@@ -4,6 +4,7 @@ export type { ConversationTurn, ExtractedMemory, ExtractorOptions, LlmExtractFn 
 export { MemoryExtractor } from "./extractor.js";
 export type { CreateEdgeInput, EdgeRelation, GraphWalkResult } from "./graph.js";
 export { GraphMemory } from "./graph.js";
+export * from "./knowledge-graph/index.js";
 export type { MemorySearchOptions } from "./search.js";
 export { MemorySearch } from "./search.js";
 export type { CreateMemoryInput, MemoryListOptions, UpdateMemoryInput } from "./store.js";
