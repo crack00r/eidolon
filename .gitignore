@@ -39,6 +39,7 @@ eidolon.db
 !.env.example
 *.pem
 *.key
+.keys/
 
 # Claude Code local preferences (per-developer, not shared)
 CLAUDE.local.md
