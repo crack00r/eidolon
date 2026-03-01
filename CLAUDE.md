@@ -109,6 +109,16 @@ Follow Conventional Commits: `type(scope): description`
 Types: feat, fix, refactor, test, docs, chore, ci, perf
 Scopes: core, cli, protocol, test-utils, gpu-worker, desktop, ios, web, ci
 
+## Versioning & Releases
+
+- Follow [Semantic Versioning](https://semver.org/): `0.x.y` during development, `1.0.0` at stable release
+- **release-please** automates version bumps, CHANGELOG generation, and GitHub Releases from Conventional Commits
+- **NEVER edit CHANGELOG.md manually** -- release-please manages it from commit messages
+- **NEVER create git tags manually** -- release-please creates release PRs that handle tagging
+- Desktop builds (Windows, macOS, Linux via Tauri) and iOS builds trigger automatically on release
+- Every release produces: version tag, GitHub Release with notes, platform binaries as assets
+- Config: `release-please-config.json` (monorepo packages) + `.release-please-manifest.json` (versions)
+
 ## User Context
 
 - **Devices**: Ubuntu server (brain), Windows PC + RTX 5080 (GPU), MacBook (client), iPhone (client)

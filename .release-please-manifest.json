@@ -1,0 +1,8 @@
+{
+  ".": "0.0.0",
+  "packages/core": "0.0.0",
+  "packages/cli": "0.0.0",
+  "packages/protocol": "0.0.0",
+  "apps/desktop": "0.0.0",
+  "apps/ios": "0.0.0"
+}
