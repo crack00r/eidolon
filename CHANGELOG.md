@@ -9,6 +9,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > [release-please](https://github.com/googleapis/release-please).
 > Do not edit manually.
 
+## 1.0.0 (2026-03-01)
+
+
+### Features
+
+* add agent-first development workflow with 5 specialized subagents ([e209ac6](https://github.com/crack00r/eidolon/commit/e209ac672ed08f835e51a847cecc839279f87026))
+
+
+### Bug Fixes
+
+* **ci:** make all workflows pass on initial empty monorepo ([3077392](https://github.com/crack00r/eidolon/commit/307739267739e7b55f2b1d17088ba4593b9ffa7b))
+* **ci:** resolve pnpm version conflict and enable PR creation ([a0938dc](https://github.com/crack00r/eidolon/commit/a0938dc77664a6178b1803c620d5114867d60d13))
+
+
+### Documentation
+
+* add Knowledge Graph (TransE), real-time voice protocol, and research-driven enhancements ([a06f5a7](https://github.com/crack00r/eidolon/commit/a06f5a7d9e7e84b68aec151288669faff97db606))
+* complete project documentation and architecture plan ([d4562aa](https://github.com/crack00r/eidolon/commit/d4562aad6fae796f87dd880306781c1c59e70bae))
+* integrate 20 expert review findings into architecture and design ([bb2563c](https://github.com/crack00r/eidolon/commit/bb2563c611a68dd0c8e73c8261a7a1921eb5594f))
+
+
+### Miscellaneous
+
+* add .keys/ to gitignore for signing key safety ([091d574](https://github.com/crack00r/eidolon/commit/091d574a178cfea211bc3833def25c9f83f61f7a))
+* add Claude Code development infrastructure ([e6cbedf](https://github.com/crack00r/eidolon/commit/e6cbedf41e096b1b33e23cd575be10ee7bcea959))
+
+
+### CI/CD
+
+* add release automation, platform builds, and versioning infrastructure ([65208d6](https://github.com/crack00r/eidolon/commit/65208d62942b3664b5a9ee92f1fbb081107f0d47))
+
 ## [Unreleased]
 
 ### Added
