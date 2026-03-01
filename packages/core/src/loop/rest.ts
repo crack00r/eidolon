@@ -36,6 +36,13 @@ const TEN_SECONDS = 10_000;
 const ONE_MINUTE = 60_000;
 const FIVE_MINUTES = 300_000;
 
+/** Rest duration when user was active within the last minute. */
+const RECENT_ACTIVITY_REST_MS = 5_000;
+/** Rest duration when user was active within the last 5 minutes. */
+const MODERATE_IDLE_REST_MS = 15_000;
+/** Rest duration when off-hours with pending learning tasks. */
+const PENDING_LEARNING_REST_MS = 60_000;
+
 export class RestCalculator {
   private readonly config: RestConfig;
   private readonly logger: Logger;
@@ -56,10 +63,10 @@ export class RestCalculator {
       duration = this.config.activeMinMs;
     } else if (timeSinceUser < ONE_MINUTE) {
       // User active within last minute
-      duration = 5_000;
+      duration = RECENT_ACTIVITY_REST_MS;
     } else if (timeSinceUser < FIVE_MINUTES) {
       // User active within last 5 minutes
-      duration = 15_000;
+      duration = MODERATE_IDLE_REST_MS;
     } else if (context.hasPendingEvents) {
       // Pending events to process
       duration = this.config.activeMinMs;
@@ -68,7 +75,7 @@ export class RestCalculator {
       duration = this.config.idleMinMs;
     } else if (context.hasPendingLearning) {
       // Off-hours with pending learning
-      duration = 60_000;
+      duration = PENDING_LEARNING_REST_MS;
     } else {
       // Nothing to do, maximum rest
       duration = this.config.maxMs;

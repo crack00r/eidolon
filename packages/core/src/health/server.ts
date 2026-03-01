@@ -44,6 +44,9 @@ export function createHealthServer(options: HealthServerOptions): HealthServer {
         "X-Content-Type-Options": "nosniff",
         "Cache-Control": "no-store",
         "X-Frame-Options": "DENY",
+        "X-XSS-Protection": "0",
+        "Content-Security-Policy": "default-src 'none'",
+        "Referrer-Policy": "no-referrer",
       },
     });
   }
@@ -69,6 +72,7 @@ export function createHealthServer(options: HealthServerOptions): HealthServer {
     const method = req.method;
 
     if (method !== "GET") {
+      logger.debug("request", `Rejected ${method} ${pathname} — only GET allowed`);
       return jsonResponse({ error: "Method not allowed" }, 405);
     }
 

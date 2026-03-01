@@ -17,6 +17,9 @@ export interface ChatMessage {
 const messagesStore = writable<ChatMessage[]>([]);
 const streamingStore = writable(false);
 
+/** Maximum allowed message length from the user (50 KB). */
+const MAX_MESSAGE_LENGTH = 50_000;
+
 function generateId(): string {
   return `msg-${crypto.randomUUID()}`;
 }
@@ -25,6 +28,10 @@ export async function sendMessage(content: string): Promise<void> {
   const client = getClient();
   if (!client || client.state !== "connected") {
     throw new Error("Not connected to gateway");
+  }
+
+  if (content.length > MAX_MESSAGE_LENGTH) {
+    throw new Error(`Message too long (max ${MAX_MESSAGE_LENGTH} characters)`);
   }
 
   const userMessage: ChatMessage = {

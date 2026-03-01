@@ -29,6 +29,13 @@ export interface TtsResult {
 /** Maximum allowed text length for a single TTS request. */
 const MAX_TTS_TEXT_LENGTH = 10_000;
 
+/** Valid TTS speed range. */
+const MIN_TTS_SPEED = 0.25;
+const MAX_TTS_SPEED = 4.0;
+
+/** Valid TTS output formats. */
+const VALID_TTS_FORMATS: ReadonlySet<string> = new Set(["opus", "wav", "mp3"]);
+
 // ---------------------------------------------------------------------------
 // TTSClient
 // ---------------------------------------------------------------------------
@@ -48,7 +55,11 @@ export class TTSClient {
       return Err(createError(ErrorCode.GPU_UNAVAILABLE, "GPU worker is not available for TTS"));
     }
 
-    // Finding #6: Validate TTS text length
+    // Validate TTS text length
+    if (request.text.length === 0) {
+      return Err(createError(ErrorCode.TTS_FAILED, "TTS text is empty"));
+    }
+
     if (request.text.length > MAX_TTS_TEXT_LENGTH) {
       return Err(
         createError(
@@ -56,6 +67,21 @@ export class TTSClient {
           `TTS text too long: ${request.text.length} characters (max ${MAX_TTS_TEXT_LENGTH})`,
         ),
       );
+    }
+
+    // Validate speed range
+    if (request.speed !== undefined && (request.speed < MIN_TTS_SPEED || request.speed > MAX_TTS_SPEED)) {
+      return Err(
+        createError(
+          ErrorCode.TTS_FAILED,
+          `TTS speed out of range: ${request.speed} (must be ${MIN_TTS_SPEED}-${MAX_TTS_SPEED})`,
+        ),
+      );
+    }
+
+    // Validate format
+    if (request.format !== undefined && !VALID_TTS_FORMATS.has(request.format)) {
+      return Err(createError(ErrorCode.TTS_FAILED, `Invalid TTS format: ${request.format}`));
     }
 
     const startMs = Date.now();

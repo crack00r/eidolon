@@ -34,6 +34,9 @@ type AttachmentType = "image" | "document" | "audio" | "voice" | "video";
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX_MESSAGES = 30;
 
+/** Maximum allowed inbound message text length (100 KB). Longer messages are truncated. */
+const MAX_INBOUND_TEXT_LENGTH = 100_000;
+
 interface RateWindow {
   count: number;
   windowStart: number;
@@ -273,11 +276,13 @@ export class TelegramChannel implements Channel {
     replyToId?: string,
     attachments?: readonly import("@eidolon/protocol").MessageAttachment[],
   ): InboundMessage {
+    // Truncate excessively long inbound text to prevent resource exhaustion
+    const safeText = text && text.length > MAX_INBOUND_TEXT_LENGTH ? text.slice(0, MAX_INBOUND_TEXT_LENGTH) : text;
     return {
       id: `tg-${messageId}-${randomUUID().slice(0, 8)}`,
       channelId: chatId,
       userId,
-      ...(text ? { text } : {}),
+      ...(safeText ? { text: safeText } : {}),
       ...(replyToId ? { replyToId } : {}),
       ...(attachments ? { attachments } : {}),
       timestamp: Date.now(),

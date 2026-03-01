@@ -52,6 +52,9 @@ type FeatureExtractionPipeline = (
 const DEFAULT_MODEL_ID = "Xenova/multilingual-e5-small";
 const DEFAULT_DIMENSIONS = 384;
 
+/** Epsilon for floating-point comparison to avoid division by near-zero. */
+const COSINE_EPSILON = 1e-10;
+
 // ---------------------------------------------------------------------------
 // EmbeddingModel
 // ---------------------------------------------------------------------------
@@ -207,7 +210,7 @@ export class EmbeddingModel {
     }
 
     const denominator = Math.sqrt(normA) * Math.sqrt(normB);
-    if (denominator === 0) return 0;
+    if (denominator < COSINE_EPSILON) return 0;
 
     return dotProduct / denominator;
   }

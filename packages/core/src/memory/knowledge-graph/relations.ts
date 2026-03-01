@@ -97,6 +97,17 @@ export class KGRelationStore {
 
   /** Create a relation (triple). */
   create(input: CreateRelationInput): Result<KGRelation, EidolonError> {
+    if (
+      input.confidence !== undefined &&
+      (!Number.isFinite(input.confidence) || input.confidence < 0 || input.confidence > 1)
+    ) {
+      return Err(
+        createError(
+          ErrorCode.DB_QUERY_FAILED,
+          `Relation confidence must be a finite number in [0, 1], got ${input.confidence}`,
+        ),
+      );
+    }
     try {
       const id = randomUUID();
       const now = Date.now();
@@ -224,6 +235,14 @@ export class KGRelationStore {
 
   /** Update confidence of a relation. */
   updateConfidence(id: string, confidence: number): Result<void, EidolonError> {
+    if (!Number.isFinite(confidence) || confidence < 0 || confidence > 1) {
+      return Err(
+        createError(
+          ErrorCode.DB_QUERY_FAILED,
+          `Relation confidence must be a finite number in [0, 1], got ${confidence}`,
+        ),
+      );
+    }
     try {
       const existing = this.db.query("SELECT 1 FROM kg_relations WHERE id = ?").get(id);
       if (!existing) {

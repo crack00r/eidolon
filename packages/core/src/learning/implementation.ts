@@ -47,6 +47,9 @@ export interface ImplementationRunOptions {
   readonly runCommandFn: RunCommandFn;
 }
 
+/** Maximum slug length in generated branch names. */
+const MAX_SLUG_LENGTH = 50;
+
 /**
  * Slugify a string: lowercase, replace non-alphanumeric with hyphens,
  * collapse consecutive hyphens, trim leading/trailing hyphens.
@@ -215,7 +218,7 @@ export class ImplementationPipeline {
    */
   static generateBranchName(discoveryId: string, title: string): string {
     const idPrefix = discoveryId.slice(0, 8);
-    const slug = slugify(title, 50);
+    const slug = slugify(title, MAX_SLUG_LENGTH);
     return `learning/${idPrefix}-${slug}`;
   }
 

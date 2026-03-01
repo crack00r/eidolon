@@ -4,12 +4,21 @@
  */
 
 import { join } from "node:path";
-import { getDataDir, getMasterKey, SecretStore } from "@eidolon/core";
+import { getDataDir, getMasterKey, SecretStore, zeroBuffer } from "@eidolon/core";
 import type { SecretMetadata } from "@eidolon/protocol";
 import { SECRETS_DB_FILENAME } from "@eidolon/protocol";
 import type { Command } from "commander";
 import { formatTable } from "../utils/formatter.js";
 
+/**
+ * Open the secret store with the master key from the environment.
+ *
+ * @returns A `SecretStore` on success, or `null` on failure (error printed to stderr).
+ *
+ * @security The master key buffer is owned by the returned store. The caller
+ *           does not need to zeroize it separately — it will be used for the
+ *           store's lifetime and should be zeroized after {@link SecretStore.close}.
+ */
 function openStore(): SecretStore | null {
   const keyResult = getMasterKey();
   if (!keyResult.ok) {
@@ -17,8 +26,16 @@ function openStore(): SecretStore | null {
     process.exitCode = 1;
     return null;
   }
-  const dbPath = join(getDataDir(), SECRETS_DB_FILENAME);
-  return new SecretStore(dbPath, keyResult.value);
+  try {
+    const dbPath = join(getDataDir(), SECRETS_DB_FILENAME);
+    return new SecretStore(dbPath, keyResult.value);
+  } catch {
+    // If store creation fails, zeroize the key buffer before discarding
+    zeroBuffer(keyResult.value);
+    console.error("Error: Failed to open secret store");
+    process.exitCode = 1;
+    return null;
+  }
 }
 
 export function registerSecretsCommand(program: Command): void {

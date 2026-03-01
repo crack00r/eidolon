@@ -128,6 +128,18 @@ const MAX_CONTENT_LENGTH = 1_048_576;
 /** Maximum number of memories that can be created in a single batch. */
 const MAX_BATCH_SIZE = 1000;
 
+/** Default page size for list queries. */
+const DEFAULT_LIST_LIMIT = 100;
+
+/** Maximum page size for list queries to prevent excessive memory usage. */
+const MAX_LIST_LIMIT = 10_000;
+
+/** Default search result limit. */
+const DEFAULT_SEARCH_LIMIT = 20;
+
+/** Maximum search result limit. */
+const MAX_SEARCH_LIMIT = 1000;
+
 // ---------------------------------------------------------------------------
 // MemoryStore
 // ---------------------------------------------------------------------------
@@ -325,8 +337,8 @@ export class MemoryStore {
       const VALID_ORDER = new Set(["asc", "desc"]);
       const orderBy = VALID_ORDER_BY.has(options?.orderBy ?? "") ? options?.orderBy : "created_at";
       const order = VALID_ORDER.has(options?.order ?? "") ? options?.order : "desc";
-      const limit = options?.limit ?? 100;
-      const offset = options?.offset ?? 0;
+      const limit = Math.max(1, Math.min(options?.limit ?? DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT));
+      const offset = Math.max(0, options?.offset ?? 0);
 
       const sql = `SELECT * FROM memories ${where} ORDER BY ${orderBy} ${order} LIMIT ? OFFSET ?`;
       params.push(limit, offset);
@@ -370,7 +382,7 @@ export class MemoryStore {
   /** Full-text search via FTS5. Returns ranked results (higher rank = better). */
   searchText(query: string, limit?: number): Result<Array<{ memory: Memory; rank: number }>, EidolonError> {
     try {
-      const maxResults = limit ?? 20;
+      const maxResults = Math.max(1, Math.min(limit ?? DEFAULT_SEARCH_LIMIT, MAX_SEARCH_LIMIT));
 
       // Sanitize query to prevent FTS5 operator injection by wrapping in quotes
       const sanitized = `"${query.replace(/"/g, '""')}"`;
@@ -391,7 +403,7 @@ export class MemoryStore {
         rank: -row.rank, // FTS5 rank is negative; negate for positive score
       }));
 
-      this.logger.debug("search", `FTS search for "${query}"`, { resultCount: results.length });
+      this.logger.debug("search", "FTS search completed", { resultCount: results.length });
       return Ok(results);
     } catch (cause) {
       return Err(createError(ErrorCode.DB_QUERY_FAILED, "Full-text search failed", cause));

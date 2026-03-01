@@ -30,4 +30,24 @@ export const AUDIT_MIGRATIONS: ReadonlyArray<Migration> = [
       DROP TABLE IF EXISTS audit_log;
     `,
   },
+  {
+    version: 2,
+    name: "add_audit_security_indexes",
+    database: "audit",
+    up: `
+      -- Index on result for filtering failed/denied operations (security monitoring)
+      CREATE INDEX IF NOT EXISTS idx_audit_result ON audit_log(result);
+
+      -- Composite index on actor + action for combined security queries
+      CREATE INDEX IF NOT EXISTS idx_audit_actor_action ON audit_log(actor, action);
+
+      -- Composite index on timestamp + result for time-windowed security scans
+      CREATE INDEX IF NOT EXISTS idx_audit_timestamp_result ON audit_log(timestamp, result);
+    `,
+    down: `
+      DROP INDEX IF EXISTS idx_audit_timestamp_result;
+      DROP INDEX IF EXISTS idx_audit_actor_action;
+      DROP INDEX IF EXISTS idx_audit_result;
+    `,
+  },
 ];

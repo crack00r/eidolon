@@ -296,10 +296,13 @@ final class WebSocketService: ObservableObject {
             return
         }
 
-        let delay = min(
+        let baseDelay = min(
             baseReconnectDelay * pow(2.0, Double(reconnectAttempts)),
             maxReconnectDelay
         )
+        // Add random jitter (0-25% of base delay) to prevent thundering herd
+        let jitter = Double.random(in: 0...(baseDelay * 0.25))
+        let delay = baseDelay + jitter
         reconnectAttempts += 1
 
         let workItem = DispatchWorkItem { [weak self] in

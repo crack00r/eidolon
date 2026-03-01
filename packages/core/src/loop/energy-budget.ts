@@ -61,7 +61,9 @@ export class EnergyBudget {
   /** Consume tokens from a category budget. */
   consume(category: BudgetCategory, tokens: number): void {
     this.resetIfNewHour();
-    this.usage.used[category] += tokens;
+    // Guard against negative or non-finite token values
+    const safeTokens = Number.isFinite(tokens) && tokens > 0 ? tokens : 0;
+    this.usage.used[category] += safeTokens;
 
     this.logger.debug("energy-budget", `Consumed ${tokens} tokens for ${category}`, {
       remaining: this.remaining(category),

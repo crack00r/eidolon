@@ -182,8 +182,20 @@ export class KGEntityStore {
       const params: Array<string | number> = [now];
 
       if (input.name !== undefined) {
+        const sanitizedName = stripControlChars(input.name).trim();
+        if (sanitizedName.length === 0) {
+          return Err(createError(ErrorCode.DB_QUERY_FAILED, "Entity name must not be empty"));
+        }
+        if (sanitizedName.length > MAX_ENTITY_NAME_LENGTH) {
+          return Err(
+            createError(
+              ErrorCode.DB_QUERY_FAILED,
+              `Entity name too long: ${sanitizedName.length} characters (max ${MAX_ENTITY_NAME_LENGTH})`,
+            ),
+          );
+        }
         setClauses.push("name = ?");
-        params.push(input.name);
+        params.push(sanitizedName);
       }
       if (input.type !== undefined) {
         setClauses.push("type = ?");

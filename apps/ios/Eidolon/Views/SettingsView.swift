@@ -34,6 +34,12 @@ struct SettingsView: View {
                     .multilineTextAlignment(.trailing)
                     .autocorrectionDisabled()
                     .textInputAutocapitalization(.never)
+                    .textContentType(.URL)
+                    .onChange(of: viewModel.host) {
+                        if viewModel.host.count > 253 {
+                            viewModel.host = String(viewModel.host.prefix(253))
+                        }
+                    }
             }
 
             HStack {
@@ -49,6 +55,12 @@ struct SettingsView: View {
                     .foregroundColor(.secondary)
                 SecureField("Authentication token", text: $viewModel.token)
                     .multilineTextAlignment(.trailing)
+                    .textContentType(.password)
+                    .onChange(of: viewModel.token) {
+                        if viewModel.token.count > 512 {
+                            viewModel.token = String(viewModel.token.prefix(512))
+                        }
+                    }
             }
 
             Toggle("Use TLS (WSS)", isOn: $viewModel.useTls)

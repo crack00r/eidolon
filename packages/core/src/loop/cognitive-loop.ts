@@ -68,6 +68,13 @@ const DEFAULT_ACTION_CATEGORIES: Record<ActionType, BudgetCategory> = {
 const DEFAULT_TOKEN_ESTIMATE = 1000;
 const ERROR_RETRY_DELAY_MS = 5000;
 
+/** Business hours start (inclusive). */
+const BUSINESS_HOURS_START = 8;
+/** Business hours end (exclusive). */
+const BUSINESS_HOURS_END = 18;
+/** Polling interval (ms) to check if loop was stopped during sleep. */
+const SLEEP_POLL_INTERVAL_MS = 50;
+
 export class CognitiveLoop {
   private readonly eventBus: EventBus;
   private readonly stateMachine: CognitiveStateMachine;
@@ -318,7 +325,7 @@ export class CognitiveLoop {
   /** Check if current time is business hours (8-18). */
   private isBusinessHours(): boolean {
     const hour = new Date().getHours();
-    return hour >= 8 && hour < 18;
+    return hour >= BUSINESS_HOURS_START && hour < BUSINESS_HOURS_END;
   }
 
   /** Sleep for the specified duration. Resolves early if stopped. Always yields at least one tick.
@@ -346,7 +353,7 @@ export class CognitiveLoop {
         if (!this._running) {
           finish();
         }
-      }, 50);
+      }, SLEEP_POLL_INTERVAL_MS);
     });
   }
 }

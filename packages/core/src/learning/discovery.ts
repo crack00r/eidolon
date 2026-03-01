@@ -63,6 +63,21 @@ const VALID_SOURCE_TYPES = new Set<string>(["reddit", "hackernews", "github", "r
 const VALID_DISCOVERY_STATUSES = new Set<string>(["new", "evaluated", "approved", "rejected", "implemented"]);
 const VALID_SAFETY_LEVELS = new Set<string>(["safe", "needs_approval", "dangerous"]);
 
+/** Maximum allowed content length for a discovery (1 MB). */
+const MAX_DISCOVERY_CONTENT_LENGTH = 1_048_576;
+
+/** Maximum allowed URL length. */
+const MAX_URL_LENGTH = 8192;
+
+/** Maximum allowed title length. */
+const MAX_TITLE_LENGTH = 1000;
+
+/** Default list limit for discovery queries. */
+const DEFAULT_LIST_LIMIT = 50;
+
+/** Maximum list limit for discovery queries. */
+const MAX_LIST_LIMIT = 1000;
+
 function rowToDiscovery(row: DiscoveryRow): Discovery {
   return {
     id: row.id,
@@ -91,6 +106,35 @@ export class DiscoveryEngine {
 
   /** Store a new discovery. */
   create(input: CreateDiscoveryInput): Result<Discovery, EidolonError> {
+    if (!Number.isFinite(input.relevanceScore) || input.relevanceScore < 0 || input.relevanceScore > 1) {
+      return Err(
+        createError(
+          ErrorCode.DISCOVERY_FAILED,
+          `Relevance score must be a finite number in [0, 1], got ${input.relevanceScore}`,
+        ),
+      );
+    }
+    if (input.url.length > MAX_URL_LENGTH) {
+      return Err(
+        createError(ErrorCode.DISCOVERY_FAILED, `URL exceeds maximum length (${input.url.length} > ${MAX_URL_LENGTH})`),
+      );
+    }
+    if (input.title.length > MAX_TITLE_LENGTH) {
+      return Err(
+        createError(
+          ErrorCode.DISCOVERY_FAILED,
+          `Title exceeds maximum length (${input.title.length} > ${MAX_TITLE_LENGTH})`,
+        ),
+      );
+    }
+    if (input.content.length > MAX_DISCOVERY_CONTENT_LENGTH) {
+      return Err(
+        createError(
+          ErrorCode.DISCOVERY_FAILED,
+          `Content exceeds maximum length (${input.content.length} > ${MAX_DISCOVERY_CONTENT_LENGTH})`,
+        ),
+      );
+    }
     try {
       const id = crypto.randomUUID();
       const now = Date.now();
@@ -138,11 +182,12 @@ export class DiscoveryEngine {
   }
 
   /** List discoveries by status. */
-  listByStatus(status: DiscoveryStatus, limit = 50): Result<Discovery[], EidolonError> {
+  listByStatus(status: DiscoveryStatus, limit = DEFAULT_LIST_LIMIT): Result<Discovery[], EidolonError> {
+    const safeLimit = Math.max(1, Math.min(limit, MAX_LIST_LIMIT));
     try {
       const rows = this.db
         .query("SELECT * FROM discoveries WHERE status = ? ORDER BY created_at DESC LIMIT ?")
-        .all(status, limit) as DiscoveryRow[];
+        .all(status, safeLimit) as DiscoveryRow[];
       return Ok(rows.map(rowToDiscovery));
     } catch (cause) {
       return Err(createError(ErrorCode.DB_QUERY_FAILED, `Failed to list discoveries by status: ${status}`, cause));

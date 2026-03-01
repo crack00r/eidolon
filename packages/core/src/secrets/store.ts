@@ -4,6 +4,12 @@
  * Secrets are stored in a separate SQLite database (secrets.db).
  * Values are encrypted at rest; only metadata (key name, timestamps,
  * description) is stored in plaintext.
+ *
+ * @security
+ * - Database file permissions are restricted to 0o600 (owner-only).
+ * - Secret values never appear in plaintext in the database.
+ * - The `list()` method deliberately excludes encrypted values.
+ * - Key names are validated to prevent empty or excessively long keys.
  */
 
 import { Database } from "bun:sqlite";
@@ -11,6 +17,19 @@ import { chmodSync, existsSync } from "node:fs";
 import type { EidolonConfig, EidolonError, Result, SecretMetadata } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 import { decrypt, encrypt } from "./crypto.js";
+
+// ---------------------------------------------------------------------------
+// Validation constants
+// ---------------------------------------------------------------------------
+
+/** Maximum length for a secret key name (bytes). Prevents abuse and SQLite issues. */
+const MAX_KEY_LENGTH = 256;
+
+/** Maximum length for a secret description (bytes). */
+const MAX_DESCRIPTION_LENGTH = 1024;
+
+/** Pattern for valid secret key names: alphanumeric, hyphens, underscores, dots, slashes. */
+const VALID_KEY_PATTERN = /^[a-zA-Z0-9._\-/]+$/;
 
 /** Row shape returned by SQLite for secret value queries. */
 interface SecretRow {
@@ -32,11 +51,23 @@ interface MetadataRow {
 /**
  * Encrypted secret store using AES-256-GCM.
  * Secrets are stored in a separate SQLite database (secrets.db).
+ *
+ * @security
+ * - The `masterKey` buffer is held for the lifetime of the store instance.
+ *   Call {@link close} when done; the caller is responsible for zeroizing the
+ *   master key buffer after the store is closed.
+ * - All encryption/decryption is delegated to {@link encrypt}/{@link decrypt}
+ *   which handle per-operation key derivation and zeroization.
  */
 export class SecretStore {
   private readonly db: Database;
   private readonly masterKey: Buffer;
 
+  /**
+   * @param dbPath    - Path to the SQLite database file, or `":memory:"` for tests.
+   * @param masterKey - 32-byte master encryption key. The buffer is referenced (not copied)
+   *                    and must remain valid for the lifetime of the store.
+   */
   constructor(dbPath: string, masterKey: Buffer) {
     this.db = new Database(dbPath, { create: true });
     this.masterKey = masterKey;
@@ -76,8 +107,24 @@ export class SecretStore {
     `);
   }
 
-  /** Store or update an encrypted secret. */
+  /**
+   * Store or update an encrypted secret.
+   *
+   * @param key         - Unique identifier (alphanumeric, hyphens, underscores, dots, slashes; max 256 chars).
+   * @param value       - Plaintext secret value. Must be non-empty.
+   * @param description - Optional human-readable description (stored unencrypted; max 1024 chars).
+   *
+   * @security The plaintext `value` is passed to {@link encrypt} which handles
+   *           key derivation and zeroization of derived material.
+   */
   set(key: string, value: string, description?: string): Result<void, EidolonError> {
+    const keyValidation = this.validateKey(key);
+    if (!keyValidation.ok) return keyValidation;
+
+    if (description !== undefined && description.length > MAX_DESCRIPTION_LENGTH) {
+      return Err(createError(ErrorCode.SECRET_DECRYPTION_FAILED, "Description exceeds maximum length"));
+    }
+
     const encrypted = encrypt(value, this.masterKey);
     if (!encrypted.ok) return encrypted;
 
@@ -122,8 +169,20 @@ export class SecretStore {
     return Ok(undefined);
   }
 
-  /** Retrieve and decrypt a secret. */
+  /**
+   * Retrieve and decrypt a secret.
+   *
+   * @param key - The secret key name to look up.
+   * @returns Decrypted plaintext value on success.
+   *
+   * @security The returned string is an immutable JS string managed by the GC.
+   *           There is no reliable way to zeroize it; callers should minimize its
+   *           lifetime and scope.
+   */
   get(key: string): Result<string, EidolonError> {
+    const keyValidation = this.validateKey(key);
+    if (!keyValidation.ok) return keyValidation;
+
     const row = this.db
       .query("SELECT encrypted_value, iv, auth_tag, salt FROM secrets WHERE key = ?")
       .get(key) as SecretRow | null;
@@ -146,8 +205,15 @@ export class SecretStore {
     );
   }
 
-  /** Delete a secret. */
+  /**
+   * Delete a secret and its encrypted data from the database.
+   *
+   * @param key - The secret key name to delete.
+   */
   delete(key: string): Result<void, EidolonError> {
+    const keyValidation = this.validateKey(key);
+    if (!keyValidation.ok) return keyValidation;
+
     const result = this.db.query("DELETE FROM secrets WHERE key = ?").run(key);
     if (result.changes === 0) {
       return Err(createError(ErrorCode.SECRET_NOT_FOUND, `Secret '${key}' not found`));
@@ -172,13 +238,24 @@ export class SecretStore {
     );
   }
 
-  /** Check if a secret exists. */
+  /**
+   * Check if a secret exists without decrypting it.
+   *
+   * @param key - The secret key name to check.
+   */
   has(key: string): boolean {
+    if (!key || key.length > MAX_KEY_LENGTH || !VALID_KEY_PATTERN.test(key)) return false;
     const row = this.db.query("SELECT 1 FROM secrets WHERE key = ?").get(key);
     return row !== null;
   }
 
-  /** Rotate (update) a secret's value. */
+  /**
+   * Rotate (update) a secret's encryption with a new plaintext value.
+   * The secret must already exist.
+   *
+   * @param key      - The secret key name to rotate.
+   * @param newValue - New plaintext value. Must be non-empty.
+   */
   rotate(key: string, newValue: string): Result<void, EidolonError> {
     if (!this.has(key)) {
       return Err(createError(ErrorCode.SECRET_NOT_FOUND, `Secret '${key}' not found`));
@@ -226,7 +303,34 @@ export class SecretStore {
     return Ok(resolved);
   }
 
-  /** Close the database connection. */
+  /**
+   * Validate a secret key name.
+   * Rejects empty keys, keys exceeding max length, and keys with invalid characters.
+   */
+  private validateKey(key: string): Result<void, EidolonError> {
+    if (!key || key.length === 0) {
+      return Err(createError(ErrorCode.SECRET_NOT_FOUND, "Secret key must not be empty"));
+    }
+    if (key.length > MAX_KEY_LENGTH) {
+      return Err(createError(ErrorCode.SECRET_NOT_FOUND, "Secret key exceeds maximum length"));
+    }
+    if (!VALID_KEY_PATTERN.test(key)) {
+      return Err(
+        createError(
+          ErrorCode.SECRET_NOT_FOUND,
+          "Secret key contains invalid characters (allowed: alphanumeric, hyphens, underscores, dots, slashes)",
+        ),
+      );
+    }
+    return Ok(undefined);
+  }
+
+  /**
+   * Close the database connection.
+   *
+   * After calling this, the master key buffer should be zeroized by the caller
+   * (e.g., via {@link import("./master-key.js").zeroBuffer}).
+   */
   close(): void {
     this.db.close();
   }

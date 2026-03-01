@@ -70,6 +70,12 @@ struct ChatView: View {
                 .cornerRadius(20)
                 .lineLimit(1...5)
                 .disabled(webSocketService.connectionState != .connected)
+                .onChange(of: viewModel.inputText) {
+                    // Enforce max input length (50 KB) to prevent resource exhaustion
+                    if viewModel.inputText.count > 50_000 {
+                        viewModel.inputText = String(viewModel.inputText.prefix(50_000))
+                    }
+                }
 
             Button {
                 viewModel.sendMessage()

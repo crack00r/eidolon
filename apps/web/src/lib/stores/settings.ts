@@ -68,6 +68,10 @@ export const settingsStore = writable<Settings>(loadSettings());
 export function updateSettings(updates: Partial<Settings>): void {
   settingsStore.update((current) => {
     const next = { ...current, ...updates };
+    // Enforce input length limits to prevent storage abuse
+    if (next.host.length > 253) next.host = next.host.slice(0, 253);
+    if (next.token.length > 512) next.token = next.token.slice(0, 512);
+    if (next.port < 1 || next.port > 65535) next.port = DEFAULT_SETTINGS.port;
     persistSettings(next);
     return next;
   });

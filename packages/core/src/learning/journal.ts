@@ -5,9 +5,9 @@
  * evaluations, approvals, rejections, implementations, and errors
  * as structured entries that can be exported to markdown.
  *
- * TODO: This journal is currently in-memory only. In a future phase, entries
- * should be persisted to the audit database so they survive daemon restarts
- * and can be queried historically.
+ * NOTE: This journal is currently in-memory only. In a future phase, entries
+ * will be persisted to the audit database so they survive daemon restarts
+ * and can be queried historically. See ROADMAP.md Phase 3.
  */
 
 import type { Logger } from "../logging/logger.js";
@@ -24,6 +24,17 @@ export interface JournalEntry {
 }
 
 const DEFAULT_MAX_ENTRIES = 10_000;
+
+/** Maximum number of entries that can be retrieved at once. */
+const MAX_RECENT_LIMIT = 1000;
+
+/**
+ * Sanitize user-sourced text before embedding in Markdown output.
+ * Escapes characters that could inject Markdown headings or formatting.
+ */
+function sanitizeForMarkdown(text: string): string {
+  return text.replace(/\n/g, " ").replace(/[#*\->`[\]\\]/g, (ch) => `\\${ch}`);
+}
 
 let nextEntryId = 0;
 
@@ -73,7 +84,7 @@ export class LearningJournal {
 
   /** Get recent entries, most recent first. */
   getRecent(limit?: number): readonly JournalEntry[] {
-    const count = limit ?? 10;
+    const count = Math.max(1, Math.min(limit ?? 10, MAX_RECENT_LIMIT));
     return this.entries.slice(-count).reverse();
   }
 
@@ -96,16 +107,18 @@ export class LearningJournal {
       const typeLabel = capitalizeFirst(entry.type);
 
       lines.push(`## ${dateStr} — ${typeLabel}`);
-      lines.push(`**${typeLabel}: "${entry.title}"**`);
+      lines.push(`**${typeLabel}: "${sanitizeForMarkdown(entry.title)}"**`);
 
       if (entry.content.length > 0) {
-        lines.push(entry.content);
+        lines.push(sanitizeForMarkdown(entry.content));
       }
 
       // Render metadata inline
       const metaKeys = Object.keys(entry.metadata);
       if (metaKeys.length > 0) {
-        const metaParts = metaKeys.map((k) => `${k}: ${String(entry.metadata[k])}`);
+        const metaParts = metaKeys.map(
+          (k) => `${sanitizeForMarkdown(k)}: ${sanitizeForMarkdown(String(entry.metadata[k]))}`,
+        );
         lines.push(metaParts.join(" | "));
       }
 

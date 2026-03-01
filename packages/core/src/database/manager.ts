@@ -6,7 +6,7 @@
  */
 
 import type { Database } from "bun:sqlite";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import type { DatabaseConfig, EidolonError, Result } from "@eidolon/protocol";
 import { AUDIT_DB_FILENAME, MEMORY_DB_FILENAME, Ok, OPERATIONAL_DB_FILENAME } from "@eidolon/protocol";
 import type { Logger } from "../logging/logger.js";
@@ -129,13 +129,21 @@ export class DatabaseManager {
   }
 
   private getDbStats(db: Database, path: string): DbStats {
-    const tables = db
-      .query("SELECT COUNT(*) as count FROM sqlite_master WHERE type='table' AND name NOT GLOB '_*'")
-      .get() as { count: number };
+    let tableCount = 0;
+    try {
+      const tables = db
+        .query("SELECT COUNT(*) as count FROM sqlite_master WHERE type='table' AND name NOT GLOB '_*'")
+        .get() as { count: number } | null;
+      tableCount = typeof tables?.count === "number" && Number.isFinite(tables.count) ? tables.count : 0;
+    } catch {
+      // Corrupt sqlite_master or inaccessible database -- report 0 tables
+      tableCount = 0;
+    }
 
     const sizeBytes = this.getFileSize(path);
 
-    return { path, sizeBytes, tableCount: tables.count };
+    // Expose only the filename, not the full filesystem path
+    return { path: basename(path), sizeBytes, tableCount };
   }
 
   private getFileSize(path: string): number {

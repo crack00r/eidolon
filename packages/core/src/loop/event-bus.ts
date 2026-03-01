@@ -64,6 +64,9 @@ const POISON_KEYS = new Set(["__proto__", "constructor", "prototype"]);
 /** Maximum number of retries before an event is sent to the dead letter queue. */
 const MAX_RETRIES = 10;
 
+/** Maximum number of events returned in a single replay or drain operation. */
+const MAX_REPLAY_BATCH_SIZE = 1000;
+
 /**
  * Recursively strip prototype-pollution keys from parsed JSON payloads.
  * Handles nested objects and arrays to prevent deep pollution attacks.
@@ -300,15 +303,18 @@ export class EventBus {
                WHEN 'low' THEN 3
              END,
              timestamp ASC
-           LIMIT 1000`,
+           LIMIT ?`,
         )
-        .all() as EventRow[];
+        .all(MAX_REPLAY_BATCH_SIZE) as EventRow[];
 
       const events = rows.map((r) => rowToEvent(r, this.logger));
       this.logger.info("event-bus", `Replaying ${events.length} unprocessed events`);
 
-      if (events.length === 1000) {
-        this.logger.warn("event-bus", "Replay hit LIMIT 1000 -- there may be more unprocessed events remaining");
+      if (events.length === MAX_REPLAY_BATCH_SIZE) {
+        this.logger.warn(
+          "event-bus",
+          `Replay hit limit (${MAX_REPLAY_BATCH_SIZE}) -- there may be more unprocessed events remaining`,
+        );
       }
 
       for (const event of events) {
@@ -337,9 +343,9 @@ export class EventBus {
                WHEN 'low' THEN 3
              END,
              timestamp ASC
-           LIMIT 1000`,
+            LIMIT ?`,
         )
-        .all() as EventRow[];
+        .all(MAX_REPLAY_BATCH_SIZE) as EventRow[];
 
       return Ok(rows.map((r) => rowToEvent(r, this.logger)));
     } catch (cause) {

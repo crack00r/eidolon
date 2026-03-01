@@ -8,12 +8,30 @@
 
 import { randomBytes, scryptSync } from "node:crypto";
 import { createInterface } from "node:readline";
-import { generateMasterKey, getConfigDir, getConfigPath, getDataDir, getLogDir, loadConfig } from "@eidolon/core";
+import {
+  generateMasterKey,
+  getConfigDir,
+  getConfigPath,
+  getDataDir,
+  getLogDir,
+  KEY_LENGTH,
+  loadConfig,
+  SCRYPT_MAXMEM,
+  SCRYPT_N,
+  SCRYPT_P,
+  SCRYPT_R,
+  zeroBuffer,
+} from "@eidolon/core";
 import { SECRETS_DB_FILENAME, VERSION } from "@eidolon/protocol";
 
-// Must match the KDF parameters in packages/core/src/secrets/master-key.ts
+/**
+ * Fixed application-level salt for passphrase-based key derivation.
+ * Must match the value in packages/core/src/secrets/master-key.ts.
+ */
 const PASSPHRASE_SALT = Buffer.from("eidolon-master-key-v1", "utf-8");
-const SCRYPT_PARAMS = { N: 2 ** 17, r: 8, p: 1, maxmem: 256 * 1024 * 1024 };
+
+/** scrypt KDF parameters — imported from core constants for consistency. */
+const SCRYPT_PARAMS = { N: SCRYPT_N, r: SCRYPT_R, p: SCRYPT_P, maxmem: SCRYPT_MAXMEM };
 
 import type { Command } from "commander";
 import { formatCheck } from "../utils/formatter.js";
@@ -90,6 +108,21 @@ async function checkPrerequisites(): Promise<boolean> {
   return allPassed;
 }
 
+/**
+ * Derive a 32-byte key buffer from a master key string (hex or passphrase).
+ * Must match the KDF logic in packages/core/src/secrets/master-key.ts.
+ *
+ * @param masterKey - Hex-encoded 256-bit key (64 chars) or passphrase string.
+ * @returns 32-byte key Buffer. **Caller must zeroize after use.**
+ */
+function deriveMasterKeyBuffer(masterKey: string): Buffer {
+  const hexKeyLength = KEY_LENGTH * 2; // 64
+  if (new RegExp(`^[0-9a-fA-F]{${hexKeyLength}}$`).test(masterKey)) {
+    return Buffer.from(masterKey, "hex");
+  }
+  return scryptSync(masterKey, PASSPHRASE_SALT, KEY_LENGTH, SCRYPT_PARAMS);
+}
+
 async function setupMasterKey(ask: (q: string) => Promise<string>): Promise<string | undefined> {
   console.log("\n--- Master Key ---\n");
   console.log("The master key encrypts all secrets stored by Eidolon.");
@@ -163,18 +196,14 @@ async function setupClaudeApiKey(
   }
 
   if (masterKey) {
+    let keyBuffer: Buffer | undefined;
     try {
       const { SecretStore } = await import("@eidolon/core");
       const { existsSync, mkdirSync } = await import("node:fs");
       const { join } = await import("node:path");
 
       // Derive key buffer from master key string (must match master-key.ts KDF)
-      let keyBuffer: Buffer;
-      if (/^[0-9a-fA-F]{64}$/.test(masterKey)) {
-        keyBuffer = Buffer.from(masterKey, "hex");
-      } else {
-        keyBuffer = scryptSync(masterKey, PASSPHRASE_SALT, 32, SCRYPT_PARAMS);
-      }
+      keyBuffer = deriveMasterKeyBuffer(masterKey);
 
       const dataDir = getDataDir();
       if (!existsSync(dataDir)) {
@@ -188,6 +217,9 @@ async function setupClaudeApiKey(
       const msg = err instanceof Error ? err.message : String(err);
       console.log(`Warning: Could not store in SecretStore: ${msg}`);
       console.log("You can store it manually: eidolon secrets set claude-api-key");
+    } finally {
+      // Zeroize derived key material (best-effort)
+      if (keyBuffer) zeroBuffer(keyBuffer);
     }
   } else {
     console.log("No master key set. API key not stored. Set it manually later.");
@@ -209,17 +241,13 @@ async function setupTelegramToken(
   }
 
   if (masterKey) {
+    let keyBuffer: Buffer | undefined;
     try {
       const { SecretStore } = await import("@eidolon/core");
       const { join } = await import("node:path");
 
       // Derive key buffer from master key string (must match master-key.ts KDF)
-      let keyBuffer: Buffer;
-      if (/^[0-9a-fA-F]{64}$/.test(masterKey)) {
-        keyBuffer = Buffer.from(masterKey, "hex");
-      } else {
-        keyBuffer = scryptSync(masterKey, PASSPHRASE_SALT, 32, SCRYPT_PARAMS);
-      }
+      keyBuffer = deriveMasterKeyBuffer(masterKey);
 
       const store = new SecretStore(join(getDataDir(), SECRETS_DB_FILENAME), keyBuffer);
       store.set("telegram-bot-token", token, "Telegram bot token from onboarding");
@@ -227,6 +255,9 @@ async function setupTelegramToken(
       console.log("Telegram token stored in SecretStore (encrypted).");
     } catch {
       console.log("Warning: Could not store token. Set manually with 'eidolon secrets set'.");
+    } finally {
+      // Zeroize derived key material (best-effort)
+      if (keyBuffer) zeroBuffer(keyBuffer);
     }
   }
 

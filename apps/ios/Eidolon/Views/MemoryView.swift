@@ -37,6 +37,10 @@ struct MemoryView: View {
                 .textFieldStyle(.plain)
                 .autocorrectionDisabled()
                 .onChange(of: viewModel.searchQuery) {
+                    // Enforce max search query length (500 chars)
+                    if viewModel.searchQuery.count > 500 {
+                        viewModel.searchQuery = String(viewModel.searchQuery.prefix(500))
+                    }
                     viewModel.searchDebounced()
                 }
 

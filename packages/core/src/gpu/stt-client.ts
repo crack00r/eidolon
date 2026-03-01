@@ -27,6 +27,23 @@ export interface SttResult {
 /** Timeout for STT upload requests (60 seconds). */
 const STT_UPLOAD_TIMEOUT_MS = 60_000;
 
+/** Maximum allowed audio size for a single STT request: 25 MB. */
+const MAX_STT_AUDIO_BYTES = 25 * 1024 * 1024;
+
+/** Supported MIME types for STT audio input. */
+const ALLOWED_STT_MIME_TYPES: ReadonlySet<string> = new Set([
+  "audio/wav",
+  "audio/wave",
+  "audio/x-wav",
+  "audio/mp3",
+  "audio/mpeg",
+  "audio/ogg",
+  "audio/opus",
+  "audio/webm",
+  "audio/flac",
+  "audio/x-flac",
+]);
+
 // ---------------------------------------------------------------------------
 // STTClient
 // ---------------------------------------------------------------------------
@@ -46,7 +63,27 @@ export class STTClient {
       return Err(createError(ErrorCode.GPU_UNAVAILABLE, "GPU worker is not available for STT"));
     }
 
+    // Validate audio size
+    if (audio.byteLength > MAX_STT_AUDIO_BYTES) {
+      return Err(
+        createError(
+          ErrorCode.STT_FAILED,
+          `STT audio too large: ${audio.byteLength} bytes (max ${MAX_STT_AUDIO_BYTES})`,
+        ),
+      );
+    }
+
+    if (audio.byteLength === 0) {
+      return Err(createError(ErrorCode.STT_FAILED, "STT audio is empty"));
+    }
+
     const mime = mimeType ?? "audio/wav";
+
+    // Validate MIME type
+    if (!ALLOWED_STT_MIME_TYPES.has(mime)) {
+      return Err(createError(ErrorCode.STT_FAILED, `Unsupported audio MIME type: ${mime}`));
+    }
+
     const extension = mime.split("/")[1] ?? "wav";
 
     const formData = new FormData();

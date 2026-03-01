@@ -146,4 +146,24 @@ export const OPERATIONAL_MIGRATIONS: ReadonlyArray<Migration> = [
       ALTER TABLE events DROP COLUMN claimed_at;
     `,
   },
+  {
+    version: 3,
+    name: "add_performance_indexes",
+    database: "operational",
+    up: `
+      -- Index on token_usage(model) for per-model cost analysis queries
+      CREATE INDEX IF NOT EXISTS idx_token_usage_model ON token_usage(model);
+
+      -- Index on account_usage(hour_bucket) for time-range aggregation queries
+      CREATE INDEX IF NOT EXISTS idx_account_usage_hour ON account_usage(hour_bucket);
+
+      -- Composite index on events(type, timestamp) for filtered event queries
+      CREATE INDEX IF NOT EXISTS idx_events_type_timestamp ON events(type, timestamp);
+    `,
+    down: `
+      DROP INDEX IF EXISTS idx_events_type_timestamp;
+      DROP INDEX IF EXISTS idx_account_usage_hour;
+      DROP INDEX IF EXISTS idx_token_usage_model;
+    `,
+  },
 ];

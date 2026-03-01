@@ -157,6 +157,12 @@ const DEFAULT_MIN_CONTENT_LENGTH = 10;
 const DEFAULT_STRATEGY: ExtractorOptions["strategy"] = "hybrid";
 const MAX_EXTRACTED_CONTENT_LENGTH = 10_000;
 
+/**
+ * Confidence multiplier for memories extracted from assistant responses.
+ * Assistant-sourced content is less reliable than user-sourced content.
+ */
+const ASSISTANT_CONFIDENCE_MULTIPLIER = 0.8;
+
 const VALID_MEMORY_TYPES = new Set<string>([
   "fact",
   "preference",
@@ -299,7 +305,7 @@ export class MemoryExtractor {
           results.push({
             type: entry.type,
             content,
-            confidence: entry.confidence * 0.8, // Lower confidence for assistant-sourced
+            confidence: entry.confidence * ASSISTANT_CONFIDENCE_MULTIPLIER, // Lower confidence for assistant-sourced
             tags: [entry.tag, "assistant-sourced"],
             source: "rule_based",
           });

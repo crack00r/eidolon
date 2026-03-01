@@ -50,6 +50,8 @@ const DEFAULT_TIMEOUT_MS = 30_000;
 const MAX_RECONNECT_DELAY_MS = 8_000;
 const BASE_RECONNECT_DELAY_MS = 1_000;
 const MAX_RECONNECT_ATTEMPTS = 50;
+/** Maximum accepted inbound WebSocket message size (1 MB). */
+const MAX_MESSAGE_SIZE = 1_048_576;
 
 export class GatewayClient {
   private ws: WebSocket | null = null;
@@ -243,11 +245,17 @@ export class GatewayClient {
   }
 
   private handleMessage(data: string): void {
+    // Guard against oversized messages to prevent memory exhaustion
+    if (data.length > MAX_MESSAGE_SIZE) {
+      console.warn("Gateway message too large, dropping:", data.length, "bytes");
+      return;
+    }
+
     let message: JsonRpcResponse;
     try {
       message = JSON.parse(data) as JsonRpcResponse;
     } catch {
-      console.error("Failed to parse gateway message:", data);
+      console.error("Failed to parse gateway message");
       return;
     }
 
@@ -256,7 +264,7 @@ export class GatewayClient {
       message.jsonrpc !== "2.0" ||
       (message.result === undefined && message.error === undefined && message.method === undefined)
     ) {
-      console.warn("Invalid JSON-RPC 2.0 message received, ignoring:", data);
+      console.warn("Invalid JSON-RPC 2.0 message received");
       return;
     }
 
@@ -319,10 +327,13 @@ export class GatewayClient {
       return;
     }
 
-    const delay = Math.min(
+    const baseDelay = Math.min(
       BASE_RECONNECT_DELAY_MS * Math.pow(2, this.reconnectAttempts),
       MAX_RECONNECT_DELAY_MS,
     );
+    // Add random jitter (0-25% of base delay) to prevent thundering herd
+    const jitter = Math.random() * baseDelay * 0.25;
+    const delay = baseDelay + jitter;
     this.reconnectAttempts++;
 
     this.reconnectTimer = setTimeout(() => {

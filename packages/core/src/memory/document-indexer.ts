@@ -46,6 +46,9 @@ const DEFAULT_CHUNK_MAX_LENGTH = 2000;
 
 const CODE_EXTENSIONS = new Set([".ts", ".tsx", ".js", ".jsx", ".py", ".rs", ".go"]);
 
+/** Maximum directory recursion depth to prevent excessive traversal or symlink loops. */
+const MAX_DIRECTORY_DEPTH = 20;
+
 // ---------------------------------------------------------------------------
 // DocumentIndexer
 // ---------------------------------------------------------------------------
@@ -315,8 +318,14 @@ export class DocumentIndexer {
   // -------------------------------------------------------------------------
 
   /** Recursively walk a directory, returning file paths matching filters.
-   *  Skips symlinks to prevent traversal outside the intended directory. */
-  private walkDirectory(dirPath: string): string[] {
+   *  Skips symlinks to prevent traversal outside the intended directory.
+   *  Depth is bounded by MAX_DIRECTORY_DEPTH to prevent excessive recursion. */
+  private walkDirectory(dirPath: string, depth = 0): string[] {
+    if (depth >= MAX_DIRECTORY_DEPTH) {
+      this.logger.warn("walkDirectory", `Max directory depth (${MAX_DIRECTORY_DEPTH}) reached, skipping: ${dirPath}`);
+      return [];
+    }
+
     const results: string[] = [];
 
     // Skip if the directory itself is a symlink
@@ -340,7 +349,7 @@ export class DocumentIndexer {
       }
 
       if (entry.isDirectory()) {
-        results.push(...this.walkDirectory(fullPath));
+        results.push(...this.walkDirectory(fullPath, depth + 1));
       } else if (entry.isFile()) {
         const ext = extname(entry.name).toLowerCase();
         if (this.fileTypes.includes(ext)) {

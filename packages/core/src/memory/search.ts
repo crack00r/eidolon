@@ -46,6 +46,12 @@ const DEFAULT_VECTOR_WEIGHT = 0.4;
 const DEFAULT_GRAPH_WEIGHT = 0.2;
 const DEFAULT_RRF_K = 60;
 const DEFAULT_LIMIT = 20;
+/** Maximum allowed search limit to prevent excessive memory usage. */
+const MAX_SEARCH_LIMIT = 1000;
+/** Minimum weight value for search weights (must be non-negative). */
+const MIN_WEIGHT = 0;
+/** Maximum weight value for search weights. */
+const MAX_WEIGHT = 1.0;
 /**
  * Upper bound on rows scanned during vector similarity search to prevent OOM.
  * Set to 10,000 as a balance between recall quality and memory usage.
@@ -79,10 +85,10 @@ export class MemorySearch {
     this.embeddingModel = embeddingModel;
     this.db = db;
     this.logger = logger.child("memory-search");
-    this.bm25Weight = options?.bm25Weight ?? DEFAULT_BM25_WEIGHT;
-    this.vectorWeight = options?.vectorWeight ?? DEFAULT_VECTOR_WEIGHT;
-    this.graphWeight = options?.graphWeight ?? DEFAULT_GRAPH_WEIGHT;
-    this.rrfK = options?.rrfK ?? DEFAULT_RRF_K;
+    this.bm25Weight = Math.max(MIN_WEIGHT, Math.min(MAX_WEIGHT, options?.bm25Weight ?? DEFAULT_BM25_WEIGHT));
+    this.vectorWeight = Math.max(MIN_WEIGHT, Math.min(MAX_WEIGHT, options?.vectorWeight ?? DEFAULT_VECTOR_WEIGHT));
+    this.graphWeight = Math.max(MIN_WEIGHT, Math.min(MAX_WEIGHT, options?.graphWeight ?? DEFAULT_GRAPH_WEIGHT));
+    this.rrfK = Math.max(1, options?.rrfK ?? DEFAULT_RRF_K);
   }
 
   // -----------------------------------------------------------------------
@@ -91,7 +97,10 @@ export class MemorySearch {
 
   /** Full hybrid search: BM25 + vector + RRF fusion. */
   async search(query: MemorySearchQuery): Promise<Result<MemorySearchResult[], EidolonError>> {
-    const limit = query.limit ?? DEFAULT_LIMIT;
+    if (!query.text || query.text.trim().length === 0) {
+      return Ok([]);
+    }
+    const limit = Math.max(1, Math.min(query.limit ?? DEFAULT_LIMIT, MAX_SEARCH_LIMIT));
 
     // BM25 search
     const bm25Result = this.searchBm25(query.text, limit);
@@ -185,7 +194,7 @@ export class MemorySearch {
       });
     }
 
-    this.logger.debug("search", `Hybrid search for "${query.text}"`, {
+    this.logger.debug("search", `Hybrid search completed`, {
       bm25Count: bm25Ranked.length,
       vectorCount: vectorRanked.length,
       fusedCount: fused.length,

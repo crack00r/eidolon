@@ -45,5 +45,11 @@ export const handle: Handle = async ({ event, resolve }) => {
     "camera=(), microphone=(self), geolocation=()",
   );
 
+  // Prevent cross-domain content loading (Flash/PDF policies)
+  response.headers.set("X-Permitted-Cross-Domain-Policies", "none");
+
+  // Prevent DNS prefetch to avoid information leakage
+  response.headers.set("X-DNS-Prefetch-Control", "off");
+
   return response;
 };

@@ -58,6 +58,15 @@ const TECH_KEYWORDS = [
   "wasm",
 ] as const;
 
+/** Score increment per matched interest found in content body. */
+const INTEREST_MATCH_SCORE = 0.2;
+/** Score bonus for an exact phrase match in the title. */
+const TITLE_MATCH_BONUS = 0.3;
+/** Score bonus for any common tech keyword found. */
+const TECH_KEYWORD_BONUS = 0.1;
+/** Maximum possible relevance score. */
+const MAX_RELEVANCE_SCORE = 1.0;
+
 /** Borderline score zone where LLM scoring is triggered. */
 const BORDERLINE_LOW = 0.3;
 const BORDERLINE_HIGH = 0.7;
@@ -88,9 +97,9 @@ export class RelevanceFilter {
 
         // Exact phrase in title gets the full bonus
         if (title.toLowerCase().includes(lowerInterest)) {
-          score += 0.3;
+          score += TITLE_MATCH_BONUS;
         } else {
-          score += 0.2;
+          score += INTEREST_MATCH_SCORE;
         }
       }
     }
@@ -98,12 +107,12 @@ export class RelevanceFilter {
     // Tech keyword bonus
     for (const keyword of TECH_KEYWORDS) {
       if (combined.includes(keyword)) {
-        score += 0.1;
+        score += TECH_KEYWORD_BONUS;
         break; // Only one tech bonus
       }
     }
 
-    score = Math.min(score, 1.0);
+    score = Math.min(score, MAX_RELEVANCE_SCORE);
 
     const reason =
       matchedInterests.length > 0 ? `Matched interests: ${matchedInterests.join(", ")}` : "No interest matches found";

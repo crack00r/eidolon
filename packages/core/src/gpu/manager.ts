@@ -33,10 +33,14 @@ export interface GpuHealth {
   readonly modelsLoaded: readonly string[];
 }
 
+/** Default timeout for GPU worker requests in ms. */
 const DEFAULT_TIMEOUT_MS = 30_000;
 
 /** Maximum allowed GPU response size: 100 MB. */
 const MAX_RESPONSE_BYTES = 100 * 1024 * 1024;
+
+/** Expected JSON Content-Type prefix from GPU worker responses. */
+const JSON_CONTENT_TYPE_PREFIX = "application/json";
 
 // ---------------------------------------------------------------------------
 // GPUManager
@@ -116,6 +120,12 @@ export class GPUManager {
         const body = await response.text().catch(() => "");
         const code =
           response.status === 401 || response.status === 403 ? ErrorCode.GPU_AUTH_FAILED : ErrorCode.GPU_UNAVAILABLE;
+        // Log auth failures as security-relevant events
+        if (response.status === 401 || response.status === 403) {
+          this.logger.warn("security", `GPU worker auth failure on ${path}: ${response.status}`, {
+            status: response.status,
+          });
+        }
         return Err(createError(code, `GPU worker returned ${response.status}: ${body}`));
       }
 
@@ -131,7 +141,7 @@ export class GPUManager {
       }
 
       const contentType = response.headers.get("content-type") ?? "";
-      if (contentType.includes("application/json")) {
+      if (contentType.includes(JSON_CONTENT_TYPE_PREFIX)) {
         const data: unknown = await response.json();
         if (typeof data !== "object" || data === null) {
           return Err(createError(ErrorCode.GPU_UNAVAILABLE, "Invalid GPU response format"));

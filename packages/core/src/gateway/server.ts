@@ -109,6 +109,12 @@ function normalizeOrigin(origin: string): string {
   return origin.toLowerCase().replace(/\/+$/, "");
 }
 
+/** Timeout in ms for unauthenticated clients before disconnection. */
+const AUTH_TIMEOUT_MS = 10_000;
+
+/** WebSocket idle timeout in seconds (Bun uses seconds for this). */
+const WS_IDLE_TIMEOUT_SECONDS = 120;
+
 /** Standard security headers applied to all HTTP responses from the gateway. */
 const SECURITY_HEADERS: Record<string, string> = {
   "X-Content-Type-Options": "nosniff",
@@ -116,6 +122,9 @@ const SECURITY_HEADERS: Record<string, string> = {
   "X-XSS-Protection": "0",
   "Cache-Control": "no-store",
   "Content-Type": "text/plain",
+  "Content-Security-Policy": "default-src 'none'",
+  "Referrer-Policy": "no-referrer",
+  "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
 };
 
 /** Create an HTTP Response with security headers, optionally adding HSTS for TLS. */
@@ -225,7 +234,7 @@ export class GatewayServer {
 
       websocket: {
         maxPayloadLength: self.config.maxMessageBytes,
-        idleTimeout: 120, // Finding #12: Close idle WebSocket connections after 120 seconds
+        idleTimeout: WS_IDLE_TIMEOUT_SECONDS,
         open(ws) {
           self.handleOpen(ws);
         },
@@ -343,15 +352,17 @@ export class GatewayServer {
     } else {
       this.logger.info("open", `Client ${clientId} connected from ${anonIp}, awaiting auth`);
 
-      // Enforce auth timeout: close unauthenticated connections after 10 seconds
+      // Enforce auth timeout: close unauthenticated connections
       setTimeout(() => {
         const client = this.clients.get(clientId);
         if (client && !client.authenticated) {
-          this.logger.warn("auth-timeout", `Client ${clientId} auth timeout`);
+          this.logger.warn("auth-timeout", `Client ${clientId} auth timeout`, {
+            ip: anonymizeIp(ip),
+          });
           ws.close(4002, "Authentication timeout");
           this.clients.delete(clientId);
         }
-      }, 10_000);
+      }, AUTH_TIMEOUT_MS);
     }
   }
 

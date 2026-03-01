@@ -6,10 +6,19 @@
  */
 
 import { Database } from "bun:sqlite";
-import { existsSync, mkdirSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import type { EidolonError, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
+
+/** Default busy timeout in milliseconds. */
+const DEFAULT_BUSY_TIMEOUT_MS = 5000;
+
+/** WAL autocheckpoint threshold in pages. */
+const WAL_AUTOCHECKPOINT_PAGES = 1000;
+
+/** Restrictive file permissions for database files (owner read/write only). */
+const DB_FILE_PERMISSIONS = 0o600;
 
 export interface ConnectionOptions {
   readonly walMode?: boolean;
@@ -38,24 +47,44 @@ export function createConnection(path: string, options?: ConnectionOptions): Res
 
     // Set busy timeout (wait rather than fail immediately on lock)
     // Validate as safe integer to prevent PRAGMA injection
-    const busyTimeout = Math.max(0, Math.trunc(options?.busyTimeout ?? 5000));
+    const busyTimeout = Math.max(0, Math.trunc(options?.busyTimeout ?? DEFAULT_BUSY_TIMEOUT_MS));
     if (!Number.isFinite(busyTimeout)) {
-      return Err(
-        createError(ErrorCode.DB_CONNECTION_FAILED, `Invalid busy_timeout value: ${String(options?.busyTimeout)}`),
-      );
+      return Err(createError(ErrorCode.DB_CONNECTION_FAILED, "Invalid busy_timeout value"));
     }
     db.exec(`PRAGMA busy_timeout=${busyTimeout}`);
 
     // Enable foreign keys
     db.exec("PRAGMA foreign_keys=ON");
 
-    // Set WAL autocheckpoint to prevent unbounded WAL growth (default is 1000 pages)
+    // Securely delete data -- overwrite freed pages with zeros to prevent
+    // recovery of sensitive information from the database file.
+    db.exec("PRAGMA secure_delete=ON");
+
+    // Enable incremental auto-vacuum so the database file can shrink
+    // when data is deleted, preventing unbounded file growth.
+    db.exec("PRAGMA auto_vacuum=INCREMENTAL");
+
+    // Set WAL autocheckpoint to prevent unbounded WAL growth
     if (options?.walMode !== false) {
-      db.exec("PRAGMA wal_autocheckpoint=1000");
+      db.exec(`PRAGMA wal_autocheckpoint=${WAL_AUTOCHECKPOINT_PAGES}`);
+    }
+
+    // Restrict database file permissions to owner-only (skip for :memory:)
+    if (path !== ":memory:") {
+      try {
+        chmodSync(path, DB_FILE_PERMISSIONS);
+        // Also restrict WAL and SHM companion files if they exist
+        const walPath = `${path}-wal`;
+        const shmPath = `${path}-shm`;
+        if (existsSync(walPath)) chmodSync(walPath, DB_FILE_PERMISSIONS);
+        if (existsSync(shmPath)) chmodSync(shmPath, DB_FILE_PERMISSIONS);
+      } catch {
+        // Non-fatal: permissions may fail on some filesystems (e.g. FAT32)
+      }
     }
 
     return Ok(db);
   } catch (cause) {
-    return Err(createError(ErrorCode.DB_CONNECTION_FAILED, `Failed to open database: ${path}`, cause));
+    return Err(createError(ErrorCode.DB_CONNECTION_FAILED, "Failed to open database", cause));
   }
 }

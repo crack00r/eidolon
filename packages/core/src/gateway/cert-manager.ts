@@ -24,6 +24,12 @@ interface CertOptions {
   readonly days?: number;
 }
 
+/** RSA key size in bits for self-signed certificate generation. */
+const RSA_KEY_BITS = 4096;
+
+/** Default certificate validity period in days. */
+const DEFAULT_CERT_DAYS = 365;
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -36,7 +42,7 @@ interface CertOptions {
  */
 export function generateSelfSignedCert(certsDir: string, options?: CertOptions): Result<CertPaths, string> {
   const hostname = options?.hostname ?? "localhost";
-  const days = options?.days ?? 365;
+  const days = options?.days ?? DEFAULT_CERT_DAYS;
 
   // Validate hostname to prevent injection in OpenSSL -subj argument
   const HOSTNAME_RE = /^[a-zA-Z0-9._-]+$/;
@@ -52,7 +58,7 @@ export function generateSelfSignedCert(certsDir: string, options?: CertOptions):
     "req",
     "-x509",
     "-newkey",
-    "rsa:4096",
+    `rsa:${RSA_KEY_BITS}`,
     "-keyout",
     keyPath,
     "-out",
