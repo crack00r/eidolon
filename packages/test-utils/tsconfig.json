@@ -1,15 +1,11 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "composite": true,
     "outDir": "dist",
-    "rootDir": "src",
     "paths": {
       "@eidolon/protocol": ["../protocol/src"]
     }
   },
   "include": ["src/**/*.ts"],
-  "references": [
-    { "path": "../protocol" }
-  ]
+  "exclude": ["dist"]
 }

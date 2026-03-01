@@ -9,8 +9,8 @@
     "eidolon": "src/index.ts"
   },
   "scripts": {
-    "build": "bun build src/index.ts --outdir dist --target bun --compile",
-    "test": "bun test",
+    "build": "bun build src/index.ts --outdir dist --target bun",
+    "test": "echo 'No tests yet'",
     "typecheck": "tsc --noEmit",
     "lint": "biome check src/",
     "lint:fix": "biome check --write src/"

@@ -1,0 +1,11 @@
+[Unit]
+Description=Eidolon Database Backup
+After=eidolon.service
+
+[Service]
+Type=oneshot
+User=eidolon
+Group=eidolon
+ExecStart=/usr/local/bin/bun /opt/eidolon/packages/cli/src/index.ts backup run
+Environment=EIDOLON_CONFIG=/etc/eidolon/eidolon.json
+Environment=EIDOLON_DATA_DIR=/var/lib/eidolon

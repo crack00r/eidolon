@@ -1,0 +1,30 @@
+[Unit]
+Description=Eidolon AI Assistant Daemon
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=eidolon
+Group=eidolon
+WorkingDirectory=/opt/eidolon
+ExecStart=/usr/local/bin/bun /opt/eidolon/packages/cli/src/index.ts daemon start --foreground
+ExecStop=/bin/kill -SIGTERM $MAINPID
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=15
+
+# Security hardening
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/var/lib/eidolon /var/log/eidolon
+PrivateTmp=yes
+
+# Environment
+Environment=EIDOLON_CONFIG=/etc/eidolon/eidolon.json
+Environment=EIDOLON_DATA_DIR=/var/lib/eidolon
+Environment=EIDOLON_LOG_DIR=/var/log/eidolon
+
+[Install]
+WantedBy=multi-user.target
