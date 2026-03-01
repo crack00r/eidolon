@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, setSystemTime, test } from "bun:test";
 import type { BusEvent } from "@eidolon/protocol";
 import type { Logger } from "../../logging/logger.js";
 import type { EnergyBudgetConfig } from "../energy-budget.js";
@@ -153,6 +153,16 @@ describe("EnergyBudget", () => {
 
 describe("RestCalculator", () => {
   const logger = createSilentLogger();
+
+  // Pin the clock to 10:00 AM so isNightMode() always returns false,
+  // making tests deterministic regardless of when they actually run.
+  beforeEach(() => {
+    setSystemTime(new Date(2025, 5, 15, 10, 0, 0));
+  });
+
+  afterEach(() => {
+    setSystemTime();
+  });
 
   test("returns short rest when user active", () => {
     const calc = new RestCalculator(DEFAULT_REST_CONFIG, logger);
