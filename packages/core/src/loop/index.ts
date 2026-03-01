@@ -1,3 +1,12 @@
+export type {
+  ActionCategoryMap,
+  CognitiveLoopOptions,
+  CycleResult,
+  EventHandler,
+  EventHandlerResult,
+  LoopStats,
+} from "./cognitive-loop.js";
+export { CognitiveLoop } from "./cognitive-loop.js";
 export type { BudgetCategory, EnergyBudgetConfig } from "./energy-budget.js";
 export { EnergyBudget } from "./energy-budget.js";
 export { EventBus } from "./event-bus.js";

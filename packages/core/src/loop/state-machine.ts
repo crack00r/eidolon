@@ -33,7 +33,7 @@ export interface CognitiveState {
  */
 const VALID_TRANSITIONS: ReadonlyMap<CognitivePhase, ReadonlySet<CognitivePhase>> = new Map([
   ["starting", new Set(["perceiving", "stopping"])],
-  ["perceiving", new Set(["evaluating", "stopping"])],
+  ["perceiving", new Set(["evaluating", "resting", "stopping"])],
   ["evaluating", new Set(["acting", "stopping"])],
   ["acting", new Set(["reflecting", "stopping"])],
   ["reflecting", new Set(["perceiving", "resting", "stopping"])],
