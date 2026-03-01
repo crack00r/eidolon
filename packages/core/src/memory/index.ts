@@ -1,5 +1,6 @@
 export type { DocumentChunk, IndexingOptions } from "./document-indexer.js";
 export { DocumentIndexer } from "./document-indexer.js";
+export * from "./dreaming/index.js";
 export type { EmbeddingModelOptions, EmbeddingPrefix } from "./embeddings.js";
 export { EmbeddingModel } from "./embeddings.js";
 export type { ConversationTurn, ExtractedMemory, ExtractorOptions, LlmExtractFn } from "./extractor.js";
