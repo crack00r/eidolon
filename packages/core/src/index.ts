@@ -7,6 +7,7 @@ export * from "./claude/index.js";
 export * from "./config/index.js";
 export * from "./database/index.js";
 export * from "./health/index.js";
+export * from "./learning/index.js";
 export * from "./logging/index.js";
 export * from "./loop/index.js";
 export * from "./memory/index.js";
