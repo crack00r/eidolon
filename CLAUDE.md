@@ -75,6 +75,15 @@ enable parallel execution, and produce better results through focused system pro
 7. **All code changes from self-learning require user approval**
 8. **AES-256-GCM encrypted secrets** with Argon2id key derivation, API keys isolated per subprocess
 
+## MASTER IMPLEMENTATION PLAN (BINDING)
+
+**Every session MUST follow this plan. No deviations without explicit user approval.**
+
+- @docs/IMPLEMENTATION_PLAN.md -- exact file structure, interfaces, build order, dependencies, SQL schemas
+
+This is the single source of truth for WHAT to build, WHERE each file goes, WHICH interfaces connect components,
+and in WHAT ORDER to implement. Always check current phase progress against this plan.
+
 ## Key Design References
 
 Architecture and design details live in these docs (Claude loads on demand):
