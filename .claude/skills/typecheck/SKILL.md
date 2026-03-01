@@ -2,6 +2,8 @@
 name: typecheck
 description: Run TypeScript type checking across all Eidolon packages
 disable-model-invocation: true
+context: fork
+agent: eidolon-coder
 allowed-tools: Bash(pnpm *), Bash(bun *), Bash(npx *), Read
 ---
 

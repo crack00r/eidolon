@@ -2,6 +2,8 @@
 name: lint
 description: Run linting across all Eidolon packages and optionally auto-fix
 disable-model-invocation: true
+context: fork
+agent: eidolon-coder
 allowed-tools: Bash(pnpm *), Bash(bun *), Bash(npx *), Read
 ---
 

@@ -42,6 +42,8 @@ eidolon.db
 
 # Claude Code local preferences (per-developer, not shared)
 CLAUDE.local.md
+.claude/settings.local.json
+.claude/agent-memory-local/
 
 # OS files
 .DS_Store

@@ -2,6 +2,8 @@
 name: fix-issue
 description: Fix a GitHub issue by number -- analyze, implement, test, and commit
 disable-model-invocation: true
+context: fork
+agent: eidolon-coder
 argument-hint: "[issue-number]"
 ---
 

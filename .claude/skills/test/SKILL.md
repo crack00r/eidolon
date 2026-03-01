@@ -2,7 +2,9 @@
 name: test
 description: Run tests for Eidolon packages using bun test
 disable-model-invocation: true
-allowed-tools: Bash(pnpm *), Bash(bun *), Read
+context: fork
+agent: eidolon-tester
+allowed-tools: Bash(pnpm *), Bash(bun *), Read, Grep, Glob
 ---
 
 # Run Tests

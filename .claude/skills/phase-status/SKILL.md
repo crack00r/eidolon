@@ -2,7 +2,7 @@
 name: phase-status
 description: Show current development phase progress for Eidolon project
 context: fork
-agent: Explore
+agent: eidolon-planner
 allowed-tools: Read, Glob, Grep
 ---
 

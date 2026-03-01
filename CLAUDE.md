@@ -47,6 +47,23 @@ apps/web/            # Web dashboard
 services/gpu-worker/ # Python/FastAPI + TTS/STT
 ```
 
+## CRITICAL: Agent-First Development Workflow
+
+**ALL development work MUST be delegated to subagents. The main session is an ORCHESTRATOR ONLY.**
+
+- **Coding** -> delegate to `eidolon-coder` agent
+- **Debugging** -> delegate to `eidolon-debugger` agent
+- **Testing** -> delegate to `eidolon-tester` agent
+- **Planning/Research** -> delegate to `eidolon-planner` agent (or built-in `Explore`/`Plan`)
+- **Code Review** -> delegate to `eidolon-reviewer` agent
+
+The main session MUST NOT: write code directly, debug directly, run tests directly, or do deep research directly.
+The main session SHOULD: understand the request, break it into tasks, delegate each to the right agent,
+synthesize results, and communicate with the user.
+
+This rule exists because agents preserve main session context, enforce tool restrictions,
+enable parallel execution, and produce better results through focused system prompts.
+
 ## Critical Architectural Rules
 
 1. **Claude Code CLI is the engine** -- managed subprocess, NOT custom agent runtime
