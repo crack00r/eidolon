@@ -1,0 +1,17 @@
+services:
+  gpu-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.cuda
+    ports:
+      - "8420:8420"
+    environment:
+      - EIDOLON_GPU_API_KEY=${EIDOLON_GPU_API_KEY:-}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: unless-stopped

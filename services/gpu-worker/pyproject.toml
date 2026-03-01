@@ -1,0 +1,21 @@
+[project]
+name = "eidolon-gpu-worker"
+version = "0.1.0"
+description = "GPU worker for Eidolon TTS/STT"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "python-multipart>=0.0.9",
+]
+
+[project.optional-dependencies]
+gpu = [
+    "faster-whisper>=1.0",
+    "torch>=2.0",
+    "transformers>=4.40",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

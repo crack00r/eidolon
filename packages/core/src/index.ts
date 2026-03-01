@@ -6,6 +6,7 @@ export * from "./channels/index.js";
 export * from "./claude/index.js";
 export * from "./config/index.js";
 export * from "./database/index.js";
+export * from "./gpu/index.js";
 export * from "./health/index.js";
 export * from "./learning/index.js";
 export * from "./logging/index.js";
