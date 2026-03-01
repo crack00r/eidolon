@@ -1,0 +1,67 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build output
+dist/
+build/
+*.tsbuildinfo
+
+# Bun
+bun.lockb
+
+# Python (GPU worker)
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Tauri (desktop app)
+apps/desktop/src-tauri/target/
+apps/desktop/src-tauri/WixTools/
+
+# iOS
+apps/ios/Eidolon.xcodeproj/xcuserdata/
+apps/ios/Eidolon.xcodeproj/project.xcworkspace/xcuserdata/
+apps/ios/build/
+*.ipa
+
+# Eidolon runtime data (NEVER commit these)
+.eidolon/
+secrets.enc
+eidolon.db
+*.log
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# OS files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Editor files
+.vscode/
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*~
+
+# Docker
+docker-compose.override.yml
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
