@@ -1,5 +1,8 @@
 # GPU Offloading & Voice
 
+> **Status: Design — not yet implemented.**
+> Updated 2026-03-01 based on [expert review findings](../REVIEW_FINDINGS.md).
+
 ## Architecture
 
 Eidolon separates the brain (Core daemon on Ubuntu server) from compute-intensive workloads (GPU worker on Windows PC). They communicate over the Tailscale mesh network.
@@ -35,7 +38,7 @@ Ubuntu Server                         Windows PC (RTX 5080)
 |---|---|---|
 | API Framework | FastAPI | Async Python, OpenAPI docs, streaming support |
 | TTS Engine | Qwen3-TTS | Open source, 10 languages, voice clone, streaming |
-| STT Engine | Whisper Large v3 | Best open-source STT, multilingual |
+| STT Engine | faster-whisper (Large v3) | Same quality as Whisper, 4x faster, half VRAM |
 | Model Serving | Direct Python or vLLM | Direct for simplicity, vLLM for performance |
 | Containerization | Docker (NVIDIA Container Toolkit) | Reproducible GPU environment |
 
@@ -43,22 +46,27 @@ Ubuntu Server                         Windows PC (RTX 5080)
 
 ```
 POST /tts/generate
+  Headers: Authorization: Bearer <GPU_WORKER_TOKEN>
   Body: { text, language, speaker, instruct? }
   Response: Audio bytes (WAV)
 
 POST /tts/stream
+  Headers: Authorization: Bearer <GPU_WORKER_TOKEN>
   Body: { text, language, speaker, instruct? }
   Response: Server-Sent Events with audio chunks
 
 POST /tts/clone
+  Headers: Authorization: Bearer <GPU_WORKER_TOKEN>
   Body: { text, language, ref_audio (base64), ref_text }
   Response: Audio bytes (WAV)
 
 POST /stt/transcribe
+  Headers: Authorization: Bearer <GPU_WORKER_TOKEN>
   Body: Multipart form with audio file
   Response: { text, language, confidence, segments[] }
 
 GET /health
+  Headers: Authorization: Bearer <GPU_WORKER_TOKEN>
   Response: {
     status: "ok",
     gpu: { name, vram_total, vram_used, temperature, utilization },
@@ -66,10 +74,13 @@ GET /health
   }
 
 WS /voice/realtime
+  Auth: Token sent in first message after connect
   Bidirectional WebSocket for real-time voice conversation
-  Client sends: audio chunks (PCM 16kHz)
-  Server sends: audio chunks (PCM 24kHz) + text transcription
+  Client sends: Opus-encoded audio chunks (configurable bitrate, default 32kbps)
+  Server sends: Opus-encoded audio chunks + text transcription (JSON)
 ```
+
+> **Review update:** All endpoints now require pre-shared key authentication (see [Security](SECURITY.md#gpu-worker-authentication)). WebSocket audio switched from raw PCM to Opus codec.
 
 ### Qwen3-TTS Details
 
@@ -100,8 +111,8 @@ Rationale:
 | Model | VRAM (bfloat16) | Notes |
 |---|---|---|
 | Qwen3-TTS 1.7B | ~3.4 GB | Always loaded |
-| Whisper Large v3 | ~3.0 GB | Loaded on demand |
-| **Total** | **~6.4 GB** | 9.6 GB free for other tasks |
+| faster-whisper (Large v3) | ~1.5 GB | Loaded on demand (CTranslate2, int8 quantized) |
+| **Total** | **~4.9 GB** | 11.1 GB free for other tasks |
 
 With FlashAttention2, memory usage is further reduced.
 
@@ -153,7 +164,7 @@ Client                    Core                     GPU Worker
 ```
 
 Total latency target: < 2 seconds end-to-end
-- STT: ~500ms (Whisper with chunked processing)
+- STT: ~200-400ms (faster-whisper with CTranslate2, 4x faster than standard Whisper)
 - Claude response: ~500-1000ms (first token)
 - TTS: ~97ms (first audio packet with streaming)
 
@@ -191,7 +202,9 @@ User stops speaking
   └─ TTS first packet ─────────── 97ms
       (Qwen3-TTS streaming)
 
-Total: ~750-1200ms (target median: ~900ms)
+Total: ~750-1200ms (target P10: ~900ms, realistic median: ~1200-1500ms)
+
+> **Review update (Voice/Audio Engineer):** The original 900ms median target is achievable only under optimal conditions. Realistic median with network variance, longer utterances, and model warm-up is ~1200-1500ms. P10 (best case) is ~900ms. This is still excellent for conversational AI.
 ```
 
 ### WebSocket Protocol Specification
@@ -201,17 +214,23 @@ The `WS /voice/realtime` endpoint uses a binary+JSON protocol:
 ```typescript
 // Client → Server messages
 type ClientMessage =
-  | { type: 'audio'; data: ArrayBuffer }        // PCM 16-bit, 16kHz mono
+  | { type: 'audio'; data: ArrayBuffer }        // Opus-encoded frames
   | { type: 'control'; action: 'start' | 'stop' | 'interrupt' }
-  | { type: 'config'; vad: VADConfig; mode: 'push-to-talk' | 'always-on' | 'wake-word' }
+  | { type: 'config'; vad: VADConfig; mode: 'push-to-talk' | 'always-on' | 'wake-word';
+      codec: { format: 'opus'; bitrate: number; sampleRate: number } }
 
 // Server → Client messages
 type ServerMessage =
-  | { type: 'audio'; data: ArrayBuffer }        // PCM 16-bit, 24kHz mono
+  | { type: 'audio'; data: ArrayBuffer }        // Opus-encoded frames
   | { type: 'transcript'; text: string; final: boolean }  // STT result
   | { type: 'response_text'; text: string; done: boolean } // Claude's text
   | { type: 'state'; state: VoiceState }        // State machine update
   | { type: 'error'; message: string }
+
+// Audio codec: Opus (RFC 6716)
+// - Default: 32kbps, 48kHz sample rate, mono
+// - Bandwidth: ~32kbps vs ~768kbps for raw PCM 16-bit 48kHz (24x reduction)
+// - Built-in: packet loss concealment, variable bitrate
 
 type VoiceState =
   | 'idle'            // Waiting for user speech
@@ -263,11 +282,14 @@ class StreamingVoicePipeline {
   async onToken(token: string): Promise<void> {
     this.sentenceBuffer += token;
 
-    // Check for sentence boundaries
-    const sentenceEnd = /[.!?]\s|[.!?]$|\n/;
-    if (sentenceEnd.test(this.sentenceBuffer) && this.sentenceBuffer.length > 10) {
-      const sentence = this.sentenceBuffer.trim();
-      this.sentenceBuffer = '';
+    // Check for sentence boundaries using Intl.Segmenter (not regex)
+    // Intl.Segmenter handles multilingual text, abbreviations, and edge cases
+    // that a simple regex misses (e.g., "Dr. Smith" is not a sentence break)
+    const segmenter = new Intl.Segmenter(this.language, { granularity: 'sentence' });
+    const segments = [...segmenter.segment(this.sentenceBuffer)];
+    if (segments.length > 1 || (segments.length === 1 && this.sentenceBuffer.length > 10 && /[.!?]\s*$/.test(this.sentenceBuffer))) {
+      const sentence = segments[0]?.segment.trim() ?? this.sentenceBuffer.trim();
+      this.sentenceBuffer = segments.length > 1 ? segments.slice(1).map(s => s.segment).join('') : '';
 
       // Dispatch sentence to TTS immediately — don't wait for previous to finish
       this.ttsQueue.push(this.speakSentence(sentence));
@@ -366,23 +388,72 @@ When the user starts speaking while Eidolon is talking:
 
 **Partial response handling:** When interrupted, the text Claude had generated so far is kept in conversation context (marked as interrupted). This means if the user says "wait, go back" — Eidolon knows what it was saying.
 
+### Audio Preprocessing Pipeline
+
+> **Review addition (Voice/Audio Engineer):** Raw microphone input requires preprocessing before STT.
+
+Client-side audio preprocessing runs before sending to the server:
+
+```
+Microphone Input
+  │
+  ├─ High-Pass Filter (80Hz cutoff) ── removes low-freq rumble, HVAC, traffic
+  │
+  ├─ Automatic Gain Control (AGC) ──── normalizes volume across speakers/distances
+  │
+  ├─ Noise Suppression ──────────────── reduces background noise (RNNoise or WebRTC NS)
+  │
+  ├─ Opus Encoding ──────────────────── compress for network transport
+  │
+  └─ Send to Server
+```
+
+| Stage | Desktop (Tauri) | iOS | Web |
+|---|---|---|---|
+| High-pass | Web Audio API BiquadFilter | AVAudioEngine | Web Audio API |
+| AGC | Web Audio API DynamicsCompressor | AVAudioSession | Web Audio API |
+| Noise suppression | RNNoise (WASM) | iOS built-in | RNNoise (WASM) |
+| Opus encoding | libopus (WASM) | iOS AudioToolbox | libopus (WASM) |
+
+### Client-Side Jitter Buffer
+
+> **Review addition (Voice/Audio Engineer):** Network variance causes audio packets to arrive unevenly.
+
+A client-side jitter buffer smooths out packet arrival times:
+
+```typescript
+interface JitterBufferConfig {
+  minDelay: number;     // Minimum buffer depth (default: 50ms)
+  maxDelay: number;     // Maximum buffer depth (default: 150ms)
+  adaptive: boolean;    // Auto-adjust based on network conditions (default: true)
+}
+```
+
+The buffer accumulates incoming Opus frames and plays them at a steady rate, absorbing network jitter up to `maxDelay`. If packets arrive consistently, the buffer shrinks to `minDelay` for lower latency.
+
 ### Echo Cancellation
 
-The system must prevent Eidolon from "hearing" its own voice output through the user's microphone. Two strategies:
+The system must prevent Eidolon from "hearing" its own voice output through the user's microphone. Four strategies, in order of preference:
 
-**Strategy 1: Hardware AEC (Recommended for Desktop)**
-- Use the platform's built-in acoustic echo cancellation:
-  - macOS: Core Audio AEC
-  - Windows: Windows Audio Session API (WASAPI) with AEC DSP
-  - Linux: PulseAudio echo cancellation module
-- This is handled at the OS level, transparent to Eidolon
+**Strategy 1: WebRTC AEC3 (Recommended)**
+> **Review update:** WebRTC AEC3 is the gold standard for software echo cancellation, used by every major video conferencing platform.
+- Available via libwebrtc (C++ with bindings)
+- Desktop: use via native module or WASM port
+- iOS: built into AVAudioSession (voiceChat mode uses Apple's AEC which is comparable)
+- Handles non-linear echo, reverberation, and double-talk
 
-**Strategy 2: Software VAD Gating (Recommended for simple setups)**
+**Strategy 2: Platform Hardware AEC**
+- macOS: Core Audio AEC
+- Windows: WASAPI with AEC DSP
+- Linux: PulseAudio echo cancellation module
+- Handled at the OS level, transparent to Eidolon
+
+**Strategy 3: Software VAD Gating (Fallback)**
 - During SPEAKING state, raise the VAD threshold significantly (0.5 → 0.85)
 - Only trigger barge-in if the speech probability is very high (real human speech, not echo)
 - Simpler but may miss quiet interruptions
 
-**Strategy 3: Ducking (Fallback)**
+**Strategy 4: Ducking (Last resort)**
 - Reduce microphone gain to 0 while audio is playing
 - Re-enable mic 50ms after playback stops
 - Simplest but prevents true simultaneous duplex
@@ -391,10 +462,20 @@ The system must prevent Eidolon from "hearing" its own voice output through the 
 ```jsonc
 {
   "voice": {
-    "echoCancellation": "hardware",  // 'hardware' | 'vad-gating' | 'ducking'
-    "bargeIn": true,                 // Allow interruptions
-    "vadThresholdSpeaking": 0.85,    // Higher threshold during playback (for vad-gating)
-    "vadThresholdListening": 0.5     // Normal threshold
+    "echoCancellation": "webrtc-aec3", // 'webrtc-aec3' | 'hardware' | 'vad-gating' | 'ducking'
+    "bargeIn": true,                    // Allow interruptions
+    "vadThresholdSpeaking": 0.85,       // Higher threshold during playback (for vad-gating)
+    "vadThresholdListening": 0.5,       // Normal threshold
+    "jitterBuffer": {
+      "minDelay": 50,
+      "maxDelay": 150,
+      "adaptive": true
+    },
+    "preprocessing": {
+      "highPassFilter": true,
+      "agc": true,
+      "noiseSuppression": true
+    }
   }
 }
 ```

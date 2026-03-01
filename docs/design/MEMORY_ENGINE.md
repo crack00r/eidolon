@@ -1,5 +1,8 @@
 # Memory Engine
 
+> **Status: Design — not yet implemented.**
+> Updated 2026-03-01 based on [expert review findings](../REVIEW_FINDINGS.md).
+
 ## The Problem with Current Approaches
 
 ### OpenClaw's Approach
@@ -425,11 +428,12 @@ CREATE TABLE kg_communities (
     updated_at TEXT NOT NULL
 );
 
--- TransE embeddings for entities and relations
+-- ComplEx embeddings for entities and relations (real + imaginary parts)
 CREATE TABLE kg_embeddings (
     id TEXT PRIMARY KEY,               -- entity_id or relation predicate
     type TEXT NOT NULL,                -- 'entity' or 'relation'
-    embedding BLOB NOT NULL,           -- 128-dim float32 TransE embedding
+    embedding_re BLOB NOT NULL,        -- 64-dim float32 real part
+    embedding_im BLOB NOT NULL,        -- 64-dim float32 imaginary part
     updated_at TEXT NOT NULL
 );
 ```
@@ -477,59 +481,90 @@ Use specific predicates: uses, owns, runs_on, depends_on, prefers, creates,
 is_part_of, located_in, has_property, related_to, contradicts, replaces.
 ```
 
-Entity deduplication uses embedding similarity (>0.92 cosine → merge) plus exact name matching after normalization.
+Entity deduplication uses embedding similarity plus exact name matching after normalization. Similarity thresholds are **configurable per entity type** (hard-coded thresholds are fragile across different entity categories):
 
-### TransE Embeddings
+| Entity Type | Default Threshold | Rationale |
+|---|---|---|
+| `person` | 0.95 | Names are specific, avoid false merges |
+| `technology` | 0.90 | Abbreviations and variants are common |
+| `device` | 0.90 | Model numbers cause variation |
+| `concept` | 0.85 | Abstract concepts overlap more |
+| `place` | 0.92 | Place names are fairly unique |
+| `project` | 0.90 | Project names can have similar prefixes |
 
-[TransE](https://papers.nips.cc/paper/5071-translating-embeddings-for-modeling-multi-relational-data) models relations as translations in embedding space: for a valid triple `(h, r, t)`, the relationship `h + r ≈ t` should hold.
+### ComplEx Embeddings (Replacing TransE)
+
+> **Review update:** TransE was replaced with **ComplEx** based on AI/ML expert review. TransE cannot model symmetric relations (`A married_to B` ≠ `B married_to A`), 1-to-N relations, or reflexive patterns. ComplEx handles all relation types via complex-valued embeddings. RotatE is available as an alternative.
+
+[ComplEx](https://arxiv.org/abs/1606.06357) represents entities and relations as complex-valued vectors. The scoring function uses the Hermitian dot product, which naturally models symmetric, antisymmetric, and 1-to-N relations.
 
 **Training:** Runs during the REM dreaming phase on all current triples:
 
 ```typescript
-// TransE scoring: lower distance = more likely true
-function transEScore(h: Float32Array, r: Float32Array, t: Float32Array): number {
-  let dist = 0;
-  for (let i = 0; i < h.length; i++) {
-    const diff = h[i] + r[i] - t[i];
-    dist += diff * diff;
+// ComplEx scoring: higher score = more likely true
+// Uses complex-valued embeddings (real + imaginary parts)
+function complexScore(
+  hRe: Float32Array, hIm: Float32Array,  // head entity
+  rRe: Float32Array, rIm: Float32Array,  // relation
+  tRe: Float32Array, tIm: Float32Array   // tail entity
+): number {
+  let score = 0;
+  for (let i = 0; i < hRe.length; i++) {
+    // Hermitian dot product: Re(<h, r, conj(t)>)
+    score += hRe[i] * rRe[i] * tRe[i]
+           + hIm[i] * rRe[i] * tIm[i]
+           + hRe[i] * rIm[i] * tIm[i]
+           - hIm[i] * rIm[i] * tRe[i];
   }
-  return Math.sqrt(dist);  // L2 distance; lower = better
+  return score;
 }
 
-// Training loop (margin-based ranking loss)
-function trainTransE(
+// Training loop (binary cross-entropy loss)
+function trainComplEx(
   triples: Triple[],
-  entityEmbeddings: Map<string, Float32Array>,
-  relationEmbeddings: Map<string, Float32Array>,
+  entityRe: Map<string, Float32Array>,
+  entityIm: Map<string, Float32Array>,
+  relationRe: Map<string, Float32Array>,
+  relationIm: Map<string, Float32Array>,
   epochs: number = 100,
   lr: number = 0.01,
-  margin: number = 1.0,
-  dim: number = 128
+  dim: number = 64  // Per component; total 128 floats per entity
 ): void {
   for (let epoch = 0; epoch < epochs; epoch++) {
     for (const { subject, predicate, object } of triples) {
-      const h = entityEmbeddings.get(subject)!;
-      const r = relationEmbeddings.get(predicate)!;
-      const t = entityEmbeddings.get(object)!;
+      const hRe = entityRe.get(subject)!, hIm = entityIm.get(subject)!;
+      const rRe = relationRe.get(predicate)!, rIm = relationIm.get(predicate)!;
+      const tRe = entityRe.get(object)!, tIm = entityIm.get(object)!;
 
-      // Corrupt either head or tail to create negative sample
-      const corrupted = corruptTriple(subject, predicate, object, entityEmbeddings);
-      const hNeg = entityEmbeddings.get(corrupted.subject)!;
-      const tNeg = entityEmbeddings.get(corrupted.object)!;
+      // Positive sample score
+      const posScore = complexScore(hRe, hIm, rRe, rIm, tRe, tIm);
 
-      const posScore = transEScore(h, r, t);
-      const negScore = transEScore(hNeg, r, tNeg);
+      // Negative sample (corrupt head or tail)
+      const corrupted = corruptTriple(subject, predicate, object, entityRe);
+      const negHRe = entityRe.get(corrupted.subject)!;
+      const negHIm = entityIm.get(corrupted.subject)!;
+      const negTRe = entityRe.get(corrupted.object)!;
+      const negTIm = entityIm.get(corrupted.object)!;
+      const negScore = complexScore(negHRe, negHIm, rRe, rIm, negTRe, negTIm);
 
-      // Margin-based loss: push positive triples closer, negatives apart
-      const loss = Math.max(0, margin + posScore - negScore);
-      if (loss > 0) {
-        // Gradient descent step on embeddings
-        updateEmbeddings(h, r, t, hNeg, tNeg, lr);
-      }
+      // Binary cross-entropy gradient step
+      updateComplExEmbeddings(posScore, negScore, lr, /* ... */);
     }
   }
 }
 ```
+
+**Why ComplEx over TransE:**
+
+| Aspect | TransE | ComplEx |
+|---|---|---|
+| Symmetric relations (`married_to`) | Cannot model | Handles correctly |
+| Antisymmetric relations (`parent_of`) | Handles | Handles correctly |
+| 1-to-N relations (`owns`) | Poor | Handles correctly |
+| Reflexive relations (`similar_to`) | Cannot model | Handles correctly |
+| Embedding size | 128 real floats | 128 floats (64 real + 64 imaginary) |
+| Training speed | Fastest | Slightly slower (2x params) |
+| Prediction quality | Good for simple graphs | Better for diverse relations |
 
 **Link prediction:** After training, predict missing relations:
 
@@ -539,25 +574,30 @@ async function predictLinks(
   predicates: string[],
   topK: number = 5
 ): Promise<PredictedTriple[]> {
-  const h = await getTransEEmbedding(entity);
+  const hRe = await getComplExRe(entity);
+  const hIm = await getComplExIm(entity);
   const predictions: PredictedTriple[] = [];
 
   for (const predicate of predicates) {
-    const r = await getTransEEmbedding(predicate);
-    // h + r ≈ ? — find entities closest to (h + r)
-    const target = add(h, r);
-    const nearest = await findNearestEntities(target, topK);
-    
-    for (const { entityId, distance } of nearest) {
-      // Skip if this triple already exists
-      if (await tripleExists(entity, predicate, entityId)) continue;
-      predictions.push({
-        subject: entity,
-        predicate,
-        object: entityId,
-        score: 1.0 / (1.0 + distance),  // Convert distance to 0-1 score
-        source: 'prediction',
-      });
+    const rRe = await getComplExRe(predicate);
+    const rIm = await getComplExIm(predicate);
+
+    // Score all candidate tail entities
+    for (const candidateId of await getAllEntityIds()) {
+      if (await tripleExists(entity, predicate, candidateId)) continue;
+      const tRe = await getComplExRe(candidateId);
+      const tIm = await getComplExIm(candidateId);
+      const score = complexScore(hRe, hIm, rRe, rIm, tRe, tIm);
+
+      if (score > 0.7) {
+        predictions.push({
+          subject: entity,
+          predicate,
+          object: candidateId,
+          score: sigmoid(score),
+          source: 'prediction',
+        });
+      }
     }
   }
 
@@ -707,13 +747,13 @@ Cross-platform compatibility is the primary criterion.
 | Phase | KG Operations |
 |---|---|
 | **Housekeeping** | Merge duplicate entities (embedding similarity >0.92), update PageRank, prune orphaned entities with 0 relations |
-| **REM** | Train TransE on all triples (100 epochs), predict new links (score >0.7 → add with source='prediction'), find cross-community connections |
+| **REM** | Train ComplEx on all triples (100 epochs), predict new links (score >0.7 → add with source='prediction'), find cross-community connections |
 | **NREM** | Run Leiden community detection, generate community summaries, create hierarchical community structure |
 
 ### Cost & Performance
 
 - Entity/relation extraction adds ~100 tokens to the hybrid extraction prompt per turn
-- TransE training on 1000 triples: <1 second (pure math, no LLM)
+- ComplEx training on 1000 triples: <2 seconds (pure math, no LLM, 2x params vs TransE)
 - Leiden community detection: <100ms for graphs with <10,000 edges
 - Community summarization: ~200 tokens per community (cheap model)
 - Total KG overhead during dreaming: ~2,000 tokens + <5 seconds compute
@@ -768,7 +808,7 @@ interface MemorySearchResult {
   id: string;
   type: string;
   content: string;
-  score: number;        // Relevance score
+  score: number;        // Relevance score (RRF-fused)
   source: string;       // Where it came from
   created_at: string;
   meta: Record<string, unknown>;
@@ -785,6 +825,51 @@ async function searchMemory(
   }
 ): Promise<MemorySearchResult[]>;
 ```
+
+### Reciprocal Rank Fusion (RRF)
+
+> **Review update:** The hybrid search fusion strategy was undefined. RRF is adopted as the default method for combining BM25 and vector search results.
+
+When combining BM25 keyword search and vector similarity search, results from each method are ranked independently, then fused using Reciprocal Rank Fusion:
+
+```
+RRF_score(d) = Σ  1 / (k + rank_i(d))
+```
+
+Where `k = 60` (standard constant from the original RRF paper) and `rank_i(d)` is the rank of document `d` in retrieval method `i`.
+
+```typescript
+function reciprocalRankFusion(
+  bm25Results: RankedResult[],
+  vectorResults: RankedResult[],
+  k: number = 60
+): FusedResult[] {
+  const scores = new Map<string, number>();
+
+  // Score from BM25 ranking
+  bm25Results.forEach((r, rank) => {
+    const current = scores.get(r.id) ?? 0;
+    scores.set(r.id, current + 1 / (k + rank + 1));
+  });
+
+  // Score from vector ranking
+  vectorResults.forEach((r, rank) => {
+    const current = scores.get(r.id) ?? 0;
+    scores.set(r.id, current + 1 / (k + rank + 1));
+  });
+
+  // Sort by fused score
+  return [...scores.entries()]
+    .map(([id, score]) => ({ id, score }))
+    .sort((a, b) => b.score - a.score);
+}
+```
+
+**Why RRF over other fusion methods:**
+- Parameter-free (only `k`, which is stable across domains)
+- Works without score normalization (BM25 and cosine similarity have different scales)
+- Well-studied: outperforms simple score averaging in most benchmarks
+- Trivial to implement and debug
 
 ## Comparison
 

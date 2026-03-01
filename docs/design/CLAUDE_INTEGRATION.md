@@ -1,5 +1,8 @@
 # Claude Code Integration
 
+> **Status: Design — not yet implemented.**
+> Updated 2026-03-01 based on [expert review findings](../REVIEW_FINDINGS.md).
+
 ## Why Claude Code CLI as Execution Engine
 
 The single most impactful architectural decision in Eidolon.
@@ -299,9 +302,10 @@ class ClaudeCodeSession {
       args.push('--worktree', `learning-${options.taskId}`);
     }
 
-    // Permission handling
-    if (options.skipPermissions) {
-      args.push('--dangerously-skip-permissions');
+    // Tool restriction by session type (replaces --dangerously-skip-permissions)
+    // NOTE: --dangerously-skip-permissions is NEVER used. See SECURITY.md.
+    if (options.allowedTools) {
+      args.push('--allowedTools', ...options.allowedTools);
     }
 
     // The message is the final positional argument
@@ -441,8 +445,7 @@ Session timeout (configurable, default 1h)
 | `--append-system-prompt` | Add Eidolon context to system prompt | All sessions |
 | `--worktree <name>` | Isolated git worktree | Learning branches |
 | `--agents` | Define subagents dynamically | Multi-task sessions |
-| `--dangerously-skip-permissions` | Skip permission prompts | Trusted environments |
-| `--allowedTools` | Restrict available tools | Sandboxed sessions |
+| `--allowedTools` | Restrict available tools | All sessions (explicit whitelist per type) |
 
 ### Memory Injection Strategy
 
@@ -479,7 +482,33 @@ if (options.sandboxed) {
 
 **Issue:** Spawning a new Claude Code process for each interaction adds ~2-3 seconds of latency.
 
-**Mitigation:** Keep a warm process pool for the main session. Only cold-start for learning and task sessions.
+**Mitigation:** Use `--resume` for existing sessions (context is cached by Claude Code, reducing startup). For new sessions, accept ~2s cold start and send immediate "Thinking..." acknowledgment to the user. Process pool pre-warming is not feasible — Claude Code CLI does not support spawning a process and injecting a prompt later.
+
+### Limitation: Testability
+
+**Issue:** Claude Code CLI is an external binary. Integration tests that spawn real Claude Code processes are slow, expensive, and non-deterministic.
+
+**Mitigation:** Introduce an `IClaudeProcess` abstraction layer:
+
+```typescript
+interface IClaudeProcess {
+  start(message: string, options: SessionOptions): Promise<void>;
+  streamResponses(): AsyncGenerator<StreamEvent>;
+  interrupt(): Promise<void>;
+  kill(): void;
+}
+
+// Real implementation: spawns Claude Code CLI
+class ClaudeCodeProcess implements IClaudeProcess { /* ... */ }
+
+// Test implementation: returns canned responses
+class FakeClaudeProcess implements IClaudeProcess {
+  constructor(private responses: StreamEvent[]) {}
+  // Returns configured responses without any API calls
+}
+```
+
+All code depends on `IClaudeProcess`, never on `ClaudeCodeProcess` directly. This enables fast, deterministic unit and integration tests.
 
 ### Limitation: Claude Code CLI is Claude-only
 

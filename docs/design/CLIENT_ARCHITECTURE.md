@@ -1,5 +1,8 @@
 # Client Architecture
 
+> **Status: Design — not yet implemented.**
+> Updated 2026-03-01 based on [expert review findings](../REVIEW_FINDINGS.md).
+
 ## Client Types
 
 Eidolon supports four client types, all connecting to the Core daemon via WebSocket over Tailscale:
@@ -135,6 +138,8 @@ Tauri has built-in auto-update using GitHub Releases:
 
 ### Connection Strategy
 
+> **Review update (Mobile Developer):** Tailscale-only networking is a dealbreaker for real-world mobile use. Added Cloudflare Tunnel as alternative for non-VPN connectivity.
+
 ```
 1. Try Bonjour (local network, zero-config)
    └── Found? Connect directly via local IP
@@ -142,13 +147,27 @@ Tauri has built-in auto-update using GitHub Releases:
 2. Try Tailscale hostname
    └── Reachable? Connect via Tailscale
 
-3. Fallback: manual configuration
+3. Try Cloudflare Tunnel
+   └── Configured? Connect via public HTTPS endpoint
+   └── Provides: HTTPS with Cloudflare's DDoS protection
+   └── No VPN required on mobile device
+
+4. Fallback: manual configuration
    └── User enters host:port
 ```
 
-### Push Notifications
+**Cloudflare Tunnel** (optional, recommended for mobile):
+- Exposes Core's WebSocket endpoint via `https://eidolon.yourdomain.com`
+- No port forwarding, no VPN required on mobile device
+- Free tier available for personal use
+- Configuration: `eidolon config set gateway.cloudflare.tunnelToken $TUNNEL_TOKEN`
+- Authentication still required (gateway token in WebSocket handshake)
 
-Since the iOS app can't maintain a persistent WebSocket in the background, push notifications are used for alerts:
+### Push Notifications (APNs)
+
+> **Review update (Mobile Developer):** iOS kills background WebSocket connections. APNs is required for reliable push delivery. The server-side APNs implementation must be part of Core.
+
+Since the iOS app can't maintain a persistent WebSocket in the background, push notifications via Apple Push Notification service (APNs) are used for alerts:
 
 ```
 Core                          APNs                    iOS App
@@ -161,6 +180,22 @@ Core                          APNs                    iOS App
   │<── WebSocket connect ──────────────────────────────│
   │── catch-up events ────────────────────────────────>│
 ```
+
+**Server-side APNs requirements (Phase 8 prerequisite):**
+- APNs HTTP/2 client in Core (e.g., `apn` npm package or direct HTTP/2)
+- APNs auth key stored in secret store
+- Device token registration via WebSocket handshake
+- Push payload: notification type, preview text, badge count
+- Silent push for background refresh triggers
+
+**Notification categories:**
+| Category | APNs Priority | Example |
+|---|---|---|
+| `critical` | 10 (immediate) | Security alert, user-requested reminder |
+| `normal` | 5 (power-aware) | Learning discovery, task completion |
+| `low` | 1 (batched) | Dreaming report, daily digest |
+
+**iOS timeline estimate:** 6 weeks (updated from original 2-week estimate). Includes: SwiftUI app, WebSocket, APNs integration, voice mode, VoiceOver accessibility, TestFlight setup.
 
 ## CLI
 

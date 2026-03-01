@@ -1,5 +1,8 @@
 # Cognitive Loop
 
+> **Status: Design — not yet implemented.**
+> Updated 2026-03-01 based on [expert review findings](../REVIEW_FINDINGS.md).
+
 ## The Problem with Timers
 
 Every existing personal AI assistant uses timers for proactive behavior:
@@ -421,3 +424,63 @@ interface ScheduledTask {
 ```
 
 The scheduler emits `schedule.trigger` events that the Cognitive Loop evaluates alongside other events. This means scheduled tasks compete fairly with other priorities rather than running in isolation.
+
+## Resilience in the Cognitive Loop
+
+> **Review additions (Distributed Systems Engineer):** The loop needs explicit failure handling, backpressure, and event persistence.
+
+### Event Bus Persistence
+
+Events are persisted to SQLite before processing (see [Architecture — Event Bus Persistence](ARCHITECTURE.md#event-bus-persistence)). On daemon restart, unprocessed events are replayed in priority order.
+
+### Backpressure
+
+When the Event Bus queue exceeds a configurable threshold (default: 1000 pending events), the loop applies backpressure:
+
+```typescript
+function shouldAcceptEvent(event: Event, queueDepth: number): boolean {
+  const threshold = config.resilience.eventQueueThreshold; // default: 1000
+
+  if (queueDepth < threshold) return true;
+  if (event.priority === 'critical' || event.priority === 'high') return true;
+  
+  // Drop low-priority events when overloaded
+  log.warn(`Event bus backpressure: dropping ${event.type} (queue: ${queueDepth})`);
+  return false;
+}
+```
+
+### Circuit Breakers
+
+External calls in the ACT phase use circuit breakers (see [Architecture — Circuit Breakers](ARCHITECTURE.md#circuit-breakers)). When a circuit is open, the loop skips actions that depend on that service and moves to the next action.
+
+### Retry Strategy
+
+Failed actions are retried with exponential backoff:
+
+```typescript
+async function executeWithRetry(action: Action, maxAttempts: number = 3): Promise<ActionResult> {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await this.execute(action);
+    } catch (error) {
+      if (!isTransient(error) || attempt === maxAttempts) throw error;
+      const delay = Math.min(1000 * Math.pow(2, attempt - 1), 60000);
+      const jitter = delay * 0.2 * (Math.random() - 0.5);
+      await sleep(delay + jitter);
+    }
+  }
+  throw new Error('unreachable');
+}
+```
+
+### Graceful Shutdown
+
+`eidolon daemon stop` triggers a graceful shutdown:
+
+1. Stop accepting new events
+2. Wait for current ACT phase to complete (max 30s timeout)
+3. Persist all pending events to SQLite
+4. Close all Claude Code subprocess connections
+5. Close database connections
+6. Exit with code 0

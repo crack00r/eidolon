@@ -1,5 +1,8 @@
 # Security Model
 
+> **Status: Design — not yet implemented.**
+> Updated 2026-03-01 based on [expert review findings](../REVIEW_FINDINGS.md).
+
 ## Threat Landscape
 
 A personal AI assistant with deep system access presents unique security challenges:
@@ -276,6 +279,117 @@ For higher security requirements, Claude Code can run inside a container:
 }
 ```
 
+## GPU Worker Authentication
+
+> **Review finding C-4:** GPU worker port 8420 was exposed on Tailscale with no authentication.
+
+All GPU worker endpoints require pre-shared key authentication:
+
+```
+Authorization: Bearer <GPU_WORKER_TOKEN>
+```
+
+The token is stored in the encrypted secret store and injected into both Core and GPU worker configuration:
+
+```bash
+# Set GPU worker token
+eidolon secrets set GPU_WORKER_TOKEN
+
+# Token is referenced in config
+# gpu.workers[].authToken: { "$secret": "GPU_WORKER_TOKEN" }
+```
+
+The GPU worker validates the token on every request. Requests without a valid token receive `401 Unauthorized`.
+
+**Token rotation:** `eidolon secrets rotate GPU_WORKER_TOKEN` generates a new token and restarts the GPU connection.
+
+## API Key Isolation in Subprocess Environment
+
+> **Review finding C-3:** Decrypted API keys were exposed in process environment variables.
+
+API keys are **never** set in the parent process environment. They are passed only to the Claude Code subprocess via isolated environment:
+
+```typescript
+// CORRECT: key only exists in subprocess environment
+const proc = spawn('claude', args, {
+  env: {
+    // Minimal env: only what Claude Code needs
+    HOME: process.env.HOME,
+    PATH: process.env.PATH,
+    ANTHROPIC_API_KEY: decryptedKey,  // Only in this subprocess
+  },
+  stdio: ['pipe', 'pipe', 'pipe'],
+});
+
+// Parent process never has ANTHROPIC_API_KEY in its env
+// Key is decrypted in-memory, passed to spawn(), then dereferenced
+```
+
+The decrypted key exists in memory only for the duration of the `spawn()` call. It is not stored in any file or persistent variable.
+
+## Self-Learning Sandboxing
+
+> **Review finding C-5:** Self-learning pipeline could become a prompt injection → RCE vector.
+
+The self-learning pipeline has strict security boundaries:
+
+1. **Content sanitization:** All scraped content is stripped of markdown injection patterns, code blocks with shell commands, and known prompt injection templates before LLM evaluation.
+2. **Restricted evaluation context:** The relevance filter runs with `--allowedTools Read,Grep,Glob` — no shell execution, no file writing.
+3. **Code changes always require approval:** Implementation is never auto-classified as `safe`. The user must explicitly approve every code change.
+4. **Isolated execution:** All implementations run in a separate git worktree, never on the main branch.
+5. **Auto-lint and test gate:** Code changes must pass lint and test before the merge option is even offered to the user.
+
+## GDPR / Privacy
+
+> **Review finding H-5:** Multiple GDPR compliance gaps identified.
+
+### Right to Erasure
+
+```bash
+# Forget a specific entity (cascading delete from all tables)
+eidolon privacy forget "entity name"
+
+# Forget all memories from a date range
+eidolon privacy forget --since 2026-01-01 --until 2026-01-31
+
+# Full data wipe
+eidolon privacy forget --all --confirm
+```
+
+The `forget` command performs cascading deletion:
+1. Delete from `memories` table (matching content or entity)
+2. Delete from `kg_entities` and `kg_relations` (matching entity)
+3. Delete from `memory_edges` (referencing deleted memories)
+4. Delete from `audit` table (referencing deleted sessions)
+5. Regenerate MEMORY.md without deleted content
+
+### Data Portability
+
+```bash
+# Export all personal data as JSON
+eidolon privacy export --output eidolon-data.json
+
+# Export format includes: memories, KG entities/relations, sessions, preferences
+```
+
+### Voice Data as Biometric Data
+
+Voice recordings are biometric data under GDPR Art. 9. Requirements:
+- Explicit opt-in consent on first voice use (stored in config)
+- Voice data is not stored after transcription (STT result only)
+- Consent can be withdrawn: `eidolon privacy revoke-voice-consent`
+
+### Third-Party PII in Knowledge Graph
+
+The KG extraction pipeline flags entities of type `person` (other than the user):
+- Third-party persons require explicit user acknowledgment before storage
+- `eidolon privacy list-third-parties` shows all stored third-party entities
+- Third-party entities can be individually deleted
+
+### MEMORY.md Transparency
+
+MEMORY.md contents are sent to Anthropic's API as part of Claude Code sessions. The onboarding wizard requires explicit acknowledgment of this data flow.
+
 ## Security Checklist for Users
 
 ```
@@ -284,8 +398,11 @@ For higher security requirements, Claude Code can run inside a container:
 [ ] No plaintext secrets in eidolon.json
 [ ] Telegram bot token in secret store
 [ ] Gateway token set for WebSocket auth
+[ ] GPU worker authentication token set
 [ ] Tailscale ACLs configured for device access
 [ ] Action policies reviewed and adjusted
 [ ] Audit logging enabled
 [ ] Regular audit log review scheduled
+[ ] Voice consent acknowledged (if using voice)
+[ ] MEMORY.md data flow acknowledged
 ```

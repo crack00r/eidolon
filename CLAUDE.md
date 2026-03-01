@@ -1,6 +1,6 @@
 # Eidolon -- Project Context for AI Assistants
 
-This file provides full context for Claude Code, Claude Code, and any AI coding assistant working on this project.
+This file provides full context for Claude Code and any AI coding assistant working on this project.
 
 ## Goal
 
@@ -8,113 +8,87 @@ Build **Eidolon** -- a new personal AI assistant that replaces OpenClaw (current
 
 ## Current Phase
 
-**Planning & Documentation is COMPLETE. Ready for Phase 0: Foundation (code implementation).**
+**Planning & Documentation is COMPLETE. Expert reviews integrated. Ready for Phase 0: Foundation (code implementation).**
 
 See `docs/ROADMAP.md` for the full development roadmap. Phase 0 deliverables:
 - pnpm workspace with `packages/core`, `packages/cli`, `packages/protocol`
 - TypeScript + Bun configuration
+- Compatibility verification: `bun:sqlite` + `sqlite-vec`, `@huggingface/transformers` on Bun
 - Config system (Zod validation, env overrides)
 - Secret store (AES-256-GCM, Argon2id)
-- SQLite database with migration system
-- CLI skeleton (`eidolon start`, `eidolon config`, `eidolon secrets`, `eidolon doctor`)
+- 3-database split: `memory.db`, `operational.db`, `audit.db` with migration system
+- CLI skeleton (`eidolon daemon start|stop|status`, `eidolon config`, `eidolon secrets`, `eidolon doctor`)
 - Structured logging
+- CI pipeline (GitHub Actions: lint, typecheck, test)
+- Test infrastructure with `bun test`
+- systemd service file
+- Automated daily backup
 
 ## Instructions
 
 - The project is structured for a **public GitHub repo** -- clean docs, no private data, enterprise-level documentation.
 - Use **Claude Code CLI as the execution engine** (managed subprocess), not a custom agent runtime. This is the key architectural insight.
+- **Never use `--dangerously-skip-permissions`**. Use `--allowedTools` whitelisting per session type instead.
 - **Multi-account auth** with failover: multiple OAuth accounts (Anthropic Max subscription) + multiple API keys, with automatic rotation when one hits rate limits.
 - **Tech stack**: TypeScript/Bun for core, Python/FastAPI for GPU worker, Tauri 2.0 for desktop apps, Swift for iOS, grammY for Telegram.
-- All devices connected via **Tailscale** (already working in user's setup).
-- Target **~8,000 lines of own code** total. Stay focused, stay small.
+- All devices connected via **Tailscale** (already working in user's setup). Optional Cloudflare Tunnel for mobile without VPN.
+- Target **~8,000 lines of own code** (aspirational; actual may be 10-12k). Tests not counted.
 
 ## Key Architectural Decisions
 
-1. **Claude Code CLI as engine** eliminates ~80% of code that OpenClaw needs for its custom agent runtime. Shell, filesystem, web search, code generation all come free. Key flags: `-p`, `--output-format stream-json`, `--resume`, `--session-id`, `--worktree`, `--max-budget-usd`, `--fallback-model`, `--append-system-prompt`, `--agents`, `--mcp-config`, `--allowedTools`.
-2. **Cognitive Loop** (Perceive-Evaluate-Act-Reflect) replaces cron/heartbeat. Event-driven, priority-based, energy-budget-aware.
-3. **Multi-Session Orchestration**: Session Supervisor manages concurrent sessions (user chat, learning, tasks, voice, dreaming) with inter-session communication via Event Bus. Sessions can coordinate, share discoveries, and hand off work. Max 3 concurrent Claude Code processes.
-4. **Automatic memory extraction** after every conversation (not model-dependent). 5-layer memory (working, short-term, long-term, episodic, procedural) with dreaming consolidation (Housekeeping, REM, NREM).
-5. **Local embeddings by default**: `all-MiniLM-L6-v2` via `@huggingface/transformers` (ONNX, 384-dim, ~23MB, no API dependency). Optional: Voyage AI or OpenAI for higher quality.
-6. **Knowledge Graph with TransE embeddings**: Store knowledge as (Subject, Predicate, Object) triples in `kg_entities`/`kg_relations`/`kg_communities` tables. TransE for link prediction during REM dreaming. Leiden algorithm for community detection during NREM. PageRank for entity importance. Graph-enhanced search injects structured triples into MEMORY.md. All runs in SQLite, no external graph DB.
-7. **Self-learning pipeline**: discover content from Reddit/HN/GitHub, evaluate relevance, implement improvements via Claude Code in isolated git worktrees. Auto-lint/test after code changes. Skill extraction from repeated patterns.
-8. **"Her"-style real-time voice**: Full-duplex streaming voice with sentence-level TTS chunking (~900ms target latency), VAD-based endpointing, barge-in/interruption support, echo cancellation. WebSocket protocol with binary+JSON messages and explicit state machine (idle/listening/processing/speaking/interrupted).
-9. **Qwen3-TTS 1.7B** on RTX 5080 for local voice (free, ~97ms latency, 10 languages). Kitten TTS (~25MB, CPU-only) as fallback.
-10. **SQLite** for all persistent state (bun:sqlite native, sqlite-vec for vectors, FTS5 for full-text).
-11. **AES-256-GCM encrypted secrets** with Argon2id key derivation. No plaintext API keys.
-12. **OpenAI-compatible REST API** on the gateway for tool/client interoperability.
-13. **MCP server support** for extensibility -- forward configured MCP servers to Claude Code via `--mcp-config`.
-14. **Token/cost tracking** per session from day one, with model pricing table and energy budget enforcement.
-15. **Sub-agent routing**: cheap models (Haiku) for classification/extraction, expensive models (Opus/Sonnet) for code generation and reasoning.
-16. **Process pool / pre-warming** for Claude Code processes to avoid ~2s startup penalty.
-17. **Research mode** (`/research` command): deep-dive into a topic using multiple sources, synthesize findings.
+1. **Claude Code CLI as engine** eliminates ~80% of code. Key flags: `-p`, `--output-format stream-json`, `--resume`, `--session-id`, `--worktree`, `--max-budget-usd`, `--fallback-model`, `--append-system-prompt`, `--agents`, `--mcp-config`, `--allowedTools`.
+2. **IClaudeProcess abstraction** layer for testability. `FakeClaudeProcess` mock for tests.
+3. **Cognitive Loop** (Perceive-Evaluate-Act-Reflect) replaces cron/heartbeat. Event-driven, priority-based, energy-budget-aware. Circuit breakers, backpressure, retry logic.
+4. **Multi-Session Orchestration**: Session Supervisor manages concurrent sessions. Max 3 concurrent Claude Code processes. Event Bus persisted to SQLite.
+5. **Automatic memory extraction** after every conversation. 5-layer memory with dreaming consolidation.
+6. **Local embeddings**: `multilingual-e5-small` via `@huggingface/transformers` (ONNX, 384-dim, proper German support).
+7. **Knowledge Graph with ComplEx embeddings** (not TransE): handles symmetric, 1-N, and reflexive relations. Leiden community detection. PageRank. All in SQLite.
+8. **Hybrid search with RRF fusion**: BM25 + vector search fused via Reciprocal Rank Fusion.
+9. **Self-learning pipeline**: all code changes require user approval. Content sanitized before LLM evaluation. Evaluation uses restricted tools.
+10. **"Her"-style real-time voice**: Opus codec (not raw PCM), `Intl.Segmenter` for sentence detection, audio preprocessing (high-pass + AGC + noise suppression), WebRTC AEC3, jitter buffer. Realistic median latency ~1200-1500ms.
+11. **STT: faster-whisper** (same quality as Whisper, 4x faster, half VRAM). **TTS: Qwen3-TTS 1.7B** on RTX 5080. Kitten TTS CPU fallback.
+12. **3-database split**: `memory.db`, `operational.db`, `audit.db` to eliminate write contention.
+13. **AES-256-GCM encrypted secrets** with Argon2id key derivation. API keys isolated per subprocess.
+14. **GPU worker authentication**: pre-shared key on all endpoints.
+15. **Circuit breakers + graceful degradation** for all external services.
+16. **GDPR compliance**: `eidolon privacy forget`, `eidolon privacy export`, voice consent, third-party PII flagging.
+17. **Testing from Phase 0**: CI pipeline, `FakeClaudeProcess`, golden datasets for memory extraction evaluation.
 
-## Discoveries from Research
-
-### OpenClaw Analysis
-- **Core weaknesses**: Heartbeat (30min timer) + Cron is not true autonomy; memory relies on model voluntarily writing to MEMORY.md; no self-learning; 430k+ lines of bloated code; 223 security advisories; plaintext API keys; Google account bans from OAuth.
-- **Stabilization mode**: drowning in PRs, closing feature requests. Major opportunity for focused alternative.
-- **Most requested features**: IDE independence, multi-key rotation (39-66 votes), RAG/persistent memory (38-56 votes), headless/remote operation (28-37 votes).
-- **Biggest bugs**: file editing unreliable, JetBrains broken, terminal integration fails, regressions with every release.
-- **No voice/TTS features at all** -- completely unaddressed space.
-
-### Competing Projects Analyzed
-- **Plandex** (15k stars): Sandboxed diff review, plan versioning with branches
-- **Aider** (41k): Repository mapping via tree-sitter, voice-to-code, auto-lint/test, 88% self-written
-- **OpenHands** (68k): Docker sandboxing, composable agent SDK, multi-interface
-- **Browser-Use** (79k): Dedicated browser automation for self-learning
-- **Dify** (131k): LLMOps observability, RAG pipeline, human-in-the-loop
-- **Mem0** (48k): Graph memory with relationships, 4-layer memory with promotion pipeline
-- **Letta/MemGPT** (21k): Stateful agents, self-modifying memory
-- **Khoj** (32k): Document indexing, multi-interface, /research mode
-- **Jan** (40k): Validates Tauri 2.0 stack, OpenAI-compatible REST API pattern
-- **Continue** (31k): Markdown-as-agent-definition, git worktrees, pivoted to CLI-first
-- **Roo Code** (22.5k): Modes system validates multi-session concept
-
-### Community Sentiment (Reddit, HN)
-- #1 wish: "AI that actually remembers what I told it last week"
-- Strong demand for ambient/non-screen voice interaction ("Her"-style)
-- Self-hosting is non-negotiable for the target audience
-- Home Assistant integration is the killer app people want
-- Kitten TTS (25MB, CPU-only, 14M params) discovered as edge-device TTS fallback
-
-### Features Added Based on Research
-1. OpenAI-compatible REST API on gateway
-2. Token/cost tracking per session from day one
-3. MCP server support for extensibility
-4. Sub-agent routing (cheap models for classification, expensive for code)
-5. Knowledge Graph with TransE embeddings
-6. Document indexing (personal files, not just conversations)
-7. Kitten TTS as CPU fallback
-8. Auto-lint/test after code changes
-9. Process pool / pre-warming for Claude Code
-10. Skill extraction from repeated patterns
-11. Research mode (/research command)
-
-## Documentation Structure (ALL COMPLETE)
+## Documentation Structure
 
 ```
 eidolon/
-├── README.md                              # Project overview, architecture diagram, tech stack
+├── README.md
 ├── LICENSE                                # MIT
-├── CONTRIBUTING.md                        # Dev setup, conventions, PR process
-├── CHANGELOG.md                           # Keep a Changelog format
-├── CLAUDE.md                              # THIS FILE -- AI assistant context
+├── CONTRIBUTING.md
+├── CHANGELOG.md
+├── CODE_OF_CONDUCT.md                     # Contributor Covenant v2.1
+├── SECURITY.md                            # Vulnerability reporting policy
+├── CLAUDE.md                              # THIS FILE
 ├── docs/
-│   ├── VISION.md                          # Philosophy, design principles, target user
-│   ├── ROADMAP.md                         # Phase 0-9 development plan (~15 weeks)
-│   ├── COMPARISON.md                      # Detailed OpenClaw vs Eidolon analysis
+│   ├── VISION.md
+│   ├── ROADMAP.md                         # Phase 0-9 (~22 weeks)
+│   ├── COMPARISON.md
+│   ├── REVIEW_FINDINGS.md                 # Consolidated findings from 20 expert reviews
 │   ├── design/
-│   │   ├── ARCHITECTURE.md                # Full system architecture, SQLite schema, monorepo
-│   │   ├── COGNITIVE_LOOP.md              # Perceive-Evaluate-Act-Reflect, multi-session, sub-agents
-│   │   ├── MEMORY_ENGINE.md               # 5-layer memory, dreaming, Knowledge Graph (TransE)
-│   │   ├── SELF_LEARNING.md               # Discovery, filtering, skill extraction, research mode
-│   │   ├── CLAUDE_INTEGRATION.md          # Claude Code CLI as engine, multi-account rotation
-│   │   ├── SECURITY.md                    # Encrypted secrets, action policies, audit trail
-│   │   ├── GPU_AND_VOICE.md               # GPU worker, TTS/STT, real-time voice protocol
-│   │   ├── CLIENT_ARCHITECTURE.md         # Tauri desktop, iOS app, web dashboard
-│   │   └── CHANNELS.md                    # Telegram implementation, channel interface
+│   │   ├── ARCHITECTURE.md                # 3-database split, resilience patterns
+│   │   ├── COGNITIVE_LOOP.md              # Loop, backpressure, circuit breakers
+│   │   ├── MEMORY_ENGINE.md               # 5-layer memory, ComplEx KG, RRF search
+│   │   ├── SELF_LEARNING.md               # Discovery, filtering, sandboxed implementation
+│   │   ├── CLAUDE_INTEGRATION.md          # IClaudeProcess abstraction, CLI flags
+│   │   ├── SECURITY.md                    # Secrets, GPU auth, GDPR, learning sandbox
+│   │   ├── GPU_AND_VOICE.md               # Opus, faster-whisper, audio preprocessing
+│   │   ├── CLIENT_ARCHITECTURE.md         # Tauri, iOS (6 weeks), Cloudflare Tunnel
+│   │   ├── CHANNELS.md                    # Telegram
+│   │   ├── TESTING.md                     # Test strategy, FakeClaudeProcess, CI
+│   │   ├── ACCESSIBILITY.md               # WCAG 2.1 AA, voice-first a11y
+│   │   └── HOME_AUTOMATION.md             # HA via MCP, security policies
 │   └── reference/
-│       └── CONFIGURATION.md               # Full eidolon.json schema with all options
+│       └── CONFIGURATION.md
+├── .github/
+│   ├── workflows/                         # CI pipeline
+│   ├── ISSUE_TEMPLATE/                    # Bug report, feature request
+│   └── PULL_REQUEST_TEMPLATE.md
 ```
 
 ## Monorepo Structure (Target -- not yet created)
@@ -123,27 +97,30 @@ eidolon/
 eidolon/
 ├── packages/
 │   ├── core/                    # ~5000-8000 lines - THE BRAIN
-│   │   └── src/
-│   │       ├── index.ts         # Daemon entry
-│   │       ├── loop.ts          # Cognitive Loop
-│   │       ├── brain.ts         # Claude Code Manager
-│   │       ├── events.ts        # Event Bus
-│   │       ├── memory/          # Memory engine, extractor, dreaming, knowledge graph, search
-│   │       ├── learning/        # Self-learning, discovery, classifier
-│   │       ├── channels/        # Telegram (grammY), channel interface
-│   │       ├── gateway/         # WebSocket server, JSON-RPC, REST API
-│   │       ├── gpu/             # GPU worker communication, TTS/STT client, voice pipeline
-│   │       ├── security/        # Secrets, policies, audit
-│   │       └── config.ts        # Config schema + loader
+│   │   ├── src/
+│   │   │   ├── index.ts         # Daemon entry
+│   │   │   ├── loop.ts          # Cognitive Loop
+│   │   │   ├── brain.ts         # Claude Code Manager (IClaudeProcess)
+│   │   │   ├── events.ts        # Event Bus (persisted)
+│   │   │   ├── memory/          # Memory engine, extractor, dreaming, KG (ComplEx), search (RRF)
+│   │   │   ├── learning/        # Self-learning, discovery, classifier
+│   │   │   ├── channels/        # Telegram (grammY), channel interface
+│   │   │   ├── gateway/         # WebSocket server, JSON-RPC, REST API
+│   │   │   ├── gpu/             # GPU worker communication, TTS/STT client, voice pipeline
+│   │   │   ├── security/        # Secrets, policies, audit
+│   │   │   ├── resilience/      # Circuit breakers, retry, backpressure
+│   │   │   └── config.ts        # Config schema + loader
+│   │   └── test/                # Tests mirroring src/
 │   ├── cli/                     # CLI commands
-│   └── protocol/                # Shared types
+│   ├── protocol/                # Shared types
+│   └── test-utils/              # FakeClaudeProcess, test helpers
 ├── apps/
 │   ├── desktop/                 # Tauri 2.0
-│   ├── ios/                     # Swift/SwiftUI
+│   ├── ios/                     # Swift/SwiftUI (6 weeks, not 2)
 │   └── web/                     # Web dashboard
 ├── services/
-│   └── gpu-worker/              # Python/FastAPI + Qwen3-TTS
-├── workspace/                   # Template workspace files (SOUL.md, CLAUDE.md, skills/)
+│   └── gpu-worker/              # Python/FastAPI + Qwen3-TTS + faster-whisper
+├── workspace/                   # Template workspace files
 └── docs/                        # Documentation (complete)
 ```
 

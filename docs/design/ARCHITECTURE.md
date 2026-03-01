@@ -1,5 +1,8 @@
 # Architecture
 
+> **Status: Design — not yet implemented.**
+> Updated 2026-03-01 based on [expert review findings](../REVIEW_FINDINGS.md).
+
 ## Overview
 
 Eidolon is a distributed system with a single **Core Daemon** running on a central server, connected to **Clients** on multiple devices and optional **GPU Workers** for compute-intensive tasks like TTS/STT. All components communicate over a Tailscale mesh VPN.
@@ -363,11 +366,27 @@ When a user sends a message via Telegram:
 
 All persistent state lives in a single directory (`~/.eidolon/` by default).
 
+### Three-Database Split
+
+> **Review update (Performance Engineer):** A single SQLite database creates write contention under concurrent sessions. Memory extraction, audit logging, event processing, and learning all write concurrently. Splitting into three databases gives each its own WAL and write lock.
+
+| Database | Contents | Write Pattern |
+|---|---|---|
+| `memory.db` | memories, embeddings, KG tables, memory_edges | Burst writes during extraction and dreaming |
+| `operational.db` | sessions, events, state, discoveries, token_usage | Frequent small writes from loop and sessions |
+| `audit.db` | audit log | Append-only, high volume, rotatable |
+
+Each database runs in WAL mode independently. Concurrent reads across all three are always safe. Write contention is eliminated because different subsystems write to different databases.
+
 ```
 ~/.eidolon/
 ├── eidolon.json               # Main configuration
 ├── secrets.enc                # AES-256 encrypted secrets
-├── eidolon.db                 # SQLite: memory, sessions, audit, state
+├── data/
+│   ├── memory.db              # Memories, embeddings, knowledge graph
+│   ├── operational.db         # Sessions, events, state, discoveries
+│   └── audit.db               # Audit log (append-only, rotatable)
+├── backups/                   # Daily automated SQLite backups
 ├── workspaces/
 │   ├── main/                  # Main conversation workspace
 │   │   ├── CLAUDE.md          # Injected system prompt
@@ -382,6 +401,93 @@ All persistent state lives in a single directory (`~/.eidolon/` by default).
     ├── daemon.log
     └── audit.log
 ```
+
+## Resilience Patterns
+
+> **Review addition (Distributed Systems Engineer):** A 24/7 daemon needs explicit failure handling.
+
+### Circuit Breakers
+
+External service calls (Claude API, GPU worker, Telegram) use circuit breakers to prevent cascading failures:
+
+```
+States: CLOSED → OPEN → HALF_OPEN → CLOSED
+
+CLOSED:    Normal operation. Failures increment counter.
+           After N failures in T seconds → transition to OPEN.
+
+OPEN:      All calls immediately fail with CircuitOpenError.
+           After cooldown period → transition to HALF_OPEN.
+
+HALF_OPEN: Allow one probe request.
+           If success → CLOSED. If failure → OPEN.
+```
+
+Configuration per service:
+```jsonc
+{
+  "resilience": {
+    "circuitBreakers": {
+      "claude":   { "failureThreshold": 3, "resetTimeout": 30000 },
+      "gpu":      { "failureThreshold": 5, "resetTimeout": 60000 },
+      "telegram": { "failureThreshold": 3, "resetTimeout": 15000 }
+    }
+  }
+}
+```
+
+### Retry Strategy
+
+Transient failures use exponential backoff:
+
+```
+Attempt 1: immediate
+Attempt 2: 1s delay
+Attempt 3: 2s delay
+Attempt 4: 4s delay
+Attempt 5: 8s delay
+... up to max 60s delay
+```
+
+Jitter is added (±20%) to prevent thundering herd.
+
+### Event Bus Persistence
+
+> **Review finding C-10:** In-memory Event Bus loses events on crash.
+
+Events are persisted to `operational.db` before processing:
+
+```sql
+CREATE TABLE events (
+    id TEXT PRIMARY KEY,
+    type TEXT NOT NULL,
+    payload TEXT NOT NULL,       -- JSON
+    priority TEXT NOT NULL,      -- 'critical', 'high', 'normal', 'low'
+    status TEXT DEFAULT 'pending', -- 'pending', 'processing', 'completed', 'failed'
+    created_at TEXT NOT NULL,
+    processed_at TEXT,
+    error TEXT
+);
+```
+
+On daemon restart, unprocessed events are replayed in priority order.
+
+### Backpressure
+
+When the Event Bus queue exceeds a configurable threshold (default: 1000 pending events), low-priority events are dropped with a warning log. Critical and high-priority events are never dropped.
+
+### Graceful Degradation Matrix
+
+| Component | Failure | Degraded Behavior |
+|---|---|---|
+| Claude API (all accounts) | Rate limit / outage | Queue messages, inform user, retry with backoff |
+| GPU worker | Offline / crash | TTS fallback chain: Kitten → system → text-only |
+| Telegram | API error | Retry with backoff, queue outbound messages |
+| SQLite (write lock) | Contention | Retry with exponential backoff (max 5 attempts) |
+| Tailscale | Network down | Local-only mode: CLI still works, remote clients disconnected |
+| Memory search | Vector index corrupt | Fall back to BM25-only search, then recent memories |
+| Event Bus | Queue overflow | Drop low-priority events, process critical/high only |
+| Embedding model | Load failure | Skip memory injection, operate without semantic search |
 
 ### SQLite Schema (Conceptual)
 

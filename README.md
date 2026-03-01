@@ -1,5 +1,7 @@
 # Eidolon
 
+> **Project Status: Design Phase** -- All architecture documents are complete and reviewed. No code has been written yet. See the [Roadmap](docs/ROADMAP.md) for the development plan.
+
 **An autonomous, self-learning personal AI assistant.**
 
 Eidolon is a personal AI daemon that lives on your server, thinks on its own rhythm, learns from the world, and speaks to you wherever you are. It uses Claude as its brain, runs a continuous cognitive loop instead of scheduled cron jobs, consolidates memory through biologically-inspired "dreaming" phases, and can autonomously discover, learn, and implement improvements.
@@ -79,10 +81,16 @@ Instead of building a custom agent runtime (like most projects do), Eidolon uses
 | [GPU & Voice](docs/design/GPU_AND_VOICE.md) | TTS/STT with GPU offloading |
 | [Clients](docs/design/CLIENT_ARCHITECTURE.md) | Desktop, iOS, and web clients |
 | [Channels](docs/design/CHANNELS.md) | Telegram and future channel support |
+| [Testing](docs/design/TESTING.md) | Testing strategy and CI pipeline |
+| [Accessibility](docs/design/ACCESSIBILITY.md) | WCAG 2.1 AA compliance plan |
+| [Home Automation](docs/design/HOME_AUTOMATION.md) | Home Assistant integration |
 | [Configuration](docs/reference/CONFIGURATION.md) | Full configuration reference |
 | [Roadmap](docs/ROADMAP.md) | Development phases and milestones |
+| [Review Findings](docs/REVIEW_FINDINGS.md) | Consolidated findings from 20 expert reviews |
 | [Comparison](docs/COMPARISON.md) | Detailed OpenClaw vs Eidolon analysis |
 | [Contributing](CONTRIBUTING.md) | How to contribute |
+| [Security Policy](SECURITY.md) | Vulnerability reporting |
+| [Code of Conduct](CODE_OF_CONDUCT.md) | Community guidelines |
 
 ## Tech Stack
 
@@ -101,9 +109,9 @@ Instead of building a custom agent runtime (like most projects do), Eidolon uses
 
 ## Project Status
 
-**Phase: Planning & Design**
+**Phase: Planning & Design Complete -- Ready for Phase 0 (Foundation)**
 
-Eidolon is currently in the design phase. All architecture documents are being written and refined before any code is committed. See the [Roadmap](docs/ROADMAP.md) for the planned development phases.
+All architecture documents are written, reviewed by 20 domain experts, and updated with their findings. Next step: code implementation starting with Phase 0 (monorepo setup, config, secrets, database, CI). See the [Roadmap](docs/ROADMAP.md) for the full development plan.
 
 ## License
 
