@@ -313,6 +313,454 @@ For each incoming message, the Memory Engine:
 3. Formats them into MEMORY.md
 4. Injects into the Claude Code workspace before the session starts
 
+## Graph Memory (Relationships Between Concepts)
+
+Inspired by [Mem0](https://github.com/mem0ai/mem0)'s graph memory. Beyond flat facts, Eidolon tracks relationships between concepts.
+
+```sql
+CREATE TABLE memory_edges (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    source_id TEXT NOT NULL REFERENCES memories(id),
+    target_id TEXT NOT NULL REFERENCES memories(id),
+    relation TEXT NOT NULL,        -- 'related_to', 'contradicts', 'refines', 'depends_on'
+    strength REAL DEFAULT 1.0,     -- Decays over time, strengthened by re-discovery
+    created_at TEXT NOT NULL,
+    source_phase TEXT              -- 'extraction', 'rem_dreaming', 'manual'
+);
+```
+
+### How Edges Are Created
+
+1. **During extraction:** When a new fact relates to an existing one, an edge is created automatically.
+   - "Manuel uses Tailscale" + "GPU worker connects via Tailscale" → `related_to` edge
+2. **During REM dreaming:** The associative discovery phase explicitly searches for non-obvious connections and creates edges.
+3. **During NREM dreaming:** Schema abstraction identifies dependencies and refinements.
+
+### How Edges Are Used
+
+Memory search uses edges to expand results: if a query matches "Tailscale", the graph walk also returns connected memories about GPU workers, network setup, and device connectivity -- even if those memories don't contain the word "Tailscale."
+
+```typescript
+async function searchWithGraph(query: string, depth: number = 1): Promise<MemorySearchResult[]> {
+  // 1. Standard hybrid search (vector + BM25)
+  const directMatches = await this.hybridSearch(query);
+  
+  // 2. Walk the graph from direct matches
+  const expanded = new Set<string>();
+  for (const match of directMatches.slice(0, 5)) {
+    const neighbors = await this.getEdges(match.id, depth);
+    neighbors.forEach(n => expanded.add(n.target_id));
+  }
+  
+  // 3. Fetch and rank expanded results
+  const graphMatches = await this.getMemories([...expanded]);
+  
+  // 4. Merge and re-rank (direct matches score higher)
+  return this.mergeAndRank(directMatches, graphMatches);
+}
+```
+
+## Knowledge Graph (Entity-Relation Model)
+
+The graph memory edges above link existing memories. The Knowledge Graph goes further: it extracts **named entities** and **typed relations** (subject-predicate-object triples) from memories, stores them as first-class objects, and uses **TransE embeddings** for link prediction and analogical reasoning. Inspired by [Mem0](https://github.com/mem0ai/mem0)'s graph memory and academic knowledge graph embedding research.
+
+### Why a Knowledge Graph?
+
+Flat memories answer "what did we discuss?" Graph edges answer "what relates to what?" The Knowledge Graph answers **"how does the world work?"** — it captures structured knowledge about entities and their relationships that can be reasoned over, queried by traversal, and used for prediction.
+
+Example: From conversations, the KG might learn:
+- `(Manuel, owns, RTX 5080)` — extracted from "my RTX 5080"
+- `(RTX 5080, has_vram, 16GB)` — extracted from specs discussion
+- `(Qwen3-TTS, requires_vram, 3.4GB)` — extracted from GPU planning
+- `(Qwen3-TTS, runs_on, RTX 5080)` — **predicted** by TransE from the above triples
+
+### Schema
+
+```sql
+-- Named entities extracted from conversations and documents
+CREATE TABLE kg_entities (
+    id TEXT PRIMARY KEY,               -- nanoid
+    name TEXT NOT NULL,                 -- "Manuel", "RTX 5080", "TypeScript"
+    entity_type TEXT NOT NULL,          -- 'person', 'technology', 'device', 'project', 'concept', 'place'
+    description TEXT,                   -- Brief description
+    mention_count INTEGER DEFAULT 1,   -- How often this entity appears
+    importance REAL DEFAULT 0.0,       -- PageRank score, updated during dreaming
+    embedding BLOB,                    -- 384-dim float32 (from entity name + description)
+    first_seen TEXT NOT NULL,
+    last_seen TEXT NOT NULL,
+    meta TEXT                          -- JSON metadata
+);
+
+CREATE INDEX idx_kg_entities_type ON kg_entities(entity_type);
+CREATE INDEX idx_kg_entities_name ON kg_entities(name);
+
+-- Typed relations between entities (subject-predicate-object triples)
+CREATE TABLE kg_relations (
+    id TEXT PRIMARY KEY,               -- nanoid
+    subject_id TEXT NOT NULL REFERENCES kg_entities(id),
+    predicate TEXT NOT NULL,           -- 'uses', 'owns', 'runs_on', 'prefers', 'depends_on', etc.
+    object_id TEXT NOT NULL REFERENCES kg_entities(id),
+    confidence REAL DEFAULT 1.0,       -- 0.0 to 1.0
+    source TEXT NOT NULL,              -- 'extraction', 'dreaming', 'prediction', 'manual'
+    source_memory_id TEXT,             -- Which memory this was extracted from
+    weight REAL DEFAULT 1.0,           -- Reinforced on re-discovery
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    UNIQUE(subject_id, predicate, object_id)
+);
+
+CREATE INDEX idx_kg_relations_subject ON kg_relations(subject_id);
+CREATE INDEX idx_kg_relations_object ON kg_relations(object_id);
+CREATE INDEX idx_kg_relations_predicate ON kg_relations(predicate);
+
+-- Community clusters of densely connected entities
+CREATE TABLE kg_communities (
+    id TEXT PRIMARY KEY,               -- nanoid
+    name TEXT NOT NULL,                -- Auto-generated: "GPU & Voice Infrastructure"
+    summary TEXT,                      -- LLM-generated summary of the community
+    entity_ids TEXT NOT NULL,          -- JSON array of entity IDs in this community
+    level INTEGER DEFAULT 0,           -- Hierarchy level (0 = leaf, higher = more abstract)
+    parent_id TEXT REFERENCES kg_communities(id),
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+-- TransE embeddings for entities and relations
+CREATE TABLE kg_embeddings (
+    id TEXT PRIMARY KEY,               -- entity_id or relation predicate
+    type TEXT NOT NULL,                -- 'entity' or 'relation'
+    embedding BLOB NOT NULL,           -- 128-dim float32 TransE embedding
+    updated_at TEXT NOT NULL
+);
+```
+
+### Entity & Relation Extraction
+
+Entities and relations are extracted alongside regular memory extraction, using the same hybrid strategy:
+
+**Rule-based extraction (zero-cost):**
+```typescript
+// Extract entities from structured patterns
+const entityPatterns = [
+  { pattern: /(?:using|mit|use)\s+([A-Z][\w.-]+)/g, type: 'technology' },
+  { pattern: /(?:on|auf)\s+(RTX|GTX|GPU|CPU)\s*([\w\s]+)/gi, type: 'device' },
+  { pattern: /(?:project|Projekt)\s+([A-Z][\w]+)/g, type: 'project' },
+];
+
+// Extract relations from verb patterns
+const relationPatterns = [
+  { pattern: /(\w+)\s+(?:uses|verwendet|nutzt)\s+(\w+)/i, predicate: 'uses' },
+  { pattern: /(\w+)\s+(?:prefers|bevorzugt)\s+(\w+)/i, predicate: 'prefers' },
+  { pattern: /(\w+)\s+(?:depends on|braucht|benötigt)\s+(\w+)/i, predicate: 'depends_on' },
+  { pattern: /(\w+)\s+(?:runs on|läuft auf)\s+(\w+)/i, predicate: 'runs_on' },
+];
+```
+
+**LLM-based extraction (for complex relations):**
+```
+Given this conversation turn, extract entities and relationships:
+
+USER: {user_message}
+ASSISTANT: {assistant_response}
+
+Extract as JSON:
+{
+  "entities": [
+    { "name": "...", "type": "person|technology|device|project|concept|place" }
+  ],
+  "relations": [
+    { "subject": "...", "predicate": "...", "object": "..." }
+  ]
+}
+
+Use specific predicates: uses, owns, runs_on, depends_on, prefers, creates,
+is_part_of, located_in, has_property, related_to, contradicts, replaces.
+```
+
+Entity deduplication uses embedding similarity (>0.92 cosine → merge) plus exact name matching after normalization.
+
+### TransE Embeddings
+
+[TransE](https://papers.nips.cc/paper/5071-translating-embeddings-for-modeling-multi-relational-data) models relations as translations in embedding space: for a valid triple `(h, r, t)`, the relationship `h + r ≈ t` should hold.
+
+**Training:** Runs during the REM dreaming phase on all current triples:
+
+```typescript
+// TransE scoring: lower distance = more likely true
+function transEScore(h: Float32Array, r: Float32Array, t: Float32Array): number {
+  let dist = 0;
+  for (let i = 0; i < h.length; i++) {
+    const diff = h[i] + r[i] - t[i];
+    dist += diff * diff;
+  }
+  return Math.sqrt(dist);  // L2 distance; lower = better
+}
+
+// Training loop (margin-based ranking loss)
+function trainTransE(
+  triples: Triple[],
+  entityEmbeddings: Map<string, Float32Array>,
+  relationEmbeddings: Map<string, Float32Array>,
+  epochs: number = 100,
+  lr: number = 0.01,
+  margin: number = 1.0,
+  dim: number = 128
+): void {
+  for (let epoch = 0; epoch < epochs; epoch++) {
+    for (const { subject, predicate, object } of triples) {
+      const h = entityEmbeddings.get(subject)!;
+      const r = relationEmbeddings.get(predicate)!;
+      const t = entityEmbeddings.get(object)!;
+
+      // Corrupt either head or tail to create negative sample
+      const corrupted = corruptTriple(subject, predicate, object, entityEmbeddings);
+      const hNeg = entityEmbeddings.get(corrupted.subject)!;
+      const tNeg = entityEmbeddings.get(corrupted.object)!;
+
+      const posScore = transEScore(h, r, t);
+      const negScore = transEScore(hNeg, r, tNeg);
+
+      // Margin-based loss: push positive triples closer, negatives apart
+      const loss = Math.max(0, margin + posScore - negScore);
+      if (loss > 0) {
+        // Gradient descent step on embeddings
+        updateEmbeddings(h, r, t, hNeg, tNeg, lr);
+      }
+    }
+  }
+}
+```
+
+**Link prediction:** After training, predict missing relations:
+
+```typescript
+async function predictLinks(
+  entity: string,
+  predicates: string[],
+  topK: number = 5
+): Promise<PredictedTriple[]> {
+  const h = await getTransEEmbedding(entity);
+  const predictions: PredictedTriple[] = [];
+
+  for (const predicate of predicates) {
+    const r = await getTransEEmbedding(predicate);
+    // h + r ≈ ? — find entities closest to (h + r)
+    const target = add(h, r);
+    const nearest = await findNearestEntities(target, topK);
+    
+    for (const { entityId, distance } of nearest) {
+      // Skip if this triple already exists
+      if (await tripleExists(entity, predicate, entityId)) continue;
+      predictions.push({
+        subject: entity,
+        predicate,
+        object: entityId,
+        score: 1.0 / (1.0 + distance),  // Convert distance to 0-1 score
+        source: 'prediction',
+      });
+    }
+  }
+
+  return predictions.sort((a, b) => b.score - a.score).slice(0, topK);
+}
+```
+
+### Community Detection
+
+During NREM dreaming, the Leiden algorithm groups densely connected entities into communities. This provides hierarchical understanding of the knowledge graph.
+
+**Process:**
+1. Build adjacency graph from `kg_relations`
+2. Run Leiden algorithm (modularity optimization) to find communities
+3. For each community, generate a summary using Claude (cheap model)
+4. Store communities hierarchically (communities of communities)
+
+```typescript
+async function detectCommunities(): Promise<void> {
+  // 1. Build adjacency from relations
+  const edges = await db.all(`
+    SELECT subject_id, object_id, weight
+    FROM kg_relations WHERE confidence > 0.5
+  `);
+
+  // 2. Run Leiden algorithm (simplified: greedy modularity)
+  const communities = leidenClustering(edges, { resolution: 1.0 });
+
+  // 3. Summarize each community
+  for (const community of communities) {
+    const entities = await getEntities(community.memberIds);
+    const relations = await getInternalRelations(community.memberIds);
+    
+    const summary = await cheapLLM(`
+      These entities are closely related: ${entities.map(e => e.name).join(', ')}
+      Relations: ${relations.map(r => `${r.subject} ${r.predicate} ${r.object}`).join('; ')}
+      
+      Generate a 1-sentence summary of what this cluster represents:
+    `);
+
+    await upsertCommunity({
+      name: generateCommunityName(entities),
+      summary,
+      entityIds: community.memberIds,
+      level: 0,
+    });
+  }
+}
+```
+
+**Example communities:**
+- **"Development Stack"**: TypeScript, Bun, SQLite, pnpm, Tauri → "Core technologies chosen for the Eidolon project, emphasizing cross-platform TypeScript."
+- **"GPU Infrastructure"**: RTX 5080, Qwen3-TTS, Whisper, CUDA, Docker → "Hardware and software stack for GPU-accelerated voice processing."
+- **"User Devices"**: MacBook, iPhone, Ubuntu Server, Windows PC, Tailscale → "Manuel's device mesh connected via Tailscale VPN."
+
+### PageRank for Entity Importance
+
+Entity importance is calculated using PageRank over the relation graph, updated during Housekeeping dreaming:
+
+```sql
+-- Simplified: count incoming relations, weighted by source importance
+-- Full PageRank uses recursive CTEs in SQLite:
+WITH RECURSIVE pagerank(entity_id, rank, iteration) AS (
+  -- Base case: uniform distribution
+  SELECT id, 1.0 / (SELECT COUNT(*) FROM kg_entities), 0
+  FROM kg_entities
+  UNION ALL
+  -- Recursive step: sum incoming ranks / out-degree
+  SELECT
+    kr.object_id,
+    0.15 / (SELECT COUNT(*) FROM kg_entities) +
+    0.85 * SUM(pr.rank / NULLIF(
+      (SELECT COUNT(*) FROM kg_relations WHERE subject_id = kr.subject_id), 0
+    )),
+    pr.iteration + 1
+  FROM kg_relations kr
+  JOIN pagerank pr ON kr.subject_id = pr.entity_id
+  WHERE pr.iteration < 20  -- Max 20 iterations
+  GROUP BY kr.object_id
+)
+SELECT entity_id, rank FROM pagerank
+WHERE iteration = (SELECT MAX(iteration) FROM pagerank);
+```
+
+Entities with high PageRank (e.g., "TypeScript", "Eidolon", "Manuel") are prioritized in memory injection and search results.
+
+### Graph-Enhanced Search
+
+The Knowledge Graph enriches memory search by providing structured context:
+
+```typescript
+async function searchWithKnowledgeGraph(
+  query: string,
+  limit: number = 10
+): Promise<EnrichedSearchResult[]> {
+  // 1. Standard memory search (vector + BM25 + graph walk)
+  const memories = await searchWithGraph(query, 1);
+
+  // 2. Extract entities mentioned in the query
+  const queryEntities = await extractEntities(query);
+
+  // 3. Find related triples for each entity
+  const relevantTriples: Triple[] = [];
+  for (const entity of queryEntities) {
+    const triples = await db.all(`
+      SELECT e1.name as subject, r.predicate, e2.name as object
+      FROM kg_relations r
+      JOIN kg_entities e1 ON r.subject_id = e1.id
+      JOIN kg_entities e2 ON r.object_id = e2.id
+      WHERE r.subject_id = ? OR r.object_id = ?
+      ORDER BY r.weight DESC
+      LIMIT 10
+    `, [entity.id, entity.id]);
+    relevantTriples.push(...triples);
+  }
+
+  // 4. Find the community this query belongs to
+  const community = await findRelevantCommunity(queryEntities);
+
+  // 5. Inject structured context into results
+  return {
+    memories,
+    knowledgeContext: {
+      entities: queryEntities,
+      triples: relevantTriples,
+      community: community?.summary,
+    },
+  };
+}
+```
+
+**Context injection into MEMORY.md:**
+```markdown
+## Knowledge Graph Context
+- Manuel uses TypeScript (confidence: 0.95)
+- Eidolon depends_on SQLite (confidence: 1.0)
+- RTX 5080 has_property 16GB VRAM (confidence: 1.0)
+- Qwen3-TTS runs_on RTX 5080 (confidence: 0.90)
+
+## Related Cluster: "Development Stack"
+Core technologies chosen for Eidolon: TypeScript, Bun, SQLite, pnpm.
+Cross-platform compatibility is the primary criterion.
+```
+
+### Integration with Dreaming Phases
+
+| Phase | KG Operations |
+|---|---|
+| **Housekeeping** | Merge duplicate entities (embedding similarity >0.92), update PageRank, prune orphaned entities with 0 relations |
+| **REM** | Train TransE on all triples (100 epochs), predict new links (score >0.7 → add with source='prediction'), find cross-community connections |
+| **NREM** | Run Leiden community detection, generate community summaries, create hierarchical community structure |
+
+### Cost & Performance
+
+- Entity/relation extraction adds ~100 tokens to the hybrid extraction prompt per turn
+- TransE training on 1000 triples: <1 second (pure math, no LLM)
+- Leiden community detection: <100ms for graphs with <10,000 edges
+- Community summarization: ~200 tokens per community (cheap model)
+- Total KG overhead during dreaming: ~2,000 tokens + <5 seconds compute
+
+## Document Indexing
+
+Beyond conversation memories, Eidolon can index personal documents for retrieval. Inspired by [Khoj](https://github.com/khoj-ai/khoj)'s "AI second brain" approach.
+
+### Supported Document Types
+
+| Type | Method | Chunking |
+|---|---|---|
+| Markdown (`.md`) | Direct text | By heading |
+| Plain text (`.txt`) | Direct text | By paragraph |
+| PDF | `pdf-parse` | By page |
+| Code files | Tree-sitter AST | By function/class |
+
+### Configuration
+
+```jsonc
+{
+  "memory": {
+    "indexing": {
+      "enabled": true,
+      "paths": [
+        "~/Documents/notes/",
+        "~/Projekte/eidolon/"
+      ],
+      "exclude": ["node_modules", ".git", "dist"],
+      "fileTypes": [".md", ".txt", ".pdf", ".ts", ".py"],
+      "recheckInterval": 3600,     // Re-index changed files every hour
+      "maxFileSize": "1MB"
+    }
+  }
+}
+```
+
+### How It Works
+
+1. File watcher detects new/changed files in configured paths
+2. Files are chunked according to their type
+3. Each chunk gets an embedding and is stored in the `memories` table with `source: 'document'`
+4. Document memories participate in the same search as conversation memories
+5. During dreaming, document memories can form edges to conversation memories
+
+This means when a user asks about a topic, Eidolon can reference both past conversations AND personal documents.
+
 ## Search API
 
 ```typescript

@@ -254,6 +254,59 @@ class CognitiveLoop {
 }
 ```
 
+## Sub-Agent Routing (Cost Optimization)
+
+Not every task needs the most expensive model. Inspired by [Anthropic's Cookbook](https://github.com/anthropics/claude-cookbooks) patterns and [Plandex](https://github.com/plandex-ai/plandex)'s multi-model packs.
+
+### Model Selection by Task Type
+
+| Task Type | Recommended Model | Rationale |
+|---|---|---|
+| User conversation | Opus/Sonnet | Full reasoning, best quality |
+| Memory extraction | Haiku | Structured extraction, cheap, fast |
+| Relevance filtering | Haiku | Binary yes/no classification |
+| Code generation | Opus/Sonnet | Complex reasoning required |
+| Dreaming (REM/NREM) | Sonnet | Analysis and abstraction |
+| Dreaming (Housekeeping) | No LLM | Pure database operations |
+| Summarization | Haiku/Sonnet | Depends on complexity |
+| Research | Opus | Deep analysis, source evaluation |
+
+### Implementation
+
+The Cognitive Loop's Evaluate phase selects the model based on the action type:
+
+```typescript
+function selectModel(action: Action, accounts: ClaudeAccount[]): string {
+  const modelMap: Record<string, string> = {
+    'respond': 'opus',           // User conversations: best quality
+    'execute_task': 'sonnet',    // Scheduled tasks: good balance
+    'learn_classify': 'haiku',   // Relevance filtering: cheap and fast
+    'learn_implement': 'sonnet', // Code changes: needs reasoning
+    'dream_rem': 'sonnet',       // Associative discovery
+    'dream_nrem': 'sonnet',      // Schema abstraction
+    'extract_memory': 'haiku',   // Structured extraction
+    'research': 'opus',          // Deep research
+  };
+  
+  const preferred = modelMap[action.type] || 'sonnet';
+  
+  // Find an account that supports this model tier
+  return accounts
+    .filter(a => a.modelTier >= modelTierOf(preferred))
+    .sort(byPriorityAndAvailability)[0]?.model || 'sonnet';
+}
+```
+
+### Cost Impact
+
+Estimated monthly savings with sub-agent routing vs. using Opus for everything:
+
+```
+Without routing (Opus-only):     ~$45/month
+With routing (Haiku/Sonnet/Opus): ~$18/month
+Savings:                          ~60%
+```
+
 ## Comparison with OpenClaw Heartbeat
 
 | Aspect | OpenClaw Heartbeat | Eidolon Cognitive Loop |

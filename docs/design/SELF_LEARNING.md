@@ -366,6 +366,82 @@ All learning activity is logged in `~/.eidolon/journal/YYYY-MM-DD.md`:
 - Total: 5,700 tokens
 ```
 
+## Skill Extraction from Repeated Patterns
+
+When Eidolon performs the same type of action 3+ times, it should recognize the pattern and extract it as a reusable skill.
+
+### How It Works
+
+1. The Reflect phase logs every action with its type, context, and outcome
+2. During NREM dreaming, the schema abstraction phase clusters similar actions
+3. If a cluster has 3+ instances with consistent patterns, a skill is proposed:
+
+```markdown
+# Skill: Check GPU Worker Status
+
+## Trigger
+User asks about GPU status, TTS availability, or voice mode
+
+## Steps
+1. Query GPU worker health endpoint: GET http://windows-pc:8420/health
+2. Parse response: gpu_util, vram_used, temperature, models loaded
+3. Format human-readable summary
+4. If worker is offline, suggest: "GPU worker appears to be offline. Check if Docker is running on the Windows PC."
+
+## Learned from
+- 2026-03-01: User asked "is the GPU running?"
+- 2026-03-03: User asked "can I use voice?"
+- 2026-03-05: User asked "what's the GPU temperature?"
+
+## Usage count: 3
+## Last used: 2026-03-05
+```
+
+Skills are stored as markdown files in `~/.eidolon/workspaces/main/skills/` and automatically injected into Claude Code sessions.
+
+### Auto-Retirement
+
+Skills that haven't been used in 90 days are moved to `skills/archived/`. They can be restored if the pattern reappears.
+
+## Research Mode
+
+A dedicated deep-research capability triggered by the user or the Cognitive Loop.
+
+```
+User: /research What are the best approaches to vector search in SQLite?
+```
+
+Research mode:
+1. Uses Playwright to search multiple sources (Google Scholar, GitHub, HN, Reddit)
+2. Collects and cross-references findings
+3. Produces a structured report with source citations
+4. Stores key findings in long-term memory
+5. Optionally creates an implementation proposal if actionable
+
+This is more thorough than regular learning discovery -- it's a focused, user-directed deep dive. Similar to [Khoj](https://github.com/khoj-ai/khoj)'s `/research` command.
+
+## Auto-Lint and Auto-Test
+
+When the self-learning pipeline (or any session) modifies code, Eidolon automatically runs configured quality checks. Inspired by [Aider](https://github.com/Aider-AI/aider)'s auto-lint/test workflow.
+
+```jsonc
+{
+  "learning": {
+    "autoImplement": {
+      "postChangeChecks": {
+        "lint": "bun run lint",
+        "typecheck": "bun run typecheck",
+        "test": "bun test"
+      },
+      "requireAllPass": true,        // All checks must pass before reporting success
+      "maxRetries": 2                // Auto-fix attempts before giving up
+    }
+  }
+}
+```
+
+If a check fails, Claude Code in the learning session attempts to fix the issue automatically (up to `maxRetries`). If it still fails, the implementation is marked as failed and the user is notified with the error details.
+
 ## CLI Commands
 
 ```bash

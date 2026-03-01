@@ -30,9 +30,10 @@ Phase 9: Polish & Release     (~1 week)     CI/CD, docs, GitHub release
 - [ ] TypeScript + Bun configuration (tsconfig, biome for linting/formatting)
 - [ ] Config system: load `eidolon.json`, validate with Zod, env variable overrides
 - [ ] Secret store: AES-256-GCM encryption, Argon2id key derivation, CLI commands
-- [ ] SQLite database: schema migration system, initial tables (memories, sessions, audit, discoveries, state)
+- [ ] SQLite database: schema migration system, initial tables (memories, sessions, audit, discoveries, state, token_usage)
 - [ ] CLI skeleton: `eidolon daemon start|stop|status`, `eidolon config`, `eidolon secrets`, `eidolon doctor`
 - [ ] Logging: structured JSON logs with rotation
+- [ ] Token/cost tracking: per-session accounting with model pricing table
 - [ ] `eidolon doctor`: verify Bun version, Claude Code installed, config valid, database writable
 
 **Exit criteria:** `eidolon doctor` passes all checks. `eidolon secrets set/list` works. Config validates.
@@ -47,11 +48,14 @@ Phase 9: Polish & Release     (~1 week)     CI/CD, docs, GitHub release
 - [ ] `ClaudeCodeManager`: spawn Claude Code CLI as subprocess, parse streaming JSON output
 - [ ] `AccountRotation`: select best account, handle rate limits, failover to next
 - [ ] `WorkspacePreparer`: create workspace directory, inject CLAUDE.md, SOUL.md
-- [ ] Session management: main session persistence, session timeout/cleanup
+- [ ] `ProcessPool`: pre-warm Claude Code processes for instant response (~2s startup mitigation)
+- [ ] Session management: main session persistence, `--resume`/`--session-id` for continuity
+- [ ] Sub-agent routing: model selection by task type (Opus/Sonnet/Haiku)
+- [ ] MCP server passthrough: forward configured MCP servers to Claude Code via `--mcp-config`
 - [ ] `eidolon chat`: interactive CLI chat with Claude Code under the hood
 - [ ] Basic error handling: auth failures, process crashes, timeout
 
-**Exit criteria:** `eidolon chat` allows a multi-turn conversation. If the primary account is rate-limited, the next account is used automatically. Workspace files are injected correctly.
+**Exit criteria:** `eidolon chat` allows a multi-turn conversation with session resumption. If the primary account is rate-limited, the next account is used automatically. MCP servers are available in sessions. Token costs are tracked.
 
 ---
 
@@ -63,14 +67,17 @@ Phase 9: Polish & Release     (~1 week)     CI/CD, docs, GitHub release
 - [ ] `MemoryExtractor`: analyze conversation turns, extract facts/decisions/preferences
 - [ ] `MemoryStore`: CRUD operations on the memories table, confidence management
 - [ ] `MemorySearch`: hybrid BM25 + vector search using sqlite-vec and FTS5
+- [ ] Graph memory: relationship edges between memories, graph-walk search expansion
+- [ ] Local embeddings: `all-MiniLM-L6-v2` via `@huggingface/transformers` (ONNX, 384-dim)
 - [ ] `MemoryInjector`: select relevant memories and write MEMORY.md before each session
+- [ ] Document indexing: index personal files (markdown, text, PDF, code) from configured paths
 - [ ] Dreaming Phase 1 (Housekeeping): deduplication, contradiction resolution, decay
-- [ ] Dreaming Phase 2 (REM): associative discovery between unrelated memories
-- [ ] Dreaming Phase 3 (NREM): schema abstraction (specific -> general rules)
+- [ ] Dreaming Phase 2 (REM): associative discovery, graph edge creation
+- [ ] Dreaming Phase 3 (NREM): schema abstraction, skill extraction from repeated patterns
 - [ ] `eidolon memory search <query>`: CLI memory search
 - [ ] `eidolon memory dream`: manually trigger dreaming
 
-**Exit criteria:** After several conversations, `eidolon memory search` returns relevant facts. Dreaming produces consolidation entries. MEMORY.md is populated with context-appropriate memories before each Claude Code session.
+**Exit criteria:** After several conversations, `eidolon memory search` returns relevant facts including graph-connected memories. Dreaming produces consolidation entries and extracted skills. Document search works alongside conversation memory. MEMORY.md is populated with context-appropriate memories before each Claude Code session.
 
 ---
 
@@ -133,19 +140,32 @@ Phase 9: Polish & Release     (~1 week)     CI/CD, docs, GitHub release
 
 ## Phase 6: Voice
 
-**Goal:** Talk to Eidolon using your voice, with responses spoken back via Qwen3-TTS.
+**Goal:** Talk to Eidolon using your voice, with "Her"-style real-time streaming conversation and responses spoken back via Qwen3-TTS.
 
 **Deliverables:**
+
+*GPU Worker (Python/FastAPI):*
 - [ ] GPU worker: Python FastAPI service with Qwen3-TTS model loaded
 - [ ] TTS endpoint: `POST /tts/stream` with SSE audio chunk streaming
 - [ ] STT endpoint: `POST /stt/transcribe` using Whisper
 - [ ] Health endpoint: `GET /health` with GPU utilization, VRAM, temperature
-- [ ] `GpuManager` in core: discover workers, health monitoring, failover
-- [ ] Voice message flow: Telegram voice -> STT -> Claude -> TTS -> Telegram voice reply
+- [ ] Real-time WebSocket: `WS /voice/realtime` with bidirectional audio streaming
 - [ ] Docker deployment: `Dockerfile.cuda` for GPU worker with CUDA support
-- [ ] Fallback: text-only mode when GPU worker is unavailable
 
-**Exit criteria:** Send a voice message to Telegram, receive a voice response generated by Qwen3-TTS on the Windows PC. Health monitoring shows GPU status. Fallback to text works when GPU is offline.
+*Core Voice Pipeline:*
+- [ ] `GpuManager` in core: discover workers, health monitoring, failover
+- [ ] `StreamingVoicePipeline`: sentence-level TTS chunking from Claude's streaming output
+- [ ] Voice state machine: idle/listening/processing/speaking/interrupted states
+- [ ] Barge-in/interruption handling: cancel TTS, flush audio, transition to listening
+- [ ] WebSocket protocol: binary+JSON messages for audio and control
+
+*Integration:*
+- [ ] Voice message flow: Telegram voice -> STT -> Claude -> TTS -> Telegram voice reply
+- [ ] Fallback chain: Qwen3-TTS (GPU) -> Kitten TTS (CPU) -> System TTS -> text-only
+- [ ] Voice metrics: latency P50/P95, interruption rate, fallback events
+- [ ] VAD configuration: endpointing delay, speech threshold, min/max duration
+
+**Exit criteria:** Send a voice message to Telegram, receive a voice response generated by Qwen3-TTS. Real-time voice WebSocket achieves <900ms median latency (silence to first audio). Barge-in interrupts playback within 200ms. Fallback to Kitten TTS works when GPU is offline. Voice metrics are tracked per session.
 
 ---
 

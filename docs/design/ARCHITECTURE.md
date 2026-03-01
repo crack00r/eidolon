@@ -275,6 +275,26 @@ Sessions do NOT share:
 
 ## Communication Protocols
 
+### Core API: WebSocket + REST
+
+The Core exposes two API surfaces:
+
+**1. WebSocket + JSON-RPC** (primary, for clients)
+Real-time bidirectional communication for desktop apps, iOS, and interactive use.
+
+**2. OpenAI-compatible REST API** (secondary, for tool integration)
+A subset of the OpenAI Chat Completions API at `/v1/chat/completions`. This allows any tool that speaks the OpenAI protocol (Jan, Open WebUI, LM Studio, custom scripts) to use Eidolon as a backend.
+
+```
+GET  /v1/models                    # List available models/sessions
+POST /v1/chat/completions          # Send message, get response (streaming SSE)
+GET  /health                       # Daemon status
+GET  /metrics                      # Token usage, session count, memory stats
+POST /config/reload                # Hot-reload configuration
+```
+
+The REST API is intentionally limited -- it doesn't expose memory management, learning control, or session orchestration. Those require the full WebSocket protocol. But it means any OpenAI-compatible client can chat with Eidolon out of the box.
+
 ### Core <-> Clients: WebSocket + JSON-RPC
 
 All client communication uses WebSocket with JSON-RPC 2.0 payloads.
@@ -532,6 +552,125 @@ eidolon/
 ├── LICENSE
 └── README.md
 ```
+
+## Extensibility: MCP Server Support
+
+Eidolon supports [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) servers as a plugin mechanism. MCP servers extend Eidolon's capabilities without modifying core code.
+
+### How It Works
+
+Claude Code CLI natively supports MCP servers via `--mcp-config`. Eidolon passes configured MCP servers through to Claude Code sessions.
+
+```jsonc
+// eidolon.json
+{
+  "mcp": {
+    "servers": [
+      {
+        "name": "home-assistant",
+        "command": "uvx",
+        "args": ["mcp-server-home-assistant"],
+        "env": { "HA_TOKEN": { "$secret": "HA_TOKEN" } }
+      },
+      {
+        "name": "github",
+        "command": "npx",
+        "args": ["-y", "@modelcontextprotocol/server-github"],
+        "env": { "GITHUB_TOKEN": { "$secret": "GITHUB_TOKEN" } }
+      },
+      {
+        "name": "filesystem-extra",
+        "command": "npx",
+        "args": ["-y", "@modelcontextprotocol/server-filesystem", "/home/user/documents"]
+      }
+    ]
+  }
+}
+```
+
+### Use Cases
+
+| MCP Server | What It Enables |
+|---|---|
+| `home-assistant` | Smart home control (lights, sensors, automation) |
+| `github` | PR reviews, issue management, repo operations |
+| `filesystem-extra` | Access to additional directories beyond workspace |
+| `brave-search` | Web search without Playwright |
+| `sqlite` | Direct database queries |
+| Custom servers | Any tool the user wants to add |
+
+MCP servers are passed to Claude Code via `--mcp-config` on each session spawn. The Cognitive Loop can also use MCP tools directly for scheduled tasks and self-learning.
+
+## Cost & Token Tracking
+
+Every API call is tracked with full cost accounting. This data feeds the energy budget system and provides transparency to the user.
+
+```sql
+CREATE TABLE token_usage (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    timestamp TEXT NOT NULL,
+    session_id TEXT NOT NULL,
+    session_type TEXT NOT NULL,       -- 'main', 'learning', 'task', 'dream'
+    account_id TEXT NOT NULL,
+    model TEXT NOT NULL,
+    input_tokens INTEGER NOT NULL,
+    output_tokens INTEGER NOT NULL,
+    cache_read_tokens INTEGER DEFAULT 0,
+    cache_write_tokens INTEGER DEFAULT 0,
+    cost_usd REAL NOT NULL,           -- Computed from model pricing
+    duration_ms INTEGER
+);
+```
+
+### Dashboard Metrics
+
+```
+Today:     12,450 input / 3,200 output tokens = $0.47
+This week: 89,000 input / 24,500 output tokens = $3.21
+By type:   Conversations 62% | Learning 28% | Dreaming 8% | Tasks 2%
+Budget:    38,500 / 50,000 tokens remaining this hour
+```
+
+CLI: `eidolon usage --since 7d --by-type`
+
+## Process Pool (Claude Code Pre-Warming)
+
+Claude Code CLI has ~2 second startup latency per process. For interactive use, this is noticeable. Eidolon mitigates this with a warm process pool.
+
+```typescript
+class ProcessPool {
+  private warm: ClaudeProcess[] = [];
+  private maxWarm = 2;  // Configurable
+
+  // Pre-spawn processes during idle time
+  async warmUp(): Promise<void> {
+    while (this.warm.length < this.maxWarm) {
+      const proc = await this.spawnClaudeCode({ preWarm: true });
+      this.warm.push(proc);
+    }
+  }
+
+  // Get a ready process (instant) or spawn new (2s delay)
+  async acquire(options: SessionOptions): Promise<ClaudeProcess> {
+    const warm = this.warm.pop();
+    if (warm) {
+      await this.configure(warm, options);  // Inject context
+      return warm;
+    }
+    return this.spawnClaudeCode(options);  // Cold start fallback
+  }
+
+  release(proc: ClaudeProcess): void {
+    if (this.warm.length < this.maxWarm) {
+      this.warm.push(proc);  // Return to pool
+    } else {
+      proc.kill();  // Pool full, terminate
+    }
+  }
+}
+```
+
+The pool warms up during idle phases of the Cognitive Loop. User messages always get a pre-warmed process for instant response.
 
 ## Technology Decisions
 
