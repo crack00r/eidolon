@@ -52,6 +52,7 @@ export class EidolonDaemon {
   private _running = false;
   private shutdownPromise: Promise<void> | undefined;
   private signalHandlerBound = false;
+  private signalHandler: (() => void) | undefined;
 
   get isRunning(): boolean {
     return this._running;
@@ -320,6 +321,9 @@ export class EidolonDaemon {
     // 8. Remove PID file
     this.removePidFile();
 
+    // 9. Remove signal handlers to prevent leaks on re-initialization
+    this.removeSignalHandlers();
+
     this._running = false;
     logger?.info("daemon", "Eidolon daemon stopped");
   }
@@ -412,8 +416,17 @@ export class EidolonDaemon {
       });
     };
 
+    this.signalHandler = handler;
     process.on("SIGTERM", handler);
     process.on("SIGINT", handler);
+  }
+
+  private removeSignalHandlers(): void {
+    if (!this.signalHandlerBound || !this.signalHandler) return;
+    process.removeListener("SIGTERM", this.signalHandler);
+    process.removeListener("SIGINT", this.signalHandler);
+    this.signalHandlerBound = false;
+    this.signalHandler = undefined;
   }
 
   // -----------------------------------------------------------------------

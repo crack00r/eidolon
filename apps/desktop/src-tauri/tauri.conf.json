@@ -22,7 +22,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; connect-src 'self' wss: ws://localhost:* ws://127.0.0.1:*; style-src 'self' 'unsafe-inline'"
+      "csp": "default-src 'self'; script-src 'self'; connect-src 'self' wss: ws://localhost:* ws://127.0.0.1:*; style-src 'self' 'unsafe-inline'"
     },
     "trayIcon": {
       "iconPath": "icons/icon.png",

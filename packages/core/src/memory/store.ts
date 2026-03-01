@@ -67,11 +67,26 @@ interface MemoryRow {
 // Helpers
 // ---------------------------------------------------------------------------
 
+const VALID_MEMORY_TYPES = new Set<string>([
+  "fact",
+  "preference",
+  "decision",
+  "episode",
+  "skill",
+  "relationship",
+  "schema",
+]);
+const VALID_MEMORY_LAYERS = new Set<string>(["short_term", "working", "long_term", "consolidated", "archived"]);
+
+function validateEnum<T extends string>(value: string, valid: Set<string>, fallback: T): T {
+  return valid.has(value) ? (value as T) : fallback;
+}
+
 function rowToMemory(row: MemoryRow): Memory {
   return {
     id: row.id,
-    type: row.type as MemoryType,
-    layer: row.layer as MemoryLayer,
+    type: validateEnum<MemoryType>(row.type, VALID_MEMORY_TYPES, "fact"),
+    layer: validateEnum<MemoryLayer>(row.layer, VALID_MEMORY_LAYERS, "long_term"),
     content: row.content,
     confidence: row.confidence,
     source: row.source,
@@ -83,6 +98,13 @@ function rowToMemory(row: MemoryRow): Memory {
     metadata: JSON.parse(row.metadata ?? "{}") as Record<string, unknown>,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+/** Maximum allowed content length for a single memory entry (1 MB). */
+const MAX_CONTENT_LENGTH = 1_048_576;
 
 // ---------------------------------------------------------------------------
 // MemoryStore
@@ -99,6 +121,14 @@ export class MemoryStore {
 
   /** Create a new memory. Generates a UUID as the ID. */
   create(input: CreateMemoryInput): Result<Memory, EidolonError> {
+    if (input.content.length > MAX_CONTENT_LENGTH) {
+      return Err(
+        createError(
+          ErrorCode.DB_QUERY_FAILED,
+          `Memory content exceeds maximum length (${input.content.length} > ${MAX_CONTENT_LENGTH})`,
+        ),
+      );
+    }
     try {
       const id = randomUUID();
       const now = Date.now();
@@ -160,6 +190,14 @@ export class MemoryStore {
 
   /** Update an existing memory. Returns the updated memory or error if not found. */
   update(id: string, input: UpdateMemoryInput): Result<Memory, EidolonError> {
+    if (input.content !== undefined && input.content.length > MAX_CONTENT_LENGTH) {
+      return Err(
+        createError(
+          ErrorCode.DB_QUERY_FAILED,
+          `Memory content exceeds maximum length (${input.content.length} > ${MAX_CONTENT_LENGTH})`,
+        ),
+      );
+    }
     try {
       // Check existence first
       const existing = this.db.query("SELECT * FROM memories WHERE id = ?").get(id) as MemoryRow | null;
@@ -341,6 +379,16 @@ export class MemoryStore {
 
   /** Bulk create memories within a single transaction. */
   createBatch(inputs: readonly CreateMemoryInput[]): Result<Memory[], EidolonError> {
+    for (const input of inputs) {
+      if (input.content.length > MAX_CONTENT_LENGTH) {
+        return Err(
+          createError(
+            ErrorCode.DB_QUERY_FAILED,
+            `Memory content exceeds maximum length (${input.content.length} > ${MAX_CONTENT_LENGTH})`,
+          ),
+        );
+      }
+    }
     try {
       const memories: Memory[] = [];
 

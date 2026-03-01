@@ -37,10 +37,22 @@ export function createConnection(path: string, options?: ConnectionOptions): Res
     }
 
     // Set busy timeout (wait rather than fail immediately on lock)
-    db.exec(`PRAGMA busy_timeout=${options?.busyTimeout ?? 5000}`);
+    // Validate as safe integer to prevent PRAGMA injection
+    const busyTimeout = Math.max(0, Math.trunc(options?.busyTimeout ?? 5000));
+    if (!Number.isFinite(busyTimeout)) {
+      return Err(
+        createError(ErrorCode.DB_CONNECTION_FAILED, `Invalid busy_timeout value: ${String(options?.busyTimeout)}`),
+      );
+    }
+    db.exec(`PRAGMA busy_timeout=${busyTimeout}`);
 
     // Enable foreign keys
     db.exec("PRAGMA foreign_keys=ON");
+
+    // Set WAL autocheckpoint to prevent unbounded WAL growth (default is 1000 pages)
+    if (options?.walMode !== false) {
+      db.exec("PRAGMA wal_autocheckpoint=1000");
+    }
 
     return Ok(db);
   } catch (cause) {

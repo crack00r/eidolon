@@ -113,10 +113,12 @@ export class SessionManager {
 
   /** Count active sessions by type */
   countByType(type: SessionType): number {
-    const row = this.db
-      .query("SELECT COUNT(*) as count FROM sessions WHERE type = ? AND status = 'running'")
-      .get(type) as { count: number };
-    return row.count;
+    const row = this.db.query("SELECT COUNT(*) as count FROM sessions WHERE type = ? AND status = 'running'").get(type);
+    // Runtime validation instead of unsafe `as` cast
+    if (!row || typeof row !== "object" || !("count" in row)) {
+      return 0;
+    }
+    return Number((row as Record<string, unknown>).count);
   }
 
   private static readonly VALID_SESSION_TYPES = new Set<string>([

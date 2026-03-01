@@ -12,5 +12,7 @@ export default defineConfig({
   build: {
     target: "esnext",
     outDir: "dist",
+    // SEC-SUPPLY-015: Do not ship source maps in production builds
+    sourcemap: false,
   },
 });

@@ -45,7 +45,7 @@ export async function searchMemory(query: string): Promise<void> {
     });
     resultsStore.set(response.items);
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "Search failed";
+    const msg = sanitizeErrorForDisplay(err, "Search failed");
     errorStore.set(msg);
     resultsStore.set([]);
   } finally {
@@ -62,6 +62,19 @@ export function clearSearch(): void {
   resultsStore.set([]);
   errorStore.set(null);
   selectedStore.set(null);
+}
+
+/**
+ * Strip internal details from error messages shown to users.
+ */
+function sanitizeErrorForDisplay(err: unknown, fallback: string): string {
+  if (!(err instanceof Error)) return fallback;
+  const msg = err.message
+    .replace(/\/[^\s:]+\.[a-z]+/gi, "[path]")
+    .replace(/[A-Z]:\\[^\s:]+\.[a-z]+/gi, "[path]")
+    .replace(/\n\s+at\s+.*/g, "")
+    .trim();
+  return msg || fallback;
 }
 
 export const memoryResults = { subscribe: resultsStore.subscribe };

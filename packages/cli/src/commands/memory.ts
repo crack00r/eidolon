@@ -27,6 +27,15 @@ import { formatTable } from "../utils/formatter.js";
 // Constants
 // ---------------------------------------------------------------------------
 
+/** Maximum length for memory content via CLI (100 KB). */
+const MAX_CONTENT_LENGTH = 102_400;
+
+/** Maximum length for CLI search queries. */
+const MAX_QUERY_LENGTH = 10_000;
+
+/** Maximum length for individual CLI arguments (tags, IDs, etc.). */
+const MAX_ARG_LENGTH = 1_000;
+
 const MEMORY_TYPES: readonly MemoryType[] = [
   "fact",
   "preference",
@@ -102,6 +111,11 @@ export function registerMemoryCommand(program: Command): void {
     .option("--type <type>", "Filter by memory type")
     .option("--limit <n>", "Max results", "10")
     .action(async (query: string, options: { readonly type?: string; readonly limit: string }) => {
+      if (query.length > MAX_QUERY_LENGTH) {
+        console.error(`Error: query exceeds maximum length of ${MAX_QUERY_LENGTH} characters.`);
+        process.exitCode = 1;
+        return;
+      }
       const sys = await initMemorySystem();
       if (!sys) return;
       try {
@@ -195,6 +209,18 @@ export function registerMemoryCommand(program: Command): void {
         content: string,
         options: { readonly type: string; readonly confidence: string; readonly tags?: string },
       ) => {
+        if (content.length > MAX_CONTENT_LENGTH) {
+          console.error(
+            `Error: content exceeds maximum length of ${MAX_CONTENT_LENGTH} characters (${content.length}).`,
+          );
+          process.exitCode = 1;
+          return;
+        }
+        if (options.tags && options.tags.length > MAX_ARG_LENGTH) {
+          console.error(`Error: tags argument exceeds maximum length of ${MAX_ARG_LENGTH} characters.`);
+          process.exitCode = 1;
+          return;
+        }
         const sys = await initMemorySystem();
         if (!sys) return;
         try {

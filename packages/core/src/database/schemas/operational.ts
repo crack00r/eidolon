@@ -42,6 +42,7 @@ export const OPERATIONAL_MIGRATIONS: ReadonlyArray<Migration> = [
 
       CREATE INDEX idx_events_unprocessed ON events(processed_at) WHERE processed_at IS NULL;
       CREATE INDEX idx_events_priority ON events(priority, timestamp);
+      CREATE INDEX idx_events_type ON events(type);
 
       CREATE TABLE loop_state (
         key TEXT PRIMARY KEY,

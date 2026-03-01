@@ -71,7 +71,7 @@ final class ChatViewModel: ObservableObject {
                 }
             } catch {
                 updateMessage(id: assistantMessage.id) { msg in
-                    msg.content = "Error: \(error.localizedDescription)"
+                    msg.content = "Error: \(ChatViewModel.sanitizeError(error))"
                     msg.isStreaming = false
                 }
             }
@@ -108,6 +108,17 @@ final class ChatViewModel: ObservableObject {
         default:
             break
         }
+    }
+
+    // MARK: - Error Sanitization
+
+    /// Strip internal details (file paths, stack traces) from error messages shown to users.
+    static func sanitizeError(_ error: Error) -> String {
+        let description = error.localizedDescription
+        // Remove Unix-style file paths
+        let cleaned = description
+            .replacingOccurrences(of: #"/[^\s:]+\.[a-zA-Z]+"#, with: "[path]", options: .regularExpression)
+        return cleaned.isEmpty ? "An unexpected error occurred" : cleaned
     }
 
     // MARK: - Helpers

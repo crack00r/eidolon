@@ -32,6 +32,8 @@ export const MEMORY_MIGRATIONS: ReadonlyArray<Migration> = [
       CREATE INDEX idx_memories_layer ON memories(layer);
       CREATE INDEX idx_memories_confidence ON memories(confidence);
       CREATE INDEX idx_memories_created_at ON memories(created_at);
+      CREATE INDEX idx_memories_updated_at ON memories(updated_at);
+      CREATE INDEX idx_memories_accessed_at ON memories(accessed_at);
 
       CREATE VIRTUAL TABLE memories_fts USING fts5(
         content,

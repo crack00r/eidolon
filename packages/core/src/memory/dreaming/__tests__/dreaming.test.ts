@@ -126,18 +126,22 @@ describe("DreamScheduler", () => {
   });
 
   test("shouldDream returns true when triggered by idle", () => {
+    // Use a schedule time far from now so the schedule trigger won't fire
+    const now = new Date();
+    const nowInBerlin = new Date(now.toLocaleString("en-US", { timeZone: "Europe/Berlin" }));
+    const farHour = (nowInBerlin.getHours() + 12) % 24;
     const config: DreamScheduleConfig = {
       enabled: true,
-      schedule: "99:99", // impossible time, so schedule trigger won't fire
-      maxDurationMs: 1_000,
-      triggerOnIdleMs: 5_000,
+      schedule: `${String(farHour).padStart(2, "0")}:00`,
+      maxDurationMs: 60_000, // 1 min (minimum valid)
+      triggerOnIdleMs: 60_000, // 1 min (minimum valid)
       timezone: "Europe/Berlin",
     };
     const scheduler = new DreamScheduler(config, logger);
 
-    // Last activity was 10s ago, idle threshold is 5s, last dream was long ago
-    const lastActivity = Date.now() - 10_000;
-    const lastDream = Date.now() - 100_000;
+    // Last activity was 2 min ago, idle threshold is 1 min, last dream was long ago
+    const lastActivity = Date.now() - 120_000;
+    const lastDream = Date.now() - 200_000;
     const result = scheduler.shouldDream(lastActivity, lastDream);
     expect(result).toBe(true);
   });
@@ -147,7 +151,7 @@ describe("DreamScheduler", () => {
       enabled: true,
       schedule: "02:00",
       maxDurationMs: 1_800_000,
-      triggerOnIdleMs: 5_000,
+      triggerOnIdleMs: 60_000, // 1 min (minimum valid)
       timezone: "Europe/Berlin",
     };
     const scheduler = new DreamScheduler(config, logger);

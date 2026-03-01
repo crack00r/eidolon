@@ -26,6 +26,18 @@ export interface DreamScheduleConfig {
 /** Default dream window: +/- 30 minutes around the scheduled time. */
 const DREAM_WINDOW_MS = 30 * 60 * 1000;
 
+/** Minimum dream duration (1 minute). */
+const MIN_DURATION_MS = 60 * 1000;
+
+/** Maximum dream duration (24 hours). */
+const MAX_DURATION_MS = 24 * 60 * 60 * 1000;
+
+/** Minimum idle trigger threshold (1 minute). */
+const MIN_IDLE_TRIGGER_MS = 60 * 1000;
+
+/** HH:MM time schedule pattern. */
+const SCHEDULE_PATTERN = /^\d{1,2}:\d{2}$/;
+
 // ---------------------------------------------------------------------------
 // DreamScheduler
 // ---------------------------------------------------------------------------
@@ -35,8 +47,38 @@ export class DreamScheduler {
   private readonly logger: Logger;
 
   constructor(config: DreamScheduleConfig, logger: Logger) {
+    DreamScheduler.validateConfig(config);
     this.config = config;
     this.logger = logger.child("dream-scheduler");
+  }
+
+  /** Validate schedule configuration parameters. */
+  private static validateConfig(config: DreamScheduleConfig): void {
+    // Validate schedule format (HH:MM)
+    if (!SCHEDULE_PATTERN.test(config.schedule)) {
+      throw new Error(`Invalid dream schedule format "${config.schedule}". Expected HH:MM (e.g., "02:00").`);
+    }
+
+    const parts = config.schedule.split(":");
+    const hours = parseInt(parts[0] ?? "0", 10);
+    const minutes = parseInt(parts[1] ?? "0", 10);
+    if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
+      throw new Error(`Invalid dream schedule time "${config.schedule}". Hours must be 0-23, minutes 0-59.`);
+    }
+
+    // Validate maxDurationMs bounds
+    if (config.maxDurationMs < MIN_DURATION_MS || config.maxDurationMs > MAX_DURATION_MS) {
+      throw new Error(
+        `maxDurationMs must be between ${MIN_DURATION_MS}ms (1 min) and ${MAX_DURATION_MS}ms (24 h), got ${config.maxDurationMs}.`,
+      );
+    }
+
+    // Validate idle trigger threshold if provided
+    if (config.triggerOnIdleMs !== undefined && config.triggerOnIdleMs < MIN_IDLE_TRIGGER_MS) {
+      throw new Error(
+        `triggerOnIdleMs must be at least ${MIN_IDLE_TRIGGER_MS}ms (1 min), got ${config.triggerOnIdleMs}.`,
+      );
+    }
   }
 
   /**

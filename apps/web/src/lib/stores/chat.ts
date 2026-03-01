@@ -18,7 +18,7 @@ const messagesStore = writable<ChatMessage[]>([]);
 const streamingStore = writable(false);
 
 function generateId(): string {
-  return `msg-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+  return `msg-${crypto.randomUUID()}`;
 }
 
 export async function sendMessage(content: string): Promise<void> {
@@ -61,7 +61,7 @@ export async function sendMessage(content: string): Promise<void> {
       ),
     );
   } catch (err) {
-    const errorMsg = err instanceof Error ? err.message : "Unknown error";
+    const errorMsg = sanitizeErrorForDisplay(err);
     messagesStore.update((msgs) =>
       msgs.map((msg) =>
         msg.id === assistantId
@@ -89,6 +89,21 @@ export function appendStreamChunk(messageId: string, chunk: string): void {
 
 export function clearMessages(): void {
   messagesStore.set([]);
+}
+
+/**
+ * Strip internal details (file paths, stack traces) from error messages
+ * shown to users. Only exposes the high-level error description.
+ */
+function sanitizeErrorForDisplay(err: unknown): string {
+  if (!(err instanceof Error)) return "An unexpected error occurred";
+  // Strip file paths (Unix and Windows) and stack traces
+  const msg = err.message
+    .replace(/\/[^\s:]+\.[a-z]+/gi, "[path]")
+    .replace(/[A-Z]:\\[^\s:]+\.[a-z]+/gi, "[path]")
+    .replace(/\n\s+at\s+.*/g, "")
+    .trim();
+  return msg || "An unexpected error occurred";
 }
 
 export const messages = { subscribe: messagesStore.subscribe };

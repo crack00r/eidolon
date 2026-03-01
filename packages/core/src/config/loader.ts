@@ -72,8 +72,16 @@ export function validateAndResolve(raw: unknown): Result<EidolonConfig, EidolonE
   // Apply environment overrides
   const withEnv = applyEnvOverrides(result.data);
 
+  // Re-validate after env overrides to ensure overridden values conform to the schema.
+  // This prevents env vars from injecting values that bypass Zod type/constraint checks.
+  const revalidated = EidolonConfigSchema.safeParse(withEnv);
+  if (!revalidated.success) {
+    const issues = revalidated.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ");
+    return Err(createError(ErrorCode.CONFIG_INVALID, `Config validation failed after env overrides: ${issues}`));
+  }
+
   // Resolve platform-specific defaults
-  const resolved = resolveDefaults(withEnv);
+  const resolved = resolveDefaults(revalidated.data);
 
   return Ok(resolved);
 }

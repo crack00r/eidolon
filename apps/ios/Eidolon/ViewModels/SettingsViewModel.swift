@@ -163,9 +163,12 @@ enum KeychainHelper {
         // Delete existing item
         SecItemDelete(query as CFDictionary)
 
-        // Add new item
+        // Add new item with restrictive access flags:
+        // - Only accessible when the device is unlocked
+        // - Never migrated to other devices via backup/transfer
         var addQuery = query
         addQuery[kSecValueData as String] = data
+        addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
         SecItemAdd(addQuery as CFDictionary, nil)
     }
 

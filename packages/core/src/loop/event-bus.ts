@@ -274,27 +274,34 @@ export class EventBus {
     }
   }
 
+  /** Invoke a single handler safely, catching both sync throws and async rejections. */
+  private safeInvoke(handler: EventHandler, event: BusEvent, label: string): void {
+    try {
+      const result = handler(event);
+      // If the handler returns a Promise, catch async rejections
+      if (result && typeof result === "object" && "catch" in result && typeof result.catch === "function") {
+        (result as Promise<void>).catch((err: unknown) => {
+          this.logger.error("event-bus", `Async ${label} error for ${event.type}`, err);
+        });
+      }
+    } catch (err) {
+      this.logger.error("event-bus", `${label} error for ${event.type}`, err);
+    }
+  }
+
   /** Notify in-memory subscribers (type-specific + wildcard). */
   private notifySubscribers(event: BusEvent): void {
     const typeHandlers = this.subscribers.get(event.type);
     if (typeHandlers) {
       for (const handler of typeHandlers) {
-        try {
-          void handler(event);
-        } catch (err) {
-          this.logger.error("event-bus", `Handler error for ${event.type}`, err);
-        }
+        this.safeInvoke(handler, event, "Handler");
       }
     }
 
     const wildcardHandlers = this.subscribers.get("*");
     if (wildcardHandlers) {
       for (const handler of wildcardHandlers) {
-        try {
-          void handler(event);
-        } catch (err) {
-          this.logger.error("event-bus", `Wildcard handler error for ${event.type}`, err);
-        }
+        this.safeInvoke(handler, event, "Wildcard handler");
       }
     }
   }

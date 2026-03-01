@@ -9,7 +9,7 @@
  */
 
 import type { Database } from "bun:sqlite";
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, lstatSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { extname, join, resolve } from "node:path";
 import type { EidolonError, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
@@ -74,12 +74,27 @@ export class DocumentIndexer {
   // -------------------------------------------------------------------------
 
   /** Index a single file. Returns the number of chunks stored. */
-  indexFile(filePath: string): Result<number, EidolonError> {
+  indexFile(filePath: string, baseDir?: string): Result<number, EidolonError> {
     try {
       const absPath = resolve(filePath);
 
       if (!existsSync(absPath)) {
         return Err(createError(ErrorCode.DB_QUERY_FAILED, `File not found: ${absPath}`));
+      }
+
+      // Security: skip symlinks to prevent indexing files outside intended directory
+      const lstat = lstatSync(absPath);
+      if (lstat.isSymbolicLink()) {
+        return Err(createError(ErrorCode.DB_QUERY_FAILED, `Refusing to index symlink: ${absPath}`));
+      }
+
+      // If a base directory constraint is provided, verify the real path is within it
+      if (baseDir) {
+        const realPath = realpathSync(absPath);
+        const realBase = realpathSync(baseDir);
+        if (!realPath.startsWith(realBase)) {
+          return Err(createError(ErrorCode.DB_QUERY_FAILED, `File is outside base directory: ${absPath}`));
+        }
       }
 
       const stat = statSync(absPath);
@@ -142,7 +157,7 @@ export class DocumentIndexer {
       let totalChunks = 0;
 
       for (const file of files) {
-        const result = this.indexFile(file);
+        const result = this.indexFile(file, absDir);
         if (!result.ok) {
           this.logger.warn("indexDirectory", `Skipping file ${file}: ${result.error.message}`);
           continue;
@@ -299,15 +314,30 @@ export class DocumentIndexer {
   // Private helpers
   // -------------------------------------------------------------------------
 
-  /** Recursively walk a directory, returning file paths matching filters. */
+  /** Recursively walk a directory, returning file paths matching filters.
+   *  Skips symlinks to prevent traversal outside the intended directory. */
   private walkDirectory(dirPath: string): string[] {
     const results: string[] = [];
+
+    // Skip if the directory itself is a symlink
+    const dirLstat = lstatSync(dirPath);
+    if (dirLstat.isSymbolicLink()) {
+      this.logger.debug("walkDirectory", `Skipping symlinked directory: ${dirPath}`);
+      return results;
+    }
+
     const entries = readdirSync(dirPath, { withFileTypes: true });
 
     for (const entry of entries) {
       if (this.exclude.includes(entry.name)) continue;
 
       const fullPath = join(dirPath, entry.name);
+
+      // Skip symlinks entirely
+      if (entry.isSymbolicLink()) {
+        this.logger.debug("walkDirectory", `Skipping symlink: ${fullPath}`);
+        continue;
+      }
 
       if (entry.isDirectory()) {
         results.push(...this.walkDirectory(fullPath));

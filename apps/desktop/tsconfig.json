@@ -12,7 +12,7 @@
     "noFallthroughCasesInSwitch": true,
     "isolatedModules": true,
     "sourceMap": true,
-    "skipLibCheck": true,
+    "skipLibCheck": true /* Required: prevents type conflicts in third-party .d.ts files (Svelte, Tauri) */,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,

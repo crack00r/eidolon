@@ -80,8 +80,51 @@ function normalizeIp(ip: string): string {
   return ip;
 }
 
+/**
+ * Anonymize an IP address for GDPR-compliant logging.
+ * IPv4: replace last octet with 0 (e.g., 192.168.1.42 -> 192.168.1.0)
+ * IPv6: truncate last 80 bits (keep first 48 bits, zero the rest)
+ */
+function anonymizeIp(ip: string): string {
+  // IPv4: a.b.c.d -> a.b.c.0
+  if (ip.includes(".") && !ip.includes(":")) {
+    const lastDot = ip.lastIndexOf(".");
+    if (lastDot === -1) return ip;
+    return `${ip.slice(0, lastDot)}.0`;
+  }
+  // IPv6: expand compressed form, keep first 3 groups (48 bits), zero the rest
+  // Short addresses like "::1" have fewer than 3 non-empty groups — return as-is
+  // since they don't contain personally identifiable information
+  const nonEmptyParts = ip.split(":").filter((p) => p.length > 0);
+  if (nonEmptyParts.length < 3) {
+    return ip;
+  }
+  return `${nonEmptyParts.slice(0, 3).join(":")}::`;
+}
+
+/**
+ * Normalize an origin string for comparison: lowercase and strip trailing slash.
+ */
+function normalizeOrigin(origin: string): string {
+  return origin.toLowerCase().replace(/\/+$/, "");
+}
+
+/** Standard security headers applied to all HTTP responses from the gateway. */
+const SECURITY_HEADERS: Record<string, string> = {
+  "X-Content-Type-Options": "nosniff",
+  "X-Frame-Options": "DENY",
+  "X-XSS-Protection": "0",
+  "Cache-Control": "no-store",
+  "Content-Type": "text/plain",
+};
+
+/** Create an HTTP Response with security headers. */
+function secureResponse(body: string, status: number): Response {
+  return new Response(body, { status, headers: { ...SECURITY_HEADERS } });
+}
+
 // Export for testing
-export { constantTimeCompare, normalizeIp };
+export { anonymizeIp, constantTimeCompare, normalizeIp, normalizeOrigin };
 
 // ---------------------------------------------------------------------------
 // GatewayServer
@@ -137,37 +180,39 @@ export class GatewayServer {
         const url = new URL(req.url);
 
         if (url.pathname !== "/ws") {
-          return new Response("Not found", { status: 404 });
+          return secureResponse("Not found", 404);
         }
 
         // Extract client IP and normalize to prevent IPv6 bypass
         const ip = normalizeIp(server.requestIP(req)?.address ?? "unknown");
+        const anonIp = anonymizeIp(ip);
 
-        // Rate limiting check
+        // Rate limiting check (uses real IP internally, logs anonymized)
         if (self.rateLimiter.isBlocked(ip)) {
-          self.logger.warn("fetch", `Rate-limited IP ${ip} attempted connection`);
-          return new Response("Too Many Requests", { status: 429 });
+          self.logger.warn("fetch", `Rate-limited IP ${anonIp} attempted connection`);
+          return secureResponse("Too Many Requests", 429);
         }
 
         // Connection limit check
         if (self.clients.size >= self.config.maxClients) {
-          self.logger.warn("fetch", `Connection limit reached (${self.config.maxClients}), rejecting ${ip}`);
-          return new Response("Service Unavailable", { status: 503 });
+          self.logger.warn("fetch", `Connection limit reached (${self.config.maxClients}), rejecting ${anonIp}`);
+          return secureResponse("Service Unavailable", 503);
         }
 
-        // Origin validation
+        // Origin validation (case-insensitive, trailing-slash-tolerant)
         if (self.config.allowedOrigins.length > 0) {
-          const origin = req.headers.get("Origin") ?? "";
-          if (!self.config.allowedOrigins.includes(origin)) {
-            self.logger.warn("fetch", `Rejected origin "${origin}" from ${ip}`);
-            return new Response("Forbidden", { status: 403 });
+          const origin = normalizeOrigin(req.headers.get("Origin") ?? "");
+          const allowed = self.config.allowedOrigins.some((o) => normalizeOrigin(o) === origin);
+          if (!allowed) {
+            self.logger.warn("fetch", `Rejected origin "${origin}" from ${anonIp}`);
+            return secureResponse("Forbidden", 403);
           }
         }
 
         const clientId = randomUUID();
         const upgraded = server.upgrade(req, { data: { clientId, ip } });
         if (!upgraded) {
-          return new Response("WebSocket upgrade failed", { status: 400 });
+          return secureResponse("WebSocket upgrade failed", 400);
         }
         return undefined;
       },
@@ -272,6 +317,7 @@ export class GatewayServer {
 
   private handleOpen(ws: ServerWS): void {
     const { clientId, ip } = ws.data;
+    const anonIp = anonymizeIp(ip);
     const requiresAuth = this.config.auth.type !== "none";
 
     const state: ClientState = {
@@ -286,7 +332,7 @@ export class GatewayServer {
       this.logger.info("open", `Client ${clientId} connected (auth: none)`);
       this.eventBus.publish("gateway:client_connected", { clientId, authenticated: true }, { source: "gateway" });
     } else {
-      this.logger.info("open", `Client ${clientId} connected from ${ip}, awaiting auth`);
+      this.logger.info("open", `Client ${clientId} connected from ${anonIp}, awaiting auth`);
 
       // Enforce auth timeout: close unauthenticated connections after 10 seconds
       setTimeout(() => {
@@ -407,7 +453,7 @@ export class GatewayServer {
     // Auth succeeded
     this.rateLimiter.recordSuccess(client.ip);
     client.authenticated = true;
-    this.logger.info("auth", `Client ${client.id} authenticated from ${client.ip}`);
+    this.logger.info("auth", `Client ${client.id} authenticated from ${anonymizeIp(client.ip)}`);
     this.eventBus.publish(
       "gateway:client_connected",
       { clientId: client.id, authenticated: true },

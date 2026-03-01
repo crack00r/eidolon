@@ -40,9 +40,10 @@ export function deriveKey(masterKey: Buffer, salt: Buffer): Buffer {
 
 /** Encrypt a value using AES-256-GCM. */
 export function encrypt(value: string, masterKey: Buffer): Result<EncryptedData, EidolonError> {
+  let key: Buffer | undefined;
   try {
     const salt = randomBytes(SALT_LENGTH);
-    const key = deriveKey(masterKey, salt);
+    key = deriveKey(masterKey, salt);
     const iv = randomBytes(IV_LENGTH);
     const cipher = createCipheriv(ALGORITHM, key, iv, { authTagLength: AUTH_TAG_LENGTH });
     const encrypted = Buffer.concat([cipher.update(value, "utf8"), cipher.final()]);
@@ -50,13 +51,17 @@ export function encrypt(value: string, masterKey: Buffer): Result<EncryptedData,
     return Ok({ ciphertext: encrypted, iv, authTag, salt });
   } catch (cause) {
     return Err(createError(ErrorCode.SECRET_DECRYPTION_FAILED, "Encryption failed", cause));
+  } finally {
+    // Zero derived key material (best-effort in JS)
+    if (key) key.fill(0);
   }
 }
 
 /** Decrypt a value using AES-256-GCM. */
 export function decrypt(data: EncryptedData, masterKey: Buffer): Result<string, EidolonError> {
+  let key: Buffer | undefined;
   try {
-    const key = deriveKey(masterKey, data.salt);
+    key = deriveKey(masterKey, data.salt);
     const decipher = createDecipheriv(ALGORITHM, key, data.iv, { authTagLength: AUTH_TAG_LENGTH });
     decipher.setAuthTag(data.authTag);
     const decrypted = Buffer.concat([decipher.update(data.ciphertext), decipher.final()]);
@@ -65,5 +70,8 @@ export function decrypt(data: EncryptedData, masterKey: Buffer): Result<string, 
     return Err(
       createError(ErrorCode.SECRET_DECRYPTION_FAILED, "Decryption failed -- wrong key or tampered data", cause),
     );
+  } finally {
+    // Zero derived key material (best-effort in JS)
+    if (key) key.fill(0);
   }
 }

@@ -62,7 +62,14 @@ export function registerSecretsCommand(program: Command): void {
         if (options.reveal) {
           console.log(result.value);
         } else {
-          console.log("*".repeat(Math.min(result.value.length, 40)));
+          // Fixed-length mask: always 4 asterisks + last 4 chars (if long enough)
+          // to avoid leaking the secret's length via mask length
+          const value = result.value;
+          if (value.length > 4) {
+            console.log(`****${value.slice(-4)}`);
+          } else {
+            console.log("********");
+          }
         }
       } finally {
         store.close();

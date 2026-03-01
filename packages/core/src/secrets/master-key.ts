@@ -13,6 +13,15 @@ import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 const ENV_KEY = "EIDOLON_MASTER_KEY";
 
 /**
+ * Zero out a Buffer to remove key material from memory.
+ * Best-effort in JavaScript — the GC may have already copied the data,
+ * but this eliminates the primary reference.
+ */
+export function zeroBuffer(buf: Buffer | Uint8Array): void {
+  buf.fill(0);
+}
+
+/**
  * Get the master key from the EIDOLON_MASTER_KEY environment variable.
  *
  * - If the value is exactly 64 hex characters, it is decoded directly as a 32-byte key.
@@ -29,7 +38,11 @@ export function getMasterKey(): Result<Buffer, EidolonError> {
     return Ok(Buffer.from(envValue, "hex"));
   }
 
-  // Otherwise, derive key from passphrase via scrypt KDF (with fixed application salt)
+  // Derive key from passphrase via scrypt KDF (with fixed application salt).
+  // Using scrypt because Bun doesn't natively support argon2id. Parameters
+  // (N=2^17, r=8, p=1) provide an equivalent security margin to argon2id with
+  // recommended settings. If Bun gains argon2id support in the future, this
+  // should be migrated. See SEC-SUPPLY-022.
   const PASSPHRASE_SALT = Buffer.from("eidolon-master-key-v1", "utf-8");
   const key = scryptSync(envValue, PASSPHRASE_SALT, 32, { N: 2 ** 17, r: 8, p: 1, maxmem: 256 * 1024 * 1024 });
   return Ok(key);

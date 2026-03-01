@@ -80,9 +80,9 @@ export class GPUManager {
   }
 
   /** Make an authenticated request to the worker. */
-  async request<T>(path: string, options?: RequestInit): Promise<Result<T, EidolonError>> {
+  async request<T>(path: string, options?: RequestInit, timeoutOverrideMs?: number): Promise<Result<T, EidolonError>> {
     const url = `${this.config.url}${path}`;
-    const timeoutMs = this.config.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+    const timeoutMs = timeoutOverrideMs ?? this.config.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);

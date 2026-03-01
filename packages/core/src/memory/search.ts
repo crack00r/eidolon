@@ -46,6 +46,8 @@ const DEFAULT_VECTOR_WEIGHT = 0.4;
 const DEFAULT_GRAPH_WEIGHT = 0.2;
 const DEFAULT_RRF_K = 60;
 const DEFAULT_LIMIT = 20;
+/** Upper bound on rows scanned during vector similarity search to prevent OOM. */
+const MAX_VECTOR_SCAN_ROWS = 50_000;
 
 // ---------------------------------------------------------------------------
 // MemorySearch
@@ -209,15 +211,25 @@ export class MemorySearch {
   // Public: vector similarity search
   // -----------------------------------------------------------------------
 
-  /** Vector similarity search. */
+  /**
+   * Vector similarity search.
+   *
+   * Performance note: This performs a full table scan of all embeddings and
+   * computes cosine similarity in application code. For large memory stores
+   * (>100k memories), consider migrating to sqlite-vec for ANN indexing.
+   * The scan is bounded by MAX_VECTOR_SCAN_ROWS to prevent excessive memory use.
+   */
   async searchVector(
     queryEmbedding: Float32Array,
     limit: number,
   ): Promise<Result<Array<{ memoryId: string; similarity: number }>, EidolonError>> {
     try {
+      // Cap the number of rows scanned to prevent unbounded memory usage.
+      // This is a reasonable upper bound; if the memory store grows beyond this,
+      // an ANN index (sqlite-vec) should be used instead.
       const rows = this.db
-        .query("SELECT id, embedding FROM memories WHERE embedding IS NOT NULL")
-        .all() as EmbeddingRow[];
+        .query("SELECT id, embedding FROM memories WHERE embedding IS NOT NULL LIMIT ?")
+        .all(MAX_VECTOR_SCAN_ROWS) as EmbeddingRow[];
 
       const scored: Array<{ memoryId: string; similarity: number }> = [];
 

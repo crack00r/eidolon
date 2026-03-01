@@ -21,6 +21,13 @@ export interface SttResult {
 }
 
 // ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+/** Timeout for STT upload requests (60 seconds). */
+const STT_UPLOAD_TIMEOUT_MS = 60_000;
+
+// ---------------------------------------------------------------------------
 // STTClient
 // ---------------------------------------------------------------------------
 
@@ -46,11 +53,15 @@ export class STTClient {
     const blob = new Blob([audio], { type: mime });
     formData.append("file", blob, `audio.${extension}`);
 
-    // Use GPUManager.request() to ensure authenticated requests
-    const result = await this.gpu.request<SttResult>("/stt/transcribe", {
-      method: "POST",
-      body: formData,
-    });
+    // Use GPUManager.request() with explicit STT upload timeout (60s)
+    const result = await this.gpu.request<SttResult>(
+      "/stt/transcribe",
+      {
+        method: "POST",
+        body: formData,
+      },
+      STT_UPLOAD_TIMEOUT_MS,
+    );
 
     if (!result.ok) {
       return Err(createError(ErrorCode.STT_FAILED, `STT transcription failed: ${result.error.message}`));

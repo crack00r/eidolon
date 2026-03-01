@@ -23,6 +23,8 @@ interface RateLimitEntry {
   firstFailureAt: number;
   blockedUntil: number;
   blockCount: number;
+  /** Timestamp of the last violation (block). Decays slowly over time. */
+  lastViolationAt: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -62,16 +64,25 @@ export class AuthRateLimiter {
     const entry = this.entries.get(ip);
     if (!entry) return false;
 
-    if (entry.blockedUntil > 0 && Date.now() < entry.blockedUntil) {
+    const now = Date.now();
+
+    if (entry.blockedUntil > 0 && now < entry.blockedUntil) {
       return true;
     }
 
-    // Block expired — check if we should clear the entry
-    if (entry.blockedUntil > 0 && Date.now() >= entry.blockedUntil) {
-      // Unblock but keep history so next failure escalates
+    // Block expired — unblock but keep violation history so next failure escalates.
+    // Slowly decay blockCount: reduce by 1 for every full maxBlockMs period since
+    // the last violation, so persistent abusers still face long lockouts.
+    if (entry.blockedUntil > 0 && now >= entry.blockedUntil) {
       entry.blockedUntil = 0;
       entry.failures = 0;
       entry.firstFailureAt = 0;
+
+      if (entry.lastViolationAt > 0) {
+        const elapsed = now - entry.lastViolationAt;
+        const decaySteps = Math.floor(elapsed / this.config.maxBlockMs);
+        entry.blockCount = Math.max(0, entry.blockCount - decaySteps);
+      }
     }
 
     return false;
@@ -85,7 +96,7 @@ export class AuthRateLimiter {
     let entry = this.entries.get(ip);
 
     if (!entry) {
-      entry = { failures: 0, firstFailureAt: now, blockedUntil: 0, blockCount: 0 };
+      entry = { failures: 0, firstFailureAt: now, blockedUntil: 0, blockCount: 0, lastViolationAt: 0 };
       this.entries.set(ip, entry);
     }
 
@@ -102,6 +113,7 @@ export class AuthRateLimiter {
       const backoffMs = Math.min(this.config.blockMs * 2 ** entry.blockCount, this.config.maxBlockMs);
       entry.blockedUntil = now + backoffMs;
       entry.blockCount++;
+      entry.lastViolationAt = now;
       entry.failures = 0;
       entry.firstFailureAt = 0;
 
@@ -113,9 +125,39 @@ export class AuthRateLimiter {
     return false;
   }
 
-  /** Record a successful auth — clears all history for the IP. */
+  /**
+   * Record a successful auth.
+   * Clears failure state but preserves violation history (blockCount) with
+   * time-based decay so that repeat offenders still face escalating lockouts.
+   */
   recordSuccess(ip: string): void {
-    this.entries.delete(ip);
+    const entry = this.entries.get(ip);
+    if (!entry) return;
+
+    // If no prior violations, simply remove the entry
+    if (entry.blockCount === 0) {
+      this.entries.delete(ip);
+      return;
+    }
+
+    // Decay blockCount based on time since last violation
+    const now = Date.now();
+    if (entry.lastViolationAt > 0) {
+      const elapsed = now - entry.lastViolationAt;
+      const decaySteps = Math.floor(elapsed / this.config.maxBlockMs);
+      entry.blockCount = Math.max(0, entry.blockCount - decaySteps);
+    }
+
+    // If fully decayed, remove the entry
+    if (entry.blockCount === 0) {
+      this.entries.delete(ip);
+      return;
+    }
+
+    // Otherwise, reset failure counters but keep violation history
+    entry.failures = 0;
+    entry.firstFailureAt = 0;
+    entry.blockedUntil = 0;
   }
 
   /** Cleanup interval and release resources. */
@@ -127,13 +169,22 @@ export class AuthRateLimiter {
     this.entries.clear();
   }
 
-  /** Remove expired entries (no longer blocked and outside failure window). */
+  /** Remove expired entries (no longer blocked, outside failure window, and fully decayed). */
   private cleanupExpired(): void {
     const now = Date.now();
     for (const [ip, entry] of this.entries) {
       const blockExpired = entry.blockedUntil === 0 || now >= entry.blockedUntil;
       const windowExpired = now - entry.firstFailureAt > this.config.windowMs;
-      if (blockExpired && windowExpired && entry.failures === 0) {
+
+      // Decay blockCount based on time since last violation
+      if (entry.lastViolationAt > 0 && entry.blockCount > 0) {
+        const elapsed = now - entry.lastViolationAt;
+        const decaySteps = Math.floor(elapsed / this.config.maxBlockMs);
+        entry.blockCount = Math.max(0, entry.blockCount - decaySteps);
+        if (entry.blockCount === 0) entry.lastViolationAt = 0;
+      }
+
+      if (blockExpired && windowExpired && entry.failures === 0 && entry.blockCount === 0) {
         this.entries.delete(ip);
       }
     }

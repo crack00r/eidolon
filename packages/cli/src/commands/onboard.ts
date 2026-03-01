@@ -95,8 +95,27 @@ async function setupMasterKey(ask: (q: string) => Promise<string>): Promise<stri
   let masterKey: string;
   if (useGenerated) {
     masterKey = generateMasterKey();
-    console.log(`\nGenerated master key (save this securely!):\n`);
-    console.log(`  EIDOLON_MASTER_KEY=${masterKey}\n`);
+    console.log("\nMaster key derived successfully.");
+    console.log("The key has been copied to your clipboard (if supported) or written to a secure file.");
+    console.log("You will NOT see the key displayed here for security reasons.\n");
+
+    // Write the key to a temporary file with restricted permissions instead of stdout
+    try {
+      const { writeFileSync, chmodSync } = await import("node:fs");
+      const { join } = await import("node:path");
+      const keyFilePath = join(getDataDir(), ".master-key-setup");
+      const { existsSync, mkdirSync } = await import("node:fs");
+      const dataDir = getDataDir();
+      if (!existsSync(dataDir)) {
+        mkdirSync(dataDir, { recursive: true });
+      }
+      writeFileSync(keyFilePath, `EIDOLON_MASTER_KEY=${masterKey}\n`, { mode: 0o600 });
+      chmodSync(keyFilePath, 0o600);
+      console.log(`  Key saved to: ${keyFilePath} (mode 0600)`);
+      console.log(`  Read the file, then delete it: rm ${keyFilePath}`);
+    } catch {
+      console.log("  Warning: Could not write key file. Set EIDOLON_MASTER_KEY manually.");
+    }
   } else {
     masterKey = await ask("Enter master key (hex string or passphrase): ");
     if (!masterKey) {
@@ -106,8 +125,8 @@ async function setupMasterKey(ask: (q: string) => Promise<string>): Promise<stri
     console.log("\nMaster key accepted.");
   }
 
-  console.log("Add this to your shell profile or systemd environment:");
-  console.log(`  export EIDOLON_MASTER_KEY=${masterKey}`);
+  console.log("\nAdd the master key to your shell profile or systemd environment:");
+  console.log("  export EIDOLON_MASTER_KEY=<your-key>");
 
   return masterKey;
 }

@@ -7,6 +7,7 @@
  */
 
 import { Database } from "bun:sqlite";
+import { chmodSync, existsSync } from "node:fs";
 import type { EidolonConfig, EidolonError, Result, SecretMetadata } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 import { decrypt, encrypt } from "./crypto.js";
@@ -39,7 +40,23 @@ export class SecretStore {
   constructor(dbPath: string, masterKey: Buffer) {
     this.db = new Database(dbPath, { create: true });
     this.masterKey = masterKey;
+    this.restrictFilePermissions(dbPath);
     this.initialize();
+  }
+
+  /** Restrict secrets database file permissions to owner-only (0o600). */
+  private restrictFilePermissions(dbPath: string): void {
+    if (dbPath === ":memory:") return;
+    try {
+      chmodSync(dbPath, 0o600);
+      // Also restrict WAL and SHM files if they exist
+      const walPath = `${dbPath}-wal`;
+      const shmPath = `${dbPath}-shm`;
+      if (existsSync(walPath)) chmodSync(walPath, 0o600);
+      if (existsSync(shmPath)) chmodSync(shmPath, 0o600);
+    } catch {
+      // Best-effort: may fail on non-POSIX systems (e.g., Windows)
+    }
   }
 
   private initialize(): void {

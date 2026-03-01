@@ -20,5 +20,10 @@
     "lint": "pnpm -r lint",
     "lint:fix": "pnpm -r lint:fix",
     "typecheck": "pnpm -r typecheck"
+  },
+  "pnpm": {
+    "overrides": {
+      "cookie": "~0.7.0"
+    }
   }
 }

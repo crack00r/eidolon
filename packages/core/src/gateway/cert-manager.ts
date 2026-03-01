@@ -52,7 +52,7 @@ export function generateSelfSignedCert(certsDir: string, options?: CertOptions):
     "req",
     "-x509",
     "-newkey",
-    "rsa:2048",
+    "rsa:4096",
     "-keyout",
     keyPath,
     "-out",

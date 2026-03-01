@@ -16,7 +16,7 @@ import {
   validateMethod,
 } from "../protocol.js";
 import { AuthRateLimiter } from "../rate-limiter.js";
-import { constantTimeCompare, GatewayServer } from "../server.js";
+import { anonymizeIp, constantTimeCompare, GatewayServer, normalizeOrigin } from "../server.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -341,6 +341,49 @@ describe("constantTimeCompare", () => {
   test("handles unicode correctly", () => {
     expect(constantTimeCompare("über-geheim", "über-geheim")).toBe(true);
     expect(constantTimeCompare("über-geheim", "uber-geheim")).toBe(false);
+  });
+});
+
+// ===========================================================================
+// anonymizeIp tests
+// ===========================================================================
+
+describe("anonymizeIp", () => {
+  test("anonymizes IPv4 by zeroing last octet", () => {
+    expect(anonymizeIp("192.168.1.42")).toBe("192.168.1.0");
+    expect(anonymizeIp("10.0.0.1")).toBe("10.0.0.0");
+  });
+
+  test("handles single-segment IP gracefully", () => {
+    expect(anonymizeIp("unknown")).toBe("unknown");
+  });
+
+  test("anonymizes IPv6 by keeping first 3 groups", () => {
+    expect(anonymizeIp("2001:db8:85a3:0:0:8a2e:370:7334")).toBe("2001:db8:85a3::");
+    expect(anonymizeIp("::1")).toBe("::1");
+  });
+});
+
+// ===========================================================================
+// normalizeOrigin tests
+// ===========================================================================
+
+describe("normalizeOrigin", () => {
+  test("lowercases the origin", () => {
+    expect(normalizeOrigin("HTTPS://Example.COM")).toBe("https://example.com");
+  });
+
+  test("strips trailing slashes", () => {
+    expect(normalizeOrigin("https://example.com/")).toBe("https://example.com");
+    expect(normalizeOrigin("https://example.com///")).toBe("https://example.com");
+  });
+
+  test("lowercases and strips trailing slash together", () => {
+    expect(normalizeOrigin("HTTPS://Example.COM/")).toBe("https://example.com");
+  });
+
+  test("leaves clean origins unchanged (after lowercasing)", () => {
+    expect(normalizeOrigin("https://example.com")).toBe("https://example.com");
   });
 });
 
@@ -1093,7 +1136,7 @@ describe("GatewayServer", () => {
     });
   });
 
-  test("returns 404 for non-WebSocket requests", async () => {
+  test("returns 404 with security headers for non-WebSocket requests", async () => {
     const config = makeConfig();
     const eventBus = createEventBus();
     const server = new GatewayServer({ config, logger, eventBus });
@@ -1103,5 +1146,8 @@ describe("GatewayServer", () => {
 
     const resp = await fetch(`http://127.0.0.1:${config.port}/health`);
     expect(resp.status).toBe(404);
+    expect(resp.headers.get("X-Content-Type-Options")).toBe("nosniff");
+    expect(resp.headers.get("X-Frame-Options")).toBe("DENY");
+    expect(resp.headers.get("Cache-Control")).toBe("no-store");
   });
 });

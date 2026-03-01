@@ -13,7 +13,7 @@
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
-    "skipLibCheck": true,
+    "skipLibCheck": true /* Required: skipping lib check avoids type conflicts between @types packages and Bun's built-in types (e.g., bun:sqlite). Removing this causes spurious errors in third-party .d.ts files. */,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true
