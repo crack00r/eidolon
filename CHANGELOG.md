@@ -9,6 +9,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > [release-please](https://github.com/googleapis/release-please).
 > Do not edit manually.
 
+## [0.1.1](https://github.com/crack00r/eidolon/compare/v0.1.0...v0.1.1) (2026-03-01)
+
+
+### Bug Fixes
+
+* **ci:** move continue-on-error to reusable workflow job level ([2fca930](https://github.com/crack00r/eidolon/commit/2fca93068387e2a8ec61fe5666f0d4a47327a140))
+* **desktop:** add placeholder icons and fix Linux build dependencies ([59884de](https://github.com/crack00r/eidolon/commit/59884de14abc2f401b889a9524c86ba3d845e67e))
+
+
+### Security
+
+* **all:** fix ~113 LOW-severity findings from second security audit ([39773fe](https://github.com/crack00r/eidolon/commit/39773fe184bc51d8ac73b3ba2c43e1e206f5f19b))
+* **all:** fix ~65 CRITICAL+HIGH+MEDIUM findings from second security audit ([6caab98](https://github.com/crack00r/eidolon/commit/6caab983df24fa9a059e237260dbadd75186b264))
+* **all:** fix 162 findings from third comprehensive security audit ([ce66c8c](https://github.com/crack00r/eidolon/commit/ce66c8cb8178cb679ef21aba5de17d69681466c7))
+
+
+### Tests
+
+* **core:** fix time-dependent RestCalculator tests with setSystemTime ([4fa098e](https://github.com/crack00r/eidolon/commit/4fa098ed7d00dd493bffdf4d19ec25c3d7eecbd6))
+
 ## 0.1.0 (2026-03-01)
 
 
