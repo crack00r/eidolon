@@ -1,0 +1,61 @@
+{
+  "$schema": "https://code.claude.com/schemas/settings.json",
+  "autoMemoryEnabled": true,
+  "permissions": {
+    "allow": [
+      "Bash(bun *)",
+      "Bash(pnpm *)",
+      "Bash(git *)",
+      "Bash(gh *)",
+      "Bash(npx *)",
+      "Bash(bunx *)",
+      "Bash(mkdir *)",
+      "Bash(rm *)",
+      "Bash(cp *)",
+      "Bash(mv *)",
+      "Bash(ls *)",
+      "Bash(cat *)",
+      "Bash(which *)",
+      "Bash(echo *)",
+      "Bash(sqlite3 *)",
+      "Bash(python3 *)",
+      "Bash(pip *)",
+      "Bash(uv *)",
+      "Read",
+      "Write",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Skill"
+    ],
+    "deny": [
+      "Bash(curl *://*/secrets*)",
+      "Bash(rm -rf /)",
+      "Bash(rm -rf ~)",
+      "Bash(: > .env*)",
+      "Bash(cat .env)",
+      "Bash(cat secrets.enc)",
+      "Bash(git push --force *)",
+      "Bash(git push -f *)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if [[ \"$CLAUDE_TOOL_INPUT_FILE_PATH\" == *.ts || \"$CLAUDE_TOOL_INPUT_FILE_PATH\" == *.tsx ]]; then npx biome format --write \"$CLAUDE_TOOL_INPUT_FILE_PATH\" 2>/dev/null || true; fi"
+          }
+        ]
+      }
+    ]
+  },
+  "enabledPlugins": {
+    "typescript-lsp@claude-plugins-official": true,
+    "github@claude-plugins-official": true,
+    "commit-commands@claude-plugins-official": true,
+    "pr-review-toolkit@claude-plugins-official": true
+  }
+}

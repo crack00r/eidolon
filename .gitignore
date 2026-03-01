@@ -40,6 +40,9 @@ eidolon.db
 *.pem
 *.key
 
+# Claude Code local preferences (per-developer, not shared)
+CLAUDE.local.md
+
 # OS files
 .DS_Store
 Thumbs.db
