@@ -129,7 +129,10 @@ export class GPUManager {
         return Err(createError(code, `GPU worker returned ${response.status}: ${body}`));
       }
 
-      // Finding #5: Reject responses exceeding 100 MB
+      // Reject responses exceeding MAX_RESPONSE_BYTES.
+      // When Content-Length is present, reject immediately. Otherwise,
+      // stream the body with a byte counter to guard against chunked
+      // transfer-encoding responses that omit Content-Length.
       const contentLength = response.headers.get("content-length");
       if (contentLength !== null) {
         const size = Number(contentLength);
@@ -140,9 +143,16 @@ export class GPUManager {
         }
       }
 
+      // Read the body via streaming reader with byte limit enforcement
+      const bodyBytes = await this.readBodyWithLimit(response, MAX_RESPONSE_BYTES);
+      if (!bodyBytes.ok) {
+        return Err(bodyBytes.error);
+      }
+
       const contentType = response.headers.get("content-type") ?? "";
       if (contentType.includes(JSON_CONTENT_TYPE_PREFIX)) {
-        const data: unknown = await response.json();
+        const text = new TextDecoder().decode(bodyBytes.value);
+        const data: unknown = JSON.parse(text);
         if (typeof data !== "object" || data === null) {
           return Err(createError(ErrorCode.GPU_UNAVAILABLE, "Invalid GPU response format"));
         }
@@ -151,9 +161,15 @@ export class GPUManager {
 
       // For non-JSON responses (e.g. audio bytes), return the raw ArrayBuffer
       // Callers that expect binary should cast appropriately
-      const data = (await response.arrayBuffer()) as T;
+      const data = bodyBytes.value.buffer.slice(
+        bodyBytes.value.byteOffset,
+        bodyBytes.value.byteOffset + bodyBytes.value.byteLength,
+      ) as T;
       return Ok(data);
     } catch (err: unknown) {
+      if (err instanceof SyntaxError) {
+        return Err(createError(ErrorCode.GPU_UNAVAILABLE, "Invalid JSON in GPU response"));
+      }
       if (err instanceof DOMException && err.name === "AbortError") {
         return Err(createError(ErrorCode.TIMEOUT, `GPU worker request to ${path} timed out after ${timeoutMs}ms`));
       }
@@ -162,5 +178,53 @@ export class GPUManager {
     } finally {
       clearTimeout(timer);
     }
+  }
+
+  /**
+   * Read response body with a strict byte limit.
+   * Uses a streaming reader to enforce the limit even when
+   * Content-Length is absent (e.g. chunked transfer-encoding).
+   */
+  private async readBodyWithLimit(response: Response, maxBytes: number): Promise<Result<Uint8Array, EidolonError>> {
+    const reader = response.body?.getReader();
+    if (!reader) {
+      // No body — return empty
+      return Ok(new Uint8Array(0));
+    }
+
+    const chunks: Uint8Array[] = [];
+    let totalBytes = 0;
+
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        totalBytes += value.byteLength;
+        if (totalBytes > maxBytes) {
+          reader.cancel().catch(() => {});
+          return Err(
+            createError(ErrorCode.GPU_UNAVAILABLE, `GPU response too large: exceeded ${maxBytes} bytes (streamed)`),
+          );
+        }
+        chunks.push(value);
+      }
+    } finally {
+      reader.releaseLock();
+    }
+
+    // Concatenate chunks into a single Uint8Array
+    if (chunks.length === 1) {
+      const single = chunks[0];
+      if (single === undefined) return Err(createError(ErrorCode.GPU_UNAVAILABLE, "unexpected empty chunk"));
+      return Ok(single);
+    }
+    const result = new Uint8Array(totalBytes);
+    let offset = 0;
+    for (const chunk of chunks) {
+      result.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    return Ok(result);
   }
 }

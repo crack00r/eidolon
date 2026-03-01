@@ -6,7 +6,7 @@
  * PID file lifecycle.
  */
 
-import { existsSync, lstatSync, mkdirSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { EidolonConfig } from "@eidolon/protocol";
 import { SECRETS_DB_FILENAME, VERSION } from "@eidolon/protocol";
@@ -326,6 +326,7 @@ export class EidolonDaemon {
     ]).catch((err: unknown) => {
       const message = err instanceof Error ? err.message : String(err);
       logger?.error("daemon", `Shutdown timeout: ${message} -- forcing exit`);
+      process.exit(1);
     });
 
     // 8. Remove PID file
@@ -395,14 +396,54 @@ export class EidolonDaemon {
       if ((e as NodeJS.ErrnoException).code !== "ENOENT") throw e;
     }
 
-    writeFileSync(pidPath, String(process.pid), "utf-8");
+    // FINDING-LOOP-018: Stale PID detection -- check if existing PID file references a running process
+    if (existsSync(pidPath)) {
+      try {
+        const existingPid = Number.parseInt(readFileSync(pidPath, "utf-8").trim(), 10);
+        if (Number.isFinite(existingPid) && existingPid > 0) {
+          try {
+            process.kill(existingPid, 0);
+            // Process is still running
+            throw new Error(`Another daemon instance is already running (PID ${existingPid})`);
+          } catch (killErr: unknown) {
+            if ((killErr as NodeJS.ErrnoException).code === "ESRCH") {
+              // Process not found -- stale PID file, safe to overwrite
+              this.modules.logger?.warn("daemon", `Stale PID file found (PID ${existingPid} not running), overwriting`);
+            } else {
+              throw killErr;
+            }
+          }
+        }
+      } catch (readErr: unknown) {
+        // If it's the "already running" error, rethrow
+        if (readErr instanceof Error && readErr.message.includes("already running")) throw readErr;
+        this.modules.logger?.warn("daemon", "Could not read existing PID file, overwriting", {
+          error: String(readErr),
+        });
+      }
+    }
+
+    // FINDING-LOOP-016: Atomic write -- write to temp file, then rename
+    const tmpPath = `${pidPath}.${process.pid}.tmp`;
+    writeFileSync(tmpPath, String(process.pid), "utf-8");
+    renameSync(tmpPath, pidPath);
     this.modules.logger?.info("daemon", `PID file written: ${pidPath} (${process.pid})`);
   }
 
+  // FINDING-LOOP-017: Only remove PID file if it contains our own PID
   private removePidFile(): void {
     const pidPath = getPidFilePath();
     try {
       if (existsSync(pidPath)) {
+        const content = readFileSync(pidPath, "utf-8").trim();
+        const filePid = Number.parseInt(content, 10);
+        if (filePid !== process.pid) {
+          this.modules.logger?.warn(
+            "daemon",
+            `PID file contains ${filePid}, not our PID ${process.pid} -- not removing`,
+          );
+          return;
+        }
         unlinkSync(pidPath);
         this.modules.logger?.info("daemon", "PID file removed");
       }
@@ -420,6 +461,11 @@ export class EidolonDaemon {
     this.signalHandlerBound = true;
 
     const handler = (): void => {
+      // Prevent re-entrant shutdown if signal received multiple times
+      if (this.shutdownPromise) {
+        this.modules.logger?.info("daemon", "Shutdown already in progress, ignoring repeated signal");
+        return;
+      }
       this.modules.logger?.info("daemon", "Received shutdown signal");
       void this.stop()
         .then(() => {
@@ -467,7 +513,5 @@ export class EidolonDaemon {
 // ---------------------------------------------------------------------------
 
 function ensureDir(dirPath: string): void {
-  if (!existsSync(dirPath)) {
-    mkdirSync(dirPath, { recursive: true });
-  }
+  mkdirSync(dirPath, { recursive: true });
 }

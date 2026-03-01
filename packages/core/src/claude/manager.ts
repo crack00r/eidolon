@@ -65,7 +65,12 @@ export class ClaudeCodeManager implements IClaudeProcess {
       "HOME",
       "LD_PRELOAD",
       "LD_LIBRARY_PATH",
+      // macOS dynamic linker injection vectors
+      "DYLD_INSERT_LIBRARIES",
+      "DYLD_FRAMEWORK_PATH",
+      "DYLD_LIBRARY_PATH",
       "EIDOLON_MASTER_KEY",
+      "EIDOLON_GPU_API_KEY",
       "NODE_OPTIONS",
     ]);
     const filteredEnv: Record<string, string> = {};
@@ -96,7 +101,11 @@ export class ClaudeCodeManager implements IClaudeProcess {
       const timeoutId =
         options.timeoutMs !== undefined
           ? setTimeout(() => {
-              proc.kill();
+              try {
+                proc.kill();
+              } catch {
+                // Process may have already exited; ignore ESRCH / similar errors
+              }
             }, options.timeoutMs)
           : null;
 

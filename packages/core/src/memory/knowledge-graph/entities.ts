@@ -17,6 +17,9 @@ import type { Logger } from "../../logging/logger.js";
 
 export type EntityType = "person" | "technology" | "device" | "project" | "concept" | "place";
 
+/** Valid entity types for runtime validation. */
+const VALID_ENTITY_TYPES = new Set<string>(["person", "technology", "device", "project", "concept", "place"]);
+
 export interface CreateEntityInput {
   readonly name: string;
   readonly type: EntityType;
@@ -93,6 +96,15 @@ export class KGEntityStore {
 
   /** Create a new entity. Generates UUID for ID. */
   create(input: CreateEntityInput): Result<KGEntity, EidolonError> {
+    // Validate entity type against allowed set
+    if (!VALID_ENTITY_TYPES.has(input.type)) {
+      return Err(
+        createError(
+          ErrorCode.DB_QUERY_FAILED,
+          `Invalid entity type "${input.type}". Must be one of: ${[...VALID_ENTITY_TYPES].join(", ")}`,
+        ),
+      );
+    }
     // Finding #19: Validate entity name length and strip control characters
     const sanitizedName = stripControlChars(input.name).trim();
     if (sanitizedName.length === 0) {
@@ -198,6 +210,14 @@ export class KGEntityStore {
         params.push(sanitizedName);
       }
       if (input.type !== undefined) {
+        if (!VALID_ENTITY_TYPES.has(input.type)) {
+          return Err(
+            createError(
+              ErrorCode.DB_QUERY_FAILED,
+              `Invalid entity type "${input.type}". Must be one of: ${[...VALID_ENTITY_TYPES].join(", ")}`,
+            ),
+          );
+        }
         setClauses.push("type = ?");
         params.push(input.type);
       }
@@ -328,8 +348,8 @@ export class KGEntityStore {
         // Move incoming relations (target_id = sourceId) to targetId
         this.db.query("UPDATE kg_relations SET target_id = ? WHERE target_id = ?").run(targetId, sourceId);
 
-        // Finding #20: Delete self-loop relations created by the merge
-        this.db.query("DELETE FROM kg_relations WHERE source_id = target_id").run();
+        // Delete self-loop relations created by the merge (scoped to targetId only)
+        this.db.query("DELETE FROM kg_relations WHERE source_id = ? AND source_id = target_id").run(targetId);
 
         // Delete source entity
         this.db.query("DELETE FROM kg_entities WHERE id = ?").run(sourceId);

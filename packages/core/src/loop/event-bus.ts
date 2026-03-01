@@ -67,6 +67,9 @@ const MAX_RETRIES = 10;
 /** Maximum number of events returned in a single replay or drain operation. */
 const MAX_REPLAY_BATCH_SIZE = 1000;
 
+/** Maximum serialized payload size in bytes (1 MB). */
+const MAX_PAYLOAD_SIZE = 1_048_576;
+
 /**
  * Recursively strip prototype-pollution keys from parsed JSON payloads.
  * Handles nested objects and arrays to prevent deep pollution attacks.
@@ -97,7 +100,7 @@ function rowToEvent(row: EventRow, logger?: Logger): BusEvent {
         id: row.id,
       });
     }
-    payload = { _corrupted: true, raw: row.payload };
+    payload = { _corrupted: true, raw: row.payload.slice(0, 200) };
   }
   return {
     id: row.id,
@@ -132,6 +135,15 @@ export class EventBus {
     const source = options?.source ?? "system";
     const timestamp = Date.now();
     const payloadJson = JSON.stringify(payload);
+
+    if (payloadJson.length > MAX_PAYLOAD_SIZE) {
+      return Err(
+        createError(
+          ErrorCode.EVENT_BUS_ERROR,
+          `Payload too large (${payloadJson.length} bytes, max ${MAX_PAYLOAD_SIZE}) for event: ${type}`,
+        ),
+      );
+    }
 
     try {
       this.db
@@ -192,34 +204,38 @@ export class EventBus {
    */
   dequeue(): Result<BusEvent | null, EidolonError> {
     try {
-      const claimTimestamp = Date.now();
+      const claimToken = randomUUID();
       let row: EventRow | null = null;
 
       const dequeueFn = this.db.transaction(() => {
-        // Atomically claim: UPDATE the first unprocessed+unclaimed row
-        this.db
+        // Find the first unprocessed+unclaimed row
+        const candidate = this.db
           .query(
-            `UPDATE events SET claimed_at = ?
-             WHERE id = (
-               SELECT id FROM events
-               WHERE processed_at IS NULL AND claimed_at IS NULL
-               ORDER BY
-                 CASE priority
-                   WHEN 'critical' THEN 0
-                   WHEN 'high' THEN 1
-                   WHEN 'normal' THEN 2
-                   WHEN 'low' THEN 3
-                 END,
-                 timestamp ASC
-               LIMIT 1
-             )`,
+            `SELECT id FROM events
+             WHERE processed_at IS NULL AND claimed_at IS NULL
+             ORDER BY
+               CASE priority
+                 WHEN 'critical' THEN 0
+                 WHEN 'high' THEN 1
+                 WHEN 'normal' THEN 2
+                 WHEN 'low' THEN 3
+               END,
+               timestamp ASC
+             LIMIT 1`,
           )
-          .run(claimTimestamp);
+          .get() as { id: string } | null;
 
-        // SELECT the row we just claimed
+        if (!candidate) return;
+
+        // Atomically claim using unique token
+        this.db
+          .query("UPDATE events SET claimed_at = ? WHERE id = ? AND claimed_at IS NULL")
+          .run(claimToken, candidate.id);
+
+        // SELECT the row we just claimed using the unique token
         row = this.db
-          .query("SELECT * FROM events WHERE claimed_at = ? AND processed_at IS NULL LIMIT 1")
-          .get(claimTimestamp) as EventRow | null;
+          .query("SELECT * FROM events WHERE id = ? AND claimed_at = ? AND processed_at IS NULL LIMIT 1")
+          .get(candidate.id, claimToken) as EventRow | null;
       });
 
       dequeueFn();

@@ -102,37 +102,47 @@ export class TokenTracker {
     try {
       const since = Date.now() - PERIOD_MS[period];
 
-      const totals = this.db
+      const totalsRaw = this.db
         .query(
           `SELECT COALESCE(SUM(cost_usd), 0) as totalCost,
                   COALESCE(SUM(input_tokens), 0) as totalInput,
                   COALESCE(SUM(output_tokens), 0) as totalOutput
            FROM token_usage WHERE timestamp >= ?`,
         )
-        .get(since) as { totalCost: number; totalInput: number; totalOutput: number };
+        .get(since) as Record<string, unknown> | null;
 
-      const byType = this.db
+      const totals = {
+        totalCost: typeof totalsRaw?.totalCost === "number" ? totalsRaw.totalCost : 0,
+        totalInput: typeof totalsRaw?.totalInput === "number" ? totalsRaw.totalInput : 0,
+        totalOutput: typeof totalsRaw?.totalOutput === "number" ? totalsRaw.totalOutput : 0,
+      };
+
+      const byTypeRaw = this.db
         .query(
           `SELECT session_type, SUM(cost_usd) as cost
            FROM token_usage WHERE timestamp >= ? GROUP BY session_type`,
         )
-        .all(since) as Array<{ session_type: SessionType; cost: number }>;
+        .all(since) as Array<Record<string, unknown>>;
 
-      const byModel = this.db
+      const byModelRaw = this.db
         .query(
           `SELECT model, SUM(cost_usd) as cost
            FROM token_usage WHERE timestamp >= ? GROUP BY model`,
         )
-        .all(since) as Array<{ model: string; cost: number }>;
+        .all(since) as Array<Record<string, unknown>>;
 
       const bySessionType: Partial<Record<SessionType, number>> = {};
-      for (const row of byType) {
-        bySessionType[row.session_type] = row.cost;
+      for (const row of byTypeRaw) {
+        if (typeof row.session_type === "string" && typeof row.cost === "number") {
+          bySessionType[row.session_type as SessionType] = row.cost;
+        }
       }
 
       const byModelMap: Record<string, number> = {};
-      for (const row of byModel) {
-        byModelMap[row.model] = row.cost;
+      for (const row of byModelRaw) {
+        if (typeof row.model === "string" && typeof row.cost === "number") {
+          byModelMap[row.model] = row.cost;
+        }
       }
 
       return Ok({

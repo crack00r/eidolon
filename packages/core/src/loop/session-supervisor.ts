@@ -45,8 +45,12 @@ export class SessionSupervisor {
     return this.countByType(type) < rule.maxConcurrent;
   }
 
-  /** Register a running session. Returns error if limit exceeded. */
+  /** Register a running session. Returns error if limit exceeded or duplicate ID. */
   register(sessionId: string, type: SessionType): Result<void, EidolonError> {
+    if (this.sessions.has(sessionId)) {
+      return Err(createError(ErrorCode.SESSION_LIMIT_REACHED, `Session "${sessionId}" is already registered`));
+    }
+
     if (!this.canStart(type)) {
       return Err(
         createError(
@@ -83,6 +87,10 @@ export class SessionSupervisor {
         sessionId,
         type: slot.type,
         activeCount: this.sessions.size,
+      });
+    } else {
+      this.logger.warn("unregister", `Attempted to unregister unknown session: ${sessionId}`, {
+        sessionId,
       });
     }
   }

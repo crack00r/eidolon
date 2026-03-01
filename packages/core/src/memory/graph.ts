@@ -174,6 +174,10 @@ export class GraphMemory {
    */
   graphWalk(seedIds: readonly string[], depth: number = 1): Result<GraphWalkResult[], EidolonError> {
     try {
+      /** Upper bound on graph walk depth to prevent excessive traversal. */
+      const MAX_GRAPH_WALK_DEPTH = 5;
+      const clampedDepth = Math.max(0, Math.min(depth, MAX_GRAPH_WALK_DEPTH));
+
       const visited = new Map<string, number>();
       let frontier: Array<{ id: string; weight: number }> = [];
 
@@ -182,7 +186,7 @@ export class GraphMemory {
         frontier.push({ id: seed, weight: 1.0 });
       }
 
-      for (let d = 0; d < depth; d++) {
+      for (let d = 0; d < clampedDepth; d++) {
         const nextFrontier: Array<{ id: string; weight: number }> = [];
 
         for (const { id, weight } of frontier) {
@@ -224,6 +228,11 @@ export class GraphMemory {
 
   /** Strengthen an edge (increase weight, capped at 1.0). Used during dreaming re-discovery. */
   strengthenEdge(sourceId: string, targetId: string, relation: string, amount: number): Result<void, EidolonError> {
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return Err(
+        createError(ErrorCode.DB_QUERY_FAILED, `Strengthen amount must be a finite positive number, got ${amount}`),
+      );
+    }
     try {
       this.db
         .query(
@@ -241,6 +250,11 @@ export class GraphMemory {
 
   /** Decay all edge weights by a factor. Used during housekeeping. */
   decayWeights(factor: number): Result<number, EidolonError> {
+    if (!Number.isFinite(factor) || factor <= 0 || factor > 1) {
+      return Err(
+        createError(ErrorCode.DB_QUERY_FAILED, `Decay factor must be a finite number in (0, 1], got ${factor}`),
+      );
+    }
     try {
       // Apply decay to all edges, then prune those below threshold
       this.db.query("UPDATE memory_edges SET weight = weight * ?").run(factor);

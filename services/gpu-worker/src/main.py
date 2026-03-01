@@ -43,9 +43,15 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
 
 class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
-    """Reject requests with Content-Length exceeding the configured limit."""
+    """Reject requests exceeding the configured body size limit.
+
+    Checks Content-Length header first for an early reject, then wraps the
+    ASGI receive channel with a byte counter to enforce the limit even for
+    chunked transfer-encoding requests that omit Content-Length.
+    """
 
     async def dispatch(self, request: Request, call_next) -> Response:
+        # Fast-path: reject immediately when Content-Length exceeds the limit
         content_length = request.headers.get("content-length")
         if content_length is not None:
             try:
@@ -57,7 +63,34 @@ class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
                     )
             except ValueError:
                 pass
-        return await call_next(request)
+
+        # Wrap the receive channel to enforce byte limit on streamed bodies
+        received_bytes = 0
+
+        original_receive = request.receive
+
+        async def limited_receive():
+            nonlocal received_bytes
+            message = await original_receive()
+            if message.get("type") == "http.request":
+                body = message.get("body", b"")
+                received_bytes += len(body)
+                if received_bytes > MAX_REQUEST_BODY_BYTES:
+                    raise ValueError("Request body too large")
+            return message
+
+        request._receive = limited_receive  # type: ignore[attr-defined]
+
+        try:
+            return await call_next(request)
+        except ValueError as exc:
+            if "Request body too large" in str(exc):
+                return Response(
+                    content='{"error": "Request body too large"}',
+                    status_code=413,
+                    media_type="application/json",
+                )
+            raise
 
 
 # ---------------------------------------------------------------------------

@@ -15,6 +15,9 @@ interface RegisteredCheck {
   readonly check: () => Promise<HealthCheck>;
 }
 
+/** Per-check timeout in milliseconds. */
+const CHECK_TIMEOUT_MS = 5_000;
+
 export class HealthChecker {
   private readonly checks: RegisteredCheck[] = [];
   private readonly logger: Logger;
@@ -37,7 +40,13 @@ export class HealthChecker {
 
     for (const registered of this.checks) {
       try {
-        const result = await registered.check();
+        const timeout = new Promise<never>((_, reject) =>
+          setTimeout(
+            () => reject(new Error(`Health check '${registered.name}' timed out after ${CHECK_TIMEOUT_MS}ms`)),
+            CHECK_TIMEOUT_MS,
+          ),
+        );
+        const result = await Promise.race([registered.check(), timeout]);
         results.push(result);
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);

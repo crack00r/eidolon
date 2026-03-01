@@ -36,6 +36,15 @@ const MAX_TTS_SPEED = 4.0;
 /** Valid TTS output formats. */
 const VALID_TTS_FORMATS: ReadonlySet<string> = new Set(["opus", "wav", "mp3"]);
 
+/** Maximum voice parameter length. */
+const MAX_VOICE_LENGTH = 64;
+
+/**
+ * Allowed characters in voice parameter: alphanumeric, hyphens, underscores, dots.
+ * Prevents injection of control characters or path traversal.
+ */
+const VOICE_PATTERN = /^[a-zA-Z0-9_\-.]+$/;
+
 // ---------------------------------------------------------------------------
 // TTSClient
 // ---------------------------------------------------------------------------
@@ -82,6 +91,26 @@ export class TTSClient {
     // Validate format
     if (request.format !== undefined && !VALID_TTS_FORMATS.has(request.format)) {
       return Err(createError(ErrorCode.TTS_FAILED, `Invalid TTS format: ${request.format}`));
+    }
+
+    // Validate voice parameter: length + safe characters only
+    if (request.voice !== undefined) {
+      if (request.voice.length === 0 || request.voice.length > MAX_VOICE_LENGTH) {
+        return Err(
+          createError(
+            ErrorCode.TTS_FAILED,
+            `Invalid TTS voice length: ${request.voice.length} (must be 1-${MAX_VOICE_LENGTH})`,
+          ),
+        );
+      }
+      if (!VOICE_PATTERN.test(request.voice)) {
+        return Err(
+          createError(
+            ErrorCode.TTS_FAILED,
+            "Invalid TTS voice: contains disallowed characters (only alphanumeric, hyphens, underscores, dots allowed)",
+          ),
+        );
+      }
     }
 
     const startMs = Date.now();

@@ -89,7 +89,9 @@ final class NetworkManager: ObservableObject {
             Task { @MainActor in
                 switch state {
                 case .failed(let error):
+                    #if DEBUG
                     print("[NetworkManager] Bonjour browse failed: \(error)")
+                    #endif
                     self?.browser?.cancel()
                     self?.browser = nil
                 default:

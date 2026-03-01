@@ -32,16 +32,32 @@ final class WebSocketService: ObservableObject {
     private var reconnectAttempts = 0
     private var reconnectWorkItem: DispatchWorkItem?
 
-    private let maxReconnectDelay: TimeInterval = 8.0
+    private let maxReconnectDelay: TimeInterval = 30.0
     private let baseReconnectDelay: TimeInterval = 1.0
     private let requestTimeout: TimeInterval = 30.0
     private let maxReconnectAttempts = 50
 
+    /// Whether the connection was authenticated with a token.
+    private(set) var isAuthenticated: Bool = false
+
     // MARK: - Public API
+
+    /// Regex for validating hostnames, IPv4, and IPv6 addresses.
+    private static let hostRegex = try! NSRegularExpression(
+        pattern: #"^(?:\[?[0-9a-fA-F:]+\]?|(?:[a-zA-Z0-9](?:[a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\.)*[a-zA-Z0-9](?:[a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)$"#
+    )
 
     /// Configure the connection parameters.
     func configure(host: String, port: Int, token: String?, useTls: Bool = true) {
-        self.host = host
+        let trimmed = host.trimmingCharacters(in: .whitespacesAndNewlines)
+        let range = NSRange(trimmed.startIndex..., in: trimmed)
+        guard !trimmed.isEmpty,
+              Self.hostRegex.firstMatch(in: trimmed, range: range) != nil else {
+            lastError = "Invalid hostname"
+            connectionState = .error
+            return
+        }
+        self.host = trimmed
         self.port = port
         self.token = token
         self.useTls = useTls
@@ -66,6 +82,7 @@ final class WebSocketService: ObservableObject {
         webSocketTask = nil
 
         rejectAllPending(reason: "Client disconnected")
+        isAuthenticated = false
         connectionState = .disconnected
     }
 
@@ -145,8 +162,10 @@ final class WebSocketService: ObservableObject {
                         method: GatewayMethod.authAuthenticate.rawValue,
                         params: ["token": token]
                     )
+                    isAuthenticated = true
                     connectionState = .connected
                 } catch {
+                    isAuthenticated = false
                     connectionState = .error
                     lastError = "Authentication failed: \(error.localizedDescription)"
                     webSocketTask?.cancel(with: .normalClosure, reason: nil)
@@ -154,6 +173,10 @@ final class WebSocketService: ObservableObject {
                     scheduleReconnect()
                 }
             } else {
+                isAuthenticated = false
+                #if DEBUG
+                print("[WebSocketService] WARNING: Connecting without authentication token")
+                #endif
                 connectionState = .connected
             }
         }
@@ -211,6 +234,9 @@ final class WebSocketService: ObservableObject {
 
         guard let data = jsonString.data(using: .utf8),
               let response = try? JSONDecoder().decode(GatewayResponse.self, from: data) else {
+            #if DEBUG
+            print("[WebSocketService] Malformed JSON message dropped: \(jsonString.prefix(200))")
+            #endif
             return
         }
 

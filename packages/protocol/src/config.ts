@@ -82,8 +82,32 @@ export const LoopConfigSchema = z.object({
     nightModeMultiplier: z.number().min(1).max(10).default(3),
   }),
   businessHours: z.object({
-    start: z.string().default("07:00"),
-    end: z.string().default("23:00"),
+    start: z
+      .string()
+      .regex(/^\d{2}:\d{2}$/, "Must be in HH:MM format")
+      .refine(
+        (v) => {
+          const parts = v.split(":").map(Number);
+          const h = parts[0] ?? -1;
+          const m = parts[1] ?? -1;
+          return h >= 0 && h <= 23 && m >= 0 && m <= 59;
+        },
+        { message: "Invalid time: hours must be 00-23, minutes must be 00-59" },
+      )
+      .default("07:00"),
+    end: z
+      .string()
+      .regex(/^\d{2}:\d{2}$/, "Must be in HH:MM format")
+      .refine(
+        (v) => {
+          const parts = v.split(":").map(Number);
+          const h = parts[0] ?? -1;
+          const m = parts[1] ?? -1;
+          return h >= 0 && h <= 23 && m >= 0 && m <= 59;
+        },
+        { message: "Invalid time: hours must be 00-23, minutes must be 00-59" },
+      )
+      .default("23:00"),
     timezone: z.string().default("Europe/Berlin"),
   }),
 });
@@ -135,8 +159,14 @@ export const LearningConfigSchema = z.object({
     .array(
       z.object({
         type: z.enum(["reddit", "hackernews", "github", "rss", "arxiv"]),
-        config: z.record(z.string(), z.unknown()),
-        schedule: z.string().default("*/6 * * * *"),
+        config: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])),
+        schedule: z
+          .string()
+          .regex(
+            /^(\*|[0-9,-/]+)(\s+(\*|[0-9,-/]+)){4}$/,
+            "Must be a valid cron expression with 5 fields (e.g. '*/6 * * * *')",
+          )
+          .default("*/6 * * * *"),
       }),
     )
     .default([]),

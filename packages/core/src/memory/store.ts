@@ -209,22 +209,28 @@ export class MemoryStore {
   /** Get a memory by ID. Also updates accessed_at and access_count (touch on read). */
   get(id: string): Result<Memory | null, EidolonError> {
     try {
-      const row = this.db.query("SELECT * FROM memories WHERE id = ?").get(id) as MemoryRow | null;
+      // Wrap read + touch in a transaction for atomicity
+      const txn = this.db.transaction(() => {
+        const row = this.db.query("SELECT * FROM memories WHERE id = ?").get(id) as MemoryRow | null;
 
-      if (!row) {
-        return Ok(null);
-      }
+        if (!row) {
+          return null;
+        }
 
-      // Touch: update accessed_at and increment access_count
-      const now = Date.now();
-      this.db.query("UPDATE memories SET accessed_at = ?, access_count = access_count + 1 WHERE id = ?").run(now, id);
+        // Touch: update accessed_at and increment access_count
+        const now = Date.now();
+        this.db.query("UPDATE memories SET accessed_at = ?, access_count = access_count + 1 WHERE id = ?").run(now, id);
 
-      const memory = rowToMemory(row);
-      return Ok({
-        ...memory,
-        accessedAt: now,
-        accessCount: memory.accessCount + 1,
+        const memory = rowToMemory(row);
+        return {
+          ...memory,
+          accessedAt: now,
+          accessCount: memory.accessCount + 1,
+        };
       });
+
+      const result = txn();
+      return Ok(result);
     } catch (cause) {
       return Err(createError(ErrorCode.DB_QUERY_FAILED, `Failed to get memory ${id}`, cause));
     }

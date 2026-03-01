@@ -16,6 +16,7 @@ import {
   getLogDir,
   KEY_LENGTH,
   loadConfig,
+  PASSPHRASE_SALT,
   SCRYPT_MAXMEM,
   SCRYPT_N,
   SCRYPT_P,
@@ -23,12 +24,6 @@ import {
   zeroBuffer,
 } from "@eidolon/core";
 import { SECRETS_DB_FILENAME, VERSION } from "@eidolon/protocol";
-
-/**
- * Fixed application-level salt for passphrase-based key derivation.
- * Must match the value in packages/core/src/secrets/master-key.ts.
- */
-const PASSPHRASE_SALT = Buffer.from("eidolon-master-key-v1", "utf-8");
 
 /** scrypt KDF parameters — imported from core constants for consistency. */
 const SCRYPT_PARAMS = { N: SCRYPT_N, r: SCRYPT_R, p: SCRYPT_P, maxmem: SCRYPT_MAXMEM };

@@ -49,6 +49,8 @@ const BASE_RECONNECT_DELAY_MS = 1_000;
 const MAX_RECONNECT_ATTEMPTS = 50;
 /** Maximum accepted inbound WebSocket message size (1 MB). */
 const MAX_MESSAGE_SIZE = 1_048_576;
+/** Allowed characters for hostname to prevent URL injection. */
+const HOSTNAME_RE = /^[a-zA-Z0-9._-]+$/;
 
 export class GatewayClient {
   private ws: WebSocket | null = null;
@@ -152,6 +154,12 @@ export class GatewayClient {
   private establishConnection(): void {
     this.setState("connecting");
 
+    if (!HOSTNAME_RE.test(this.config.host)) {
+      console.error("Invalid hostname:", this.config.host);
+      this.setState("error");
+      return;
+    }
+
     const scheme = this.config.useTls !== false ? "wss" : "ws";
     const url = `${scheme}://${this.config.host}:${this.config.port}/ws`;
 
@@ -175,7 +183,9 @@ export class GatewayClient {
     };
 
     this.ws.onmessage = (event: MessageEvent) => {
-      this.handleMessage(event.data as string);
+      // Ignore binary frames — we only handle JSON text messages
+      if (typeof event.data !== "string") return;
+      this.handleMessage(event.data);
     };
 
     this.ws.onclose = () => {

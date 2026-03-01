@@ -62,7 +62,25 @@ export function createConnection(path: string, options?: ConnectionOptions): Res
 
     // Enable incremental auto-vacuum so the database file can shrink
     // when data is deleted, preventing unbounded file growth.
-    db.exec("PRAGMA auto_vacuum=INCREMENTAL");
+    // NOTE: auto_vacuum mode can only be changed before any tables are created.
+    // On existing databases, check the current mode and log a warning if mismatched.
+    const currentAutoVacuum = db.query("PRAGMA auto_vacuum").get() as { auto_vacuum: number } | null;
+    const currentMode = currentAutoVacuum?.auto_vacuum ?? 0;
+    if (currentMode !== 2) {
+      // Attempt to set it (succeeds only on fresh databases with no tables)
+      db.exec("PRAGMA auto_vacuum=INCREMENTAL");
+      const afterSet = db.query("PRAGMA auto_vacuum").get() as { auto_vacuum: number } | null;
+      if ((afterSet?.auto_vacuum ?? 0) !== 2) {
+        // Existing DB -- cannot change auto_vacuum mode without VACUUM INTO
+        // This is non-fatal; the DB will continue to work but won't shrink on delete.
+        if (typeof console !== "undefined") {
+          console.warn(
+            `[eidolon] auto_vacuum=INCREMENTAL could not be set on "${path}" (current mode: ${currentMode}). ` +
+              "Run VACUUM to apply on an existing database.",
+          );
+        }
+      }
+    }
 
     // Set WAL autocheckpoint to prevent unbounded WAL growth
     if (options?.walMode !== false) {

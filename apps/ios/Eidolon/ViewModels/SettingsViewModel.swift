@@ -15,7 +15,11 @@ final class SettingsViewModel: ObservableObject {
     }
 
     @Published var port: Int {
-        didSet { UserDefaults.standard.set(port, forKey: Keys.port) }
+        didSet {
+            let clamped = max(1, min(port, 65535))
+            if port != clamped { port = clamped }
+            UserDefaults.standard.set(port, forKey: Keys.port)
+        }
     }
 
     @Published var token: String {
@@ -47,7 +51,8 @@ final class SettingsViewModel: ObservableObject {
 
     init() {
         self.host = UserDefaults.standard.string(forKey: Keys.host) ?? "127.0.0.1"
-        self.port = UserDefaults.standard.integer(forKey: Keys.port).nonZero ?? 8419
+        let rawPort = UserDefaults.standard.integer(forKey: Keys.port).nonZero ?? 8419
+        self.port = max(1, min(rawPort, 65535))
         self.token = KeychainHelper.load(key: Keys.token) ?? ""
         self.useTls = UserDefaults.standard.object(forKey: Keys.useTls) == nil
             ? true
@@ -105,7 +110,7 @@ final class SettingsViewModel: ObservableObject {
             testResult = "Connected — status: \(health.status)"
             serverVersion = health.version
         } catch {
-            testResult = "Failed: \(error.localizedDescription)"
+            testResult = "Failed: \(ChatViewModel.sanitizeError(error))"
         }
 
         if wasDisconnected {

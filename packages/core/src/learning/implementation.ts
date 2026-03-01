@@ -11,7 +11,24 @@
 
 import type { EidolonError, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
+import { randomUUID } from "crypto";
 import type { Logger } from "../logging/logger.js";
+
+/**
+ * Escape < and > in untrusted text to prevent XML delimiter injection.
+ * This ensures user-provided content cannot break out of XML-like prompt delimiters.
+ */
+function escapeXmlDelimiters(text: string): string {
+  return text.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+/**
+ * Sanitize user-provided text for inclusion in Markdown (PR descriptions).
+ * Escapes characters that could inject Markdown headings, links, or formatting.
+ */
+function sanitizeForMarkdown(text: string): string {
+  return text.replace(/\n/g, " ").replace(/[#*\->`[\]\\|!()<>]/g, (ch) => `\\${ch}`);
+}
 
 export interface ImplementationStep {
   readonly name: string;
@@ -94,9 +111,18 @@ export class ImplementationPipeline {
       branch,
     });
 
-    // Validate branch name to prevent command injection
+    // Validate branch name to prevent command injection.
+    // Only allow alphanumeric, dots, hyphens, underscores, and forward slashes.
+    // Reject names starting with '-' (git flag injection), containing '..', or consecutive slashes.
+    // Also enforce a maximum length to prevent buffer-based attacks.
     const SAFE_BRANCH = /^[a-zA-Z0-9._/-]+$/;
-    if (!SAFE_BRANCH.test(branch)) {
+    if (
+      !SAFE_BRANCH.test(branch) ||
+      branch.startsWith("-") ||
+      branch.includes("..") ||
+      branch.includes("//") ||
+      branch.length > 200
+    ) {
       return Err(createError(ErrorCode.DISCOVERY_FAILED, `Invalid branch name: ${branch}`));
     }
 
@@ -131,10 +157,13 @@ export class ImplementationPipeline {
     });
 
     // Step 2: Implement via Claude Code
-    // Finding #4: Wrap untrusted content in XML-like delimiters to mitigate prompt injection
+    // Use random boundaries and escape XML delimiters to mitigate prompt injection
     const implStart = Date.now();
+    const boundary = `---BOUNDARY-${randomUUID()}---`;
+    const safeTitle = escapeXmlDelimiters(options.title);
+    const safeContent = escapeXmlDelimiters(options.content);
     const implementResult = await options.implementFn(
-      `Implement this improvement:\n\n<discovery-title>${options.title}</discovery-title>\n\n<discovery-content>${options.content}</discovery-content>`,
+      `Implement this improvement:\n\n${boundary}\nTITLE: ${safeTitle}\n${boundary}\n\n${boundary}\nCONTENT: ${safeContent}\n${boundary}`,
       options.workspaceDir,
     );
     const implDuration = Date.now() - implStart;
@@ -231,14 +260,17 @@ export class ImplementationPipeline {
     const lintCheck = lintStep?.status === "passed" ? "[x] Lint passed" : "[ ] Lint passed";
     const testCheck = testStep?.status === "passed" ? "[x] Tests passed" : "[ ] Tests passed";
 
+    const safeTitle = sanitizeForMarkdown(title);
+    const safeContent = sanitizeForMarkdown(content);
+
     return [
       "## Self-Learning Implementation",
       "",
       "### Discovery",
-      title,
+      safeTitle,
       "",
       "### What Changed",
-      content,
+      safeContent,
       "",
       "### Verification",
       `- ${lintCheck}`,

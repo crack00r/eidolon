@@ -128,11 +128,28 @@ export class RelevanceFilter {
   ): Promise<Result<RelevanceResult, EidolonError>> {
     try {
       const result = await scorerFn(title, content, this.config.userInterests);
-      this.logger.debug("scoreLlm", `LLM scored: ${result.score}`, {
+
+      // Validate the returned score: must be a finite number in [0, 1]
+      if (!Number.isFinite(result.score)) {
+        return Err(
+          createError(ErrorCode.DISCOVERY_FAILED, `LLM returned non-finite score (${result.score}) for: ${title}`),
+        );
+      }
+      // Clamp score to [0, 1] range
+      const clampedScore = Math.max(0, Math.min(1, result.score));
+
+      const validatedResult: RelevanceResult = {
+        score: clampedScore,
+        reason: result.reason,
+        matchedInterests: result.matchedInterests,
+      };
+
+      this.logger.debug("scoreLlm", `LLM scored: ${validatedResult.score}`, {
         title,
-        score: result.score,
+        score: validatedResult.score,
+        rawScore: result.score,
       });
-      return Ok(result);
+      return Ok(validatedResult);
     } catch (cause) {
       return Err(createError(ErrorCode.DISCOVERY_FAILED, `LLM relevance scoring failed for: ${title}`, cause));
     }

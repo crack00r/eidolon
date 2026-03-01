@@ -6,7 +6,7 @@
  *   export           -- export all user data as structured JSON
  */
 
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { createLogger, DatabaseManager, getDataDir, loadConfig } from "@eidolon/core";
 import { VERSION } from "@eidolon/protocol";
@@ -123,16 +123,9 @@ function forgetEntity(dbManager: DatabaseManager, entity: string): DeletionRepor
       deletedCounts.kg_relations = 0;
     }
 
-    // 4. kg_entities table
-    try {
-      const result = dbManager.memory.query("DELETE FROM kg_entities WHERE name LIKE ? ESCAPE '\\'").run(pattern);
-      deletedCounts.kg_entities = result.changes;
-    } catch {
-      deletedCounts.kg_entities = 0;
-    }
-
-    // 5. kg_complex_embeddings -- CASCADE handles entity FK, but predicates referencing
-    //    the entity may remain. Delete matching embeddings explicitly.
+    // 4. kg_complex_embeddings -- must run BEFORE kg_entities delete so the
+    //    subquery can still find matching entity IDs. CASCADE handles the FK,
+    //    but predicates referencing the entity may remain. Delete explicitly.
     //    NOTE: After bulk entity deletion, ComplEx model re-training is needed
     //    to maintain embedding consistency.
     try {
@@ -144,6 +137,14 @@ function forgetEntity(dbManager: DatabaseManager, entity: string): DeletionRepor
       deletedCounts.kg_complex_embeddings = result.changes;
     } catch {
       deletedCounts.kg_complex_embeddings = 0;
+    }
+
+    // 5. kg_entities table
+    try {
+      const result = dbManager.memory.query("DELETE FROM kg_entities WHERE name LIKE ? ESCAPE '\\'").run(pattern);
+      deletedCounts.kg_entities = result.changes;
+    } catch {
+      deletedCounts.kg_entities = 0;
     }
   });
   memoryTx();
@@ -237,7 +238,7 @@ function exportAllData(dbManager: DatabaseManager): ExportData {
   let memoryEdges: unknown[] = [];
   try {
     memoryEdges = dbManager.memory
-      .query("SELECT id, source_id, target_id, relation_type, weight, created_at FROM memory_edges")
+      .query("SELECT source_id, target_id, relation, weight, created_at FROM memory_edges")
       .all();
     recordCounts.memoryEdges = memoryEdges.length;
   } catch {
@@ -248,7 +249,7 @@ function exportAllData(dbManager: DatabaseManager): ExportData {
   let kgEntities: unknown[] = [];
   try {
     kgEntities = dbManager.memory
-      .query("SELECT id, name, type, metadata, created_at, updated_at FROM kg_entities")
+      .query("SELECT id, name, type, attributes, created_at, updated_at FROM kg_entities")
       .all();
     recordCounts.kgEntities = kgEntities.length;
   } catch {
@@ -259,7 +260,7 @@ function exportAllData(dbManager: DatabaseManager): ExportData {
   let kgRelations: unknown[] = [];
   try {
     kgRelations = dbManager.memory
-      .query("SELECT id, source_id, target_id, predicate, confidence, metadata, created_at FROM kg_relations")
+      .query("SELECT id, source_id, target_id, type, confidence, source, created_at FROM kg_relations")
       .all();
     recordCounts.kgRelations = kgRelations.length;
   } catch {
@@ -373,6 +374,7 @@ export function registerPrivacyCommand(program: Command): void {
             mkdirSync(dir, { recursive: true });
           }
           writeFileSync(opts.output, `${json}\n`, "utf-8");
+          chmodSync(opts.output, 0o600);
           console.log(`Data exported to: ${opts.output}`);
           console.log(`Record counts: ${JSON.stringify(data.recordCounts)}`);
         } else {

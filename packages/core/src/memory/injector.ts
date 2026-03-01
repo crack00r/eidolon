@@ -78,7 +78,7 @@ const TYPE_ORDER: readonly MemoryType[] = [
  * to prevent prompt injection via memory content or KG triple names.
  */
 function sanitizeForMarkdown(text: string): string {
-  return text.replace(/\n/g, " ").replace(/[#*\->`[\]\\]/g, (ch) => `\\${ch}`);
+  return text.replace(/\n/g, " ").replace(/[#*\->`[\]\\`<]/g, (ch) => `\\${ch}`);
 }
 
 // ---------------------------------------------------------------------------
@@ -217,7 +217,7 @@ export class MemoryInjector {
     // Static context
     if (staticContext) {
       sections.push("");
-      sections.push(staticContext);
+      sections.push(sanitizeForMarkdown(staticContext));
     }
 
     // No content at all

@@ -22,6 +22,7 @@ function createTestDb(): Database {
       id TEXT PRIMARY KEY,
       source_type TEXT NOT NULL,
       url TEXT NOT NULL UNIQUE,
+      normalized_url TEXT,
       title TEXT NOT NULL,
       content TEXT NOT NULL,
       relevance_score REAL NOT NULL,
@@ -33,6 +34,7 @@ function createTestDb(): Database {
       implemented_at INTEGER
     );
     CREATE INDEX idx_discoveries_status ON discoveries(status);
+    CREATE INDEX idx_discoveries_normalized_url ON discoveries(normalized_url);
   `);
   return db;
 }

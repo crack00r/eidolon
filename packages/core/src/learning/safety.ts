@@ -48,7 +48,6 @@ const CREDENTIAL_PATTERNS: ReadonlyArray<{ pattern: RegExp; flag: string }> = [
 /** Code and system modification patterns. */
 const CODE_PATTERNS: ReadonlyArray<{ pattern: RegExp; flag: string }> = [
   { pattern: /```[\s\S]*?```/, flag: "contains_code_block" },
-  { pattern: /^\s{4,}\S/m, flag: "contains_indented_code" },
   { pattern: /(?:src|packages|lib|dist)\/\S+\.\w+/i, flag: "references_file_path" },
   { pattern: /npm\s+install\s/i, flag: "npm_install" },
   { pattern: /pnpm\s+add\s/i, flag: "pnpm_add" },
@@ -66,15 +65,67 @@ const CODE_PATTERNS: ReadonlyArray<{ pattern: RegExp; flag: string }> = [
 ];
 
 /**
+ * Map of common Cyrillic homoglyphs to their ASCII equivalents.
+ * These characters look identical to Latin letters but have different code points,
+ * which attackers use to bypass pattern-based safety checks.
+ */
+const HOMOGLYPH_MAP: ReadonlyMap<string, string> = new Map([
+  ["\u0435", "e"], // Cyrillic е → Latin e
+  ["\u0430", "a"], // Cyrillic а → Latin a
+  ["\u043E", "o"], // Cyrillic о → Latin o
+  ["\u0441", "c"], // Cyrillic с → Latin c
+  ["\u0455", "s"], // Cyrillic ѕ → Latin s
+  ["\u0440", "p"], // Cyrillic р → Latin p
+  ["\u0443", "y"], // Cyrillic у → Latin y (visually similar in some fonts)
+  ["\u0445", "x"], // Cyrillic х → Latin x
+  ["\u0456", "i"], // Cyrillic і → Latin i
+  ["\u0458", "j"], // Cyrillic ј → Latin j
+  ["\u04BB", "h"], // Cyrillic һ → Latin h
+  ["\u0501", "d"], // Cyrillic ԁ → Latin d
+  ["\u051B", "q"], // Cyrillic ԛ → Latin q
+  ["\u051D", "w"], // Cyrillic ԝ → Latin w
+]);
+
+/**
+ * Replace Cyrillic homoglyphs with their ASCII equivalents.
+ */
+function replaceHomoglyphs(text: string): string {
+  let result = "";
+  for (const ch of text) {
+    const replacement = HOMOGLYPH_MAP.get(ch);
+    result += replacement ?? ch;
+  }
+  return result;
+}
+
+/**
+ * Strip Unicode format characters (category Cf) from text.
+ * These invisible characters (soft hyphens, RTL/LTR marks, etc.) can be used
+ * to break up patterns and bypass detection.
+ */
+function stripFormatCharacters(text: string): string {
+  // eslint-disable-next-line no-control-regex
+  return text.replace(
+    /[\u00AD\u061C\u200E\u200F\u202A-\u202E\u2060-\u2064\u2066-\u2069\u206A-\u206F\uFFF9-\uFFFB]/g,
+    "",
+  );
+}
+
+/**
  * Normalize text to prevent classification bypass via encoding tricks.
- * Strips zero-width characters, applies NFKD normalization, and lowercases.
+ * Strips zero-width characters, format characters, applies NFKD normalization,
+ * replaces Cyrillic homoglyphs with ASCII equivalents, and lowercases.
  */
 function normalizeForClassification(text: string): string {
   // Strip zero-width characters: U+200B, U+200C, U+200D, U+FEFF
   const stripped = text.replace(/\u200B|\u200C|\u200D|\uFEFF/g, "");
   // NFKD Unicode normalization (decomposes compatibility characters)
   const normalized = stripped.normalize("NFKD");
-  return normalized.toLowerCase();
+  // Strip Unicode format characters (category Cf)
+  const noFormat = stripFormatCharacters(normalized);
+  // Replace Cyrillic homoglyphs with ASCII equivalents
+  const deconfused = replaceHomoglyphs(noFormat);
+  return deconfused.toLowerCase();
 }
 
 /** Minimum content length threshold for defaulting to needs_approval. */

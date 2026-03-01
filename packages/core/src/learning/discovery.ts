@@ -20,6 +20,7 @@ export interface Discovery {
   readonly id: string;
   readonly sourceType: SourceType;
   readonly url: string;
+  readonly normalizedUrl: string;
   readonly title: string;
   readonly content: string;
   readonly relevanceScore: number;
@@ -44,6 +45,7 @@ interface DiscoveryRow {
   id: string;
   source_type: string;
   url: string;
+  normalized_url: string | null;
   title: string;
   content: string;
   relevance_score: number;
@@ -72,6 +74,56 @@ const MAX_URL_LENGTH = 8192;
 /** Maximum allowed title length. */
 const MAX_TITLE_LENGTH = 1000;
 
+/** Allowed URL schemes for discoveries. */
+const ALLOWED_URL_SCHEMES = new Set(["https:", "http:"]);
+
+/** UTM and common tracking parameters to strip during URL normalization. */
+const TRACKING_PARAMS = new Set([
+  "utm_source",
+  "utm_medium",
+  "utm_campaign",
+  "utm_term",
+  "utm_content",
+  "utm_id",
+  "fbclid",
+  "gclid",
+  "ref",
+  "source",
+  "mc_cid",
+  "mc_eid",
+]);
+
+/** Normalize a URL for consistent storage and deduplication. */
+function normalizeUrl(url: string): string {
+  try {
+    const parsed = new URL(url);
+    parsed.hostname = parsed.hostname.toLowerCase();
+    for (const param of TRACKING_PARAMS) {
+      parsed.searchParams.delete(param);
+    }
+    parsed.hash = "";
+    let normalized = parsed.toString();
+    if (normalized.endsWith("/")) {
+      normalized = normalized.slice(0, -1);
+    }
+    return normalized;
+  } catch {
+    return url.toLowerCase().replace(/\/$/, "");
+  }
+}
+
+/**
+ * Valid status transitions for discoveries.
+ * Enforces a state machine: new -> evaluated -> approved/rejected -> implemented.
+ */
+const VALID_TRANSITIONS: ReadonlyMap<DiscoveryStatus, ReadonlySet<DiscoveryStatus>> = new Map([
+  ["new", new Set<DiscoveryStatus>(["evaluated", "rejected"])],
+  ["evaluated", new Set<DiscoveryStatus>(["approved", "rejected"])],
+  ["approved", new Set<DiscoveryStatus>(["implemented", "rejected"])],
+  ["rejected", new Set<DiscoveryStatus>([])],
+  ["implemented", new Set<DiscoveryStatus>([])],
+]);
+
 /** Default list limit for discovery queries. */
 const DEFAULT_LIST_LIMIT = 50;
 
@@ -83,6 +135,7 @@ function rowToDiscovery(row: DiscoveryRow): Discovery {
     id: row.id,
     sourceType: validateEnum<SourceType>(row.source_type, VALID_SOURCE_TYPES, "reddit"),
     url: row.url,
+    normalizedUrl: row.normalized_url ?? normalizeUrl(row.url),
     title: row.title,
     content: row.content,
     relevanceScore: row.relevance_score,
@@ -119,6 +172,17 @@ export class DiscoveryEngine {
         createError(ErrorCode.DISCOVERY_FAILED, `URL exceeds maximum length (${input.url.length} > ${MAX_URL_LENGTH})`),
       );
     }
+    // Validate URL scheme to prevent javascript:, data:, file:, blob:, ftp: etc.
+    try {
+      const parsedUrl = new URL(input.url);
+      if (!ALLOWED_URL_SCHEMES.has(parsedUrl.protocol)) {
+        return Err(
+          createError(ErrorCode.DISCOVERY_FAILED, `URL scheme not allowed: ${parsedUrl.protocol} (only http/https)`),
+        );
+      }
+    } catch {
+      return Err(createError(ErrorCode.DISCOVERY_FAILED, `Invalid URL: ${input.url}`));
+    }
     if (input.title.length > MAX_TITLE_LENGTH) {
       return Err(
         createError(
@@ -138,19 +202,31 @@ export class DiscoveryEngine {
     try {
       const id = crypto.randomUUID();
       const now = Date.now();
+      const normalized = normalizeUrl(input.url);
 
       this.db
         .query(
           `INSERT INTO discoveries
-           (id, source_type, url, title, content, relevance_score, safety_level, status, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, 'new', ?)`,
+           (id, source_type, url, normalized_url, title, content, relevance_score, safety_level, status, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'new', ?)`,
         )
-        .run(id, input.sourceType, input.url, input.title, input.content, input.relevanceScore, input.safetyLevel, now);
+        .run(
+          id,
+          input.sourceType,
+          input.url,
+          normalized,
+          input.title,
+          input.content,
+          input.relevanceScore,
+          input.safetyLevel,
+          now,
+        );
 
       const discovery: Discovery = {
         id,
         sourceType: input.sourceType,
         url: input.url,
+        normalizedUrl: normalized,
         title: input.title,
         content: input.content,
         relevanceScore: input.relevanceScore,
@@ -159,10 +235,11 @@ export class DiscoveryEngine {
         createdAt: now,
       };
 
-      this.logger.info("create", `Stored discovery: ${input.title}`, {
+      this.logger.info("create", "Stored discovery", {
         id,
         sourceType: input.sourceType,
         url: input.url,
+        title: input.title,
       });
 
       return Ok(discovery);
@@ -194,9 +271,28 @@ export class DiscoveryEngine {
     }
   }
 
-  /** Update discovery status. */
+  /** Update discovery status with state machine validation. */
   updateStatus(id: string, status: DiscoveryStatus): Result<void, EidolonError> {
     try {
+      // Fetch current status to validate the transition
+      const currentRow = this.db.query("SELECT status FROM discoveries WHERE id = ?").get(id) as {
+        status: string;
+      } | null;
+      if (!currentRow) {
+        return Err(createError(ErrorCode.DB_QUERY_FAILED, `Discovery not found: ${id}`));
+      }
+
+      const currentStatus = currentRow.status as DiscoveryStatus;
+      const allowedTransitions = VALID_TRANSITIONS.get(currentStatus);
+      if (!allowedTransitions || !allowedTransitions.has(status)) {
+        return Err(
+          createError(
+            ErrorCode.DISCOVERY_FAILED,
+            `Invalid status transition: ${currentStatus} -> ${status} for discovery ${id}`,
+          ),
+        );
+      }
+
       const now = Date.now();
 
       if (status === "evaluated") {
@@ -225,13 +321,13 @@ export class DiscoveryEngine {
     }
   }
 
-  /** Check if a URL has already been discovered. */
+  /** Check if a URL has already been discovered (compares normalized form). */
   isKnown(url: string): Result<boolean, EidolonError> {
     try {
-      const row = this.db.query("SELECT 1 FROM discoveries WHERE url = ? LIMIT 1").get(url) as Record<
-        string,
-        unknown
-      > | null;
+      const normalized = normalizeUrl(url);
+      const row = this.db
+        .query("SELECT 1 FROM discoveries WHERE normalized_url = ? OR url = ? LIMIT 1")
+        .get(normalized, url) as Record<string, unknown> | null;
       return Ok(row !== null);
     } catch (cause) {
       return Err(createError(ErrorCode.DB_QUERY_FAILED, `Failed to check known URL: ${url}`, cause));

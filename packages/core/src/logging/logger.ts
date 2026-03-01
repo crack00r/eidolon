@@ -24,6 +24,43 @@ const LEVEL_ORDER: Record<LogLevel, number> = {
 };
 
 /**
+ * Patterns matching sensitive data keys that should be auto-redacted in log `data`.
+ * Matched case-insensitively against data object keys.
+ */
+const SENSITIVE_KEY_PATTERNS: readonly RegExp[] = [
+  /passw(?:or)?d/i,
+  /secret/i,
+  /token/i,
+  /api[_-]?key/i,
+  /auth(?:orization)?/i,
+  /credential/i,
+  /master[_-]?key/i,
+  /private[_-]?key/i,
+  /access[_-]?key/i,
+  /session[_-]?id/i,
+];
+
+/** Placeholder used to replace redacted values. */
+const REDACTED = "[REDACTED]";
+
+/**
+ * Deep-clone `data` and replace values whose keys match {@link SENSITIVE_KEY_PATTERNS}.
+ */
+function redactSensitiveKeys(data: Record<string, unknown>): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(data)) {
+    if (SENSITIVE_KEY_PATTERNS.some((p) => p.test(key))) {
+      result[key] = REDACTED;
+    } else if (value !== null && typeof value === "object" && !Array.isArray(value)) {
+      result[key] = redactSensitiveKeys(value as Record<string, unknown>);
+    } else {
+      result[key] = value;
+    }
+  }
+  return result;
+}
+
+/**
  * Normalize an unknown error value into the LogEntry error shape.
  */
 function normalizeError(err: unknown): LogEntry["error"] {
@@ -49,6 +86,7 @@ function shouldLog(entryLevel: LogLevel, configLevel: LogLevel): boolean {
 
 /**
  * Build a LogEntry from the provided fields.
+ * Sensitive keys in `data` are automatically redacted.
  */
 function buildEntry(
   level: LogLevel,
@@ -57,12 +95,13 @@ function buildEntry(
   data?: Record<string, unknown>,
   error?: unknown,
 ): LogEntry {
+  const safeData = data && Object.keys(data).length > 0 ? redactSensitiveKeys(data) : undefined;
   const entry: LogEntry = {
     level,
     timestamp: Date.now(),
     module,
     message,
-    ...(data && Object.keys(data).length > 0 ? { data } : {}),
+    ...(safeData ? { data: safeData } : {}),
     ...(error !== undefined ? { error: normalizeError(error) } : {}),
   };
   return entry;

@@ -75,7 +75,7 @@ final class MemoryViewModel: ObservableObject {
                 totalCount = response.totalCount
             } catch {
                 guard !Task.isCancelled else { return }
-                errorMessage = error.localizedDescription
+                errorMessage = ChatViewModel.sanitizeError(error)
                 results = []
                 totalCount = 0
             }

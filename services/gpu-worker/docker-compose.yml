@@ -6,7 +6,16 @@ services:
     ports:
       - "127.0.0.1:8420:8420"
     environment:
-      - EIDOLON_GPU_API_KEY=${EIDOLON_GPU_API_KEY:-}
+      - EIDOLON_GPU_API_KEY=${EIDOLON_GPU_API_KEY:?Must be set}
+    security_opt:
+      - "no-new-privileges:true"
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp
+    mem_limit: "16g"
+    pids_limit: 256
     deploy:
       resources:
         reservations:

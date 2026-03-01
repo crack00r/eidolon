@@ -127,9 +127,10 @@ describe("MemoryInjector", () => {
     if (!result.ok) return;
 
     expect(result.value).toContain("# Memory Context");
-    expect(result.value).toContain("## User");
-    expect(result.value).toContain("- Name: Manuel");
-    expect(result.value).toContain("- Timezone: Europe/Berlin");
+    // staticContext goes through sanitizeForMarkdown: # → \#, - → \-, newlines → spaces
+    expect(result.value).toContain("\\#\\# User");
+    expect(result.value).toContain("\\- Name: Manuel");
+    expect(result.value).toContain("\\- Timezone: Europe/Berlin");
     // Should NOT contain the "no memories" message when static context is present
     expect(result.value).not.toContain("No relevant memories found");
   });

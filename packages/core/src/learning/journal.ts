@@ -33,7 +33,7 @@ const MAX_RECENT_LIMIT = 1000;
  * Escapes characters that could inject Markdown headings or formatting.
  */
 function sanitizeForMarkdown(text: string): string {
-  return text.replace(/\n/g, " ").replace(/[#*\->`[\]\\]/g, (ch) => `\\${ch}`);
+  return text.replace(/\n/g, " ").replace(/[#*\->`[\]\\|!()<>]/g, (ch) => `\\${ch}`);
 }
 
 let nextEntryId = 0;

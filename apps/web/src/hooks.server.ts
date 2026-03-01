@@ -15,13 +15,17 @@ export const handle: Handle = async ({ event, resolve }) => {
   );
 
   // Content Security Policy
+  // NOTE: connect-src is pinned to the default gateway port 8419. If the port
+  // becomes user-configurable, widen to wss://localhost:* wss://127.0.0.1:*.
+  // TODO: In production, add a `report-to` directive pointing at a CSP
+  // violation reporting endpoint (e.g. report-uri.com or a self-hosted collector).
   response.headers.set(
     "Content-Security-Policy",
     [
       "default-src 'self'",
       "script-src 'self'",
       "style-src 'self' 'unsafe-inline'",
-      "connect-src 'self' wss://localhost:* wss://127.0.0.1:*",
+      "connect-src 'self' wss://localhost:8419 wss://127.0.0.1:8419",
       "img-src 'self' data:",
       "font-src 'self'",
       "frame-ancestors 'none'",

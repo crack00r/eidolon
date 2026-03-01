@@ -21,10 +21,27 @@ function sanitizeLogMessage(msg: string): string {
 
 /**
  * Format a LogEntry as a string in the specified format.
+ *
+ * Both JSON and pretty formats apply control-character sanitization to
+ * message, error.message, and error.stack to prevent log injection.
  */
 export function formatLogEntry(entry: LogEntry, format: "json" | "pretty"): string {
   if (format === "json") {
-    return JSON.stringify(entry);
+    // Sanitize user-controlled fields before JSON serialization to prevent log injection
+    const sanitized: LogEntry = {
+      ...entry,
+      message: sanitizeLogMessage(entry.message),
+      ...(entry.error
+        ? {
+            error: {
+              ...entry.error,
+              message: sanitizeLogMessage(entry.error.message),
+              ...(entry.error.stack ? { stack: sanitizeLogMessage(entry.error.stack) } : {}),
+            },
+          }
+        : {}),
+    };
+    return JSON.stringify(sanitized);
   }
   return formatPretty(entry);
 }

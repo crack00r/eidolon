@@ -69,7 +69,7 @@ export class CognitiveStateMachine {
     const from = this.currentState.phase;
     this.currentState = {
       phase: to,
-      currentAction: null,
+      currentAction: from === "acting" ? null : this.currentState.currentAction,
       lastTransitionAt: Date.now(),
       cycleCount: this.currentState.cycleCount,
     };

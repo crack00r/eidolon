@@ -92,6 +92,9 @@ export class SecretStore {
 
   private initialize(): void {
     this.db.exec("PRAGMA journal_mode=WAL");
+    // SEC: Overwrite deleted content on disk instead of marking as free.
+    // Prevents recovery of plaintext fragments after DELETE operations.
+    this.db.exec("PRAGMA secure_delete=ON");
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS secrets (
         key TEXT PRIMARY KEY,

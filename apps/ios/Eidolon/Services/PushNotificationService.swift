@@ -38,13 +38,17 @@ final class PushNotificationService: ObservableObject {
             let settings = await center.notificationSettings()
             permissionStatus = settings.authorizationStatus
 
+            #if DEBUG
             if granted {
                 print("[PushNotificationService] Notification permission granted")
             } else {
                 print("[PushNotificationService] Notification permission denied")
             }
+            #endif
         } catch {
+            #if DEBUG
             print("[PushNotificationService] Failed to request permission: \(error)")
+            #endif
         }
     }
 
@@ -54,6 +58,7 @@ final class PushNotificationService: ObservableObject {
     /// When ready, uncomment the `UIApplication.shared.registerForRemoteNotifications()` call
     /// and implement the `AppDelegate` methods for token handling.
     func registerForRemoteNotifications() {
+        #if DEBUG
         print("""
         [PushNotificationService] APNs registration is NOT ACTIVE.
         To activate:
@@ -62,6 +67,7 @@ final class PushNotificationService: ObservableObject {
           3. Configure APNs key/certificate
           4. Uncomment the registration call in PushNotificationService.swift
         """)
+        #endif
 
         // Uncomment when Apple Developer Account is available:
         // UIApplication.shared.registerForRemoteNotifications()
@@ -81,7 +87,9 @@ final class PushNotificationService: ObservableObject {
 
     /// Called when APNs registration fails.
     func didFailToRegisterForRemoteNotifications(error: Error) {
+        #if DEBUG
         print("[PushNotificationService] Failed to register: \(error.localizedDescription)")
+        #endif
     }
 
     // MARK: - Local Notifications (available without Developer Account)
@@ -98,9 +106,11 @@ final class PushNotificationService: ObservableObject {
         let request = UNNotificationRequest(identifier: id, content: content, trigger: trigger)
 
         UNUserNotificationCenter.current().add(request) { error in
+            #if DEBUG
             if let error {
                 print("[PushNotificationService] Local notification error: \(error)")
             }
+            #endif
         }
     }
 

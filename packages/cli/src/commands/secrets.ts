@@ -44,6 +44,12 @@ export function registerSecretsCommand(program: Command): void {
   cmd
     .command("set <key>")
     .description("Store an encrypted secret")
+    /**
+     * @security WARNING: The `--value` argument is visible in the OS process table
+     * (e.g., via `ps aux`) while the command is running. This is an inherent limitation
+     * of passing secrets as CLI arguments. For high-sensitivity secrets, consider piping
+     * from stdin or using a file-based approach in a future version.
+     */
     .requiredOption("--value <value>", "Secret value to store")
     .option("-d, --description <description>", "Description of the secret")
     .action((key: string, options: { readonly value: string; readonly description?: string }) => {

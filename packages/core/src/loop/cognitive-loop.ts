@@ -48,6 +48,7 @@ export interface CycleResult {
 export interface LoopStats {
   readonly totalCycles: number;
   readonly eventsProcessed: number;
+  readonly eventsFailed: number;
   readonly eventsDeferred: number;
   readonly totalTokensUsed: number;
   readonly totalRestMs: number;
@@ -61,7 +62,7 @@ const DEFAULT_ACTION_CATEGORIES: Record<ActionType, BudgetCategory> = {
   learn: "learning",
   dream: "dreaming",
   self_improve: "learning",
-  alert: "user",
+  alert: "alert",
   rest: "user",
 };
 
@@ -94,6 +95,7 @@ export class CognitiveLoop {
   private stats: {
     totalCycles: number;
     eventsProcessed: number;
+    eventsFailed: number;
     eventsDeferred: number;
     totalTokensUsed: number;
     totalRestMs: number;
@@ -130,6 +132,7 @@ export class CognitiveLoop {
     this.stats = {
       totalCycles: 0,
       eventsProcessed: 0,
+      eventsFailed: 0,
       eventsDeferred: 0,
       totalTokensUsed: 0,
       totalRestMs: 0,
@@ -222,8 +225,9 @@ export class CognitiveLoop {
     const priority = this.evaluator.evaluate(event);
     const category = this.actionCategories[priority.suggestedAction] ?? "user";
 
-    // Check energy budget (user messages always proceed)
-    if (category !== "user" && !this.energyBudget.canAfford(category)) {
+    // Check energy budget (actual user interaction events always proceed)
+    const isUserInteraction = event.type.startsWith("user:");
+    if (!isUserInteraction && !this.energyBudget.canAfford(category)) {
       this.eventBus.defer(event.id);
       this.stats.eventsDeferred++;
       this.stats.totalCycles++;
@@ -296,9 +300,13 @@ export class CognitiveLoop {
     if (!clearResult.ok) {
       this.logger.warn("loop", `clearAction failed: ${clearResult.error.message}`);
     }
-    this.energyBudget.consume(category, tokensUsed);
-    this.stats.eventsProcessed++;
-    this.stats.totalTokensUsed += tokensUsed;
+    if (handlerSucceeded) {
+      this.energyBudget.consume(category, tokensUsed);
+      this.stats.eventsProcessed++;
+      this.stats.totalTokensUsed += tokensUsed;
+    } else {
+      this.stats.eventsFailed++;
+    }
     this.stats.totalCycles++;
     this.stats.lastCycleAt = Date.now();
     this.stateMachine.completeCycle();

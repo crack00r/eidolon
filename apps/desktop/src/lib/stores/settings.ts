@@ -13,6 +13,8 @@ export interface Settings {
 }
 
 const STORAGE_KEY = "eidolon-settings";
+/** Allowed characters for hostname to prevent URL injection. */
+const HOSTNAME_RE = /^[a-zA-Z0-9._-]+$/;
 
 const DEFAULT_SETTINGS: Settings = {
   host: "127.0.0.1",
@@ -54,6 +56,7 @@ export function updateSettings(updates: Partial<Settings>): void {
     const next = { ...current, ...updates };
     // Enforce input length limits to prevent storage abuse
     if (next.host.length > 253) next.host = next.host.slice(0, 253);
+    if (!HOSTNAME_RE.test(next.host)) next.host = DEFAULT_SETTINGS.host;
     if (next.token.length > 512) next.token = next.token.slice(0, 512);
     if (next.port < 1 || next.port > 65535) next.port = DEFAULT_SETTINGS.port;
     persistSettings(next);

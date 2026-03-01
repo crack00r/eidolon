@@ -41,6 +41,14 @@ export const SCRYPT_P = 1;
 export const SCRYPT_MAXMEM = 256 * 1024 * 1024;
 
 /**
+ * Fixed application-level salt for passphrase-based key derivation.
+ *
+ * Exported so that all modules (master-key.ts, onboard.ts, etc.) use the same value.
+ * Using a fixed salt is an accepted trade-off for a single-user daemon (see master-key.ts).
+ */
+export const PASSPHRASE_SALT = Buffer.from("eidolon-master-key-v1", "utf-8");
+
+/**
  * Maximum plaintext length accepted by {@link encrypt}.
  * Prevents excessive memory allocation from untrusted input.
  * 1 MiB is generous for secrets (API keys, tokens, certificates).

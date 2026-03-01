@@ -30,6 +30,22 @@ export type RelationPredicate =
   | "contradicts"
   | "replaces";
 
+/** Valid relation predicates for runtime validation. */
+const VALID_RELATION_PREDICATES = new Set<string>([
+  "uses",
+  "owns",
+  "runs_on",
+  "depends_on",
+  "prefers",
+  "creates",
+  "is_part_of",
+  "located_in",
+  "has_property",
+  "related_to",
+  "contradicts",
+  "replaces",
+]);
+
 export interface CreateRelationInput {
   readonly sourceId: string;
   readonly targetId: string;
@@ -97,6 +113,15 @@ export class KGRelationStore {
 
   /** Create a relation (triple). */
   create(input: CreateRelationInput): Result<KGRelation, EidolonError> {
+    // Validate relation type against allowed predicates
+    if (!VALID_RELATION_PREDICATES.has(input.type)) {
+      return Err(
+        createError(
+          ErrorCode.DB_QUERY_FAILED,
+          `Invalid relation type "${input.type}". Must be one of: ${[...VALID_RELATION_PREDICATES].join(", ")}`,
+        ),
+      );
+    }
     if (
       input.confidence !== undefined &&
       (!Number.isFinite(input.confidence) || input.confidence < 0 || input.confidence > 1)

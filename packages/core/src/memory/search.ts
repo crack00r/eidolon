@@ -247,8 +247,19 @@ export class MemorySearch {
 
       const scored: Array<{ memoryId: string; similarity: number }> = [];
 
+      /** Expected embedding dimension (must match EmbeddingModel output). */
+      const EXPECTED_DIMENSIONS = 384;
+
       for (const row of rows) {
         const embedding = new Float32Array(new Uint8Array(row.embedding).buffer);
+        // Skip rows with wrong embedding dimensions (corrupted or schema-mismatched data)
+        if (embedding.length !== EXPECTED_DIMENSIONS) {
+          this.logger.warn(
+            "searchVector",
+            `Skipping row ${row.id}: embedding dimension ${embedding.length} !== ${EXPECTED_DIMENSIONS}`,
+          );
+          continue;
+        }
         const similarity = EmbeddingModel.cosineSimilarity(queryEmbedding, embedding);
         scored.push({ memoryId: row.id, similarity });
       }
