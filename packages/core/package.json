@@ -1,0 +1,24 @@
+{
+  "name": "@eidolon/core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "build": "bun build src/index.ts --outdir dist --target bun",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check src/",
+    "lint:fix": "biome check --write src/"
+  },
+  "dependencies": {
+    "@eidolon/protocol": "workspace:*"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.0.0",
+    "@eidolon/test-utils": "workspace:*",
+    "@types/bun": "latest",
+    "typescript": "^5.7"
+  }
+}

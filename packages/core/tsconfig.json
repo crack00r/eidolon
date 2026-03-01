@@ -1,0 +1,17 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "outDir": "dist",
+    "rootDir": "src",
+    "paths": {
+      "@eidolon/protocol": ["../protocol/src"],
+      "@eidolon/test-utils": ["../test-utils/src"]
+    }
+  },
+  "include": ["src/**/*.ts"],
+  "references": [
+    { "path": "../protocol" },
+    { "path": "../test-utils" }
+  ]
+}
