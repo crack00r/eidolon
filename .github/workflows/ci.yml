@@ -37,14 +37,34 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # Only run checks if workspace packages exist
+      - name: Check for workspace packages
+        id: check-packages
+        run: |
+          count=$(pnpm -r list --depth -1 --json 2>/dev/null | jq 'length' 2>/dev/null || echo "0")
+          echo "package_count=$count" >> "$GITHUB_OUTPUT"
+          if [ "$count" -gt "1" ]; then
+            echo "has_packages=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_packages=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Lint
+        if: steps.check-packages.outputs.has_packages == 'true'
         run: pnpm -r lint
 
       - name: Typecheck
+        if: steps.check-packages.outputs.has_packages == 'true'
         run: pnpm -r typecheck
 
       - name: Test
+        if: steps.check-packages.outputs.has_packages == 'true'
         run: pnpm -r test
 
       - name: Build
+        if: steps.check-packages.outputs.has_packages == 'true'
         run: pnpm -r build
+
+      - name: No packages yet
+        if: steps.check-packages.outputs.has_packages != 'true'
+        run: echo "No workspace packages found. CI will run checks once packages are added."

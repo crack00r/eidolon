@@ -112,13 +112,6 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # macOS code signing
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         with:
           projectPath: apps/desktop
           tauriScript: pnpm tauri
@@ -137,7 +130,6 @@ jobs:
           name: desktop-${{ matrix.config.rust-target }}
           path: |
             apps/desktop/src-tauri/target/${{ matrix.config.rust-target }}/release/bundle/**/*.dmg
-            apps/desktop/src-tauri/target/${{ matrix.config.rust-target }}/release/bundle/**/*.app
             apps/desktop/src-tauri/target/${{ matrix.config.rust-target }}/release/bundle/**/*.exe
             apps/desktop/src-tauri/target/${{ matrix.config.rust-target }}/release/bundle/**/*.msi
             apps/desktop/src-tauri/target/${{ matrix.config.rust-target }}/release/bundle/**/*.deb

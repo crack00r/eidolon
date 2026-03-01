@@ -1,17 +1,10 @@
 name: Build iOS
 
-on:
-  # Triggered by release workflow
-  workflow_call:
-    inputs:
-      tag_name:
-        required: true
-        type: string
-      version:
-        required: true
-        type: string
+# iOS builds require an Apple Developer account ($99/year).
+# This workflow is prepared for when signing credentials are available.
+# It does NOT run automatically -- manual trigger only.
 
-  # Manual trigger for testing
+on:
   workflow_dispatch:
     inputs:
       tag_name:
@@ -34,6 +27,18 @@ jobs:
       XCODE_VERSION: "16.0"
 
     steps:
+      - name: Check signing prerequisites
+        run: |
+          missing=""
+          if [ -z "${{ secrets.IOS_BUILD_CERTIFICATE_BASE64 }}" ]; then missing="$missing IOS_BUILD_CERTIFICATE_BASE64"; fi
+          if [ -z "${{ secrets.IOS_PROVISION_PROFILE_BASE64 }}" ]; then missing="$missing IOS_PROVISION_PROFILE_BASE64"; fi
+          if [ -n "$missing" ]; then
+            echo "::error::Missing required secrets:$missing"
+            echo "iOS builds require an Apple Developer account (\$99/year)."
+            echo "See: https://developer.apple.com/programs/"
+            exit 1
+          fi
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -48,26 +53,21 @@ jobs:
           BUILD_PROVISION_PROFILE_BASE64: ${{ secrets.IOS_PROVISION_PROFILE_BASE64 }}
           KEYCHAIN_PASSWORD: ${{ secrets.IOS_KEYCHAIN_PASSWORD }}
         run: |
-          # Create variables
           CERTIFICATE_PATH=$RUNNER_TEMP/build_certificate.p12
           PP_PATH=$RUNNER_TEMP/build_pp.mobileprovision
           KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
 
-          # Import certificate and provisioning profile from secrets
           echo -n "$BUILD_CERTIFICATE_BASE64" | base64 --decode -o $CERTIFICATE_PATH
           echo -n "$BUILD_PROVISION_PROFILE_BASE64" | base64 --decode -o $PP_PATH
 
-          # Create temporary keychain
           security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
           security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
 
-          # Import certificate to keychain
           security import $CERTIFICATE_PATH -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
           security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
           security list-keychain -d user -s $KEYCHAIN_PATH
 
-          # Apply provisioning profile
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
           cp $PP_PATH ~/Library/MobileDevice/Provisioning\ Profiles
 
@@ -107,7 +107,7 @@ jobs:
           if-no-files-found: warn
 
       - name: Upload to TestFlight
-        if: inputs.tag_name != ''
+        if: inputs.tag_name != '' && secrets.APP_STORE_CONNECT_API_KEY_ID != ''
         env:
           APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}

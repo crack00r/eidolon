@@ -4,6 +4,7 @@
   "bump-minor-pre-major": true,
   "bump-patch-for-minor-pre-major": true,
   "include-v-in-tag": true,
+  "include-component-in-tag": false,
   "changelog-sections": [
     { "type": "feat", "section": "Features" },
     { "type": "fix", "section": "Bug Fixes" },
@@ -18,28 +19,6 @@
     ".": {
       "component": "eidolon",
       "changelog-path": "CHANGELOG.md"
-    },
-    "packages/core": {
-      "component": "core",
-      "changelog-path": "CHANGELOG.md"
-    },
-    "packages/cli": {
-      "component": "cli",
-      "changelog-path": "CHANGELOG.md"
-    },
-    "packages/protocol": {
-      "component": "protocol",
-      "changelog-path": "CHANGELOG.md"
-    },
-    "apps/desktop": {
-      "component": "desktop",
-      "changelog-path": "CHANGELOG.md",
-      "release-type": "node"
-    },
-    "apps/ios": {
-      "component": "ios",
-      "changelog-path": "CHANGELOG.md",
-      "release-type": "simple"
     }
   }
 }
