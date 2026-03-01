@@ -9,4 +9,9 @@ RUN pip3 install --no-cache-dir ".[gpu]"
 COPY src/ src/
 
 EXPOSE 8420
+
+RUN groupadd -r eidolon && useradd -r -g eidolon -d /app eidolon
+RUN chown -R eidolon:eidolon /app
+USER eidolon
+
 CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8420"]

@@ -68,34 +68,28 @@ async function initDatabase(): Promise<DatabaseManager | undefined> {
 }
 
 // ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/** Escape LIKE metacharacters to prevent wildcard injection. */
+function escapeLikePattern(input: string): string {
+  return input.replace(/[%_\\]/g, (ch) => `\\${ch}`);
+}
+
+// ---------------------------------------------------------------------------
 // forget command
 // ---------------------------------------------------------------------------
 
 function forgetEntity(dbManager: DatabaseManager, entity: string): DeletionReport {
   const deletedCounts: Record<string, number> = {};
-  const pattern = `%${entity}%`;
+  const escaped = escapeLikePattern(entity);
+  const pattern = `%${escaped}%`;
 
-  // 1. memories table (memory.db)
-  try {
-    const result = dbManager.memory.query("DELETE FROM memories WHERE content LIKE ?").run(pattern);
-    deletedCounts.memories = result.changes;
-  } catch {
-    deletedCounts.memories = 0;
-  }
-
-  // 2. memory_fts table (memory.db)
-  try {
-    const result = dbManager.memory.query("DELETE FROM memory_fts WHERE content LIKE ?").run(pattern);
-    deletedCounts.memory_fts = result.changes;
-  } catch {
-    deletedCounts.memory_fts = 0;
-  }
-
-  // 3. memory_edges table (memory.db)
+  // 1. memory_edges table (memory.db) -- delete edges BEFORE memories (FK references)
   try {
     const result = dbManager.memory
       .query(
-        "DELETE FROM memory_edges WHERE source_id IN (SELECT id FROM memories WHERE content LIKE ?) OR target_id IN (SELECT id FROM memories WHERE content LIKE ?)",
+        "DELETE FROM memory_edges WHERE source_id IN (SELECT id FROM memories WHERE content LIKE ? ESCAPE '\\') OR target_id IN (SELECT id FROM memories WHERE content LIKE ? ESCAPE '\\')",
       )
       .run(pattern, pattern);
     deletedCounts.memory_edges = result.changes;
@@ -103,49 +97,71 @@ function forgetEntity(dbManager: DatabaseManager, entity: string): DeletionRepor
     deletedCounts.memory_edges = 0;
   }
 
-  // 4. kg_entities table (memory.db)
+  // 2. memories table (memory.db) -- FTS5 triggers handle memories_fts cleanup automatically
   try {
-    const result = dbManager.memory.query("DELETE FROM kg_entities WHERE name LIKE ?").run(pattern);
-    deletedCounts.kg_entities = result.changes;
+    const result = dbManager.memory.query("DELETE FROM memories WHERE content LIKE ? ESCAPE '\\'").run(pattern);
+    deletedCounts.memories = result.changes;
   } catch {
-    deletedCounts.kg_entities = 0;
+    deletedCounts.memories = 0;
   }
 
-  // 5. kg_relations table (memory.db)
+  // 3. kg_relations table (memory.db) -- uses source_id/target_id FK to kg_entities.id
   try {
     const result = dbManager.memory
-      .query("DELETE FROM kg_relations WHERE head_entity LIKE ? OR tail_entity LIKE ?")
+      .query(
+        "DELETE FROM kg_relations WHERE source_id IN (SELECT id FROM kg_entities WHERE name LIKE ? ESCAPE '\\') OR target_id IN (SELECT id FROM kg_entities WHERE name LIKE ? ESCAPE '\\')",
+      )
       .run(pattern, pattern);
     deletedCounts.kg_relations = result.changes;
   } catch {
     deletedCounts.kg_relations = 0;
   }
 
-  // 6. sessions table (operational.db)
+  // 4. kg_entities table (memory.db)
   try {
-    const result = dbManager.operational.query("DELETE FROM sessions WHERE messages LIKE ?").run(pattern);
+    const result = dbManager.memory.query("DELETE FROM kg_entities WHERE name LIKE ? ESCAPE '\\'").run(pattern);
+    deletedCounts.kg_entities = result.changes;
+  } catch {
+    deletedCounts.kg_entities = 0;
+  }
+
+  // 5. sessions table (operational.db) -- has metadata column, not messages
+  try {
+    const result = dbManager.operational.query("DELETE FROM sessions WHERE metadata LIKE ? ESCAPE '\\'").run(pattern);
     deletedCounts.sessions = result.changes;
   } catch {
     deletedCounts.sessions = 0;
   }
 
-  // 7. audit_log table (audit.db)
+  // 6. audit_log table (audit.db) -- columns: actor, action, target, result, metadata
   try {
     const result = dbManager.audit
-      .query("DELETE FROM audit_log WHERE details LIKE ? OR entity LIKE ?")
-      .run(pattern, pattern);
+      .query(
+        "DELETE FROM audit_log WHERE target LIKE ? ESCAPE '\\' OR actor LIKE ? ESCAPE '\\' OR metadata LIKE ? ESCAPE '\\'",
+      )
+      .run(pattern, pattern, pattern);
     deletedCounts.audit_log = result.changes;
   } catch {
     deletedCounts.audit_log = 0;
   }
 
-  // 8. Log the deletion to audit (the action itself)
+  // 7. Log the deletion to audit (the action itself)
   try {
     dbManager.audit
-      .query("INSERT INTO audit_log (id, timestamp, action, entity, details) VALUES (?, ?, ?, ?, ?)")
-      .run(crypto.randomUUID(), Date.now(), "privacy:forget", entity, JSON.stringify({ deletedCounts }));
+      .query(
+        "INSERT INTO audit_log (id, timestamp, actor, action, target, result, metadata) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      )
+      .run(
+        crypto.randomUUID(),
+        Date.now(),
+        "system",
+        "privacy:forget",
+        entity,
+        "success",
+        JSON.stringify({ deletedCounts }),
+      );
   } catch {
-    // Best effort -- audit table might not have this schema
+    // Best effort -- audit logging should not block the forget operation
   }
 
   const totalDeleted = Object.values(deletedCounts).reduce((sum, n) => sum + n, 0);
@@ -179,7 +195,7 @@ function exportAllData(dbManager: DatabaseManager): ExportData {
   // Sessions
   let sessions: unknown[] = [];
   try {
-    sessions = dbManager.operational.query("SELECT id, type, status, created_at, ended_at FROM sessions").all();
+    sessions = dbManager.operational.query("SELECT id, type, status, started_at, completed_at FROM sessions").all();
     recordCounts.sessions = sessions.length;
   } catch {
     recordCounts.sessions = 0;
@@ -189,7 +205,7 @@ function exportAllData(dbManager: DatabaseManager): ExportData {
   let auditLog: unknown[] = [];
   try {
     auditLog = dbManager.audit
-      .query("SELECT id, timestamp, action, entity, details FROM audit_log ORDER BY timestamp DESC")
+      .query("SELECT id, timestamp, actor, action, target, result, metadata FROM audit_log ORDER BY timestamp DESC")
       .all();
     recordCounts.auditLog = auditLog.length;
   } catch {

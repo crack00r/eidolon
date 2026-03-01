@@ -10,7 +10,7 @@
  */
 
 import type { EidolonError, Result } from "@eidolon/protocol";
-import { Ok } from "@eidolon/protocol";
+import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 import type { Logger } from "../logging/logger.js";
 
 export interface ImplementationStep {
@@ -90,6 +90,12 @@ export class ImplementationPipeline {
       discoveryId: options.discoveryId,
       branch,
     });
+
+    // Validate branch name to prevent command injection
+    const SAFE_BRANCH = /^[a-zA-Z0-9._/-]+$/;
+    if (!SAFE_BRANCH.test(branch)) {
+      return Err(createError(ErrorCode.DISCOVERY_FAILED, `Invalid branch name: ${branch}`));
+    }
 
     // Step 1: Create branch
     const branchStart = Date.now();

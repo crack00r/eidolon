@@ -39,7 +39,12 @@ export function createHealthServer(options: HealthServerOptions): HealthServer {
   function jsonResponse(body: unknown, status: number): Response {
     return new Response(JSON.stringify(body), {
       status,
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "X-Content-Type-Options": "nosniff",
+        "Cache-Control": "no-store",
+        "X-Frame-Options": "DENY",
+      },
     });
   }
 

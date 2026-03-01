@@ -21,7 +21,7 @@ export const handle: Handle = async ({ event, resolve }) => {
       "default-src 'self'",
       "script-src 'self'",
       "style-src 'self' 'unsafe-inline'",
-      "connect-src 'self' wss: ws:",
+      "connect-src 'self' wss://localhost:* wss://127.0.0.1:* ws://localhost:* ws://127.0.0.1:*",
       "img-src 'self' data:",
       "font-src 'self'",
       "frame-ancestors 'none'",

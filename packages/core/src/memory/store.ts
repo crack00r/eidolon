@@ -242,8 +242,10 @@ export class MemoryStore {
       }
 
       const where = whereClauses.length > 0 ? `WHERE ${whereClauses.join(" AND ")}` : "";
-      const orderBy = options?.orderBy ?? "created_at";
-      const order = options?.order ?? "desc";
+      const VALID_ORDER_BY = new Set(["created_at", "updated_at", "accessed_at", "confidence"]);
+      const VALID_ORDER = new Set(["asc", "desc"]);
+      const orderBy = VALID_ORDER_BY.has(options?.orderBy ?? "") ? options?.orderBy : "created_at";
+      const order = VALID_ORDER.has(options?.order ?? "") ? options?.order : "desc";
       const limit = options?.limit ?? 100;
       const offset = options?.offset ?? 0;
 
@@ -291,6 +293,9 @@ export class MemoryStore {
     try {
       const maxResults = limit ?? 20;
 
+      // Sanitize query to prevent FTS5 operator injection by wrapping in quotes
+      const sanitized = `"${query.replace(/"/g, '""')}"`;
+
       const rows = this.db
         .query(
           `SELECT m.*, f.rank
@@ -300,7 +305,7 @@ export class MemoryStore {
            ORDER BY f.rank
            LIMIT ?`,
         )
-        .all(query, maxResults) as Array<MemoryRow & { rank: number }>;
+        .all(sanitized, maxResults) as Array<MemoryRow & { rank: number }>;
 
       const results = rows.map((row) => ({
         memory: rowToMemory(row),
@@ -310,7 +315,7 @@ export class MemoryStore {
       this.logger.debug("search", `FTS search for "${query}"`, { resultCount: results.length });
       return Ok(results);
     } catch (cause) {
-      return Err(createError(ErrorCode.DB_QUERY_FAILED, `Full-text search failed for query: ${query}`, cause));
+      return Err(createError(ErrorCode.DB_QUERY_FAILED, "Full-text search failed", cause));
     }
   }
 

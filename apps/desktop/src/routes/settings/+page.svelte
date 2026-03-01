@@ -98,6 +98,7 @@
           type="password"
           bind:value={token}
           placeholder="Optional authentication token"
+          autocomplete="off"
           disabled={$isConnected}
         />
       </div>

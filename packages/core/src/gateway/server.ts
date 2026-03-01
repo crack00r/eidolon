@@ -58,20 +58,30 @@ interface WSData {
 
 /**
  * Constant-time string comparison to prevent timing attacks on token validation.
+ * When lengths differ, compare the secret (b) against itself to avoid leaking
+ * attacker-controlled timing information while preserving constant-time behavior.
  */
 function constantTimeCompare(a: string, b: string): boolean {
   const bufA = Buffer.from(a, "utf-8");
   const bufB = Buffer.from(b, "utf-8");
   if (bufA.length !== bufB.length) {
-    // Compare bufA against itself to prevent timing leak on length difference
-    timingSafeEqual(bufA, bufA);
+    // Compare secret against itself (not attacker input) to prevent timing leak
+    timingSafeEqual(bufB, bufB);
     return false;
   }
   return timingSafeEqual(bufA, bufB);
 }
 
+/**
+ * Normalize IP address: strip IPv4-mapped IPv6 prefix (::ffff:) to prevent bypass.
+ */
+function normalizeIp(ip: string): string {
+  if (ip.startsWith("::ffff:")) return ip.slice(7);
+  return ip;
+}
+
 // Export for testing
-export { constantTimeCompare };
+export { constantTimeCompare, normalizeIp };
 
 // ---------------------------------------------------------------------------
 // GatewayServer
@@ -130,8 +140,8 @@ export class GatewayServer {
           return new Response("Not found", { status: 404 });
         }
 
-        // Extract client IP
-        const ip = server.requestIP(req)?.address ?? "unknown";
+        // Extract client IP and normalize to prevent IPv6 bypass
+        const ip = normalizeIp(server.requestIP(req)?.address ?? "unknown");
 
         // Rate limiting check
         if (self.rateLimiter.isBlocked(ip)) {
@@ -277,6 +287,16 @@ export class GatewayServer {
       this.eventBus.publish("gateway:client_connected", { clientId, authenticated: true }, { source: "gateway" });
     } else {
       this.logger.info("open", `Client ${clientId} connected from ${ip}, awaiting auth`);
+
+      // Enforce auth timeout: close unauthenticated connections after 10 seconds
+      setTimeout(() => {
+        const client = this.clients.get(clientId);
+        if (client && !client.authenticated) {
+          this.logger.warn("auth-timeout", `Client ${clientId} auth timeout`);
+          ws.close(4002, "Authentication timeout");
+          this.clients.delete(clientId);
+        }
+      }, 10_000);
     }
   }
 
@@ -324,9 +344,8 @@ export class GatewayServer {
       const response = createJsonRpcResponse(request.id, handlerResult);
       ws.send(JSON.stringify(response));
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : String(err);
       this.logger.error("handler", `Handler error for ${request.method}`, err);
-      const errResp = createJsonRpcError(request.id, JSON_RPC_INTERNAL_ERROR, errorMessage);
+      const errResp = createJsonRpcError(request.id, JSON_RPC_INTERNAL_ERROR, "Internal server error");
       ws.send(JSON.stringify(errResp));
     }
   }

@@ -48,5 +48,17 @@
 
     <key>NSLocalNetworkUsageDescription</key>
     <string>Eidolon uses the local network to discover and connect to the Eidolon Core server running on your LAN.</string>
+
+    <key>NSAppTransportSecurity</key>
+    <dict>
+        <key>NSExceptionDomains</key>
+        <dict>
+            <key>localhost</key>
+            <dict>
+                <key>NSExceptionAllowsInsecureHTTPLoads</key>
+                <true/>
+            </dict>
+        </dict>
+    </dict>
 </dict>
 </plist>

@@ -71,7 +71,9 @@ final class PushNotificationService: ObservableObject {
     func didRegisterForRemoteNotifications(deviceToken data: Data) {
         let token = data.map { String(format: "%02.2hhx", $0) }.joined()
         self.deviceToken = token
+        #if DEBUG
         print("[PushNotificationService] Device token: \(token)")
+        #endif
 
         // TODO: Send token to Eidolon Core server via WebSocket
         // webSocketService.call("push.register", params: ["token": token, "platform": "ios"])

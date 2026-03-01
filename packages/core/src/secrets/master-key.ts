@@ -6,7 +6,7 @@
  * Shorter values (passphrases) are hashed with SHA-256 to produce a 32-byte key.
  */
 
-import { createHash, randomBytes } from "node:crypto";
+import { randomBytes, scryptSync } from "node:crypto";
 import type { EidolonError, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 
@@ -16,7 +16,7 @@ const ENV_KEY = "EIDOLON_MASTER_KEY";
  * Get the master key from the EIDOLON_MASTER_KEY environment variable.
  *
  * - If the value is exactly 64 hex characters, it is decoded directly as a 32-byte key.
- * - Otherwise, the value is treated as a passphrase and hashed with SHA-256.
+ * - Otherwise, the value is treated as a passphrase and derived via scrypt KDF.
  */
 export function getMasterKey(): Result<Buffer, EidolonError> {
   const envValue = process.env[ENV_KEY];
@@ -29,8 +29,9 @@ export function getMasterKey(): Result<Buffer, EidolonError> {
     return Ok(Buffer.from(envValue, "hex"));
   }
 
-  // Otherwise, hash the passphrase to get a 32-byte key
-  const key = createHash("sha256").update(envValue).digest();
+  // Otherwise, derive key from passphrase via scrypt KDF (with fixed application salt)
+  const PASSPHRASE_SALT = Buffer.from("eidolon-master-key-v1", "utf-8");
+  const key = scryptSync(envValue, PASSPHRASE_SALT, 32, { N: 2 ** 17, r: 8, p: 1, maxmem: 256 * 1024 * 1024 });
   return Ok(key);
 }
 

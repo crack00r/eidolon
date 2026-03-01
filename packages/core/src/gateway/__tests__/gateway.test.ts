@@ -818,7 +818,7 @@ describe("GatewayServer", () => {
       expect(resp.id).toBe("req-3");
       expect(resp.error).toBeDefined();
       expect(resp.error?.code).toBe(JSON_RPC_INTERNAL_ERROR);
-      expect(resp.error?.message).toBe("Database unavailable");
+      expect(resp.error?.message).toBe("Internal server error");
     });
 
     test("returns parse error for invalid JSON-RPC message", async () => {

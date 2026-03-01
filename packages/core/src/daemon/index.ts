@@ -6,7 +6,7 @@
  * PID file lifecycle.
  */
 
-import { existsSync, mkdirSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { EidolonConfig } from "@eidolon/protocol";
 import { SECRETS_DB_FILENAME, VERSION } from "@eidolon/protocol";
@@ -370,6 +370,17 @@ export class EidolonDaemon {
   private writePidFile(): void {
     const pidPath = getPidFilePath();
     ensureDir(dirname(pidPath));
+
+    // Check for symlink attack before writing PID file
+    try {
+      const stat = lstatSync(pidPath);
+      if (stat.isSymbolicLink()) {
+        throw new Error(`PID file is a symlink: ${pidPath}`);
+      }
+    } catch (e: unknown) {
+      if ((e as NodeJS.ErrnoException).code !== "ENOENT") throw e;
+    }
+
     writeFileSync(pidPath, String(process.pid), "utf-8");
     this.modules.logger?.info("daemon", `PID file written: ${pidPath} (${process.pid})`);
   }

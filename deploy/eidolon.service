@@ -20,6 +20,15 @@ ProtectSystem=strict
 ProtectHome=read-only
 ReadWritePaths=/var/lib/eidolon /var/log/eidolon
 PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+CapabilityBoundingSet=
+UMask=077
 
 # Environment
 Environment=EIDOLON_CONFIG=/etc/eidolon/eidolon.json

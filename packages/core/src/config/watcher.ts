@@ -5,6 +5,7 @@
 
 import { type FSWatcher, watch } from "node:fs";
 import type { EidolonConfig } from "@eidolon/protocol";
+import type { Logger } from "../logging/logger.js";
 import { loadConfig } from "./loader.js";
 
 export type ConfigChangeHandler = (config: EidolonConfig) => void;
@@ -14,12 +15,14 @@ export class ConfigWatcher {
   private readonly handlers: ConfigChangeHandler[] = [];
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly debounceMs: number;
+  private readonly logger?: Logger;
 
   constructor(
     private readonly configPath: string,
-    options?: { debounceMs?: number },
+    options?: { debounceMs?: number; logger?: Logger },
   ) {
     this.debounceMs = options?.debounceMs ?? 500;
+    this.logger = options?.logger;
   }
 
   /** Register a handler for config changes */
@@ -55,7 +58,8 @@ export class ConfigWatcher {
       for (const handler of this.handlers) {
         handler(result.value);
       }
+    } else {
+      this.logger?.warn("watcher", `Config reload failed: ${result.error.message}`);
     }
-    // If invalid, silently ignore (keep old config)
   }
 }

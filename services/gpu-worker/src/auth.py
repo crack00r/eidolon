@@ -17,8 +17,12 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
         api_key = os.environ.get("EIDOLON_GPU_API_KEY")
         if not api_key:
-            # No key configured = no auth required (development mode)
-            return await call_next(request)
+            if request.url.path == "/health":
+                return await call_next(request)
+            return JSONResponse(
+                status_code=503,
+                content={"error": "EIDOLON_GPU_API_KEY not configured. Authentication required."},
+            )
 
         provided_key = request.headers.get("X-API-Key")
         if provided_key != api_key:

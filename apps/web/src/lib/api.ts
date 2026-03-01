@@ -49,6 +49,7 @@ interface PendingRequest {
 const DEFAULT_TIMEOUT_MS = 30_000;
 const MAX_RECONNECT_DELAY_MS = 8_000;
 const BASE_RECONNECT_DELAY_MS = 1_000;
+const MAX_RECONNECT_ATTEMPTS = 50;
 
 export class GatewayClient {
   private ws: WebSocket | null = null;
@@ -303,6 +304,11 @@ export class GatewayClient {
 
   private scheduleReconnect(): void {
     if (!this.shouldReconnect) return;
+
+    if (this.reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+      this.setState("error");
+      return;
+    }
 
     const delay = Math.min(
       BASE_RECONNECT_DELAY_MS * Math.pow(2, this.reconnectAttempts),

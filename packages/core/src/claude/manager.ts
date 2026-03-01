@@ -37,11 +37,33 @@ export class ClaudeCodeManager implements IClaudeProcess {
       model: options.model,
     });
 
+    // Whitelist only safe env vars to avoid leaking secrets to subprocesses
+    const SAFE_ENV_KEYS = [
+      "PATH",
+      "HOME",
+      "USER",
+      "LANG",
+      "TERM",
+      "SHELL",
+      "TMPDIR",
+      "XDG_CONFIG_HOME",
+      "XDG_DATA_HOME",
+    ];
+    const safeEnv: Record<string, string> = {};
+    for (const key of SAFE_ENV_KEYS) {
+      const val = process.env[key];
+      if (val) safeEnv[key] = val;
+    }
+    // Also pass any ANTHROPIC_ prefixed vars for API keys
+    for (const [key, val] of Object.entries(process.env)) {
+      if (key.startsWith("ANTHROPIC_") && val) safeEnv[key] = val;
+    }
+
     const proc = Bun.spawn(["claude", ...args], {
       stdout: "pipe",
       stderr: "pipe",
       env: {
-        ...process.env,
+        ...safeEnv,
         ...(options.env ?? {}),
       },
       cwd: options.workspaceDir,
@@ -106,9 +128,10 @@ export class ClaudeCodeManager implements IClaudeProcess {
         const stderr = proc.stderr ? await new Response(proc.stderr).text() : "";
         yield {
           type: "error",
-          error: `Claude Code exited with code ${String(exitCode)}: ${stderr}`.trim(),
+          error: `Claude Code exited with code ${String(exitCode)}`,
           timestamp: Date.now(),
         };
+        this.logger.error("manager", `Claude stderr: ${stderr}`, { sessionId: options.sessionId });
       }
 
       yield { type: "done", timestamp: Date.now() };

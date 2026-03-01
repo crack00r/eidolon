@@ -181,7 +181,7 @@ export const ChannelConfigSchema = z.object({
 // ---------------------------------------------------------------------------
 
 export const GatewayConfigSchema = z.object({
-  host: z.string().default("0.0.0.0"),
+  host: z.string().default("127.0.0.1"),
   port: z.number().int().positive().default(8419),
   tls: z
     .object({

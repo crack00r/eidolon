@@ -97,6 +97,7 @@ export class GPUManager {
         ...options,
         headers,
         signal: controller.signal,
+        redirect: "error",
       });
 
       if (!response.ok) {
@@ -108,13 +109,16 @@ export class GPUManager {
 
       const contentType = response.headers.get("content-type") ?? "";
       if (contentType.includes("application/json")) {
-        const data = (await response.json()) as T;
-        return Ok(data);
+        const data = await response.json();
+        if (typeof data !== "object" || data === null) {
+          return Err(createError(ErrorCode.GPU_UNAVAILABLE, "Invalid GPU response format"));
+        }
+        return Ok(data as T);
       }
 
-      // For non-JSON responses (e.g. audio bytes), return the response as-is
+      // For non-JSON responses (e.g. audio bytes), return the raw ArrayBuffer
       // Callers that expect binary should cast appropriately
-      const data = (await response.json()) as T;
+      const data = (await response.arrayBuffer()) as T;
       return Ok(data);
     } catch (err: unknown) {
       if (err instanceof DOMException && err.name === "AbortError") {

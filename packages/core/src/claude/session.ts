@@ -119,15 +119,33 @@ export class SessionManager {
     return row.count;
   }
 
+  private static readonly VALID_SESSION_TYPES = new Set<string>([
+    "main",
+    "task",
+    "learning",
+    "dream",
+    "voice",
+    "review",
+  ]);
+  private static readonly VALID_SESSION_STATUSES = new Set<string>(["running", "paused", "completed", "failed"]);
+
+  private static validateEnum<T extends string>(value: unknown, valid: Set<string>, fallback: T): T {
+    return valid.has(String(value)) ? (String(value) as T) : fallback;
+  }
+
   private rowToSession(row: unknown): SessionInfo {
     const r = row as Record<string, unknown>;
     return {
       id: String(r.id),
-      type: String(r.type) as SessionType,
+      type: SessionManager.validateEnum<SessionType>(r.type, SessionManager.VALID_SESSION_TYPES, "task"),
       startedAt: Number(r.started_at),
       lastActivityAt: Number(r.last_activity_at),
       tokensUsed: Number(r.tokens_used),
-      status: String(r.status) as SessionInfo["status"],
+      status: SessionManager.validateEnum<SessionInfo["status"]>(
+        r.status,
+        SessionManager.VALID_SESSION_STATUSES,
+        "failed",
+      ),
       claudeSessionId: r.claude_session_id ? String(r.claude_session_id) : undefined,
     };
   }

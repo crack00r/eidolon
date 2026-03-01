@@ -25,12 +25,57 @@ interface EventRow {
   retry_count: number;
 }
 
+const VALID_EVENT_TYPES = new Set<string>([
+  "user:message",
+  "user:voice",
+  "user:approval",
+  "system:startup",
+  "system:shutdown",
+  "system:health_check",
+  "system:config_changed",
+  "memory:extracted",
+  "memory:dream_start",
+  "memory:dream_complete",
+  "learning:discovery",
+  "learning:approved",
+  "learning:rejected",
+  "learning:implemented",
+  "session:started",
+  "session:completed",
+  "session:failed",
+  "session:budget_warning",
+  "channel:connected",
+  "channel:disconnected",
+  "channel:error",
+  "scheduler:task_due",
+  "gateway:client_connected",
+  "gateway:client_disconnected",
+]);
+const VALID_PRIORITIES = new Set<string>(["critical", "high", "normal", "low"]);
+
+function validateEnum<T extends string>(value: unknown, valid: Set<string>, fallback: T): T {
+  return valid.has(String(value)) ? (String(value) as T) : fallback;
+}
+
+/** Prototype-pollution keys to strip from parsed JSON payloads. */
+const POISON_KEYS = ["__proto__", "constructor", "prototype"] as const;
+
+/** Strip prototype-pollution keys from parsed JSON payloads. */
+function sanitizePayload(value: unknown): unknown {
+  if (typeof value !== "object" || value === null) return value;
+  const obj = value as Record<string, unknown>;
+  for (const key of POISON_KEYS) {
+    Reflect.deleteProperty(obj, key);
+  }
+  return obj;
+}
+
 function rowToEvent(row: EventRow): BusEvent {
   return {
     id: row.id,
-    type: row.type as EventType,
-    priority: row.priority as EventPriority,
-    payload: JSON.parse(row.payload) as unknown,
+    type: validateEnum<EventType>(row.type, VALID_EVENT_TYPES, "system:health_check"),
+    priority: validateEnum<EventPriority>(row.priority, VALID_PRIORITIES, "normal"),
+    payload: sanitizePayload(JSON.parse(row.payload)),
     source: row.source,
     timestamp: row.timestamp,
     ...(row.processed_at !== null ? { processedAt: row.processed_at } : {}),
@@ -187,7 +232,8 @@ export class EventBus {
                WHEN 'normal' THEN 2
                WHEN 'low' THEN 3
              END,
-             timestamp ASC`,
+             timestamp ASC
+           LIMIT 1000`,
         )
         .all() as EventRow[];
 
@@ -217,7 +263,8 @@ export class EventBus {
                WHEN 'normal' THEN 2
                WHEN 'low' THEN 3
              END,
-             timestamp ASC`,
+             timestamp ASC
+           LIMIT 1000`,
         )
         .all() as EventRow[];
 

@@ -55,16 +55,24 @@ interface DiscoveryRow {
   implemented_at: number | null;
 }
 
+function validateEnum<T extends string>(value: unknown, valid: Set<string>, fallback: T): T {
+  return valid.has(String(value)) ? (String(value) as T) : fallback;
+}
+
+const VALID_SOURCE_TYPES = new Set<string>(["reddit", "hackernews", "github", "rss", "arxiv"]);
+const VALID_DISCOVERY_STATUSES = new Set<string>(["new", "evaluated", "approved", "rejected", "implemented"]);
+const VALID_SAFETY_LEVELS = new Set<string>(["safe", "needs_approval", "dangerous"]);
+
 function rowToDiscovery(row: DiscoveryRow): Discovery {
   return {
     id: row.id,
-    sourceType: row.source_type as SourceType,
+    sourceType: validateEnum<SourceType>(row.source_type, VALID_SOURCE_TYPES, "reddit"),
     url: row.url,
     title: row.title,
     content: row.content,
     relevanceScore: row.relevance_score,
-    safetyLevel: row.safety_level as SafetyLevel,
-    status: row.status as DiscoveryStatus,
+    safetyLevel: validateEnum<SafetyLevel>(row.safety_level, VALID_SAFETY_LEVELS, "dangerous"),
+    status: validateEnum<DiscoveryStatus>(row.status, VALID_DISCOVERY_STATUSES, "new"),
     implementationBranch: row.implementation_branch ?? undefined,
     createdAt: row.created_at,
     evaluatedAt: row.evaluated_at ?? undefined,
@@ -145,11 +153,11 @@ export class DiscoveryEngine {
   updateStatus(id: string, status: DiscoveryStatus): Result<void, EidolonError> {
     try {
       const now = Date.now();
-      const timestampField =
-        status === "evaluated" ? "evaluated_at" : status === "implemented" ? "implemented_at" : null;
 
-      if (timestampField) {
-        this.db.query(`UPDATE discoveries SET status = ?, ${timestampField} = ? WHERE id = ?`).run(status, now, id);
+      if (status === "evaluated") {
+        this.db.query("UPDATE discoveries SET status = ?, evaluated_at = ? WHERE id = ?").run(status, now, id);
+      } else if (status === "implemented") {
+        this.db.query("UPDATE discoveries SET status = ?, implemented_at = ? WHERE id = ?").run(status, now, id);
       } else {
         this.db.query("UPDATE discoveries SET status = ? WHERE id = ?").run(status, id);
       }

@@ -42,34 +42,27 @@ export class STTClient {
     const mime = mimeType ?? "audio/wav";
     const extension = mime.split("/")[1] ?? "wav";
 
-    try {
-      const formData = new FormData();
-      const blob = new Blob([audio], { type: mime });
-      formData.append("file", blob, `audio.${extension}`);
+    const formData = new FormData();
+    const blob = new Blob([audio], { type: mime });
+    formData.append("file", blob, `audio.${extension}`);
 
-      const response = await fetch(`${this.gpu.baseUrl}/stt/transcribe`, {
-        method: "POST",
-        body: formData,
-      });
+    // Use GPUManager.request() to ensure authenticated requests
+    const result = await this.gpu.request<SttResult>("/stt/transcribe", {
+      method: "POST",
+      body: formData,
+    });
 
-      if (!response.ok) {
-        const errorText = await response.text().catch(() => "");
-        return Err(createError(ErrorCode.STT_FAILED, `STT transcription failed (${response.status}): ${errorText}`));
-      }
-
-      const result = (await response.json()) as SttResult;
-
-      this.logger.debug("transcribe", "STT completed", {
-        textLength: result.text.length,
-        language: result.language,
-        confidence: result.confidence,
-      });
-
-      return Ok(result);
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err);
-      return Err(createError(ErrorCode.STT_FAILED, `STT transcription request failed: ${message}`, err));
+    if (!result.ok) {
+      return Err(createError(ErrorCode.STT_FAILED, `STT transcription failed: ${result.error.message}`));
     }
+
+    this.logger.debug("transcribe", "STT completed", {
+      textLength: result.value.text.length,
+      language: result.value.language,
+      confidence: result.value.confidence,
+    });
+
+    return Ok(result.value);
   }
 
   /** Check if STT is available via the GPU worker. */

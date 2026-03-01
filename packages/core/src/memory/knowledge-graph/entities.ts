@@ -251,9 +251,10 @@ export class KGEntityStore {
   searchByName(prefix: string, limit?: number): Result<KGEntity[], EidolonError> {
     try {
       const maxResults = limit ?? 10;
+      const escaped = prefix.replace(/[%_\\]/g, (ch) => `\\${ch}`);
       const rows = this.db
-        .query("SELECT * FROM kg_entities WHERE LOWER(name) LIKE LOWER(?) ORDER BY name LIMIT ?")
-        .all(`${prefix}%`, maxResults) as EntityRow[];
+        .query("SELECT * FROM kg_entities WHERE LOWER(name) LIKE LOWER(?) ESCAPE '\\' ORDER BY name LIMIT ?")
+        .all(`${escaped}%`, maxResults) as EntityRow[];
       return Ok(rows.map(rowToEntity));
     } catch (cause) {
       return Err(createError(ErrorCode.DB_QUERY_FAILED, `Failed to search entities by prefix "${prefix}"`, cause));

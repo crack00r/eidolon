@@ -9,3 +9,19 @@ Group=eidolon
 ExecStart=/usr/local/bin/bun /opt/eidolon/packages/cli/src/index.ts backup run
 Environment=EIDOLON_CONFIG=/etc/eidolon/eidolon.json
 Environment=EIDOLON_DATA_DIR=/var/lib/eidolon
+
+# Security hardening
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/var/lib/eidolon /var/log/eidolon
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+CapabilityBoundingSet=
+UMask=077

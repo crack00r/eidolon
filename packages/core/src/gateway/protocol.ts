@@ -70,14 +70,12 @@ export function parseJsonRpcRequest(data: string): Result<GatewayRequest, Gatewa
     );
   }
 
-  if (typeof obj.id !== "string" || obj.id.length === 0) {
-    return Err(createJsonRpcError("null", JSON_RPC_INVALID_REQUEST, "Invalid request: id must be a non-empty string"));
+  if (typeof obj.id !== "string" || obj.id.length === 0 || obj.id.length > 256) {
+    return Err(createJsonRpcError("null", JSON_RPC_INVALID_REQUEST, "Invalid id field"));
   }
 
-  if (typeof obj.method !== "string" || obj.method.length === 0) {
-    return Err(
-      createJsonRpcError(obj.id, JSON_RPC_INVALID_REQUEST, "Invalid request: method must be a non-empty string"),
-    );
+  if (typeof obj.method !== "string" || obj.method.length === 0 || obj.method.length > 256) {
+    return Err(createJsonRpcError(obj.id, JSON_RPC_INVALID_REQUEST, "Invalid method field"));
   }
 
   if (

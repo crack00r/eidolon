@@ -38,6 +38,12 @@ export function generateSelfSignedCert(certsDir: string, options?: CertOptions):
   const hostname = options?.hostname ?? "localhost";
   const days = options?.days ?? 365;
 
+  // Validate hostname to prevent injection in OpenSSL -subj argument
+  const HOSTNAME_RE = /^[a-zA-Z0-9._-]+$/;
+  if (!HOSTNAME_RE.test(hostname)) {
+    return Err(`Invalid hostname: ${hostname}`);
+  }
+
   const certPath = join(certsDir, "cert.pem");
   const keyPath = join(certsDir, "key.pem");
 

@@ -6,7 +6,7 @@
  */
 
 import { existsSync, mkdirSync, readdirSync, rmSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import type { EidolonError, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 import { getCacheDir } from "../config/paths.js";
@@ -40,6 +40,12 @@ export class WorkspacePreparer {
 
   /** Create a workspace for a session */
   async prepare(sessionId: string, content: WorkspaceContent): Promise<Result<string, EidolonError>> {
+    // Validate sessionId to prevent path traversal
+    const SAFE_SESSION_ID = /^[a-zA-Z0-9_-]+$/;
+    if (!SAFE_SESSION_ID.test(sessionId)) {
+      return Err(createError(ErrorCode.CONFIG_INVALID, `Invalid session ID: ${sessionId}`));
+    }
+
     const workspaceDir = join(this.workspacesDir, sessionId);
     try {
       mkdirSync(workspaceDir, { recursive: true });
@@ -52,10 +58,15 @@ export class WorkspacePreparer {
         await Bun.write(join(workspaceDir, "SOUL.md"), content.soulMd);
       }
 
-      // Write additional files
+      // Write additional files with path traversal protection
       if (content.additionalFiles) {
+        const resolvedWorkspace = resolve(workspaceDir);
         for (const [filename, fileContent] of Object.entries(content.additionalFiles)) {
-          await Bun.write(join(workspaceDir, filename), fileContent);
+          const resolvedPath = resolve(workspaceDir, filename);
+          if (!resolvedPath.startsWith(`${resolvedWorkspace}/`)) {
+            return Err(createError(ErrorCode.CONFIG_INVALID, `Path traversal detected in filename: ${filename}`));
+          }
+          await Bun.write(resolvedPath, fileContent);
         }
       }
 
