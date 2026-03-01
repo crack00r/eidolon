@@ -5,6 +5,7 @@ export * from "./backup/index.js";
 export * from "./channels/index.js";
 export * from "./claude/index.js";
 export * from "./config/index.js";
+export * from "./daemon/index.js";
 export * from "./database/index.js";
 export * from "./gateway/index.js";
 export * from "./gpu/index.js";

@@ -11,6 +11,7 @@ import { registerDaemonCommand } from "./commands/daemon.js";
 import { registerDoctorCommand } from "./commands/doctor.js";
 import { registerLearningCommand } from "./commands/learning.js";
 import { registerMemoryCommand } from "./commands/memory.js";
+import { registerOnboardCommand } from "./commands/onboard.js";
 import { registerPrivacyCommand } from "./commands/privacy.js";
 import { registerSecretsCommand } from "./commands/secrets.js";
 
@@ -27,6 +28,7 @@ registerMemoryCommand(program);
 registerLearningCommand(program);
 registerChannelCommand(program);
 registerPrivacyCommand(program);
+registerOnboardCommand(program);
 
 program.parse();
 
