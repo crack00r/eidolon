@@ -1,9 +1,13 @@
+export type { DocumentChunk, IndexingOptions } from "./document-indexer.js";
+export { DocumentIndexer } from "./document-indexer.js";
 export type { EmbeddingModelOptions, EmbeddingPrefix } from "./embeddings.js";
 export { EmbeddingModel } from "./embeddings.js";
 export type { ConversationTurn, ExtractedMemory, ExtractorOptions, LlmExtractFn } from "./extractor.js";
 export { MemoryExtractor } from "./extractor.js";
 export type { CreateEdgeInput, EdgeRelation, GraphWalkResult } from "./graph.js";
 export { GraphMemory } from "./graph.js";
+export type { InjectionContext, MemoryInjectorOptions } from "./injector.js";
+export { MemoryInjector } from "./injector.js";
 export * from "./knowledge-graph/index.js";
 export type { MemorySearchOptions } from "./search.js";
 export { MemorySearch } from "./search.js";
