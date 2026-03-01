@@ -118,4 +118,17 @@ export const MEMORY_MIGRATIONS: ReadonlyArray<Migration> = [
       DROP TABLE IF EXISTS memories;
     `,
   },
+  {
+    version: 2,
+    name: "add_embedding_column",
+    database: "memory",
+    up: `
+      ALTER TABLE memories ADD COLUMN embedding BLOB;
+      CREATE INDEX idx_memories_has_embedding ON memories(id) WHERE embedding IS NOT NULL;
+    `,
+    down: `
+      DROP INDEX IF EXISTS idx_memories_has_embedding;
+      -- SQLite cannot drop columns in older versions; this migration is effectively one-way.
+    `,
+  },
 ];
