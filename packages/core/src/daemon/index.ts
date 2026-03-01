@@ -315,8 +315,18 @@ export class EidolonDaemon {
     // 6. Close channels -- placeholder
     logger?.info("daemon", "Step 6: Close channels");
 
-    // 7. Teardown initialized modules in reverse
-    await this.teardownModules();
+    // 7. Teardown initialized modules in reverse, with timeout enforcement
+    await Promise.race([
+      this.teardownModules(),
+      new Promise<void>((_, reject) =>
+        setTimeout(() => {
+          reject(new Error(`Graceful shutdown timed out after ${gracefulMs}ms`));
+        }, gracefulMs),
+      ),
+    ]).catch((err: unknown) => {
+      const message = err instanceof Error ? err.message : String(err);
+      logger?.error("daemon", `Shutdown timeout: ${message} -- forcing exit`);
+    });
 
     // 8. Remove PID file
     this.removePidFile();
@@ -411,9 +421,15 @@ export class EidolonDaemon {
 
     const handler = (): void => {
       this.modules.logger?.info("daemon", "Received shutdown signal");
-      void this.stop().then(() => {
-        process.exit(0);
-      });
+      void this.stop()
+        .then(() => {
+          process.exit(0);
+        })
+        .catch((err: unknown) => {
+          const message = err instanceof Error ? err.message : String(err);
+          this.modules.logger?.error("daemon", `Shutdown error: ${message}`, err);
+          process.exit(1);
+        });
     };
 
     this.signalHandler = handler;

@@ -5,7 +5,7 @@
  * Supports listing and pruning old backups.
  */
 
-import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, rmSync, statSync } from "node:fs";
 import { join } from "node:path";
 import type { DatabaseConfig, EidolonError, Result } from "@eidolon/protocol";
 import {
@@ -19,8 +19,6 @@ import {
 } from "@eidolon/protocol";
 import type { DatabaseManager } from "../database/manager.js";
 import type { Logger } from "../logging/logger.js";
-
-const DB_FILES = [MEMORY_DB_FILENAME, OPERATIONAL_DB_FILENAME, AUDIT_DB_FILENAME] as const;
 
 /** Format a date as YYYY-MM-DD_HH-mm-ss. */
 function formatTimestamp(date: Date): string {
@@ -58,14 +56,16 @@ export class BackupManager {
 
       mkdirSync(backupDir, { recursive: true });
 
-      // Flush WAL before copying
-      this.flushWal();
+      // Use VACUUM INTO for atomic, consistent backup (no WAL/checkpoint issues)
+      const databases: ReadonlyArray<readonly [string, { exec: (sql: string) => void }]> = [
+        [MEMORY_DB_FILENAME, this.dbManager.memory],
+        [OPERATIONAL_DB_FILENAME, this.dbManager.operational],
+        [AUDIT_DB_FILENAME, this.dbManager.audit],
+      ];
 
-      for (const dbFile of DB_FILES) {
-        const src = join(this.config.directory, dbFile);
-        if (existsSync(src)) {
-          copyFileSync(src, join(backupDir, dbFile));
-        }
+      for (const [dbFile, db] of databases) {
+        const backupPath = join(backupDir, dbFile);
+        db.exec(`VACUUM INTO '${backupPath.replace(/'/g, "''")}'`);
       }
 
       this.logger.info("backup", `Backup created: ${timestamp}`, { path: backupDir });
@@ -133,17 +133,6 @@ export class BackupManager {
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
       return Err(createError(ErrorCode.DB_QUERY_FAILED, `Failed to prune backups: ${message}`, err));
-    }
-  }
-
-  /** Flush WAL on all databases before file copy. */
-  private flushWal(): void {
-    try {
-      this.dbManager.memory.exec("PRAGMA wal_checkpoint(TRUNCATE)");
-      this.dbManager.operational.exec("PRAGMA wal_checkpoint(TRUNCATE)");
-      this.dbManager.audit.exec("PRAGMA wal_checkpoint(TRUNCATE)");
-    } catch {
-      this.logger.warn("backup", "WAL checkpoint failed (databases may not use WAL mode)");
     }
   }
 }

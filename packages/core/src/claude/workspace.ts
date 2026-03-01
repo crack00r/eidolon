@@ -79,6 +79,13 @@ export class WorkspacePreparer {
 
   /** Clean up a workspace after session completes */
   cleanup(sessionId: string): void {
+    // Validate sessionId to prevent path traversal (same check as prepare())
+    const SAFE_SESSION_ID = /^[a-zA-Z0-9_-]+$/;
+    if (!SAFE_SESSION_ID.test(sessionId)) {
+      this.logger.warn("workspace", `Cleanup rejected: invalid session ID: ${sessionId}`);
+      return;
+    }
+
     const workspaceDir = join(this.workspacesDir, sessionId);
     if (existsSync(workspaceDir)) {
       rmSync(workspaceDir, { recursive: true });

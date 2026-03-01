@@ -1,5 +1,6 @@
 """Pre-shared key authentication middleware."""
 
+import hmac
 import os
 
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -11,21 +12,20 @@ class AuthMiddleware(BaseHTTPMiddleware):
     """Validates X-API-Key header against EIDOLON_GPU_API_KEY env var."""
 
     async def dispatch(self, request: Request, call_next):
-        # Skip auth for health endpoint
-        if request.url.path.startswith("/health"):
+        # Finding #16: Exact match for health endpoint path
+        if request.url.path == "/health":
             return await call_next(request)
 
         api_key = os.environ.get("EIDOLON_GPU_API_KEY", "").strip()
         if not api_key:
-            if request.url.path == "/health":
-                return await call_next(request)
             return JSONResponse(
                 status_code=503,
                 content={"error": "EIDOLON_GPU_API_KEY not configured. Authentication required."},
             )
 
         provided_key = (request.headers.get("X-API-Key") or "").strip()
-        if not provided_key or provided_key != api_key:
+        # Finding #15: Constant-time comparison to prevent timing attacks
+        if not provided_key or not hmac.compare_digest(provided_key, api_key):
             return JSONResponse(
                 status_code=401,
                 content={"error": "Invalid or missing API key"},

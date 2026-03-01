@@ -6,9 +6,15 @@
  * and doctor checks.
  */
 
+import { randomBytes, scryptSync } from "node:crypto";
 import { createInterface } from "node:readline";
 import { generateMasterKey, getConfigDir, getConfigPath, getDataDir, getLogDir, loadConfig } from "@eidolon/core";
 import { SECRETS_DB_FILENAME, VERSION } from "@eidolon/protocol";
+
+// Must match the KDF parameters in packages/core/src/secrets/master-key.ts
+const PASSPHRASE_SALT = Buffer.from("eidolon-master-key-v1", "utf-8");
+const SCRYPT_PARAMS = { N: 2 ** 17, r: 8, p: 1, maxmem: 256 * 1024 * 1024 };
+
 import type { Command } from "commander";
 import { formatCheck } from "../utils/formatter.js";
 
@@ -113,6 +119,17 @@ async function setupMasterKey(ask: (q: string) => Promise<string>): Promise<stri
       chmodSync(keyFilePath, 0o600);
       console.log(`  Key saved to: ${keyFilePath} (mode 0600)`);
       console.log(`  Read the file, then delete it: rm ${keyFilePath}`);
+
+      // Auto-cleanup: overwrite with random bytes then delete after 60 seconds
+      setTimeout(() => {
+        try {
+          const { writeFileSync: writeSync, unlinkSync } = require("node:fs") as typeof import("node:fs");
+          writeSync(keyFilePath, randomBytes(64));
+          unlinkSync(keyFilePath);
+        } catch {
+          // Best effort -- file may have been manually deleted already
+        }
+      }, 60_000).unref();
     } catch {
       console.log("  Warning: Could not write key file. Set EIDOLON_MASTER_KEY manually.");
     }
@@ -148,16 +165,15 @@ async function setupClaudeApiKey(
   if (masterKey) {
     try {
       const { SecretStore } = await import("@eidolon/core");
-      const { createHash } = await import("node:crypto");
       const { existsSync, mkdirSync } = await import("node:fs");
       const { join } = await import("node:path");
 
-      // Derive key buffer from master key string
+      // Derive key buffer from master key string (must match master-key.ts KDF)
       let keyBuffer: Buffer;
       if (/^[0-9a-fA-F]{64}$/.test(masterKey)) {
         keyBuffer = Buffer.from(masterKey, "hex");
       } else {
-        keyBuffer = createHash("sha256").update(masterKey).digest();
+        keyBuffer = scryptSync(masterKey, PASSPHRASE_SALT, 32, SCRYPT_PARAMS);
       }
 
       const dataDir = getDataDir();
@@ -195,14 +211,14 @@ async function setupTelegramToken(
   if (masterKey) {
     try {
       const { SecretStore } = await import("@eidolon/core");
-      const { createHash } = await import("node:crypto");
       const { join } = await import("node:path");
 
+      // Derive key buffer from master key string (must match master-key.ts KDF)
       let keyBuffer: Buffer;
       if (/^[0-9a-fA-F]{64}$/.test(masterKey)) {
         keyBuffer = Buffer.from(masterKey, "hex");
       } else {
-        keyBuffer = createHash("sha256").update(masterKey).digest();
+        keyBuffer = scryptSync(masterKey, PASSPHRASE_SALT, 32, SCRYPT_PARAMS);
       }
 
       const store = new SecretStore(join(getDataDir(), SECRETS_DB_FILENAME), keyBuffer);

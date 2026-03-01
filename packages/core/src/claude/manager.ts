@@ -59,12 +59,32 @@ export class ClaudeCodeManager implements IClaudeProcess {
       if (key.startsWith("ANTHROPIC_") && val) safeEnv[key] = val;
     }
 
+    // Filter options.env to reject dangerous keys that could hijack the subprocess
+    const DANGEROUS_ENV_KEYS = new Set([
+      "PATH",
+      "HOME",
+      "LD_PRELOAD",
+      "LD_LIBRARY_PATH",
+      "EIDOLON_MASTER_KEY",
+      "NODE_OPTIONS",
+    ]);
+    const filteredEnv: Record<string, string> = {};
+    if (options.env) {
+      for (const [key, val] of Object.entries(options.env)) {
+        if (!DANGEROUS_ENV_KEYS.has(key)) {
+          filteredEnv[key] = val;
+        } else {
+          this.logger.warn("manager", `Rejected dangerous env override: ${key}`, { sessionId });
+        }
+      }
+    }
+
     const proc = Bun.spawn(["claude", ...args], {
       stdout: "pipe",
       stderr: "pipe",
       env: {
+        ...filteredEnv,
         ...safeEnv,
-        ...(options.env ?? {}),
       },
       cwd: options.workspaceDir,
     });

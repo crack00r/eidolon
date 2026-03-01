@@ -59,29 +59,45 @@ export class DatabaseManager {
   initialize(): Result<void, EidolonError> {
     const dir = this.config.directory;
 
-    // Open connections
+    // Open connections — close already-opened connections on partial failure
     const memResult = createConnection(join(dir, MEMORY_DB_FILENAME), { walMode: this.config.walMode });
     if (!memResult.ok) return memResult;
 
     const opResult = createConnection(join(dir, OPERATIONAL_DB_FILENAME), { walMode: this.config.walMode });
-    if (!opResult.ok) return opResult;
+    if (!opResult.ok) {
+      memResult.value.close();
+      return opResult;
+    }
 
     const auditResult = createConnection(join(dir, AUDIT_DB_FILENAME), { walMode: this.config.walMode });
-    if (!auditResult.ok) return auditResult;
+    if (!auditResult.ok) {
+      memResult.value.close();
+      opResult.value.close();
+      return auditResult;
+    }
 
     this._memory = memResult.value;
     this._operational = opResult.value;
     this._audit = auditResult.value;
 
-    // Run migrations
+    // Run migrations — close all connections on failure
     const memMig = runMigrations(this._memory, "memory", MEMORY_MIGRATIONS, this.logger);
-    if (!memMig.ok) return memMig;
+    if (!memMig.ok) {
+      this.close();
+      return memMig;
+    }
 
     const opMig = runMigrations(this._operational, "operational", OPERATIONAL_MIGRATIONS, this.logger);
-    if (!opMig.ok) return opMig;
+    if (!opMig.ok) {
+      this.close();
+      return opMig;
+    }
 
     const auditMig = runMigrations(this._audit, "audit", AUDIT_MIGRATIONS, this.logger);
-    if (!auditMig.ok) return auditMig;
+    if (!auditMig.ok) {
+      this.close();
+      return auditMig;
+    }
 
     this.logger.info("init", "All databases initialized", {
       memoryMigrations: memMig.value,

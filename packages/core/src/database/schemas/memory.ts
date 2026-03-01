@@ -133,4 +133,41 @@ export const MEMORY_MIGRATIONS: ReadonlyArray<Migration> = [
       -- SQLite cannot drop columns in older versions; this migration is effectively one-way.
     `,
   },
+  {
+    version: 3,
+    name: "fix_complex_fk_add_indexes",
+    database: "memory",
+    up: `
+      -- Remove FK constraint from kg_complex_embeddings to allow predicate storage
+      CREATE TABLE kg_complex_embeddings_new (
+        entity_id TEXT PRIMARY KEY,
+        real_embedding BLOB NOT NULL,
+        imaginary_embedding BLOB NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+      INSERT INTO kg_complex_embeddings_new SELECT * FROM kg_complex_embeddings;
+      DROP TABLE kg_complex_embeddings;
+      ALTER TABLE kg_complex_embeddings_new RENAME TO kg_complex_embeddings;
+
+      -- Add unique index on kg_entities(name, type) to prevent duplicates
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_kg_entities_name_type ON kg_entities(LOWER(name), type);
+
+      -- Add index on memories(source) for source-based queries
+      CREATE INDEX IF NOT EXISTS idx_memories_source ON memories(source);
+    `,
+    down: `
+      DROP INDEX IF EXISTS idx_memories_source;
+      DROP INDEX IF EXISTS idx_kg_entities_name_type;
+
+      CREATE TABLE kg_complex_embeddings_new (
+        entity_id TEXT PRIMARY KEY REFERENCES kg_entities(id) ON DELETE CASCADE,
+        real_embedding BLOB NOT NULL,
+        imaginary_embedding BLOB NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+      INSERT INTO kg_complex_embeddings_new SELECT * FROM kg_complex_embeddings;
+      DROP TABLE kg_complex_embeddings;
+      ALTER TABLE kg_complex_embeddings_new RENAME TO kg_complex_embeddings;
+    `,
+  },
 ];

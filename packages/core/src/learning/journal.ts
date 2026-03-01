@@ -4,6 +4,10 @@
  * Provides transparency and auditability by recording discoveries,
  * evaluations, approvals, rejections, implementations, and errors
  * as structured entries that can be exported to markdown.
+ *
+ * TODO: This journal is currently in-memory only. In a future phase, entries
+ * should be persisted to the audit database so they survive daemon restarts
+ * and can be queried historically.
  */
 
 import type { Logger } from "../logging/logger.js";

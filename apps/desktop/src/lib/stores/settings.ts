@@ -1,6 +1,6 @@
 /**
  * Settings store — persists gateway connection settings
- * to localStorage.
+ * to sessionStorage (cleared on window close to avoid token leakage).
  */
 
 import { writable } from "svelte/store";
@@ -23,7 +23,7 @@ const DEFAULT_SETTINGS: Settings = {
 
 function loadSettings(): Settings {
   try {
-    const stored = localStorage.getItem(STORAGE_KEY);
+    const stored = sessionStorage.getItem(STORAGE_KEY);
     if (stored) {
       const parsed = JSON.parse(stored) as Partial<Settings>;
       return {
@@ -41,7 +41,7 @@ function loadSettings(): Settings {
 
 function persistSettings(settings: Settings): void {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
   } catch {
     // Ignore storage errors (e.g. quota exceeded)
   }

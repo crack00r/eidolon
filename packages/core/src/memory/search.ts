@@ -46,8 +46,13 @@ const DEFAULT_VECTOR_WEIGHT = 0.4;
 const DEFAULT_GRAPH_WEIGHT = 0.2;
 const DEFAULT_RRF_K = 60;
 const DEFAULT_LIMIT = 20;
-/** Upper bound on rows scanned during vector similarity search to prevent OOM. */
-const MAX_VECTOR_SCAN_ROWS = 50_000;
+/**
+ * Upper bound on rows scanned during vector similarity search to prevent OOM.
+ * Set to 10,000 as a balance between recall quality and memory usage.
+ * For stores larger than this, migrate to sqlite-vec for ANN indexing.
+ * At 384 dimensions × 4 bytes × 10,000 rows ≈ 15 MB peak memory.
+ */
+const MAX_VECTOR_SCAN_ROWS = 10_000;
 
 // ---------------------------------------------------------------------------
 // MemorySearch

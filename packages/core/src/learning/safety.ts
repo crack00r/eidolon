@@ -65,6 +65,23 @@ const CODE_PATTERNS: ReadonlyArray<{ pattern: RegExp; flag: string }> = [
   { pattern: /docker\s+(?:run|build|compose)/i, flag: "docker_command" },
 ];
 
+/**
+ * Normalize text to prevent classification bypass via encoding tricks.
+ * Strips zero-width characters, applies NFKD normalization, and lowercases.
+ */
+function normalizeForClassification(text: string): string {
+  // Strip zero-width characters: U+200B, U+200C, U+200D, U+FEFF
+  const stripped = text.replace(/\u200B|\u200C|\u200D|\uFEFF/g, "");
+  // NFKD Unicode normalization (decomposes compatibility characters)
+  const normalized = stripped.normalize("NFKD");
+  return normalized.toLowerCase();
+}
+
+/** Minimum content length threshold for defaulting to needs_approval. */
+const SAFE_MAX_LENGTH = 500;
+
+export { normalizeForClassification };
+
 export class SafetyClassifier {
   private readonly logger: Logger;
 
@@ -74,7 +91,8 @@ export class SafetyClassifier {
 
   /** Classify the safety level of a discovery. */
   classify(title: string, content: string, sourceType: string): SafetyResult {
-    const combined = `${title}\n${content}`;
+    // Finding #2: Normalize input to prevent encoding-based bypass
+    const combined = normalizeForClassification(`${title}\n${content}`);
     const flags: string[] = [];
 
     // Check dangerous patterns first (highest priority)
@@ -139,7 +157,19 @@ export class SafetyClassifier {
       return result;
     }
 
-    // Pure informational content
+    // Finding #3: Only return "safe" for short, purely informational content.
+    // Longer content defaults to "needs_approval" to avoid false negatives.
+    if (combined.length > SAFE_MAX_LENGTH) {
+      const result: SafetyResult = {
+        level: "needs_approval",
+        reason: "Content exceeds safe-length threshold — requires review",
+        flags: ["content_length_threshold"],
+      };
+      this.logger.debug("classify", result.reason, { title, sourceType, length: combined.length });
+      return result;
+    }
+
+    // Pure informational content (short, no patterns matched)
     const result: SafetyResult = {
       level: "safe",
       reason: "No code, commands, or sensitive patterns detected",

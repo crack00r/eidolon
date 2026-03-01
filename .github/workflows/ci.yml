@@ -51,6 +51,10 @@ jobs:
         if: steps.check-packages.outputs.has_packages == 'true'
         run: pnpm -r lint
 
+      - name: Prepare SvelteKit (generate tsconfig)
+        if: steps.check-packages.outputs.has_packages == 'true'
+        run: pnpm --filter @eidolon/web exec svelte-kit sync || true
+
       - name: Typecheck
         if: steps.check-packages.outputs.has_packages == 'true'
         run: pnpm -r typecheck

@@ -76,13 +76,32 @@ const VALID_MEMORY_TYPES = new Set<string>([
   "relationship",
   "schema",
 ]);
-const VALID_MEMORY_LAYERS = new Set<string>(["short_term", "working", "long_term", "consolidated", "archived"]);
+const VALID_MEMORY_LAYERS = new Set<string>(["working", "short_term", "long_term", "episodic", "procedural"]);
 
 function validateEnum<T extends string>(value: string, valid: Set<string>, fallback: T): T {
   return valid.has(value) ? (value as T) : fallback;
 }
 
 function rowToMemory(row: MemoryRow): Memory {
+  let tags: string[];
+  try {
+    const parsed: unknown = JSON.parse(row.tags);
+    tags = Array.isArray(parsed) ? (parsed as string[]) : [];
+  } catch {
+    tags = [];
+  }
+
+  let metadata: Record<string, unknown>;
+  try {
+    const parsed: unknown = JSON.parse(row.metadata ?? "{}");
+    metadata =
+      typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
+        ? (parsed as Record<string, unknown>)
+        : {};
+  } catch {
+    metadata = {};
+  }
+
   return {
     id: row.id,
     type: validateEnum<MemoryType>(row.type, VALID_MEMORY_TYPES, "fact"),
@@ -90,12 +109,12 @@ function rowToMemory(row: MemoryRow): Memory {
     content: row.content,
     confidence: row.confidence,
     source: row.source,
-    tags: JSON.parse(row.tags) as string[],
+    tags,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     accessedAt: row.accessed_at,
     accessCount: row.access_count,
-    metadata: JSON.parse(row.metadata ?? "{}") as Record<string, unknown>,
+    metadata,
   };
 }
 
@@ -105,6 +124,9 @@ function rowToMemory(row: MemoryRow): Memory {
 
 /** Maximum allowed content length for a single memory entry (1 MB). */
 const MAX_CONTENT_LENGTH = 1_048_576;
+
+/** Maximum number of memories that can be created in a single batch. */
+const MAX_BATCH_SIZE = 1000;
 
 // ---------------------------------------------------------------------------
 // MemoryStore
@@ -126,6 +148,14 @@ export class MemoryStore {
         createError(
           ErrorCode.DB_QUERY_FAILED,
           `Memory content exceeds maximum length (${input.content.length} > ${MAX_CONTENT_LENGTH})`,
+        ),
+      );
+    }
+    if (!Number.isFinite(input.confidence) || input.confidence < 0 || input.confidence > 1) {
+      return Err(
+        createError(
+          ErrorCode.DB_QUERY_FAILED,
+          `Memory confidence must be a finite number in [0, 1], got ${input.confidence}`,
         ),
       );
     }
@@ -195,6 +225,17 @@ export class MemoryStore {
         createError(
           ErrorCode.DB_QUERY_FAILED,
           `Memory content exceeds maximum length (${input.content.length} > ${MAX_CONTENT_LENGTH})`,
+        ),
+      );
+    }
+    if (
+      input.confidence !== undefined &&
+      (!Number.isFinite(input.confidence) || input.confidence < 0 || input.confidence > 1)
+    ) {
+      return Err(
+        createError(
+          ErrorCode.DB_QUERY_FAILED,
+          `Memory confidence must be a finite number in [0, 1], got ${input.confidence}`,
         ),
       );
     }
@@ -379,12 +420,25 @@ export class MemoryStore {
 
   /** Bulk create memories within a single transaction. */
   createBatch(inputs: readonly CreateMemoryInput[]): Result<Memory[], EidolonError> {
+    if (inputs.length > MAX_BATCH_SIZE) {
+      return Err(
+        createError(ErrorCode.DB_QUERY_FAILED, `Batch size exceeds maximum (${inputs.length} > ${MAX_BATCH_SIZE})`),
+      );
+    }
     for (const input of inputs) {
       if (input.content.length > MAX_CONTENT_LENGTH) {
         return Err(
           createError(
             ErrorCode.DB_QUERY_FAILED,
             `Memory content exceeds maximum length (${input.content.length} > ${MAX_CONTENT_LENGTH})`,
+          ),
+        );
+      }
+      if (!Number.isFinite(input.confidence) || input.confidence < 0 || input.confidence > 1) {
+        return Err(
+          createError(
+            ErrorCode.DB_QUERY_FAILED,
+            `Memory confidence must be a finite number in [0, 1], got ${input.confidence}`,
           ),
         );
       }

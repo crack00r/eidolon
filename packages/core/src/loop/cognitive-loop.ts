@@ -146,7 +146,10 @@ export class CognitiveLoop {
       }
     }
 
-    this.stateMachine.transition("stopping");
+    const stopTransition = this.stateMachine.transition("stopping");
+    if (!stopTransition.ok) {
+      this.logger.warn("loop", `State transition to 'stopping' failed: ${stopTransition.error.message}`);
+    }
     this.logger.info("loop", "Cognitive loop stopped");
   }
 
@@ -162,7 +165,10 @@ export class CognitiveLoop {
 
     // 1. PERCEIVE
     if (this.stateMachine.state.phase !== "perceiving") {
-      this.stateMachine.transition("perceiving");
+      const perceiveTransition = this.stateMachine.transition("perceiving");
+      if (!perceiveTransition.ok) {
+        this.logger.warn("loop", `State transition to 'perceiving' failed: ${perceiveTransition.error.message}`);
+      }
     }
     const dequeueResult = this.eventBus.dequeue();
     if (!dequeueResult.ok) {
@@ -173,7 +179,10 @@ export class CognitiveLoop {
 
     if (!event) {
       // Nothing to do — rest
-      this.stateMachine.transition("resting");
+      const restTransition = this.stateMachine.transition("resting");
+      if (!restTransition.ok) {
+        this.logger.warn("loop", `State transition to 'resting' failed: ${restTransition.error.message}`);
+      }
       const restMs = this.restCalculator.calculate({
         lastUserActivityAt: this.lastUserActivityAt,
         hasPendingEvents: false,
@@ -199,7 +208,10 @@ export class CognitiveLoop {
     }
 
     // 2. EVALUATE
-    this.stateMachine.transition("evaluating");
+    const evalTransition = this.stateMachine.transition("evaluating");
+    if (!evalTransition.ok) {
+      this.logger.warn("loop", `State transition to 'evaluating' failed: ${evalTransition.error.message}`);
+    }
     const priority = this.evaluator.evaluate(event);
     const category = this.actionCategories[priority.suggestedAction] ?? "user";
 
@@ -209,9 +221,21 @@ export class CognitiveLoop {
       this.stats.eventsDeferred++;
       this.stats.totalCycles++;
       this.stats.lastCycleAt = Date.now();
-      this.stateMachine.transition("acting");
-      this.stateMachine.transition("reflecting");
-      this.stateMachine.clearAction();
+      const deferActResult = this.stateMachine.transition("acting");
+      if (!deferActResult.ok) {
+        this.logger.warn("loop", `State transition to 'acting' (defer) failed: ${deferActResult.error.message}`);
+      }
+      const deferReflectResult = this.stateMachine.transition("reflecting");
+      if (!deferReflectResult.ok) {
+        this.logger.warn(
+          "loop",
+          `State transition to 'reflecting' (defer) failed: ${deferReflectResult.error.message}`,
+        );
+      }
+      const deferClearResult = this.stateMachine.clearAction();
+      if (!deferClearResult.ok) {
+        this.logger.warn("loop", `clearAction (defer) failed: ${deferClearResult.error.message}`);
+      }
       this.stateMachine.completeCycle();
       return Ok({
         hadEvent: true,
@@ -223,29 +247,48 @@ export class CognitiveLoop {
     }
 
     // 3. ACT
-    this.stateMachine.transition("acting");
-    this.stateMachine.setAction(priority.suggestedAction);
+    const actTransition = this.stateMachine.transition("acting");
+    if (!actTransition.ok) {
+      this.logger.warn("loop", `State transition to 'acting' failed: ${actTransition.error.message}`);
+    }
+    const setActionResult = this.stateMachine.setAction(priority.suggestedAction);
+    if (!setActionResult.ok) {
+      this.logger.warn("loop", `setAction failed: ${setActionResult.error.message}`);
+    }
 
     let tokensUsed = this.defaultTokenEstimate;
+    let handlerSucceeded = true;
     if (this.handler) {
       try {
         const result = await this.handler(event, priority);
         tokensUsed = result.tokensUsed || this.defaultTokenEstimate;
         if (!result.success) {
+          handlerSucceeded = false;
           this.logger.warn("loop", `Handler failed for ${event.type}: ${result.error}`);
         }
       } catch (err: unknown) {
+        handlerSucceeded = false;
         const errorMessage = err instanceof Error ? err.message : String(err);
         this.logger.error("loop", `Handler threw for ${event.type}: ${errorMessage}`);
       }
     }
 
-    // Mark event as processed
-    this.eventBus.markProcessed(event.id);
+    // Only mark as processed on success; defer on failure
+    if (handlerSucceeded) {
+      this.eventBus.markProcessed(event.id);
+    } else {
+      this.eventBus.defer(event.id);
+    }
 
     // 4. REFLECT
-    this.stateMachine.transition("reflecting");
-    this.stateMachine.clearAction();
+    const reflectTransition = this.stateMachine.transition("reflecting");
+    if (!reflectTransition.ok) {
+      this.logger.warn("loop", `State transition to 'reflecting' failed: ${reflectTransition.error.message}`);
+    }
+    const clearResult = this.stateMachine.clearAction();
+    if (!clearResult.ok) {
+      this.logger.warn("loop", `clearAction failed: ${clearResult.error.message}`);
+    }
     this.energyBudget.consume(category, tokensUsed);
     this.stats.eventsProcessed++;
     this.stats.totalTokensUsed += tokensUsed;

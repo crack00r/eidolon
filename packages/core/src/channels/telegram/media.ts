@@ -89,17 +89,50 @@ export function sanitizeTelegramFilePath(filePath: string): string {
  *
  * @throws Error if the file path fails validation or the download fails.
  */
+/** Maximum allowed file download size: 25 MB. */
+const MAX_FILE_SIZE_BYTES = 25 * 1024 * 1024;
+
+/** Timeout for Telegram file downloads: 30 seconds. */
+const DOWNLOAD_TIMEOUT_MS = 30_000;
+
 export async function downloadTelegramFile(botToken: string, filePath: string): Promise<Uint8Array> {
   const safePath = sanitizeTelegramFilePath(filePath);
   const url = `${TELEGRAM_FILE_URL}${botToken}/${safePath}`;
-  const response = await fetch(url);
 
-  if (!response.ok) {
-    throw new Error(`Failed to download Telegram file: ${response.status} ${response.statusText}`);
+  // Finding #7: Add 30-second abort timeout
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), DOWNLOAD_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(url, {
+      signal: controller.signal,
+      redirect: "error", // Finding #8: Prevent open redirects
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to download Telegram file: ${response.status} ${response.statusText}`);
+    }
+
+    // Finding #9: Check Content-Length before reading body
+    const contentLength = response.headers.get("content-length");
+    if (contentLength !== null) {
+      const size = Number(contentLength);
+      if (!Number.isNaN(size) && size > MAX_FILE_SIZE_BYTES) {
+        throw new Error(`Telegram file too large: ${size} bytes (max ${MAX_FILE_SIZE_BYTES})`);
+      }
+    }
+
+    const buffer = await response.arrayBuffer();
+
+    // Also check actual size after download (Content-Length can be absent or wrong)
+    if (buffer.byteLength > MAX_FILE_SIZE_BYTES) {
+      throw new Error(`Telegram file too large: ${buffer.byteLength} bytes (max ${MAX_FILE_SIZE_BYTES})`);
+    }
+
+    return new Uint8Array(buffer);
+  } finally {
+    clearTimeout(timer);
   }
-
-  const buffer = await response.arrayBuffer();
-  return new Uint8Array(buffer);
 }
 
 /**

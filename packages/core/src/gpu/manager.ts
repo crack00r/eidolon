@@ -35,6 +35,9 @@ export interface GpuHealth {
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 
+/** Maximum allowed GPU response size: 100 MB. */
+const MAX_RESPONSE_BYTES = 100 * 1024 * 1024;
+
 // ---------------------------------------------------------------------------
 // GPUManager
 // ---------------------------------------------------------------------------
@@ -47,6 +50,15 @@ export class GPUManager {
   constructor(config: GpuWorkerConfig, logger: Logger) {
     this.config = config;
     this.logger = logger.child("gpu-manager");
+
+    // Finding #1: Warn if GPU API key may be sent over plain HTTP
+    if (this.config.apiKey && this.config.url.startsWith("http://")) {
+      this.logger.warn(
+        "security",
+        "GPU worker URL uses plain HTTP — API key will be sent unencrypted. Use HTTPS in production.",
+        { url: this.config.url },
+      );
+    }
   }
 
   /** Check if the GPU worker is reachable and healthy. */
@@ -107,9 +119,20 @@ export class GPUManager {
         return Err(createError(code, `GPU worker returned ${response.status}: ${body}`));
       }
 
+      // Finding #5: Reject responses exceeding 100 MB
+      const contentLength = response.headers.get("content-length");
+      if (contentLength !== null) {
+        const size = Number(contentLength);
+        if (!Number.isNaN(size) && size > MAX_RESPONSE_BYTES) {
+          return Err(
+            createError(ErrorCode.GPU_UNAVAILABLE, `GPU response too large: ${size} bytes (max ${MAX_RESPONSE_BYTES})`),
+          );
+        }
+      }
+
       const contentType = response.headers.get("content-type") ?? "";
       if (contentType.includes("application/json")) {
-        const data = await response.json();
+        const data: unknown = await response.json();
         if (typeof data !== "object" || data === null) {
           return Err(createError(ErrorCode.GPU_UNAVAILABLE, "Invalid GPU response format"));
         }

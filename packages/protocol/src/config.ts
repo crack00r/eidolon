@@ -189,6 +189,9 @@ export const GatewayConfigSchema = z.object({
       cert: z.string().optional(),
       key: z.string().optional(),
     })
+    .refine((tls) => !tls.enabled || (tls.cert !== undefined && tls.key !== undefined), {
+      message: "TLS cert and key are required when TLS is enabled",
+    })
     .default({}),
   maxMessageBytes: z.number().int().positive().default(1_048_576),
   maxClients: z.number().int().positive().default(10),
@@ -201,10 +204,14 @@ export const GatewayConfigSchema = z.object({
       maxBlockMs: z.number().int().positive().default(3_600_000),
     })
     .default({}),
-  auth: z.object({
-    type: z.enum(["token", "none"]).default("token"),
-    token: SecretRefSchema.or(z.string()).optional(),
-  }),
+  auth: z
+    .object({
+      type: z.enum(["token", "none"]).default("token"),
+      token: SecretRefSchema.or(z.string()).optional(),
+    })
+    .refine((auth) => auth.type !== "token" || auth.token !== undefined, {
+      message: "Token value is required when auth type is 'token'",
+    }),
 });
 
 // ---------------------------------------------------------------------------

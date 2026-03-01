@@ -22,6 +22,7 @@ interface EventRow {
   source: string;
   timestamp: number;
   processed_at: number | null;
+  claimed_at: number | null;
   retry_count: number;
 }
 
@@ -58,24 +59,48 @@ function validateEnum<T extends string>(value: unknown, valid: Set<string>, fall
 }
 
 /** Prototype-pollution keys to strip from parsed JSON payloads. */
-const POISON_KEYS = ["__proto__", "constructor", "prototype"] as const;
+const POISON_KEYS = new Set(["__proto__", "constructor", "prototype"]);
 
-/** Strip prototype-pollution keys from parsed JSON payloads. */
+/** Maximum number of retries before an event is sent to the dead letter queue. */
+const MAX_RETRIES = 10;
+
+/**
+ * Recursively strip prototype-pollution keys from parsed JSON payloads.
+ * Handles nested objects and arrays to prevent deep pollution attacks.
+ */
 function sanitizePayload(value: unknown): unknown {
   if (typeof value !== "object" || value === null) return value;
+  if (Array.isArray(value)) {
+    return value.map(sanitizePayload);
+  }
   const obj = value as Record<string, unknown>;
-  for (const key of POISON_KEYS) {
-    Reflect.deleteProperty(obj, key);
+  for (const key of Object.keys(obj)) {
+    if (POISON_KEYS.has(key)) {
+      Reflect.deleteProperty(obj, key);
+    } else {
+      obj[key] = sanitizePayload(obj[key]);
+    }
   }
   return obj;
 }
 
-function rowToEvent(row: EventRow): BusEvent {
+function rowToEvent(row: EventRow, logger?: Logger): BusEvent {
+  let payload: unknown;
+  try {
+    payload = sanitizePayload(JSON.parse(row.payload));
+  } catch {
+    if (logger) {
+      logger.warn("event-bus", `Corrupted event payload for event ${row.id}, using fallback`, {
+        id: row.id,
+      });
+    }
+    payload = { _corrupted: true, raw: row.payload };
+  }
   return {
     id: row.id,
     type: validateEnum<EventType>(row.type, VALID_EVENT_TYPES, "system:health_check"),
     priority: validateEnum<EventPriority>(row.priority, VALID_PRIORITIES, "normal"),
-    payload: sanitizePayload(JSON.parse(row.payload)),
+    payload,
     source: row.source,
     timestamp: row.timestamp,
     ...(row.processed_at !== null ? { processedAt: row.processed_at } : {}),
@@ -157,29 +182,50 @@ export class EventBus {
     };
   }
 
-  /** Dequeue the highest-priority unprocessed event. Returns null if empty. */
+  /**
+   * Atomically dequeue the highest-priority unprocessed event.
+   * Uses a transaction to claim the event (set claimed_at) and select it
+   * in one atomic operation, preventing double-dequeue in concurrent scenarios.
+   */
   dequeue(): Result<BusEvent | null, EidolonError> {
     try {
-      const row = this.db
-        .query(
-          `SELECT * FROM events WHERE processed_at IS NULL
-           ORDER BY
-             CASE priority
-               WHEN 'critical' THEN 0
-               WHEN 'high' THEN 1
-               WHEN 'normal' THEN 2
-               WHEN 'low' THEN 3
-             END,
-             timestamp ASC
-           LIMIT 1`,
-        )
-        .get() as EventRow | null;
+      const claimTimestamp = Date.now();
+      let row: EventRow | null = null;
+
+      const dequeueFn = this.db.transaction(() => {
+        // Atomically claim: UPDATE the first unprocessed+unclaimed row
+        this.db
+          .query(
+            `UPDATE events SET claimed_at = ?
+             WHERE id = (
+               SELECT id FROM events
+               WHERE processed_at IS NULL AND claimed_at IS NULL
+               ORDER BY
+                 CASE priority
+                   WHEN 'critical' THEN 0
+                   WHEN 'high' THEN 1
+                   WHEN 'normal' THEN 2
+                   WHEN 'low' THEN 3
+                 END,
+                 timestamp ASC
+               LIMIT 1
+             )`,
+          )
+          .run(claimTimestamp);
+
+        // SELECT the row we just claimed
+        row = this.db
+          .query("SELECT * FROM events WHERE claimed_at = ? AND processed_at IS NULL LIMIT 1")
+          .get(claimTimestamp) as EventRow | null;
+      });
+
+      dequeueFn();
 
       if (!row) {
         return Ok(null);
       }
 
-      return Ok(rowToEvent(row));
+      return Ok(rowToEvent(row, this.logger));
     } catch (cause) {
       return Err(createError(ErrorCode.EVENT_BUS_ERROR, "Failed to dequeue event", cause));
     }
@@ -196,10 +242,29 @@ export class EventBus {
     }
   }
 
-  /** Defer an event (increment retry count, keep unprocessed). */
+  /**
+   * Defer an event (increment retry count, unclaim, keep unprocessed).
+   * If retry_count reaches MAX_RETRIES, the event is marked processed
+   * as a dead letter to prevent infinite retry loops.
+   */
   defer(eventId: string): Result<void, EidolonError> {
     try {
-      this.db.query("UPDATE events SET retry_count = retry_count + 1 WHERE id = ?").run(eventId);
+      // Unclaim so the event can be re-dequeued, and increment retry count
+      this.db.query("UPDATE events SET retry_count = retry_count + 1, claimed_at = NULL WHERE id = ?").run(eventId);
+
+      // Check if max retries exceeded -> dead letter
+      const row = this.db.query("SELECT retry_count FROM events WHERE id = ?").get(eventId) as {
+        retry_count: number;
+      } | null;
+
+      if (row && row.retry_count >= MAX_RETRIES) {
+        this.logger.warn("event-bus", `Event ${eventId} exceeded max retries (${MAX_RETRIES}), moving to dead letter`, {
+          retryCount: row.retry_count,
+        });
+        this.db.query("UPDATE events SET processed_at = ? WHERE id = ?").run(Date.now(), eventId);
+        return Ok(undefined);
+      }
+
       this.logger.debug("event-bus", `Deferred event: ${eventId}`);
       return Ok(undefined);
     } catch (cause) {
@@ -219,7 +284,9 @@ export class EventBus {
     }
   }
 
-  /** Replay all unprocessed events (for crash recovery). */
+  /** Replay all unprocessed events (for crash recovery).
+   *  After notifying subscribers, each replayed event is marked as processed
+   *  to prevent infinite replay on restart. */
   replayUnprocessed(): Result<BusEvent[], EidolonError> {
     try {
       const rows = this.db
@@ -237,11 +304,17 @@ export class EventBus {
         )
         .all() as EventRow[];
 
-      const events = rows.map(rowToEvent);
+      const events = rows.map((r) => rowToEvent(r, this.logger));
       this.logger.info("event-bus", `Replaying ${events.length} unprocessed events`);
+
+      if (events.length === 1000) {
+        this.logger.warn("event-bus", "Replay hit LIMIT 1000 -- there may be more unprocessed events remaining");
+      }
 
       for (const event of events) {
         this.notifySubscribers(event);
+        // Mark each replayed event as processed to prevent infinite replay
+        this.markProcessed(event.id);
       }
 
       return Ok(events);
@@ -268,7 +341,7 @@ export class EventBus {
         )
         .all() as EventRow[];
 
-      return Ok(rows.map(rowToEvent));
+      return Ok(rows.map((r) => rowToEvent(r, this.logger)));
     } catch (cause) {
       return Err(createError(ErrorCode.EVENT_BUS_ERROR, "Failed to drain events", cause));
     }

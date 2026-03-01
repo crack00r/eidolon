@@ -155,6 +155,49 @@ function deduplicateMemories(memories: readonly ExtractedMemory[]): ExtractedMem
 
 const DEFAULT_MIN_CONTENT_LENGTH = 10;
 const DEFAULT_STRATEGY: ExtractorOptions["strategy"] = "hybrid";
+const MAX_EXTRACTED_CONTENT_LENGTH = 10_000;
+
+const VALID_MEMORY_TYPES = new Set<string>([
+  "fact",
+  "preference",
+  "decision",
+  "episode",
+  "skill",
+  "relationship",
+  "schema",
+]);
+
+/**
+ * Validate and sanitize LLM-extracted memories.
+ * Ensures type is valid, confidence is in [0,1], content is bounded, and tags is string[].
+ */
+function validateExtractedMemory(mem: unknown): ExtractedMemory | null {
+  if (typeof mem !== "object" || mem === null) return null;
+  const record = mem as Record<string, unknown>;
+
+  // Validate type
+  const type =
+    typeof record.type === "string" && VALID_MEMORY_TYPES.has(record.type) ? (record.type as MemoryType) : null;
+  if (!type) return null;
+
+  // Validate content
+  if (typeof record.content !== "string" || record.content.length === 0) return null;
+  const content = record.content.slice(0, MAX_EXTRACTED_CONTENT_LENGTH);
+
+  // Clamp confidence to [0, 1]
+  const rawConfidence = typeof record.confidence === "number" ? record.confidence : 0.5;
+  const confidence = Math.max(0, Math.min(1, Number.isFinite(rawConfidence) ? rawConfidence : 0.5));
+
+  // Ensure tags is string[]
+  const tags: readonly string[] = Array.isArray(record.tags)
+    ? record.tags.filter((t): t is string => typeof t === "string")
+    : [];
+
+  // Validate source
+  const source = record.source === "rule_based" || record.source === "llm" ? record.source : "llm";
+
+  return { type, content, confidence, tags, source };
+}
 
 export class MemoryExtractor {
   private readonly logger: Logger;
@@ -181,10 +224,21 @@ export class MemoryExtractor {
 
       const ruleBased = this.strategy !== "llm" ? this.extractRuleBased(turn) : [];
 
-      let llmBased: ExtractedMemory[] = [];
+      const llmBased: ExtractedMemory[] = [];
       if (this.strategy !== "rule-based" && this.llmExtractFn) {
         try {
-          llmBased = await this.llmExtractFn(turn);
+          const rawResults = await this.llmExtractFn(turn);
+          // Validate each LLM-extracted entry to prevent malformed data
+          for (const raw of rawResults) {
+            const validated = validateExtractedMemory(raw);
+            if (validated) {
+              llmBased.push(validated);
+            } else {
+              this.logger.warn("extract", "Dropped invalid LLM extraction result", {
+                raw: String(raw),
+              });
+            }
+          }
         } catch (cause) {
           this.logger.warn("extract", "LLM extraction failed, falling back to rule-based only", {
             error: String(cause),

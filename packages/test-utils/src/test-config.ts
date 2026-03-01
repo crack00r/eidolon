@@ -43,7 +43,7 @@ export function createTestConfig(overrides?: Record<string, unknown>): EidolonCo
     },
     learning: { relevance: {}, autoImplement: {}, budget: {} },
     channels: {},
-    gateway: { auth: {} },
+    gateway: { auth: { type: "none" as const } },
     gpu: { tts: {}, stt: {}, fallback: {} },
     security: { policies: {}, approval: {}, sandbox: {}, audit: {} },
     database: {},

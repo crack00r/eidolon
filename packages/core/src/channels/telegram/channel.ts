@@ -30,6 +30,15 @@ export interface TelegramConfig {
 /** Map of grammy MIME type helpers to MessageAttachment types. */
 type AttachmentType = "image" | "document" | "audio" | "voice" | "video";
 
+// Finding #10: Per-user rate limiting
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const RATE_LIMIT_MAX_MESSAGES = 30;
+
+interface RateWindow {
+  count: number;
+  windowStart: number;
+}
+
 export class TelegramChannel implements Channel {
   readonly id = "telegram";
   readonly name = "Telegram";
@@ -47,6 +56,7 @@ export class TelegramChannel implements Channel {
   private readonly config: TelegramConfig;
   private readonly logger: Logger;
   private readonly allowedUserSet: ReadonlySet<number>;
+  private readonly userRateLimits: Map<number, RateWindow> = new Map();
   private bot: Bot | null = null;
   private connected = false;
   private messageHandler: ((message: InboundMessage) => Promise<void>) | null = null;
@@ -144,6 +154,9 @@ export class TelegramChannel implements Channel {
         return;
       }
 
+      // Finding #10: Per-user rate limiting
+      if (ctx.from?.id !== undefined && this.isRateLimited(ctx.from.id)) return;
+
       const inbound = this.toInboundMessage(
         String(ctx.message.message_id),
         String(ctx.chat.id),
@@ -158,6 +171,7 @@ export class TelegramChannel implements Channel {
     // Photo messages
     bot.on("message:photo", async (ctx) => {
       if (!this.isAuthorized(ctx.from?.id)) return;
+      if (ctx.from?.id !== undefined && this.isRateLimited(ctx.from.id)) return;
 
       const photo = ctx.message.photo;
       const largest = photo[photo.length - 1];
@@ -180,6 +194,7 @@ export class TelegramChannel implements Channel {
     // Document messages
     bot.on("message:document", async (ctx) => {
       if (!this.isAuthorized(ctx.from?.id)) return;
+      if (ctx.from?.id !== undefined && this.isRateLimited(ctx.from.id)) return;
 
       const doc = ctx.message.document;
       const attachment = await this.downloadMediaAttachment(
@@ -204,6 +219,7 @@ export class TelegramChannel implements Channel {
     // Voice messages
     bot.on("message:voice", async (ctx) => {
       if (!this.isAuthorized(ctx.from?.id)) return;
+      if (ctx.from?.id !== undefined && this.isRateLimited(ctx.from.id)) return;
 
       const voice = ctx.message.voice;
       const attachment = await this.downloadMediaAttachment(voice.file_id, "voice", voice.mime_type ?? "audio/ogg");
@@ -225,6 +241,27 @@ export class TelegramChannel implements Channel {
   private isAuthorized(userId: number | undefined): boolean {
     if (userId === undefined) return false;
     return this.allowedUserSet.has(userId);
+  }
+
+  /**
+   * Check per-user rate limit: max 30 messages per 60 seconds.
+   * Returns true if the message should be dropped.
+   */
+  private isRateLimited(userId: number): boolean {
+    const now = Date.now();
+    const entry = this.userRateLimits.get(userId);
+
+    if (!entry || now - entry.windowStart > RATE_LIMIT_WINDOW_MS) {
+      this.userRateLimits.set(userId, { count: 1, windowStart: now });
+      return false;
+    }
+
+    entry.count++;
+    if (entry.count > RATE_LIMIT_MAX_MESSAGES) {
+      this.logger.warn("telegram", "Rate limited user", { userId });
+      return true;
+    }
+    return false;
   }
 
   /** Build an InboundMessage from Telegram context fields. */

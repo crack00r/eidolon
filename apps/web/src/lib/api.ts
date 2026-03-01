@@ -251,6 +251,15 @@ export class GatewayClient {
       return;
     }
 
+    // Validate JSON-RPC 2.0 envelope
+    if (
+      message.jsonrpc !== "2.0" ||
+      (message.result === undefined && message.error === undefined && message.method === undefined)
+    ) {
+      console.warn("Invalid JSON-RPC 2.0 message received, ignoring:", data);
+      return;
+    }
+
     // Push notification (no id, has method)
     if (message.id === undefined && message.method) {
       const params = message.params ?? {};

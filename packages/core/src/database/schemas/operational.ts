@@ -29,6 +29,8 @@ export const OPERATIONAL_MIGRATIONS: ReadonlyArray<Migration> = [
       CREATE INDEX idx_sessions_status ON sessions(status);
       CREATE INDEX idx_sessions_type ON sessions(type);
 
+      -- TODO: Add event cleanup as a housekeeping task — processed events should
+      -- be pruned after a configurable retention period to prevent unbounded growth.
       CREATE TABLE events (
         id TEXT PRIMARY KEY,
         type TEXT NOT NULL,
@@ -129,6 +131,19 @@ export const OPERATIONAL_MIGRATIONS: ReadonlyArray<Migration> = [
       DROP TABLE IF EXISTS loop_state;
       DROP TABLE IF EXISTS events;
       DROP TABLE IF EXISTS sessions;
+    `,
+  },
+  {
+    version: 2,
+    name: "add_events_claimed_at",
+    database: "operational",
+    up: `
+      ALTER TABLE events ADD COLUMN claimed_at INTEGER;
+      CREATE INDEX idx_events_claimed ON events(claimed_at) WHERE claimed_at IS NULL AND processed_at IS NULL;
+    `,
+    down: `
+      DROP INDEX IF EXISTS idx_events_claimed;
+      ALTER TABLE events DROP COLUMN claimed_at;
     `,
   },
 ];

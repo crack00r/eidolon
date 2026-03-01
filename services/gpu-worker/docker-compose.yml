@@ -4,7 +4,7 @@ services:
       context: .
       dockerfile: Dockerfile.cuda
     ports:
-      - "8420:8420"
+      - "127.0.0.1:8420:8420"
     environment:
       - EIDOLON_GPU_API_KEY=${EIDOLON_GPU_API_KEY:-}
     deploy:

@@ -85,8 +85,11 @@ export class EmbeddingModel {
 
       // Configure cache directory for model storage
       transformers.env.cacheDir = this.cacheDir;
-      // Disable remote model loading to use only cached models after initial download
-      // This can be overridden by setting the env var before calling initialize()
+      // SECURITY NOTE: allowRemoteModels=true enables downloading from Hugging Face Hub
+      // on first run. After the initial download, the model is cached locally in cacheDir.
+      // This is acceptable for trusted model IDs (e.g. Xenova/multilingual-e5-small).
+      // If deploying in a locked-down environment, pre-populate the cache and set
+      // allowRemoteModels=false to prevent any network model fetching.
       transformers.env.allowRemoteModels = true;
 
       this.logger.info("initialize", `Loading embedding model: ${this.modelId}`, {

@@ -39,7 +39,7 @@ export async function fetchPendingItems(): Promise<void> {
     );
     itemsStore.set(response.items);
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "Failed to fetch items";
+    const msg = sanitizeErrorForDisplay(err, "Failed to fetch items");
     errorStore.set(msg);
   } finally {
     loadingStore.set(false);
@@ -83,3 +83,17 @@ export const learningError = { subscribe: errorStore.subscribe };
 export const pendingCount = derived(itemsStore, (items) =>
   items.filter((i) => i.status === "pending").length,
 );
+
+/**
+ * Strip internal details (file paths, stack traces) from error messages
+ * shown to users. Only exposes the high-level error description.
+ */
+function sanitizeErrorForDisplay(err: unknown, fallback: string): string {
+  if (!(err instanceof Error)) return fallback;
+  const msg = err.message
+    .replace(/\/[^\s:]+\.[a-z]+/gi, "[path]")
+    .replace(/[A-Z]:\\[^\s:]+\.[a-z]+/gi, "[path]")
+    .replace(/\n\s+at\s+.*/g, "")
+    .trim();
+  return msg || fallback;
+}

@@ -12,6 +12,10 @@ permissions:
 jobs:
   review:
     name: AI Code Review
+    if: >
+      github.event.pull_request.author_association == 'OWNER' ||
+      github.event.pull_request.author_association == 'MEMBER' ||
+      github.event.pull_request.author_association == 'COLLABORATOR'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:

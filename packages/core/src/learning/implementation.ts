@@ -128,9 +128,10 @@ export class ImplementationPipeline {
     });
 
     // Step 2: Implement via Claude Code
+    // Finding #4: Wrap untrusted content in XML-like delimiters to mitigate prompt injection
     const implStart = Date.now();
     const implementResult = await options.implementFn(
-      `Implement this improvement:\n\nTitle: ${options.title}\n\n${options.content}`,
+      `Implement this improvement:\n\n<discovery-title>${options.title}</discovery-title>\n\n<discovery-content>${options.content}</discovery-content>`,
       options.workspaceDir,
     );
     const implDuration = Date.now() - implStart;

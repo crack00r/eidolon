@@ -72,6 +72,15 @@ const TYPE_ORDER: readonly MemoryType[] = [
   "schema",
 ];
 
+/**
+ * Sanitize user-sourced content before embedding in Markdown.
+ * Escapes Markdown special characters and replaces newlines with spaces
+ * to prevent prompt injection via memory content or KG triple names.
+ */
+function sanitizeForMarkdown(text: string): string {
+  return text.replace(/\n/g, " ").replace(/[#*\->`[\]\\]/g, (ch) => `\\${ch}`);
+}
+
 // ---------------------------------------------------------------------------
 // MemoryInjector
 // ---------------------------------------------------------------------------
@@ -233,7 +242,7 @@ export class MemoryInjector {
         sections.push("");
         sections.push(`### ${label}`);
         for (const memory of group) {
-          sections.push(`- ${memory.content}`);
+          sections.push(`- ${sanitizeForMarkdown(memory.content)}`);
         }
       }
     }
@@ -243,7 +252,10 @@ export class MemoryInjector {
       sections.push("");
       sections.push("## Knowledge Graph");
       for (const triple of triples) {
-        sections.push(`- ${triple.subject} ${triple.predicate} ${triple.object} (confidence: ${triple.confidence})`);
+        const subject = sanitizeForMarkdown(triple.subject);
+        const predicate = sanitizeForMarkdown(triple.predicate);
+        const object = sanitizeForMarkdown(triple.object);
+        sections.push(`- ${subject} ${predicate} ${object} (confidence: ${triple.confidence})`);
       }
     }
 

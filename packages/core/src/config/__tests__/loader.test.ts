@@ -30,7 +30,7 @@ describe("loadConfig", () => {
       memory: { extraction: {}, dreaming: {}, search: {}, embedding: {}, retention: {}, entityResolution: {} },
       learning: { relevance: {}, autoImplement: {}, budget: {} },
       channels: {},
-      gateway: { auth: {} },
+      gateway: { auth: { type: "none" } },
       gpu: { tts: {}, stt: {}, fallback: {} },
       security: { policies: {}, approval: {}, sandbox: {}, audit: {} },
       database: {},

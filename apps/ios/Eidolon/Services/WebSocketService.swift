@@ -35,6 +35,7 @@ final class WebSocketService: ObservableObject {
     private let maxReconnectDelay: TimeInterval = 8.0
     private let baseReconnectDelay: TimeInterval = 1.0
     private let requestTimeout: TimeInterval = 30.0
+    private let maxReconnectAttempts = 50
 
     // MARK: - Public API
 
@@ -288,6 +289,12 @@ final class WebSocketService: ObservableObject {
 
     private func scheduleReconnect() {
         guard shouldReconnect else { return }
+
+        if reconnectAttempts >= maxReconnectAttempts {
+            connectionState = .error
+            lastError = "Maximum reconnect attempts (\(maxReconnectAttempts)) reached"
+            return
+        }
 
         let delay = min(
             baseReconnectDelay * pow(2.0, Double(reconnectAttempts)),

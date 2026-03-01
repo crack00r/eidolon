@@ -56,7 +56,12 @@ export class ConfigWatcher {
     const result = await loadConfig(this.configPath);
     if (result.ok) {
       for (const handler of this.handlers) {
-        handler(result.value);
+        try {
+          handler(result.value);
+        } catch (err: unknown) {
+          const message = err instanceof Error ? err.message : String(err);
+          this.logger?.error("watcher", `Config change handler threw: ${message}`, err);
+        }
       }
     } else {
       this.logger?.warn("watcher", `Config reload failed: ${result.error.message}`);

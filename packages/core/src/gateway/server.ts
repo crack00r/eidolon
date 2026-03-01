@@ -118,9 +118,14 @@ const SECURITY_HEADERS: Record<string, string> = {
   "Content-Type": "text/plain",
 };
 
-/** Create an HTTP Response with security headers. */
-function secureResponse(body: string, status: number): Response {
-  return new Response(body, { status, headers: { ...SECURITY_HEADERS } });
+/** Create an HTTP Response with security headers, optionally adding HSTS for TLS. */
+function secureResponse(body: string, status: number, tlsEnabled?: boolean): Response {
+  const headers = { ...SECURITY_HEADERS };
+  // Finding #11: Add HSTS header when TLS is enabled
+  if (tlsEnabled) {
+    headers["Strict-Transport-Security"] = "max-age=31536000";
+  }
+  return new Response(body, { status, headers });
 }
 
 // Export for testing
@@ -178,9 +183,10 @@ export class GatewayServer {
 
       fetch(req, server) {
         const url = new URL(req.url);
+        const isTls = self.config.tls.enabled;
 
         if (url.pathname !== "/ws") {
-          return secureResponse("Not found", 404);
+          return secureResponse("Not found", 404, isTls);
         }
 
         // Extract client IP and normalize to prevent IPv6 bypass
@@ -190,13 +196,13 @@ export class GatewayServer {
         // Rate limiting check (uses real IP internally, logs anonymized)
         if (self.rateLimiter.isBlocked(ip)) {
           self.logger.warn("fetch", `Rate-limited IP ${anonIp} attempted connection`);
-          return secureResponse("Too Many Requests", 429);
+          return secureResponse("Too Many Requests", 429, isTls);
         }
 
         // Connection limit check
         if (self.clients.size >= self.config.maxClients) {
           self.logger.warn("fetch", `Connection limit reached (${self.config.maxClients}), rejecting ${anonIp}`);
-          return secureResponse("Service Unavailable", 503);
+          return secureResponse("Service Unavailable", 503, isTls);
         }
 
         // Origin validation (case-insensitive, trailing-slash-tolerant)
@@ -205,7 +211,7 @@ export class GatewayServer {
           const allowed = self.config.allowedOrigins.some((o) => normalizeOrigin(o) === origin);
           if (!allowed) {
             self.logger.warn("fetch", `Rejected origin "${origin}" from ${anonIp}`);
-            return secureResponse("Forbidden", 403);
+            return secureResponse("Forbidden", 403, isTls);
           }
         }
 
@@ -219,6 +225,7 @@ export class GatewayServer {
 
       websocket: {
         maxPayloadLength: self.config.maxMessageBytes,
+        idleTimeout: 120, // Finding #12: Close idle WebSocket connections after 120 seconds
         open(ws) {
           self.handleOpen(ws);
         },
@@ -292,6 +299,8 @@ export class GatewayServer {
       this.logger.warn("sendTo", `Client ${clientId} not found`);
       return;
     }
+    // Finding #14: Only send to authenticated clients
+    if (!client.authenticated) return;
     try {
       client.ws.send(JSON.stringify(event));
     } catch {
@@ -472,11 +481,16 @@ export class GatewayServer {
    * Optionally sends a JSON-RPC error response if a request ID is provided.
    */
   private emitAuthFailure(ws: ServerWS, client: ClientState, reason: string, jsonRpcId?: string): void {
+    // Finding #13: Log specific reason server-side, send generic message to client
+    this.logger.warn("auth-failure", `Auth failed for client ${client.id}: ${reason}`, {
+      ip: anonymizeIp(client.ip),
+    });
+    const genericMessage = "Authentication failed";
     if (jsonRpcId) {
-      const errResp = createJsonRpcError(jsonRpcId, -32000, reason);
+      const errResp = createJsonRpcError(jsonRpcId, -32000, genericMessage);
       ws.send(JSON.stringify(errResp));
     }
-    ws.close(4001, reason);
+    ws.close(4001, genericMessage);
     this.eventBus.publish(
       "gateway:client_connected",
       { clientId: client.id, authenticated: false },

@@ -26,6 +26,9 @@ export interface TtsResult {
   readonly durationMs: number;
 }
 
+/** Maximum allowed text length for a single TTS request. */
+const MAX_TTS_TEXT_LENGTH = 10_000;
+
 // ---------------------------------------------------------------------------
 // TTSClient
 // ---------------------------------------------------------------------------
@@ -43,6 +46,16 @@ export class TTSClient {
   async synthesize(request: TtsRequest): Promise<Result<TtsResult, EidolonError>> {
     if (!this.gpu.isAvailable) {
       return Err(createError(ErrorCode.GPU_UNAVAILABLE, "GPU worker is not available for TTS"));
+    }
+
+    // Finding #6: Validate TTS text length
+    if (request.text.length > MAX_TTS_TEXT_LENGTH) {
+      return Err(
+        createError(
+          ErrorCode.TTS_FAILED,
+          `TTS text too long: ${request.text.length} characters (max ${MAX_TTS_TEXT_LENGTH})`,
+        ),
+      );
     }
 
     const startMs = Date.now();

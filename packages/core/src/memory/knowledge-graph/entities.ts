@@ -47,13 +47,35 @@ interface EntityRow {
 // ---------------------------------------------------------------------------
 
 function rowToEntity(row: EntityRow): KGEntity {
+  let attributes: Record<string, unknown>;
+  try {
+    const parsed: unknown = JSON.parse(row.attributes);
+    attributes =
+      typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
+        ? (parsed as Record<string, unknown>)
+        : {};
+  } catch {
+    attributes = {};
+  }
+
   return {
     id: row.id,
     name: row.name,
     type: row.type,
-    attributes: JSON.parse(row.attributes) as Record<string, unknown>,
+    attributes,
     createdAt: row.created_at,
   };
+}
+
+/** Maximum allowed entity name length. */
+const MAX_ENTITY_NAME_LENGTH = 500;
+
+/**
+ * Strip control characters (U+0000–U+001F, U+007F–U+009F) from a string.
+ */
+function stripControlChars(text: string): string {
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: intentionally stripping control characters for security
+  return text.replace(/[\u0000-\u001f\u007f-\u009f]/g, "");
 }
 
 // ---------------------------------------------------------------------------
@@ -71,6 +93,20 @@ export class KGEntityStore {
 
   /** Create a new entity. Generates UUID for ID. */
   create(input: CreateEntityInput): Result<KGEntity, EidolonError> {
+    // Finding #19: Validate entity name length and strip control characters
+    const sanitizedName = stripControlChars(input.name).trim();
+    if (sanitizedName.length === 0) {
+      return Err(createError(ErrorCode.DB_QUERY_FAILED, "Entity name must not be empty"));
+    }
+    if (sanitizedName.length > MAX_ENTITY_NAME_LENGTH) {
+      return Err(
+        createError(
+          ErrorCode.DB_QUERY_FAILED,
+          `Entity name too long: ${sanitizedName.length} characters (max ${MAX_ENTITY_NAME_LENGTH})`,
+        ),
+      );
+    }
+
     try {
       const id = randomUUID();
       const now = Date.now();
@@ -81,11 +117,11 @@ export class KGEntityStore {
           `INSERT INTO kg_entities (id, name, type, attributes, created_at, updated_at)
            VALUES (?, ?, ?, ?, ?, ?)`,
         )
-        .run(id, input.name, input.type, attributes, now, now);
+        .run(id, sanitizedName, input.type, attributes, now, now);
 
       const entity: KGEntity = {
         id,
-        name: input.name,
+        name: sanitizedName,
         type: input.type,
         attributes: input.attributes ?? {},
         createdAt: now,
@@ -279,6 +315,9 @@ export class KGEntityStore {
 
         // Move incoming relations (target_id = sourceId) to targetId
         this.db.query("UPDATE kg_relations SET target_id = ? WHERE target_id = ?").run(targetId, sourceId);
+
+        // Finding #20: Delete self-loop relations created by the merge
+        this.db.query("DELETE FROM kg_relations WHERE source_id = target_id").run();
 
         // Delete source entity
         this.db.query("DELETE FROM kg_entities WHERE id = ?").run(sourceId);
