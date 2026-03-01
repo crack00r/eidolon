@@ -2,6 +2,7 @@
 // All business logic: config, secrets, database, logging, memory, loop, channels, etc.
 
 export * from "./backup/index.js";
+export * from "./channels/index.js";
 export * from "./claude/index.js";
 export * from "./config/index.js";
 export * from "./database/index.js";
