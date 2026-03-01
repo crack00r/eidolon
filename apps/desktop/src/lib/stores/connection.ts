@@ -31,6 +31,7 @@ export function connect(): void {
   const config: GatewayConfig = {
     host: settings.host,
     port: settings.port,
+    useTls: settings.useTls,
     ...(settings.token ? { token: settings.token } : {}),
   };
 

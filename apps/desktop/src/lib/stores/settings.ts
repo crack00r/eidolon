@@ -9,6 +9,7 @@ export interface Settings {
   host: string;
   port: number;
   token: string;
+  useTls: boolean;
 }
 
 const STORAGE_KEY = "eidolon-settings";
@@ -17,6 +18,7 @@ const DEFAULT_SETTINGS: Settings = {
   host: "127.0.0.1",
   port: 8419,
   token: "",
+  useTls: true,
 };
 
 function loadSettings(): Settings {
@@ -28,6 +30,7 @@ function loadSettings(): Settings {
         host: typeof parsed.host === "string" ? parsed.host : DEFAULT_SETTINGS.host,
         port: typeof parsed.port === "number" ? parsed.port : DEFAULT_SETTINGS.port,
         token: typeof parsed.token === "string" ? parsed.token : DEFAULT_SETTINGS.token,
+        useTls: typeof parsed.useTls === "boolean" ? parsed.useTls : DEFAULT_SETTINGS.useTls,
       };
     }
   } catch {

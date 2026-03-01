@@ -4,11 +4,17 @@
  * Desktop/iOS clients connect here to communicate with the Eidolon core
  * via JSON-RPC 2.0 over WebSocket.
  *
- * Authentication is required on the first message (ClientAuth) unless
- * the config sets auth.type to "none".
+ * Security features:
+ * - Constant-time token comparison (timing-safe)
+ * - Dual auth format: raw ClientAuth + JSON-RPC wrapped
+ * - TLS support (cert/key via Bun.serve)
+ * - IP-based auth rate limiting with exponential backoff
+ * - Connection limit enforcement
+ * - Origin validation
+ * - Max message payload size
  */
 
-import { randomUUID } from "node:crypto";
+import { randomUUID, timingSafeEqual } from "node:crypto";
 import type { GatewayConfig, GatewayMethod, GatewayPushEvent } from "@eidolon/protocol";
 import type { Logger } from "../logging/logger.js";
 import type { EventBus } from "../loop/event-bus.js";
@@ -19,6 +25,7 @@ import {
   JSON_RPC_METHOD_NOT_FOUND,
   parseJsonRpcRequest,
 } from "./protocol.js";
+import { AuthRateLimiter } from "./rate-limiter.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -35,13 +42,36 @@ interface ServerWS {
 
 interface ClientState {
   readonly id: string;
+  readonly ip: string;
   readonly ws: ServerWS;
   authenticated: boolean;
 }
 
 interface WSData {
   clientId: string;
+  ip: string;
 }
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Constant-time string comparison to prevent timing attacks on token validation.
+ */
+function constantTimeCompare(a: string, b: string): boolean {
+  const bufA = Buffer.from(a, "utf-8");
+  const bufB = Buffer.from(b, "utf-8");
+  if (bufA.length !== bufB.length) {
+    // Compare bufA against itself to prevent timing leak on length difference
+    timingSafeEqual(bufA, bufA);
+    return false;
+  }
+  return timingSafeEqual(bufA, bufB);
+}
+
+// Export for testing
+export { constantTimeCompare };
 
 // ---------------------------------------------------------------------------
 // GatewayServer
@@ -51,6 +81,7 @@ export class GatewayServer {
   private readonly config: GatewayConfig;
   private readonly logger: Logger;
   private readonly eventBus: EventBus;
+  private readonly rateLimiter: AuthRateLimiter;
 
   private readonly clients: Map<string, ClientState> = new Map();
   private readonly handlers: Map<GatewayMethod, MethodHandler> = new Map();
@@ -60,6 +91,7 @@ export class GatewayServer {
     this.config = deps.config;
     this.logger = deps.logger.child("gateway");
     this.eventBus = deps.eventBus;
+    this.rateLimiter = new AuthRateLimiter(deps.config.rateLimiting, this.logger);
   }
 
   // -------------------------------------------------------------------------
@@ -76,24 +108,62 @@ export class GatewayServer {
     const { host, port } = this.config;
     const self = this;
 
+    const tlsCert = this.config.tls.cert;
+    const tlsKey = this.config.tls.key;
+    const tlsConfig =
+      this.config.tls.enabled && tlsCert && tlsKey
+        ? {
+            cert: Bun.file(tlsCert),
+            key: Bun.file(tlsKey),
+          }
+        : undefined;
+
     this.server = Bun.serve<WSData>({
       port,
       hostname: host,
+      ...(tlsConfig ? { tls: tlsConfig } : {}),
 
       fetch(req, server) {
         const url = new URL(req.url);
-        if (url.pathname === "/ws") {
-          const clientId = randomUUID();
-          const upgraded = server.upgrade(req, { data: { clientId } });
-          if (!upgraded) {
-            return new Response("WebSocket upgrade failed", { status: 400 });
-          }
-          return undefined;
+
+        if (url.pathname !== "/ws") {
+          return new Response("Not found", { status: 404 });
         }
-        return new Response("Not found", { status: 404 });
+
+        // Extract client IP
+        const ip = server.requestIP(req)?.address ?? "unknown";
+
+        // Rate limiting check
+        if (self.rateLimiter.isBlocked(ip)) {
+          self.logger.warn("fetch", `Rate-limited IP ${ip} attempted connection`);
+          return new Response("Too Many Requests", { status: 429 });
+        }
+
+        // Connection limit check
+        if (self.clients.size >= self.config.maxClients) {
+          self.logger.warn("fetch", `Connection limit reached (${self.config.maxClients}), rejecting ${ip}`);
+          return new Response("Service Unavailable", { status: 503 });
+        }
+
+        // Origin validation
+        if (self.config.allowedOrigins.length > 0) {
+          const origin = req.headers.get("Origin") ?? "";
+          if (!self.config.allowedOrigins.includes(origin)) {
+            self.logger.warn("fetch", `Rejected origin "${origin}" from ${ip}`);
+            return new Response("Forbidden", { status: 403 });
+          }
+        }
+
+        const clientId = randomUUID();
+        const upgraded = server.upgrade(req, { data: { clientId, ip } });
+        if (!upgraded) {
+          return new Response("WebSocket upgrade failed", { status: 400 });
+        }
+        return undefined;
       },
 
       websocket: {
+        maxPayloadLength: self.config.maxMessageBytes,
         open(ws) {
           self.handleOpen(ws);
         },
@@ -106,7 +176,8 @@ export class GatewayServer {
       },
     });
 
-    this.logger.info("start", `Gateway server listening on ${host}:${port}`);
+    const scheme = this.config.tls.enabled ? "wss" : "ws";
+    this.logger.info("start", `Gateway server listening on ${scheme}://${host}:${port}`);
   }
 
   /** Graceful shutdown: close all connections and stop the server. */
@@ -127,6 +198,7 @@ export class GatewayServer {
 
     this.server.stop(true);
     this.server = undefined;
+    this.rateLimiter.dispose();
     this.logger.info("stop", "Gateway server stopped");
   }
 
@@ -189,11 +261,12 @@ export class GatewayServer {
   // -------------------------------------------------------------------------
 
   private handleOpen(ws: ServerWS): void {
-    const clientId = ws.data.clientId;
+    const { clientId, ip } = ws.data;
     const requiresAuth = this.config.auth.type !== "none";
 
     const state: ClientState = {
       id: clientId,
+      ip,
       ws,
       authenticated: !requiresAuth,
     };
@@ -203,7 +276,7 @@ export class GatewayServer {
       this.logger.info("open", `Client ${clientId} connected (auth: none)`);
       this.eventBus.publish("gateway:client_connected", { clientId, authenticated: true }, { source: "gateway" });
     } else {
-      this.logger.info("open", `Client ${clientId} connected, awaiting auth`);
+      this.logger.info("open", `Client ${clientId} connected from ${ip}, awaiting auth`);
     }
   }
 
@@ -263,55 +336,85 @@ export class GatewayServer {
     try {
       parsed = JSON.parse(text);
     } catch {
-      ws.close(4001, "Invalid auth payload");
-      this.eventBus.publish(
-        "gateway:client_connected",
-        { clientId: client.id, authenticated: false },
-        { source: "gateway" },
-      );
+      this.emitAuthFailure(ws, client, "Invalid auth payload");
       return;
     }
 
     if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-      ws.close(4001, "Invalid auth payload");
-      this.eventBus.publish(
-        "gateway:client_connected",
-        { clientId: client.id, authenticated: false },
-        { source: "gateway" },
-      );
+      this.emitAuthFailure(ws, client, "Invalid auth payload");
       return;
     }
 
-    const auth = parsed as Record<string, unknown>;
+    const obj = parsed as Record<string, unknown>;
 
-    if (auth.type !== "token" || typeof auth.token !== "string") {
-      ws.close(4001, "Invalid auth: expected { type: 'token', token: string }");
-      this.eventBus.publish(
-        "gateway:client_connected",
-        { clientId: client.id, authenticated: false },
-        { source: "gateway" },
-      );
+    // Detect format: JSON-RPC wrapped or raw ClientAuth
+    const isJsonRpc = obj.jsonrpc === "2.0" && typeof obj.method === "string";
+    let token: string | undefined;
+    let jsonRpcId: string | undefined;
+
+    if (isJsonRpc) {
+      // JSON-RPC format: { jsonrpc: "2.0", id: "...", method: "auth.authenticate", params: { token: "..." } }
+      if (obj.method !== "auth.authenticate") {
+        this.emitAuthFailure(ws, client, "Expected auth.authenticate method", obj.id as string);
+        return;
+      }
+      jsonRpcId = typeof obj.id === "string" ? obj.id : undefined;
+      const params = obj.params as Record<string, unknown> | undefined;
+      if (params && typeof params.token === "string") {
+        token = params.token;
+      }
+    } else {
+      // Raw ClientAuth format: { type: "token", token: "..." }
+      if (obj.type !== "token" || typeof obj.token !== "string") {
+        this.emitAuthFailure(ws, client, "Invalid auth: expected { type: 'token', token: string }");
+        return;
+      }
+      token = obj.token;
+    }
+
+    if (typeof token !== "string") {
+      this.emitAuthFailure(ws, client, "Missing token in auth payload", jsonRpcId);
       return;
     }
 
-    // Resolve configured token (could be a SecretRef string or plain string)
+    // Resolve configured token
     const configToken = this.config.auth.token;
-    if (typeof configToken !== "string" || auth.token !== configToken) {
-      ws.close(4001, "Authentication failed");
-      this.eventBus.publish(
-        "gateway:client_connected",
-        { clientId: client.id, authenticated: false },
-        { source: "gateway" },
-      );
+    if (typeof configToken !== "string" || !constantTimeCompare(token, configToken)) {
+      this.rateLimiter.recordFailure(client.ip);
+      this.emitAuthFailure(ws, client, "Authentication failed", jsonRpcId);
       return;
     }
 
     // Auth succeeded
+    this.rateLimiter.recordSuccess(client.ip);
     client.authenticated = true;
-    this.logger.info("auth", `Client ${client.id} authenticated`);
+    this.logger.info("auth", `Client ${client.id} authenticated from ${client.ip}`);
     this.eventBus.publish(
       "gateway:client_connected",
       { clientId: client.id, authenticated: true },
+      { source: "gateway" },
+    );
+
+    // If JSON-RPC format, send a proper JSON-RPC response
+    if (isJsonRpc && jsonRpcId) {
+      const response = createJsonRpcResponse(jsonRpcId, { authenticated: true });
+      ws.send(JSON.stringify(response));
+    }
+  }
+
+  /**
+   * Emit auth failure event and close the connection.
+   * Optionally sends a JSON-RPC error response if a request ID is provided.
+   */
+  private emitAuthFailure(ws: ServerWS, client: ClientState, reason: string, jsonRpcId?: string): void {
+    if (jsonRpcId) {
+      const errResp = createJsonRpcError(jsonRpcId, -32000, reason);
+      ws.send(JSON.stringify(errResp));
+    }
+    ws.close(4001, reason);
+    this.eventBus.publish(
+      "gateway:client_connected",
+      { clientId: client.id, authenticated: false },
       { source: "gateway" },
     );
   }

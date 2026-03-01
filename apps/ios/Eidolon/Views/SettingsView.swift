@@ -51,6 +51,8 @@ struct SettingsView: View {
                     .multilineTextAlignment(.trailing)
             }
 
+            Toggle("Use TLS (WSS)", isOn: $viewModel.useTls)
+
             HStack(spacing: 12) {
                 Button {
                     viewModel.connect()

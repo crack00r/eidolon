@@ -7,6 +7,7 @@ export interface GatewayConfig {
   host: string;
   port: number;
   token?: string;
+  useTls?: boolean;
 }
 
 export type ConnectionState =
@@ -18,14 +19,14 @@ export type ConnectionState =
 
 interface JsonRpcRequest {
   jsonrpc: "2.0";
-  id: number;
+  id: string;
   method: string;
   params?: Record<string, unknown>;
 }
 
 interface JsonRpcResponse {
   jsonrpc: "2.0";
-  id?: number;
+  id?: string;
   result?: unknown;
   error?: {
     code: number;
@@ -49,7 +50,7 @@ const BASE_RECONNECT_DELAY_MS = 1_000;
 export class GatewayClient {
   private ws: WebSocket | null = null;
   private requestId = 0;
-  private pendingRequests = new Map<number, PendingRequest>();
+  private pendingRequests = new Map<string, PendingRequest>();
   private pushHandlers = new Set<(method: string, params: Record<string, unknown>) => void>();
   private stateHandlers = new Set<(state: ConnectionState) => void>();
   private currentState: ConnectionState = "disconnected";
@@ -103,7 +104,7 @@ export class GatewayClient {
       throw new Error(`Cannot send request: connection state is "${this.currentState}"`);
     }
 
-    const id = ++this.requestId;
+    const id = this.nextId();
     const request: JsonRpcRequest = {
       jsonrpc: "2.0",
       id,
@@ -141,10 +142,15 @@ export class GatewayClient {
     };
   }
 
+  private nextId(): string {
+    return String(++this.requestId);
+  }
+
   private establishConnection(): void {
     this.setState("connecting");
 
-    const url = `ws://${this.config.host}:${this.config.port}`;
+    const scheme = this.config.useTls !== false ? "wss" : "ws";
+    const url = `${scheme}://${this.config.host}:${this.config.port}/ws`;
 
     try {
       this.ws = new WebSocket(url);
@@ -190,14 +196,13 @@ export class GatewayClient {
   private sendAuth(): void {
     if (!this.ws || !this.config.token) return;
 
+    const id = this.nextId();
     const authRequest: JsonRpcRequest = {
       jsonrpc: "2.0",
-      id: ++this.requestId,
+      id,
       method: "auth.authenticate",
       params: { token: this.config.token },
     };
-
-    const id = authRequest.id;
 
     const timer = setTimeout(() => {
       this.pendingRequests.delete(id);

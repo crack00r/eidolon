@@ -19,6 +19,7 @@ final class WebSocketService: ObservableObject {
     private var host: String = "127.0.0.1"
     private var port: Int = 8419
     private var token: String?
+    private var useTls: Bool = true
 
     // MARK: Internals
 
@@ -26,7 +27,7 @@ final class WebSocketService: ObservableObject {
     private var session: URLSession = .shared
     private var requestCounter: Int = 0
     private var pendingRequests: [String: PendingRequestEntry] = [:]
-    private var pushHandlers: [(String, [String: AnyCodable]) -> Void] = []
+    private var pushHandlers: [UUID: (String, [String: AnyCodable]) -> Void] = [:]
     private var shouldReconnect = false
     private var reconnectAttempts = 0
     private var reconnectWorkItem: DispatchWorkItem?
@@ -38,10 +39,11 @@ final class WebSocketService: ObservableObject {
     // MARK: - Public API
 
     /// Configure the connection parameters.
-    func configure(host: String, port: Int, token: String?) {
+    func configure(host: String, port: Int, token: String?, useTls: Bool = true) {
         self.host = host
         self.port = port
         self.token = token
+        self.useTls = useTls
     }
 
     /// Open the WebSocket connection.
@@ -82,18 +84,17 @@ final class WebSocketService: ObservableObject {
     }
 
     /// Register a handler for server push events.
-    /// Returns a closure to unregister.
-    func onPush(_ handler: @escaping (String, [String: AnyCodable]) -> Void) -> () -> Void {
+    /// Returns the handler's UUID for later removal.
+    @discardableResult
+    func onPush(_ handler: @escaping (String, [String: AnyCodable]) -> Void) -> UUID {
         let id = UUID()
-        pushHandlers.append(handler)
-        let index = pushHandlers.count - 1
-        return { [weak self] in
-            guard let self else { return }
-            // Safety: only remove if index is still valid
-            guard index < self.pushHandlers.count else { return }
-            self.pushHandlers.remove(at: index)
-            _ = id // Retain id for identity
-        }
+        pushHandlers[id] = handler
+        return id
+    }
+
+    /// Remove a previously registered push handler by its UUID.
+    func removePushHandler(_ id: UUID) {
+        pushHandlers.removeValue(forKey: id)
     }
 
     // MARK: - Connection Lifecycle
@@ -102,7 +103,8 @@ final class WebSocketService: ObservableObject {
         connectionState = .connecting
         lastError = nil
 
-        let urlString = "ws://\(host):\(port)"
+        let scheme = useTls ? "wss" : "ws"
+        let urlString = "\(scheme)://\(host):\(port)/ws"
         guard let url = URL(string: urlString) else {
             connectionState = .error
             lastError = "Invalid URL: \(urlString)"
@@ -117,12 +119,21 @@ final class WebSocketService: ObservableObject {
         // Start receive loop (first successful receive confirms connection)
         listenForMessages()
 
-        // Perform authentication after short delay for connection establishment
+        // Wait for the WebSocket to actually reach the running state before auth
         Task {
-            // Give the WebSocket a moment to connect
-            try? await Task.sleep(nanoseconds: 200_000_000) // 200ms
+            let connected = await waitForTaskRunning(task: task, timeout: 5.0)
 
-            guard webSocketTask != nil else { return }
+            guard connected, webSocketTask === task else {
+                // Connection was cancelled or failed to open in time
+                if webSocketTask === task {
+                    connectionState = .error
+                    lastError = "WebSocket failed to open"
+                    webSocketTask?.cancel(with: .abnormalClosure, reason: nil)
+                    webSocketTask = nil
+                    scheduleReconnect()
+                }
+                return
+            }
 
             reconnectAttempts = 0
 
@@ -145,6 +156,23 @@ final class WebSocketService: ObservableObject {
                 connectionState = .connected
             }
         }
+    }
+
+    /// Poll until the WebSocket task reaches `.running` state or timeout expires.
+    private func waitForTaskRunning(task: URLSessionWebSocketTask, timeout: TimeInterval) async -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        let pollInterval: UInt64 = 50_000_000 // 50ms
+
+        while Date() < deadline {
+            if task.state == .running {
+                return true
+            }
+            if task.state == .canceling || task.state == .completed {
+                return false
+            }
+            try? await Task.sleep(nanoseconds: pollInterval)
+        }
+        return task.state == .running
     }
 
     // MARK: - Message Handling
@@ -188,7 +216,7 @@ final class WebSocketService: ObservableObject {
         // Push notification (no id, has method)
         if response.id == nil, let method = response.method {
             let params = response.params ?? [:]
-            for handler in pushHandlers {
+            for (_, handler) in pushHandlers {
                 handler(method, params)
             }
             return

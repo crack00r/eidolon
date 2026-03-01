@@ -26,6 +26,10 @@ final class SettingsViewModel: ObservableObject {
         didSet { UserDefaults.standard.set(tailscaleHost, forKey: Keys.tailscaleHost) }
     }
 
+    @Published var useTls: Bool {
+        didSet { UserDefaults.standard.set(useTls, forKey: Keys.useTls) }
+    }
+
     @Published var cloudflareUrl: String {
         didSet { UserDefaults.standard.set(cloudflareUrl, forKey: Keys.cloudflareUrl) }
     }
@@ -45,6 +49,9 @@ final class SettingsViewModel: ObservableObject {
         self.host = UserDefaults.standard.string(forKey: Keys.host) ?? "127.0.0.1"
         self.port = UserDefaults.standard.integer(forKey: Keys.port).nonZero ?? 8419
         self.token = KeychainHelper.load(key: Keys.token) ?? ""
+        self.useTls = UserDefaults.standard.object(forKey: Keys.useTls) == nil
+            ? true
+            : UserDefaults.standard.bool(forKey: Keys.useTls)
         self.tailscaleHost = UserDefaults.standard.string(forKey: Keys.tailscaleHost) ?? ""
         self.cloudflareUrl = UserDefaults.standard.string(forKey: Keys.cloudflareUrl) ?? ""
     }
@@ -59,7 +66,7 @@ final class SettingsViewModel: ObservableObject {
     /// Apply settings and connect.
     func connect() {
         guard let service = webSocketService else { return }
-        service.configure(host: host, port: port, token: token.isEmpty ? nil : token)
+        service.configure(host: host, port: port, token: token.isEmpty ? nil : token, useTls: useTls)
         service.connect()
 
         // Update network manager with Tailscale/Cloudflare settings
@@ -85,7 +92,7 @@ final class SettingsViewModel: ObservableObject {
         // Temporarily connect if needed
         let wasDisconnected = service.connectionState == .disconnected
         if wasDisconnected {
-            service.configure(host: host, port: port, token: token.isEmpty ? nil : token)
+            service.configure(host: host, port: port, token: token.isEmpty ? nil : token, useTls: useTls)
             service.connect()
             // Wait for connection
             try? await Task.sleep(nanoseconds: 2_000_000_000)
@@ -126,6 +133,7 @@ final class SettingsViewModel: ObservableObject {
         static let host = "eidolon.host"
         static let port = "eidolon.port"
         static let token = "eidolon.token"
+        static let useTls = "eidolon.useTls"
         static let tailscaleHost = "eidolon.tailscaleHost"
         static let cloudflareUrl = "eidolon.cloudflareUrl"
     }

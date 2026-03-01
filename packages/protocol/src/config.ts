@@ -189,7 +189,18 @@ export const GatewayConfigSchema = z.object({
       cert: z.string().optional(),
       key: z.string().optional(),
     })
-    .optional(),
+    .default({}),
+  maxMessageBytes: z.number().int().positive().default(1_048_576),
+  maxClients: z.number().int().positive().default(10),
+  allowedOrigins: z.array(z.string()).default([]),
+  rateLimiting: z
+    .object({
+      maxFailures: z.number().int().positive().default(5),
+      windowMs: z.number().int().positive().default(60_000),
+      blockMs: z.number().int().positive().default(300_000),
+      maxBlockMs: z.number().int().positive().default(3_600_000),
+    })
+    .default({}),
   auth: z.object({
     type: z.enum(["token", "none"]).default("token"),
     token: SecretRefSchema.or(z.string()).optional(),

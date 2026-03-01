@@ -5,10 +5,11 @@
   let host = $state($settingsStore.host);
   let port = $state($settingsStore.port);
   let token = $state($settingsStore.token);
+  let useTls = $state($settingsStore.useTls);
   let saved = $state(false);
 
   function handleSave(): void {
-    updateSettings({ host, port, token });
+    updateSettings({ host, port, token, useTls });
     saved = true;
     setTimeout(() => {
       saved = false;
@@ -20,6 +21,7 @@
     host = "127.0.0.1";
     port = 8419;
     token = "";
+    useTls = true;
   }
 
   function handleConnect(): void {
@@ -98,6 +100,16 @@
           placeholder="Optional authentication token"
           disabled={$isConnected}
         />
+      </div>
+
+      <div class="form-group form-group-inline">
+        <input
+          id="useTls"
+          type="checkbox"
+          bind:checked={useTls}
+          disabled={$isConnected}
+        />
+        <label class="form-label" for="useTls">Use TLS (WSS)</label>
       </div>
 
       <div class="button-group">
@@ -233,8 +245,20 @@
     color: var(--text-secondary);
   }
 
-  .form-group input {
+  .form-group input[type="text"],
+  .form-group input[type="number"],
+  .form-group input[type="password"] {
     width: 100%;
+  }
+
+  .form-group-inline {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .form-group-inline .form-label {
+    margin: 0;
   }
 
   .form-group input:disabled {

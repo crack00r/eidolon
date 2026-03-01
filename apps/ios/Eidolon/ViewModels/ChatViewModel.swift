@@ -16,7 +16,7 @@ final class ChatViewModel: ObservableObject {
     // MARK: Dependencies
 
     private weak var webSocketService: WebSocketService?
-    private var pushUnsubscribe: (() -> Void)?
+    private var pushHandlerId: UUID?
     private var currentStreamingMessageId: String?
 
     // MARK: - Initialization
@@ -25,7 +25,7 @@ final class ChatViewModel: ObservableObject {
         webSocketService = service
 
         // Subscribe to push events for streaming responses
-        pushUnsubscribe = service.onPush { [weak self] method, params in
+        pushHandlerId = service.onPush { [weak self] method, params in
             Task { @MainActor in
                 self?.handlePushEvent(method: method, params: params)
             }
@@ -33,7 +33,9 @@ final class ChatViewModel: ObservableObject {
     }
 
     deinit {
-        pushUnsubscribe?()
+        if let id = pushHandlerId {
+            webSocketService?.removePushHandler(id)
+        }
     }
 
     // MARK: - Public API
