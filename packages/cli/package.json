@@ -10,7 +10,7 @@
   },
   "scripts": {
     "build": "bun build src/index.ts --outdir dist --target bun",
-    "test": "bun test src/",
+    "test": "bun test src/__tests__/formatter.test.ts && bun test src/__tests__/doctor.test.ts && bun test src/__tests__/config.test.ts && bun test src/__tests__/secrets.test.ts && bun test src/__tests__/commands.test.ts",
     "typecheck": "tsc --noEmit",
     "lint": "biome check src/",
     "lint:fix": "biome check --write src/"
