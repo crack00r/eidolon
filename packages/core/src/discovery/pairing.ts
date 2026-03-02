@@ -85,7 +85,7 @@ export function formatConnectionDetails(config: GatewayConfig, tailscale?: Tails
   const lines: string[] = [
     "",
     "  Connection Details",
-    "  " + "=".repeat(40),
+    `  ${"=".repeat(40)}`,
     `  Host:         ${pairing.host}`,
     `  Port:         ${pairing.port}`,
     `  TLS:          ${pairing.tls ? "enabled" : "disabled"}`,

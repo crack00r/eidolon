@@ -343,7 +343,7 @@ async function onboardClient(ask: AskFn): Promise<void> {
     const selected = servers[selIdx];
     if (selected) {
       console.log(`\n  Selected: ${selected.host}:${selected.port}`);
-      const token = await ask("Auth token: ");
+      const _token = await ask("Auth token: ");
       console.log("\n--- Testing connection... ---\n");
       console.log(`  Would connect to ${selected.host}:${selected.port} with provided token.`);
       console.log("  (Full connection test requires the gateway client -- Phase 7+)");

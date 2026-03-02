@@ -21,6 +21,22 @@
       "component": "eidolon",
       "changelog-path": "CHANGELOG.md",
       "initial-version": "0.1.0"
+    },
+    "packages/protocol": {
+      "component": "protocol",
+      "changelog-path": "packages/protocol/CHANGELOG.md"
+    },
+    "packages/core": {
+      "component": "core",
+      "changelog-path": "packages/core/CHANGELOG.md"
+    },
+    "packages/cli": {
+      "component": "cli",
+      "changelog-path": "packages/cli/CHANGELOG.md"
+    },
+    "packages/test-utils": {
+      "component": "test-utils",
+      "changelog-path": "packages/test-utils/CHANGELOG.md"
     }
   }
 }

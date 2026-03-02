@@ -1,0 +1,103 @@
+{
+  // ─── Identity ───────────────────────────────────────────
+  // Who Eidolon is and who it serves
+  "identity": {
+    "name": "Eidolon",
+    "timezone": "Europe/Berlin",
+    "locale": "en-US",
+    "owner": {
+      "name": "Your Name"
+    }
+  },
+
+  // ─── Brain (Claude Code Integration) ────────────────────
+  // At least one account is required. OAuth is recommended for personal use.
+  "brain": {
+    "accounts": [
+      {
+        "type": "oauth",
+        "name": "primary",
+        "priority": 1,
+        "model": "claude-sonnet-4-20250514"
+      }
+    ],
+    "defaultModel": "claude-sonnet-4-20250514",
+    "maxTurns": 25,
+    "sessionTimeout": 3600
+  },
+
+  // ─── Cognitive Loop ─────────────────────────────────────
+  // Controls how Eidolon allocates its thinking budget
+  "loop": {
+    "energyBudget": {
+      "tokensPerHour": 50000,
+      "responseAllocation": 0.6,
+      "learningAllocation": 0.3,
+      "dreamingAllocation": 0.1
+    },
+    "businessHours": {
+      "start": "08:00",
+      "end": "22:00",
+      "days": [1, 2, 3, 4, 5, 6, 7]
+    }
+  },
+
+  // ─── Memory Engine ──────────────────────────────────────
+  // Local embeddings via ONNX -- no external API needed
+  "memory": {
+    "extraction": {
+      "enabled": true,
+      "minConfidence": 0.7
+    },
+    "dreaming": {
+      "enabled": true,
+      "schedule": "02:00",
+      "maxDuration": 3600
+    },
+    "search": {
+      "hybridWeight": 0.7,
+      "maxResults": 20,
+      "embedding": {
+        "provider": "local",
+        "model": "multilingual-e5-small",
+        "dimensions": 384
+      }
+    }
+  },
+
+  // ─── Channels ───────────────────────────────────────────
+  // Enable channels as needed. Set secrets via: eidolon secrets set <KEY>
+  "channels": {
+    "telegram": {
+      "enabled": false,
+      "botToken": { "$secret": "TELEGRAM_BOT_TOKEN" },
+      "allowedUsers": [],
+      "mode": "polling"
+    }
+  },
+
+  // ─── Gateway (WebSocket API) ────────────────────────────
+  // Exposes a WebSocket endpoint for desktop/mobile clients
+  "gateway": {
+    "enabled": true,
+    "host": "0.0.0.0",
+    "port": 8419,
+    "authToken": { "$secret": "GATEWAY_TOKEN" },
+    "maxConnections": 10,
+    "heartbeatInterval": 30000
+  },
+
+  // ─── Logging ────────────────────────────────────────────
+  "logging": {
+    "level": "info",
+    "console": true,
+    "maxSize": "50MB",
+    "maxFiles": 5
+  },
+
+  // ─── Daemon ─────────────────────────────────────────────
+  "daemon": {
+    "autoStart": false,
+    "gracefulShutdownTimeout": 30000
+  }
+}

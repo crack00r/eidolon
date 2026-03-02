@@ -56,8 +56,8 @@ function installMacOsService(): boolean {
     }
     writeFileSync(plistPath, PLIST_CONTENT, "utf-8");
     console.log(`  Created LaunchAgent: ${plistPath}`);
-    console.log("  To load now: launchctl load " + plistPath);
-    console.log("  To unload:   launchctl unload " + plistPath);
+    console.log(`  To load now: launchctl load ${plistPath}`);
+    console.log(`  To unload:   launchctl unload ${plistPath}`);
     return true;
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);

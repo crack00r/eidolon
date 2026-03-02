@@ -29,8 +29,8 @@ export const OPERATIONAL_MIGRATIONS: ReadonlyArray<Migration> = [
       CREATE INDEX idx_sessions_status ON sessions(status);
       CREATE INDEX idx_sessions_type ON sessions(type);
 
-      -- TODO: Add event cleanup as a housekeeping task — processed events should
-      -- be pruned after a configurable retention period to prevent unbounded growth.
+      -- Event cleanup is handled by the housekeeping module (dreaming phase 1).
+      -- Processed events are pruned after a configurable retention period.
       CREATE TABLE events (
         id TEXT PRIMARY KEY,
         type TEXT NOT NULL,
@@ -184,6 +184,19 @@ export const OPERATIONAL_MIGRATIONS: ReadonlyArray<Migration> = [
     down: `
       DROP INDEX IF EXISTS idx_device_tokens_platform;
       DROP TABLE IF EXISTS device_tokens;
+    `,
+  },
+  {
+    version: 5,
+    name: "add_event_retention_tracking",
+    database: "operational",
+    up: `
+      ALTER TABLE events ADD COLUMN retention_days INTEGER DEFAULT 30;
+      CREATE INDEX IF NOT EXISTS idx_events_processed_cleanup ON events(processed_at) WHERE processed_at IS NOT NULL;
+    `,
+    down: `
+      DROP INDEX IF EXISTS idx_events_processed_cleanup;
+      ALTER TABLE events DROP COLUMN retention_days;
     `,
   },
 ];
