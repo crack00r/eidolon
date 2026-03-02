@@ -53,13 +53,28 @@ export ANTHROPIC_API_KEY=sk-ant-...
 eidolon onboard
 ```
 
-The wizard walks you through:
-1. **Identity** — your name, timezone, locale
-2. **Claude Code** — account type (OAuth or API key)
-3. **Gateway** — port (default: 7777) and auth token
-4. **Channels** — optionally configure Telegram
+The wizard first checks prerequisites (Bun runtime, Claude Code CLI, data/config/log directories), then walks you through setup based on the role you choose.
 
-This creates `~/.eidolon/eidolon.json`.
+### Wizard Steps (Brain Server)
+
+1. **Role Selection** — choose **Brain Server** (runs the AI daemon) or **Client Only** (connects to an existing server)
+2. **Identity** — enter the owner name
+3. **Security** — generate or provide a master encryption key (AES-256-GCM, used to encrypt all secrets)
+4. **Claude Account** — optionally enter a Claude API key (otherwise OAuth is used)
+5. **Gateway Setup** — port (default: `8419`), auto-generated or manual auth token, TLS toggle, bind address (`0.0.0.0` or `127.0.0.1`)
+6. **Network Discovery** — enable/disable UDP broadcast so clients can auto-discover the server; Tailscale IP is auto-detected if available
+7. **Channels** — optionally enter a Telegram bot token and/or GPU worker URL
+8. **Platform Service** — optionally install as a systemd/launchd service for auto-start on boot
+9. **Doctor Checks** — validates the generated configuration
+10. **Summary** — shows gateway URL, discovery status, and a **pairing URL** (`eidolon://host:port?token=...&tls=...`) for connecting clients
+
+### Wizard Steps (Client Only)
+
+1. **Auto-Discovery** — listens for UDP broadcast beacons for 5 seconds and lists any discovered servers
+2. **Select or Enter Manually** — pick a discovered server or enter a `host:port` address manually
+3. **Auth Token** — enter the gateway auth token provided by the server operator
+
+After setup, the config is written to `~/.eidolon/eidolon.json`.
 
 ### Minimal Manual Config (Alternative)
 
@@ -71,24 +86,36 @@ cat > ~/.eidolon/eidolon.json << 'EOF'
 {
   "identity": {
     "name": "Eidolon",
-    "timezone": "Europe/Berlin",
-    "owner": { "name": "Manuel" }
+    "ownerName": "Manuel"
   },
   "brain": {
     "accounts": [
-      { "type": "oauth", "name": "main" }
+      { "type": "oauth", "name": "primary", "credential": "oauth", "priority": 50 }
     ]
   },
   "gateway": {
-    "enabled": true,
-    "port": 7777,
-    "authToken": { "$secret": "GATEWAY_TOKEN" }
-  }
+    "host": "0.0.0.0",
+    "port": 8419,
+    "tls": { "enabled": false },
+    "auth": { "type": "token", "token": { "$secret": "gateway-auth-token" } }
+  },
+  "database": {},
+  "logging": { "level": "info", "format": "pretty" },
+  "daemon": {}
 }
 EOF
 ```
 
 ## Step 4: Set Up Secrets
+
+If you used the onboard wizard, secrets (master key, gateway token, API key) were already encrypted and stored during setup. You only need to ensure the master key is available at runtime:
+
+```bash
+# Add to your shell profile (~/.bashrc, ~/.zshrc, etc.)
+export EIDOLON_MASTER_KEY=<your-master-key>
+```
+
+To add or change secrets manually:
 
 ```bash
 # Gateway auth token (clients use this to connect)
@@ -111,7 +138,7 @@ Expected output:
 [INFO] Eidolon daemon starting...
 [INFO] Configuration loaded from ~/.eidolon/eidolon.json
 [INFO] Databases initialized (memory.db, operational.db, audit.db)
-[INFO] Gateway listening on 0.0.0.0:7777
+[INFO] Gateway listening on 0.0.0.0:8419
 [INFO] Cognitive loop active
 [INFO] Eidolon is ready
 ```
@@ -124,7 +151,7 @@ Leave this running and open a new terminal for the next steps.
 eidolon daemon status
 # Status: running
 # PID: 12345
-# Gateway: 0.0.0.0:7777
+# Gateway: 0.0.0.0:8419
 
 eidolon doctor
 # ✓ Bun 1.1.x
@@ -132,7 +159,7 @@ eidolon doctor
 # ✓ Configuration valid
 # ✓ Secret store accessible
 # ✓ Databases writable
-# ✓ Gateway port 7777 available
+# ✓ Gateway port 8419 available
 ```
 
 ## Step 7: Chat
@@ -161,7 +188,7 @@ pnpm --filter @eidolon/web dev
 
 Open `http://localhost:5173` in your browser. Enter:
 - Server: `localhost`
-- Port: `7777`
+- Port: `8419`
 - Token: (the GATEWAY_TOKEN you set earlier)
 
 ### Desktop Client
@@ -173,7 +200,7 @@ cd apps/desktop
 cargo tauri dev
 ```
 
-Enter `localhost:7777` and your gateway token in the connection settings.
+Enter `localhost:8419` and your gateway token in the connection settings.
 
 ## Step 9: Add Telegram (Optional)
 
@@ -212,7 +239,7 @@ After completing this guide, you have:
 | Component | Location | Status |
 |---|---|---|
 | Brain/Core daemon | localhost | Running, cognitive loop active |
-| WebSocket Gateway | localhost:7777 | Accepting client connections |
+| WebSocket Gateway | localhost:8419 | Accepting client connections |
 | Databases | ~/.eidolon/*.db | Auto-created, WAL mode |
 | Secret store | ~/.eidolon/secrets.enc | Encrypted with your passphrase |
 | Web dashboard | localhost:5173 | (if started) Dev server |
@@ -244,14 +271,14 @@ Or link it:
 pnpm --filter @eidolon/cli link --global
 ```
 
-### "Port 7777 already in use"
+### "Port 8419 already in use"
 
 ```bash
 # Find what's using the port
-ss -tlnp | grep 7777
+ss -tlnp | grep 8419
 
 # Use a different port
-EIDOLON_GATEWAY__PORT=7778 eidolon daemon start --foreground
+EIDOLON_GATEWAY__PORT=8420 eidolon daemon start --foreground
 ```
 
 ### "Claude Code authentication failed"
@@ -274,7 +301,7 @@ eidolon config validate
 ### Web dashboard can't connect
 
 - Ensure the daemon is running: `eidolon daemon status`
-- Check the port matches (default: 7777)
+- Check the port matches (default: 8419)
 - Check the auth token is correct
 
 ## Next Steps

@@ -131,6 +131,48 @@ describe("HealthServer", () => {
     expect(res.status).toBe(404);
   });
 
+  test("GET /discovery returns discovery info when configured", async () => {
+    const checker = new HealthChecker(logger);
+    checker.register("db", passCheck("db"));
+
+    const port = randomPort();
+    const server = createHealthServer({
+      port,
+      checker,
+      logger,
+      discovery: {
+        version: "0.1.2",
+        hostname: "test-server",
+        gateway: { host: "192.168.1.50", port: 8419, tls: false },
+      },
+    });
+    server.start();
+    activeServers.push(server);
+
+    const res = await fetch(`http://127.0.0.1:${port}/discovery`);
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe("application/json");
+
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.service).toBe("eidolon");
+    expect(body.version).toBe("0.1.2");
+    expect(body.hostname).toBe("test-server");
+    expect(body.gateway).toEqual({ host: "192.168.1.50", port: 8419, tls: false });
+  });
+
+  test("GET /discovery returns 404 when not configured", async () => {
+    const checker = new HealthChecker(logger);
+
+    const { base } = startServer(checker);
+    const res = await fetch(`${base}/discovery`);
+
+    expect(res.status).toBe(404);
+
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.error).toBe("Discovery not configured");
+  });
+
   test("server can be stopped", async () => {
     const checker = new HealthChecker(logger);
     const port = randomPort();

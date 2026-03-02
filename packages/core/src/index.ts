@@ -7,6 +7,7 @@ export * from "./claude/index.ts";
 export * from "./config/index.ts";
 export * from "./daemon/index.ts";
 export * from "./database/index.ts";
+export * from "./discovery/index.ts";
 export * from "./gateway/index.ts";
 export * from "./gpu/index.ts";
 export * from "./health/index.ts";

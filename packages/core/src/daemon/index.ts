@@ -14,10 +14,14 @@ import { BackupManager } from "../backup/manager.ts";
 import { loadConfig } from "../config/loader.ts";
 import { getDataDir, getPidFilePath } from "../config/paths.ts";
 import { DatabaseManager } from "../database/manager.ts";
+import { DiscoveryBroadcaster } from "../discovery/broadcaster.ts";
+import { TailscaleDetector } from "../discovery/tailscale.ts";
+import { GatewayServer } from "../gateway/server.ts";
 import { HealthChecker } from "../health/checker.ts";
 import { createHealthServer } from "../health/server.ts";
 import type { Logger } from "../logging/logger.ts";
 import { createLogger } from "../logging/logger.ts";
+import { EventBus } from "../loop/event-bus.ts";
 import { TokenTracker } from "../metrics/token-tracker.ts";
 import { getMasterKey } from "../secrets/master-key.ts";
 import { SecretStore } from "../secrets/store.ts";
@@ -41,6 +45,10 @@ interface InitializedModules {
   healthServer?: ReturnType<typeof createHealthServer>;
   tokenTracker?: TokenTracker;
   backupManager?: BackupManager;
+  eventBus?: EventBus;
+  gatewayServer?: GatewayServer;
+  tailscaleDetector?: TailscaleDetector;
+  discoveryBroadcaster?: DiscoveryBroadcaster;
 }
 
 // ---------------------------------------------------------------------------
@@ -230,17 +238,15 @@ export class EidolonDaemon {
         },
       });
 
-      // 10-18: Higher-phase modules (placeholder logging)
+      // 10-14: Higher-phase modules (placeholder logging)
       const placeholders = [
         "EmbeddingModel (Phase 2)",
         "MemoryStore (Phase 2)",
         "MemorySearch (Phase 2)",
         "ClaudeCodeManager (Phase 1)",
-        "EventBus (Phase 3)",
         "SessionSupervisor (Phase 3)",
         "CognitiveLoop (Phase 3)",
         "Channels (Phase 4)",
-        "Gateway (Phase 7)",
         "GPUManager (Phase 6)",
       ];
 
@@ -252,6 +258,76 @@ export class EidolonDaemon {
           },
         });
       }
+
+      // 15. EventBus (needs DatabaseManager, Logger)
+      initOrder.push({
+        name: "EventBus",
+        fn: () => {
+          const dbManager = this.modules.dbManager;
+          const logger = this.modules.logger;
+          if (!dbManager || !logger) return;
+
+          this.modules.eventBus = new EventBus(dbManager.operational, logger);
+          logger.info("daemon", "EventBus initialized");
+        },
+      });
+
+      // 16. GatewayServer (needs Config, Logger, EventBus)
+      initOrder.push({
+        name: "GatewayServer",
+        fn: async () => {
+          const config = this.modules.config;
+          const logger = this.modules.logger;
+          const eventBus = this.modules.eventBus;
+          if (!config || !logger || !eventBus) {
+            logger?.warn("daemon", "GatewayServer skipped: missing dependencies");
+            return;
+          }
+
+          this.modules.gatewayServer = new GatewayServer({
+            config: config.gateway,
+            logger,
+            eventBus,
+          });
+          await this.modules.gatewayServer.start();
+          logger.info(
+            "daemon",
+            `GatewayServer started on ${config.gateway.host}:${config.gateway.port}`,
+          );
+        },
+      });
+
+      // 17. TailscaleDetector (needs Logger)
+      initOrder.push({
+        name: "TailscaleDetector",
+        fn: () => {
+          const logger = this.modules.logger;
+          if (!logger) return;
+
+          this.modules.tailscaleDetector = new TailscaleDetector(logger);
+          this.modules.tailscaleDetector.start();
+          logger.info("daemon", "TailscaleDetector started");
+        },
+      });
+
+      // 18. DiscoveryBroadcaster (needs Config, Logger, TailscaleDetector)
+      initOrder.push({
+        name: "DiscoveryBroadcaster",
+        fn: async () => {
+          const config = this.modules.config;
+          const logger = this.modules.logger;
+          if (!config || !logger) return;
+
+          this.modules.discoveryBroadcaster = new DiscoveryBroadcaster({
+            logger,
+            gatewayPort: config.gateway.port,
+            tlsEnabled: config.gateway.tls.enabled,
+            tailscale: this.modules.tailscaleDetector,
+          });
+          await this.modules.discoveryBroadcaster.start();
+          logger.info("daemon", "DiscoveryBroadcaster started");
+        },
+      });
 
       // Execute init steps in order
       for (const step of initOrder) {
@@ -345,6 +421,36 @@ export class EidolonDaemon {
 
   private async teardownModules(): Promise<void> {
     const logger = this.modules.logger;
+
+    // Discovery broadcaster (stop UDP + mDNS)
+    if (this.modules.discoveryBroadcaster) {
+      try {
+        await this.modules.discoveryBroadcaster.stop();
+        logger?.info("daemon", "DiscoveryBroadcaster stopped");
+      } catch (err: unknown) {
+        logger?.error("daemon", "Error stopping DiscoveryBroadcaster", err);
+      }
+    }
+
+    // Tailscale detector
+    if (this.modules.tailscaleDetector) {
+      try {
+        this.modules.tailscaleDetector.stop();
+        logger?.info("daemon", "TailscaleDetector stopped");
+      } catch (err: unknown) {
+        logger?.error("daemon", "Error stopping TailscaleDetector", err);
+      }
+    }
+
+    // Gateway server
+    if (this.modules.gatewayServer) {
+      try {
+        await this.modules.gatewayServer.stop();
+        logger?.info("daemon", "GatewayServer stopped");
+      } catch (err: unknown) {
+        logger?.error("daemon", "Error stopping GatewayServer", err);
+      }
+    }
 
     // Health server
     if (this.modules.healthServer) {

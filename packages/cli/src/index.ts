@@ -12,6 +12,7 @@ import { registerDoctorCommand } from "./commands/doctor.ts";
 import { registerLearningCommand } from "./commands/learning.ts";
 import { registerMemoryCommand } from "./commands/memory.ts";
 import { registerOnboardCommand } from "./commands/onboard.ts";
+import { registerPairCommand } from "./commands/pair.ts";
 import { registerPrivacyCommand } from "./commands/privacy.ts";
 import { registerSecretsCommand } from "./commands/secrets.ts";
 
@@ -29,6 +30,7 @@ registerLearningCommand(program);
 registerChannelCommand(program);
 registerPrivacyCommand(program);
 registerOnboardCommand(program);
+registerPairCommand(program);
 
 program.parse();
 

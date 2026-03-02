@@ -16,7 +16,7 @@ All Eidolon components communicate over a Tailscale mesh VPN. This provides encr
    │  │ Eidolon Core │        │GPU Worker │      │ Tauri  │  │
    │  │              │◄──────►│ :8420     │      │ Client │  │
    │  │ Gateway      │        └───────────┘      │        │  │
-   │  │ :7777        │◄─────────────────────────►│        │  │
+   │  │ :8419        │◄─────────────────────────►│        │  │
    │  │              │                            └────────┘  │
    │  │ Web Dashboard│        iPhone                          │
    │  │ :3000        │        100.64.0.4                      │
@@ -31,7 +31,7 @@ All Eidolon components communicate over a Tailscale mesh VPN. This provides encr
 
 | Component | Port | Protocol | Direction |
 |---|---|---|---|
-| Brain Gateway | 7777 | WebSocket (JSON-RPC 2.0) | Clients → Server |
+| Brain Gateway | 8419 | WebSocket (JSON-RPC 2.0) | Clients → Server |
 | GPU Worker | 8420 | HTTP + WebSocket | Server → GPU |
 | Web Dashboard | 3000 | HTTP | Browser → Server |
 | Telegram API | 443 | HTTPS (outbound) | Server → Telegram |
@@ -89,7 +89,7 @@ Configure ACLs in the [Tailscale Admin Console](https://login.tailscale.com/admi
     {
       "action": "accept",
       "src": ["*"],
-      "dst": ["ubuntu-server:7777"]
+      "dst": ["ubuntu-server:8419"]
     },
     // Only the server can reach the GPU worker
     {
@@ -116,7 +116,7 @@ This ensures that only the brain server can communicate with the GPU worker, whi
 All clients (desktop, iOS, web) connect to the brain server's WebSocket gateway:
 
 ```
-Client → ws://ubuntu-server.tailnet.ts.net:7777 → Brain Server
+Client → ws://ubuntu-server.tailnet.ts.net:8419 → Brain Server
 ```
 
 1. Client opens WebSocket connection
@@ -178,7 +178,7 @@ If a device cannot join the Tailscale network (e.g., an iPhone on a corporate ne
 
    ingress:
      - hostname: eidolon.yourdomain.com
-       service: ws://localhost:7777
+       service: ws://localhost:8419
      - hostname: dashboard.yourdomain.com
        service: http://localhost:3000
      - service: http_status:404
@@ -219,13 +219,13 @@ The Cloudflare Tunnel handles TLS termination and WebSocket proxying automatical
 
 ```bash
 # Allow gateway from Tailscale only
-sudo ufw allow in on tailscale0 to any port 7777
+sudo ufw allow in on tailscale0 to any port 8419
 
 # Allow web dashboard from Tailscale only
 sudo ufw allow in on tailscale0 to any port 3000
 
 # Block gateway from public interfaces
-sudo ufw deny 7777
+sudo ufw deny 8419
 sudo ufw deny 3000
 
 # Allow outbound (Telegram, package managers, etc.)
@@ -287,7 +287,7 @@ Configure the gateway to use TLS:
 }
 ```
 
-Clients connect via `wss://ubuntu-server.tailnet.ts.net:7777`.
+Clients connect via `wss://ubuntu-server.tailnet.ts.net:8419`.
 
 > **Note:** Tailscale certs auto-renew, but you may need to restart the daemon or set up a renewal hook.
 
@@ -315,7 +315,7 @@ Run from the brain server:
 ```bash
 eidolon doctor
 # ✓ Tailscale connected (100.64.0.1)
-# ✓ Gateway port 7777 available
+# ✓ Gateway port 8419 available
 # ✓ GPU worker reachable (windows-pc.tailnet.ts.net:8420)
 # ✓ Telegram API reachable
 ```
@@ -331,7 +331,7 @@ curl -H "Authorization: Bearer $GPU_API_KEY" \
 **Client → Gateway:**
 ```bash
 # Using websocat
-websocat ws://ubuntu-server.tailnet.ts.net:7777
+websocat ws://ubuntu-server.tailnet.ts.net:8419
 ```
 
 **Server → Telegram:**

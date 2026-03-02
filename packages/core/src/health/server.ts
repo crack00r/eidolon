@@ -1,9 +1,10 @@
 /**
  * Lightweight HTTP health check server using Bun.serve().
  *
- * Exposes two endpoints:
+ * Exposes three endpoints:
  * - GET /health       — full health status with checks array
  * - GET /health/ready — simple readiness probe { ready: boolean }
+ * - GET /discovery    — server discovery info (service, version, hostname, gateway)
  *
  * Binds to 127.0.0.1 by default for security (internal use only).
  */
@@ -11,11 +12,22 @@
 import type { Logger } from "../logging/logger.ts";
 import type { HealthChecker } from "./checker.ts";
 
+export interface DiscoveryInfo {
+  readonly version: string;
+  readonly hostname: string;
+  readonly gateway: {
+    readonly host: string;
+    readonly port: number;
+    readonly tls: boolean;
+  };
+}
+
 export interface HealthServerOptions {
   readonly port: number;
   readonly host?: string;
   readonly checker: HealthChecker;
   readonly logger: Logger;
+  readonly discovery?: DiscoveryInfo;
 }
 
 export interface HealthServer {
@@ -30,7 +42,7 @@ export interface HealthServer {
  * Call `.start()` to begin serving, `.stop()` to shut down.
  */
 export function createHealthServer(options: HealthServerOptions): HealthServer {
-  const { port, checker, logger: parentLogger } = options;
+  const { port, checker, logger: parentLogger, discovery } = options;
   const host = options.host ?? "127.0.0.1";
   const logger = parentLogger.child("health-server");
 
@@ -66,6 +78,22 @@ export function createHealthServer(options: HealthServerOptions): HealthServer {
     return jsonResponse({ ready }, ready ? 200 : 503);
   }
 
+  function handleDiscovery(): Response {
+    if (!discovery) {
+      return jsonResponse({ error: "Discovery not configured" }, 404);
+    }
+
+    return jsonResponse(
+      {
+        service: "eidolon",
+        version: discovery.version,
+        hostname: discovery.hostname,
+        gateway: discovery.gateway,
+      },
+      200,
+    );
+  }
+
   async function handleRequest(req: Request): Promise<Response> {
     const url = new URL(req.url);
     const { pathname } = url;
@@ -82,6 +110,10 @@ export function createHealthServer(options: HealthServerOptions): HealthServer {
 
     if (pathname === "/health/ready") {
       return handleReady();
+    }
+
+    if (pathname === "/discovery") {
+      return handleDiscovery();
     }
 
     return jsonResponse({ error: "Not found" }, 404);

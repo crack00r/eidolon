@@ -12,6 +12,7 @@ pub fn run() {
             commands::get_platform,
             commands::get_version,
             commands::open_external_url,
+            commands::discover_servers,
         ])
         .setup(|app| {
             tray::create_tray(app.handle())?;

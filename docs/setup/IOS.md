@@ -83,7 +83,7 @@ apps/ios/Eidolon/
 
 ### Default Connection
 
-The app defaults to `ws://127.0.0.1:7777`. Change this in the **Settings** tab after launching.
+The app defaults to `ws://127.0.0.1:8419`. Change this in the **Settings** tab after launching.
 
 ### Using Tailscale
 
@@ -93,7 +93,7 @@ If both your iPhone and the server are on the same Tailscale network:
 2. Log in with the same Tailscale account as the server
 3. In the Eidolon app Settings, enter:
    - **Server**: `ubuntu-server.tailnet.ts.net` (or the Tailscale IP)
-   - **Port**: `7777`
+   - **Port**: `8419`
    - **Token**: Your gateway auth token
 
 ### Using Cloudflare Tunnel (Alternative)

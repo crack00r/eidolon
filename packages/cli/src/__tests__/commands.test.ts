@@ -130,6 +130,37 @@ mock.module("@eidolon/core", () => ({
   HousekeepingPhase: class {},
   RemPhase: class {},
   NremPhase: class {},
+  // discovery
+  DISCOVERY_PORT: 41920,
+  DiscoveryBroadcaster: class {
+    async start() {}
+    async stop() {}
+    buildBeacon() {
+      return {};
+    }
+  },
+  TailscaleDetector: class {
+    start() {}
+    stop() {}
+    getCachedIp() {
+      return undefined;
+    }
+    async getInfo() {
+      return { ok: true, value: { ip: "", hostname: "", active: false } };
+    }
+  },
+  getLocalIpAddresses: () => ["192.168.1.100"],
+  generateAuthToken: () => "mock-token",
+  buildPairingUrl: () => ({
+    url: "eidolon://localhost:8419?token=mock",
+    host: "localhost",
+    port: 8419,
+    token: "mock",
+    tls: false,
+    version: "0.0.0",
+  }),
+  buildPairingJson: () => "{}",
+  formatConnectionDetails: () => "Connection details",
 }));
 
 // ---------------------------------------------------------------------------
@@ -145,6 +176,7 @@ import { registerDoctorCommand } from "../commands/doctor.ts";
 import { registerLearningCommand } from "../commands/learning.ts";
 import { registerMemoryCommand } from "../commands/memory.ts";
 import { registerOnboardCommand } from "../commands/onboard.ts";
+import { registerPairCommand } from "../commands/pair.ts";
 import { registerPrivacyCommand } from "../commands/privacy.ts";
 import { registerSecretsCommand } from "../commands/secrets.ts";
 
@@ -167,6 +199,7 @@ function createProgram(): Command {
   registerChannelCommand(program);
   registerPrivacyCommand(program);
   registerOnboardCommand(program);
+  registerPairCommand(program);
 
   return program;
 }
@@ -208,7 +241,7 @@ describe("CLI command registration", () => {
     expect(program.description()).toContain("AI assistant");
   });
 
-  test("all 10 top-level commands are registered", () => {
+  test("all 11 top-level commands are registered", () => {
     const commandNames = program.commands.map((c) => c.name());
     const expected = [
       "daemon",
@@ -221,12 +254,13 @@ describe("CLI command registration", () => {
       "channel",
       "privacy",
       "onboard",
+      "pair",
     ];
 
     for (const name of expected) {
       expect(commandNames).toContain(name);
     }
-    expect(program.commands.length).toBe(10);
+    expect(program.commands.length).toBe(11);
   });
 });
 
@@ -483,6 +517,10 @@ describe("stub commands", () => {
 
   test("onboard command exists", () => {
     expect(findCommand(program, "onboard")).toBeDefined();
+  });
+
+  test("pair command exists", () => {
+    expect(findCommand(program, "pair")).toBeDefined();
   });
 });
 

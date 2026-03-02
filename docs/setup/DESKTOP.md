@@ -87,14 +87,14 @@ Enter the Tailscale hostname or IP of your brain server:
 
 ```
 Server: ubuntu-server.tailnet.ts.net
-Port:   7777
+Port:   8419
 ```
 
 Or use a direct Tailscale IP:
 
 ```
 Server: 100.x.x.y
-Port:   7777
+Port:   8419
 ```
 
 ### 2. Enter Auth Token
@@ -208,7 +208,7 @@ This starts the Svelte dev server with hot-reload and opens the Tauri window. Ch
 The desktop client communicates with the brain server using JSON-RPC 2.0 over WebSocket.
 
 **Connection flow:**
-1. Client opens WebSocket to `ws://server:7777` (or `wss://` with TLS)
+1. Client opens WebSocket to `ws://server:8419` (or `wss://` with TLS)
 2. Client sends authentication message with the gateway token
 3. Server validates token (constant-time comparison)
 4. On success, client receives a welcome event with server capabilities
@@ -225,7 +225,7 @@ The desktop client communicates with the brain server using JSON-RPC 2.0 over We
 
 - Verify the brain server is running: `eidolon daemon status` on the server
 - Check Tailscale connectivity: `ping ubuntu-server.tailnet.ts.net`
-- Verify the port matches: default is `7777`
+- Verify the port matches: default is `8419`
 - Check the auth token matches the server's `GATEWAY_TOKEN` secret
 
 ### App crashes on startup (Linux)

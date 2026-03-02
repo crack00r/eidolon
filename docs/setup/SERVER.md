@@ -127,7 +127,7 @@ If you skipped the onboard wizard, create `~/.eidolon/eidolon.json` manually:
   },
   "gateway": {
     "enabled": true,
-    "port": 7777,
+    "port": 8419,
     "authToken": { "$secret": "GATEWAY_TOKEN" }
   }
 }
@@ -156,7 +156,7 @@ eidolon daemon start --foreground
 # [INFO] Eidolon daemon starting...
 # [INFO] Configuration loaded from ~/.eidolon/eidolon.json
 # [INFO] Databases initialized
-# [INFO] Gateway listening on 0.0.0.0:7777
+# [INFO] Gateway listening on 0.0.0.0:8419
 # [INFO] Cognitive loop active
 ```
 
@@ -193,7 +193,7 @@ eidolon daemon status
 # Status: running
 # PID: 12345
 # Uptime: 2h 15m
-# Gateway: 0.0.0.0:7777 (3 connections)
+# Gateway: 0.0.0.0:8419 (3 connections)
 # Memory: 245 MB RSS
 ```
 
@@ -208,7 +208,7 @@ eidolon doctor
 # ✓ Configuration valid
 # ✓ Secret store accessible
 # ✓ Databases writable
-# ✓ Gateway port 7777 available
+# ✓ Gateway port 8419 available
 # ✓ Tailscale connected (100.x.x.x)
 # ✓ GPU worker reachable (windows-pc.tailnet.ts.net:8420)
 # ✓ Telegram bot token valid
@@ -220,7 +220,7 @@ From another machine on the Tailscale network:
 
 ```bash
 # Using websocat or similar WebSocket client
-websocat ws://ubuntu-server.tailnet.ts.net:7777
+websocat ws://ubuntu-server.tailnet.ts.net:8419
 ```
 
 ## Firewall Configuration
@@ -229,14 +229,14 @@ Open the gateway port only on the Tailscale interface:
 
 ```bash
 # Allow gateway traffic from Tailscale only
-sudo ufw allow in on tailscale0 to any port 7777
+sudo ufw allow in on tailscale0 to any port 8419
 
 # Verify
 sudo ufw status
-# 7777    ALLOW IN    Anywhere on tailscale0
+# 8419    ALLOW IN    Anywhere on tailscale0
 ```
 
-Do **not** expose port 7777 on public interfaces. All client connections go through Tailscale.
+Do **not** expose port 8419 on public interfaces. All client connections go through Tailscale.
 
 See [Network Setup](NETWORK.md) for the full network configuration guide.
 
@@ -274,11 +274,11 @@ eidolon config validate
 ### Port already in use
 
 ```bash
-# Check what's using port 7777
-sudo ss -tlnp | grep 7777
+# Check what's using port 8419
+sudo ss -tlnp | grep 8419
 
 # Use a different port
-export EIDOLON_GATEWAY__PORT=7778
+export EIDOLON_GATEWAY__PORT=8420
 ```
 
 ### Claude Code authentication

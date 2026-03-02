@@ -183,7 +183,7 @@ Everything else has sensible defaults.
   "gateway": {
     "enabled": true,
     "host": "0.0.0.0",                    // Bind address
-    "port": 7777,                         // WebSocket port
+    "port": 8419,                         // WebSocket port
     "authToken": { "$secret": "GATEWAY_TOKEN" },
     "tls": {
       "enabled": false,                   // TLS handled by Tailscale

@@ -180,3 +180,41 @@ export interface PushExecuteCommandPayload {
   readonly args?: unknown;
   readonly fromClientId: string;
 }
+
+// ---------------------------------------------------------------------------
+// Discovery & Pairing types
+// ---------------------------------------------------------------------------
+
+export interface DiscoveryBeacon {
+  readonly service: "eidolon";
+  readonly version: string;
+  readonly hostname: string;
+  readonly host: string;
+  readonly port: number;
+  readonly tailscaleIp?: string;
+  readonly tls: boolean;
+  readonly role: "server";
+  readonly startedAt: number;
+}
+
+export interface ServerInfo {
+  readonly hostname: string;
+  readonly host: string;
+  readonly port: number;
+  readonly version: string;
+  readonly tailscaleIp?: string;
+  readonly tls: boolean;
+  readonly uptime: number;
+  readonly connectedClients: number;
+  readonly memoryCount: number;
+}
+
+export interface PairingUrl {
+  readonly url: string;
+  readonly host: string;
+  readonly port: number;
+  readonly token: string;
+  readonly tls: boolean;
+  readonly tailscaleIp?: string;
+  readonly version: string;
+}

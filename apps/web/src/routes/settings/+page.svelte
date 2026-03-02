@@ -1,4 +1,5 @@
 <script lang="ts">
+import { onMount } from "svelte";
 import { connect, connectionState, disconnect, isConnected } from "$lib/stores/connection";
 import { resetSettings, settingsStore, updateSettings } from "$lib/stores/settings";
 
@@ -7,6 +8,173 @@ let port = $state($settingsStore.port);
 let token = $state($settingsStore.token);
 let useTls = $state($settingsStore.useTls);
 let saved = $state(false);
+
+// Auto-detect state
+let autoDetectStatus = $state<"idle" | "checking" | "found" | "not-found">("idle");
+let detectedHost = $state<string | null>(null);
+let detectedPort = $state<number | null>(null);
+
+// Pairing URL state
+let pairingUrl = $state("");
+let pairingError = $state<string | null>(null);
+let pairingParsed = $state<{ host: string; port: number; token: string; tls: boolean } | null>(null);
+
+onMount(() => {
+  // Auto-detect: if the web app is served from the same host as the server,
+  // try connecting to the discovery endpoint
+  tryAutoDetect();
+});
+
+async function tryAutoDetect(): Promise<void> {
+  autoDetectStatus = "checking";
+
+  // First, try the origin host (web app served from the server itself)
+  const originHost = window.location.hostname;
+  const healthPort = 9419;
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 2000);
+
+    const res = await fetch(`http://${originHost}:${healthPort}/discovery`, {
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+
+    if (res.ok) {
+      const data = (await res.json()) as {
+        service?: string;
+        hostname?: string;
+        gateway?: { host?: string; port?: number; tls?: boolean };
+      };
+
+      if (data.service === "eidolon" && data.gateway) {
+        detectedHost = data.gateway.host ?? originHost;
+        detectedPort = data.gateway.port ?? 8419;
+        autoDetectStatus = "found";
+        return;
+      }
+    }
+  } catch {
+    // Origin host didn't work, try localhost
+  }
+
+  // Try localhost if origin didn't work
+  if (originHost !== "127.0.0.1" && originHost !== "localhost") {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 2000);
+
+      const res = await fetch(`http://127.0.0.1:${healthPort}/discovery`, {
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+
+      if (res.ok) {
+        const data = (await res.json()) as {
+          service?: string;
+          gateway?: { host?: string; port?: number; tls?: boolean };
+        };
+
+        if (data.service === "eidolon" && data.gateway) {
+          detectedHost = data.gateway.host ?? "127.0.0.1";
+          detectedPort = data.gateway.port ?? 8419;
+          autoDetectStatus = "found";
+          return;
+        }
+      }
+    } catch {
+      // localhost didn't work either
+    }
+  }
+
+  autoDetectStatus = "not-found";
+}
+
+function handleApplyDetected(): void {
+  if (detectedHost && detectedPort) {
+    host = detectedHost;
+    port = detectedPort;
+    useTls = false;
+  }
+}
+
+async function handleTryLocalServer(): Promise<void> {
+  autoDetectStatus = "checking";
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 3000);
+
+    const res = await fetch("http://127.0.0.1:9419/discovery", {
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+
+    if (res.ok) {
+      const data = (await res.json()) as {
+        service?: string;
+        gateway?: { host?: string; port?: number; tls?: boolean };
+      };
+
+      if (data.service === "eidolon" && data.gateway) {
+        detectedHost = data.gateway.host ?? "127.0.0.1";
+        detectedPort = data.gateway.port ?? 8419;
+        autoDetectStatus = "found";
+        return;
+      }
+    }
+
+    autoDetectStatus = "not-found";
+  } catch {
+    autoDetectStatus = "not-found";
+  }
+}
+
+function parsePairingUrl(url: string): { host: string; port: number; token: string; tls: boolean } | null {
+  try {
+    const normalized = url.trim();
+    if (!normalized.startsWith("eidolon://")) return null;
+
+    // Replace eidolon:// with https:// so URL parser can handle it
+    const asUrl = new URL(normalized.replace("eidolon://", "https://"));
+    const parsedHost = asUrl.hostname;
+    const parsedPort = asUrl.port ? Number.parseInt(asUrl.port, 10) : 8419;
+    const parsedToken = asUrl.searchParams.get("token") ?? "";
+    const parsedTls = asUrl.searchParams.get("tls") === "true";
+
+    if (!parsedHost || parsedPort < 1 || parsedPort > 65535) return null;
+
+    return { host: parsedHost, port: parsedPort, token: parsedToken, tls: parsedTls };
+  } catch {
+    return null;
+  }
+}
+
+function handlePairingUrlInput(): void {
+  pairingError = null;
+  pairingParsed = null;
+
+  if (!pairingUrl.trim()) return;
+
+  const parsed = parsePairingUrl(pairingUrl);
+  if (parsed) {
+    pairingParsed = parsed;
+  } else {
+    pairingError = "Invalid pairing URL. Expected format: eidolon://host:port?token=xxx&tls=true";
+  }
+}
+
+function handleApplyPairing(): void {
+  if (!pairingParsed) return;
+
+  host = pairingParsed.host;
+  port = pairingParsed.port;
+  token = pairingParsed.token;
+  useTls = pairingParsed.tls;
+  pairingUrl = "";
+  pairingParsed = null;
+}
 
 function handleSave(): void {
   updateSettings({ host, port, token, useTls });
@@ -138,6 +306,103 @@ function stateColor(state: string): string {
           Reset to Defaults
         </button>
       </div>
+    </section>
+
+    <section class="settings-section">
+      <h3 class="section-title">Server Discovery</h3>
+
+      <p class="section-desc">
+        Auto-detect an Eidolon server on the local machine or same network origin.
+      </p>
+
+      {#if autoDetectStatus === "checking"}
+        <div class="discovery-status">
+          Checking for local server...
+        </div>
+      {/if}
+
+      {#if autoDetectStatus === "found" && detectedHost && detectedPort}
+        <div class="discovery-found">
+          <div class="about-row">
+            <span class="about-label">Detected Server</span>
+            <span class="about-value">{detectedHost}:{detectedPort}</span>
+          </div>
+          <div class="button-group">
+            <button class="btn btn-connect" onclick={handleApplyDetected} disabled={$isConnected}>
+              Use Detected Server
+            </button>
+          </div>
+        </div>
+      {/if}
+
+      {#if autoDetectStatus === "not-found"}
+        <div class="discovery-empty">
+          No server detected automatically.
+        </div>
+      {/if}
+
+      <div class="button-group">
+        <button
+          class="btn btn-save"
+          onclick={handleTryLocalServer}
+          disabled={autoDetectStatus === "checking" || $isConnected}
+        >
+          Try Local Server
+        </button>
+      </div>
+    </section>
+
+    <section class="settings-section">
+      <h3 class="section-title">Pairing URL</h3>
+
+      <p class="section-desc">
+        Paste a pairing URL to auto-fill connection settings.
+      </p>
+
+      <div class="form-group">
+        <label class="form-label" for="pairingUrl">Pairing URL</label>
+        <input
+          id="pairingUrl"
+          type="text"
+          bind:value={pairingUrl}
+          oninput={handlePairingUrlInput}
+          placeholder="eidolon://host:port?token=xxx&tls=true"
+          disabled={$isConnected}
+        />
+      </div>
+
+      {#if pairingError}
+        <div class="discovery-error">
+          {pairingError}
+        </div>
+      {/if}
+
+      {#if pairingParsed}
+        <div class="pairing-preview">
+          <div class="about-row">
+            <span class="about-label">Host</span>
+            <span class="about-value">{pairingParsed.host}</span>
+          </div>
+          <div class="about-row">
+            <span class="about-label">Port</span>
+            <span class="about-value">{pairingParsed.port}</span>
+          </div>
+          <div class="about-row">
+            <span class="about-label">Token</span>
+            <span class="about-value">{pairingParsed.token ? "***" : "(none)"}</span>
+          </div>
+          <div class="about-row">
+            <span class="about-label">TLS</span>
+            <span class="about-value">{pairingParsed.tls ? "Yes" : "No"}</span>
+          </div>
+        </div>
+
+        <div class="button-group">
+          <button class="btn btn-connect" onclick={handleApplyPairing} disabled={$isConnected}>
+            Apply Pairing
+          </button>
+        </div>
+      {/if}
     </section>
 
     <section class="settings-section">
@@ -376,5 +641,59 @@ function stateColor(state: string): string {
 
   .security-note strong {
     color: var(--text-primary);
+  }
+
+  .section-desc {
+    font-size: 13px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+  }
+
+  .discovery-status {
+    padding: 10px 14px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text-secondary);
+    font-size: 13px;
+  }
+
+  .discovery-found {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 10px 14px;
+    background: color-mix(in srgb, var(--success) 8%, transparent);
+    border: 1px solid var(--success);
+    border-radius: var(--radius);
+  }
+
+  .discovery-empty {
+    padding: 10px 14px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text-secondary);
+    font-size: 13px;
+  }
+
+  .discovery-error {
+    padding: 10px 14px;
+    background: color-mix(in srgb, var(--error) 10%, transparent);
+    border: 1px solid var(--error);
+    border-radius: var(--radius);
+    color: var(--error);
+    font-size: 12px;
+    word-break: break-word;
+  }
+
+  .pairing-preview {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 10px 14px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
   }
 </style>

@@ -46,7 +46,7 @@ On first visit, you will be prompted to enter:
 
 1. **Server address**: The Tailscale hostname or IP of the brain server
    - Example: `ubuntu-server.tailnet.ts.net` or `100.x.x.y`
-2. **Port**: The gateway port (default: `7777`)
+2. **Port**: The gateway port (default: `8419`)
 3. **Auth token**: The gateway token (same as `GATEWAY_TOKEN` secret on the server)
 
 Connection settings are stored in the browser's `localStorage`.
@@ -57,7 +57,7 @@ You can pre-configure the gateway connection via environment variables:
 
 ```bash
 VITE_GATEWAY_HOST=ubuntu-server.tailnet.ts.net \
-VITE_GATEWAY_PORT=7777 \
+VITE_GATEWAY_PORT=8419 \
 pnpm --filter @eidolon/web dev
 ```
 
@@ -210,7 +210,7 @@ sudo systemctl start eidolon-web
 The web dashboard does **not** proxy WebSocket connections through SvelteKit. Instead, the browser connects directly to the brain server's gateway:
 
 ```
-Browser ──WebSocket──> Brain Server :7777 (gateway)
+Browser ──WebSocket──> Brain Server :8419 (gateway)
 Browser ──HTTP──────> Web Server :3000 (SvelteKit, serves UI)
 ```
 

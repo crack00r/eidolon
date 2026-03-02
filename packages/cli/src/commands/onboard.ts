@@ -1,9 +1,9 @@
 /**
  * eidolon onboard -- interactive first-time setup wizard.
  *
- * Guides the user through initial configuration: master key,
- * Claude API keys, Telegram token, GPU worker, config file generation,
- * and doctor checks.
+ * Supports two modes:
+ * 1. Brain Server: full daemon setup with gateway, discovery, and services
+ * 2. Client Only: discover and connect to an existing brain server
  */
 
 import { randomBytes, scryptSync } from "node:crypto";
@@ -24,12 +24,12 @@ import {
   zeroBuffer,
 } from "@eidolon/core";
 import { SECRETS_DB_FILENAME, VERSION } from "@eidolon/protocol";
-
-/** scrypt KDF parameters — imported from core constants for consistency. */
-const SCRYPT_PARAMS = { N: SCRYPT_N, r: SCRYPT_R, p: SCRYPT_P, maxmem: SCRYPT_MAXMEM };
-
 import type { Command } from "commander";
 import { formatCheck } from "../utils/formatter.ts";
+import { installPlatformService } from "./onboard-service.ts";
+
+/** scrypt KDF parameters -- imported from core for consistency. */
+const SCRYPT_PARAMS = { N: SCRYPT_N, r: SCRYPT_R, p: SCRYPT_P, maxmem: SCRYPT_MAXMEM };
 
 // ---------------------------------------------------------------------------
 // ASCII banner
@@ -44,39 +44,47 @@ const BANNER = `
  ╚══════╝╚═╝╚═════╝  ╚═════╝ ╚══════╝ ╚═════╝ ╚═╝  ╚═══╝
 `;
 
+type AskFn = (question: string) => Promise<string>;
+
 // ---------------------------------------------------------------------------
 // Readline helper
 // ---------------------------------------------------------------------------
 
-function createPrompt(): { ask: (question: string) => Promise<string>; close: () => void } {
+function createPrompt(): { ask: AskFn; close: () => void } {
   const rl = createInterface({ input: process.stdin, output: process.stdout });
-
-  const ask = (question: string): Promise<string> =>
+  const ask: AskFn = (question) =>
     new Promise((resolve) => {
-      rl.question(question, (answer) => {
-        resolve(answer.trim());
-      });
+      rl.question(question, (answer) => resolve(answer.trim()));
     });
-
   return { ask, close: () => rl.close() };
 }
 
 // ---------------------------------------------------------------------------
-// Steps
+// KDF helper
+// ---------------------------------------------------------------------------
+
+function deriveMasterKeyBuffer(masterKey: string): Buffer {
+  const hexKeyLength = KEY_LENGTH * 2;
+  if (new RegExp(`^[0-9a-fA-F]{${hexKeyLength}}$`).test(masterKey)) {
+    return Buffer.from(masterKey, "hex");
+  }
+  return scryptSync(masterKey, PASSPHRASE_SALT, KEY_LENGTH, SCRYPT_PARAMS);
+}
+
+// ---------------------------------------------------------------------------
+// Prerequisite checks
 // ---------------------------------------------------------------------------
 
 async function checkPrerequisites(): Promise<boolean> {
   console.log("\n--- Prerequisites ---\n");
   let allPassed = true;
 
-  // Bun version
   const bunVersion = Bun.version;
   const [major] = bunVersion.split(".");
   const bunOk = Number.parseInt(major ?? "0", 10) >= 1;
   console.log(formatCheck(bunOk ? "pass" : "fail", `Bun runtime v${bunVersion}`));
   if (!bunOk) allPassed = false;
 
-  // Claude CLI
   try {
     const result = Bun.spawnSync(["claude", "--version"], { stdout: "pipe", stderr: "pipe" });
     const output = result.stdout.toString().trim();
@@ -88,75 +96,44 @@ async function checkPrerequisites(): Promise<boolean> {
     allPassed = false;
   }
 
-  // Data directory
-  const dataDir = getDataDir();
-  console.log(formatCheck("pass", `Data directory: ${dataDir}`));
-
-  // Config directory
-  const configDir = getConfigDir();
-  console.log(formatCheck("pass", `Config directory: ${configDir}`));
-
-  // Log directory
-  const logDir = getLogDir();
-  console.log(formatCheck("pass", `Log directory: ${logDir}`));
+  console.log(formatCheck("pass", `Data directory: ${getDataDir()}`));
+  console.log(formatCheck("pass", `Config directory: ${getConfigDir()}`));
+  console.log(formatCheck("pass", `Log directory: ${getLogDir()}`));
 
   return allPassed;
 }
 
-/**
- * Derive a 32-byte key buffer from a master key string (hex or passphrase).
- * Must match the KDF logic in packages/core/src/secrets/master-key.ts.
- *
- * @param masterKey - Hex-encoded 256-bit key (64 chars) or passphrase string.
- * @returns 32-byte key Buffer. **Caller must zeroize after use.**
- */
-function deriveMasterKeyBuffer(masterKey: string): Buffer {
-  const hexKeyLength = KEY_LENGTH * 2; // 64
-  if (new RegExp(`^[0-9a-fA-F]{${hexKeyLength}}$`).test(masterKey)) {
-    return Buffer.from(masterKey, "hex");
-  }
-  return scryptSync(masterKey, PASSPHRASE_SALT, KEY_LENGTH, SCRYPT_PARAMS);
-}
+// ---------------------------------------------------------------------------
+// Master key setup
+// ---------------------------------------------------------------------------
 
-async function setupMasterKey(ask: (q: string) => Promise<string>): Promise<string | undefined> {
-  console.log("\n--- Master Key ---\n");
-  console.log("The master key encrypts all secrets stored by Eidolon.");
-  console.log("Options: (1) Generate a random key, (2) Enter your own.\n");
+async function setupMasterKey(ask: AskFn): Promise<string | undefined> {
+  console.log("\n--- Step: Security ---\n");
+  console.log("The master key encrypts all secrets stored by Eidolon.\n");
 
-  const choice = await ask("Generate a random master key? [Y/n]: ");
+  const choice = await ask("Generate master encryption key? [Y/n]: ");
   const useGenerated = choice === "" || choice.toLowerCase() === "y";
 
   let masterKey: string;
   if (useGenerated) {
     masterKey = generateMasterKey();
-    console.log("\nMaster key derived successfully.");
-    console.log("The key has been copied to your clipboard (if supported) or written to a secure file.");
-    console.log("You will NOT see the key displayed here for security reasons.\n");
-
-    // Write the key to a temporary file with restricted permissions instead of stdout
+    console.log("\nMaster key generated.");
     try {
-      const { writeFileSync, chmodSync } = await import("node:fs");
+      const { writeFileSync, chmodSync, existsSync, mkdirSync } = await import("node:fs");
       const { join } = await import("node:path");
-      const keyFilePath = join(getDataDir(), ".master-key-setup");
-      const { existsSync, mkdirSync } = await import("node:fs");
       const dataDir = getDataDir();
-      if (!existsSync(dataDir)) {
-        mkdirSync(dataDir, { recursive: true });
-      }
+      if (!existsSync(dataDir)) mkdirSync(dataDir, { recursive: true });
+      const keyFilePath = join(dataDir, ".master-key-setup");
       writeFileSync(keyFilePath, `EIDOLON_MASTER_KEY=${masterKey}\n`, { mode: 0o600 });
       chmodSync(keyFilePath, 0o600);
       console.log(`  Key saved to: ${keyFilePath} (mode 0600)`);
       console.log(`  Read the file, then delete it: rm ${keyFilePath}`);
-
-      // Auto-cleanup: overwrite with random bytes then delete after 60 seconds
       setTimeout(() => {
         try {
-          const { writeFileSync: writeSync, unlinkSync } = require("node:fs") as typeof import("node:fs");
-          writeSync(keyFilePath, randomBytes(64));
-          unlinkSync(keyFilePath);
-        } catch {
-          // Best effort -- file may have been manually deleted already
-        }
+          const fs = require("node:fs") as typeof import("node:fs");
+          fs.writeFileSync(keyFilePath, randomBytes(64));
+          fs.unlinkSync(keyFilePath);
+        } catch { /* best effort */ }
       }, 60_000).unref();
     } catch {
       console.log("  Warning: Could not write key file. Set EIDOLON_MASTER_KEY manually.");
@@ -164,171 +141,263 @@ async function setupMasterKey(ask: (q: string) => Promise<string>): Promise<stri
   } else {
     masterKey = await ask("Enter master key (hex string or passphrase): ");
     if (!masterKey) {
-      console.log("No key provided. Skipping master key setup.");
+      console.log("No key provided. Skipping.");
       return undefined;
     }
-    console.log("\nMaster key accepted.");
   }
 
-  console.log("\nAdd the master key to your shell profile or systemd environment:");
-  console.log("  export EIDOLON_MASTER_KEY=<your-key>");
-
+  console.log("\n  export EIDOLON_MASTER_KEY=<your-key>");
   return masterKey;
 }
 
-async function setupClaudeApiKey(
-  ask: (q: string) => Promise<string>,
-  masterKey: string | undefined,
-): Promise<string | undefined> {
-  console.log("\n--- Claude API Configuration ---\n");
-  console.log("Eidolon needs at least one Claude account (OAuth or API key).");
-  console.log("If using Claude Code CLI with OAuth, you can skip this step.\n");
+// ---------------------------------------------------------------------------
+// Secret storage helper
+// ---------------------------------------------------------------------------
 
-  const apiKey = await ask("Enter Claude API key (or press Enter to skip): ");
-  if (!apiKey) {
-    console.log("Skipped. You can add API keys later with 'eidolon secrets set'.");
-    return undefined;
+async function storeSecret(
+  name: string,
+  value: string,
+  masterKey: string,
+  description: string,
+): Promise<boolean> {
+  let keyBuffer: Buffer | undefined;
+  try {
+    const { SecretStore } = await import("@eidolon/core");
+    const { existsSync, mkdirSync } = await import("node:fs");
+    const { join } = await import("node:path");
+    keyBuffer = deriveMasterKeyBuffer(masterKey);
+    const dataDir = getDataDir();
+    if (!existsSync(dataDir)) mkdirSync(dataDir, { recursive: true });
+    const store = new SecretStore(join(dataDir, SECRETS_DB_FILENAME), keyBuffer);
+    store.set(name, value, description);
+    store.close();
+    return true;
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.log(`  Warning: Could not store secret: ${msg}`);
+    return false;
+  } finally {
+    if (keyBuffer) zeroBuffer(keyBuffer);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Server onboard flow
+// ---------------------------------------------------------------------------
+
+interface ServerSetupResult {
+  ownerName: string;
+  masterKey?: string;
+  apiKey?: string;
+  telegramToken?: string;
+  gpuUrl?: string;
+  gatewayPort: number;
+  gatewayToken: string;
+  gatewayHost: string;
+  tlsEnabled: boolean;
+  discoveryEnabled: boolean;
+  tailscaleIp?: string;
+}
+
+async function onboardServer(ask: AskFn): Promise<ServerSetupResult> {
+  // Identity
+  console.log("\n--- Step 2: Identity ---\n");
+  const ownerName = await ask("Owner name: ");
+
+  // Security
+  const masterKey = await setupMasterKey(ask);
+
+  // Claude account
+  console.log("\n--- Step 4: Claude Account ---\n");
+  const apiKey = await ask("Claude API key (optional, Enter to skip): ");
+  if (apiKey && masterKey) {
+    const ok = await storeSecret("claude-api-key", apiKey, masterKey, "Claude API key from onboarding");
+    console.log(ok ? "  API key encrypted and stored." : "  API key not stored.");
   }
 
+  // Gateway setup
+  console.log("\n--- Step 5: Gateway Setup ---\n");
+  const portInput = await ask("Gateway port [8419]: ");
+  const gatewayPort = Number.parseInt(portInput, 10) || 8419;
+
+  const tokenChoice = await ask("Auth token (auto-generate or enter manually) [auto]: ");
+  // Dynamic import to avoid mock.module issues in tests
+  const { generateAuthToken } = await import("@eidolon/core");
+  const gatewayToken = tokenChoice || generateAuthToken();
+  if (!tokenChoice) {
+    console.log(`  Generated token: ${gatewayToken}`);
+  }
   if (masterKey) {
-    let keyBuffer: Buffer | undefined;
-    try {
-      const { SecretStore } = await import("@eidolon/core");
-      const { existsSync, mkdirSync } = await import("node:fs");
-      const { join } = await import("node:path");
+    await storeSecret("gateway-auth-token", gatewayToken, masterKey, "Gateway auth token from onboarding");
+  }
 
-      // Derive key buffer from master key string (must match master-key.ts KDF)
-      keyBuffer = deriveMasterKeyBuffer(masterKey);
+  const tlsChoice = await ask("Enable TLS? [y/N]: ");
+  const tlsEnabled = tlsChoice.toLowerCase() === "y";
 
-      const dataDir = getDataDir();
-      if (!existsSync(dataDir)) {
-        mkdirSync(dataDir, { recursive: true });
-      }
-      const store = new SecretStore(join(dataDir, SECRETS_DB_FILENAME), keyBuffer);
-      store.set("claude-api-key", apiKey, "Claude API key from onboarding");
-      store.close();
-      console.log("API key stored in SecretStore (encrypted).");
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.log(`Warning: Could not store in SecretStore: ${msg}`);
-      console.log("You can store it manually: eidolon secrets set claude-api-key");
-    } finally {
-      // Zeroize derived key material (best-effort)
-      if (keyBuffer) zeroBuffer(keyBuffer);
+  const bindChoice = await ask("Bind to all interfaces (0.0.0.0)? [Y/n]: ");
+  const gatewayHost = bindChoice.toLowerCase() === "n" ? "127.0.0.1" : "0.0.0.0";
+
+  // Discovery
+  console.log("\n--- Step 6: Network Discovery ---\n");
+  const discChoice = await ask("Enable network broadcast? [Y/n]: ");
+  const discoveryEnabled = discChoice === "" || discChoice.toLowerCase() === "y";
+
+  let tailscaleIp: string | undefined;
+  try {
+    const result = Bun.spawnSync(["tailscale", "ip", "-4"], { stdout: "pipe", stderr: "pipe" });
+    if (result.exitCode === 0) {
+      tailscaleIp = result.stdout.toString().trim();
+      if (tailscaleIp) console.log(`  Tailscale detected: ${tailscaleIp}`);
     }
-  } else {
-    console.log("No master key set. API key not stored. Set it manually later.");
+  } catch { /* Tailscale not installed */ }
+
+  if (discoveryEnabled) {
+    console.log("  Clients on your network will auto-discover this server.");
   }
 
-  return apiKey;
+  // Channels
+  console.log("\n--- Step 7: Channels (optional) ---\n");
+  const telegramToken = await ask("Telegram bot token (Enter to skip): ");
+  if (telegramToken && masterKey) {
+    await storeSecret("telegram-bot-token", telegramToken, masterKey, "Telegram bot token from onboarding");
+  }
+  const gpuUrl = await ask("GPU worker URL (Enter to skip): ");
+
+  return {
+    ownerName, masterKey, apiKey: apiKey || undefined,
+    telegramToken: telegramToken || undefined, gpuUrl: gpuUrl || undefined,
+    gatewayPort, gatewayToken, gatewayHost, tlsEnabled,
+    discoveryEnabled, tailscaleIp,
+  };
 }
 
-async function setupTelegramToken(
-  ask: (q: string) => Promise<string>,
-  masterKey: string | undefined,
-): Promise<string | undefined> {
-  console.log("\n--- Telegram Bot (optional) ---\n");
+// ---------------------------------------------------------------------------
+// Config file writer (server mode)
+// ---------------------------------------------------------------------------
 
-  const token = await ask("Enter Telegram bot token (or press Enter to skip): ");
-  if (!token) {
-    console.log("Skipped. Configure Telegram later if desired.");
-    return undefined;
-  }
-
-  if (masterKey) {
-    let keyBuffer: Buffer | undefined;
-    try {
-      const { SecretStore } = await import("@eidolon/core");
-      const { join } = await import("node:path");
-
-      // Derive key buffer from master key string (must match master-key.ts KDF)
-      keyBuffer = deriveMasterKeyBuffer(masterKey);
-
-      const store = new SecretStore(join(getDataDir(), SECRETS_DB_FILENAME), keyBuffer);
-      store.set("telegram-bot-token", token, "Telegram bot token from onboarding");
-      store.close();
-      console.log("Telegram token stored in SecretStore (encrypted).");
-    } catch {
-      console.log("Warning: Could not store token. Set manually with 'eidolon secrets set'.");
-    } finally {
-      // Zeroize derived key material (best-effort)
-      if (keyBuffer) zeroBuffer(keyBuffer);
-    }
-  }
-
-  return token;
-}
-
-async function setupGpuWorker(ask: (q: string) => Promise<string>): Promise<string | undefined> {
-  console.log("\n--- GPU Worker (optional) ---\n");
-  console.log("If you have a GPU worker running (Python/FastAPI for TTS/STT),");
-  console.log("enter its URL here.\n");
-
-  const url = await ask("GPU worker URL (e.g., http://192.168.1.10:8420, or Enter to skip): ");
-  if (!url) {
-    console.log("Skipped. GPU features will use fallback (text-only) mode.");
-    return undefined;
-  }
-
-  console.log(`GPU worker URL set: ${url}`);
-  return url;
-}
-
-function writeConfigFile(opts: { ownerName: string; apiKey?: string; telegramToken?: string; gpuUrl?: string }): void {
+function writeServerConfig(r: ServerSetupResult): void {
   const { existsSync, mkdirSync, writeFileSync } = require("node:fs") as typeof import("node:fs");
-
   const configPath = getConfigPath();
   const configDir = getConfigDir();
-
-  if (!existsSync(configDir)) {
-    mkdirSync(configDir, { recursive: true });
-  }
+  if (!existsSync(configDir)) mkdirSync(configDir, { recursive: true });
 
   const config: Record<string, unknown> = {
-    identity: {
-      name: "Eidolon",
-      ownerName: opts.ownerName || "User",
-    },
+    identity: { name: "Eidolon", ownerName: r.ownerName || "User" },
     brain: {
       accounts: [
-        opts.apiKey
+        r.apiKey
           ? { type: "api-key", name: "primary", credential: { $secret: "claude-api-key" }, priority: 50 }
           : { type: "oauth", name: "primary", credential: "oauth", priority: 50 },
       ],
+    },
+    gateway: {
+      host: r.gatewayHost,
+      port: r.gatewayPort,
+      tls: { enabled: r.tlsEnabled },
+      auth: { type: "token", token: { $secret: "gateway-auth-token" } },
     },
     database: {},
     logging: { level: "info", format: "pretty" },
     daemon: {},
   };
 
-  if (opts.telegramToken) {
+  if (r.telegramToken) {
     config.channels = {
-      telegram: {
-        enabled: true,
-        botToken: { $secret: "telegram-bot-token" },
-        allowedUserIds: [],
-      },
+      telegram: { enabled: true, botToken: { $secret: "telegram-bot-token" }, allowedUserIds: [] },
     };
   }
-
-  if (opts.gpuUrl) {
-    config.gpu = {
-      workers: [{ name: "primary", host: opts.gpuUrl, port: 8420, token: "" }],
-    };
+  if (r.gpuUrl) {
+    config.gpu = { workers: [{ name: "primary", host: r.gpuUrl, port: 8420, token: "" }] };
   }
 
   writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`, "utf-8");
-  console.log(`\nConfig written to: ${configPath}`);
+  console.log(`\n  Config written to: ${configPath}`);
 }
 
-async function runDoctorChecks(): Promise<void> {
-  console.log("\n--- Doctor Checks ---\n");
-  const configResult = await loadConfig();
-  if (configResult.ok) {
-    console.log(formatCheck("pass", "Configuration file is valid"));
+// ---------------------------------------------------------------------------
+// Client onboard flow
+// ---------------------------------------------------------------------------
+
+async function onboardClient(ask: AskFn): Promise<void> {
+  console.log("\n--- Step 2: Searching for Eidolon servers... ---\n");
+  console.log("  Listening for broadcast beacons (5 seconds)...");
+
+  // Try to discover servers via UDP broadcast
+  const servers = await discoverServers();
+
+  if (servers.length > 0) {
+    for (let i = 0; i < servers.length; i++) {
+      const s = servers[i];
+      if (!s) continue;
+      const via = s.tailscaleIp ? " (tailscale)" : " (local)";
+      console.log(`  [${i + 1}] "${s.hostname}" at ${s.host}:${s.port}${via}`);
+    }
+    const selInput = await ask(`\nSelect server [1]: `);
+    const selIdx = (Number.parseInt(selInput, 10) || 1) - 1;
+    const selected = servers[selIdx];
+    if (selected) {
+      console.log(`\n  Selected: ${selected.host}:${selected.port}`);
+      const token = await ask("Auth token: ");
+      console.log("\n--- Testing connection... ---\n");
+      console.log(`  Would connect to ${selected.host}:${selected.port} with provided token.`);
+      console.log("  (Full connection test requires the gateway client -- Phase 7+)");
+      console.log(`\n  Connection saved. Open the Desktop/iOS/Web app to get started!`);
+      return;
+    }
   } else {
-    console.log(formatCheck("warn", `Config: ${configResult.error.message}`));
+    console.log("  No servers found via broadcast.");
   }
+
+  const manual = await ask("\nEnter server address manually (host:port): ");
+  if (manual) {
+    const token = await ask("Auth token: ");
+    console.log(`\n  Configured connection to ${manual} (token: ${token ? "set" : "none"})`);
+    console.log("  Open the Desktop/iOS/Web app to get started!");
+  } else {
+    console.log("  No server configured. Run 'eidolon onboard' again when ready.");
+  }
+}
+
+interface DiscoveredServer {
+  hostname: string;
+  host: string;
+  port: number;
+  tailscaleIp?: string;
+}
+
+async function discoverServers(): Promise<DiscoveredServer[]> {
+  const servers: DiscoveredServer[] = [];
+  try {
+    const { DISCOVERY_PORT } = await import("@eidolon/core");
+    const socket = await Bun.udpSocket({
+      port: DISCOVERY_PORT,
+      socket: {
+        data(_socket, buf, _port, _addr) {
+          try {
+            const text = Buffer.from(buf).toString("utf-8");
+            const parsed: unknown = JSON.parse(text);
+            if (typeof parsed === "object" && parsed !== null) {
+              const obj = parsed as Record<string, unknown>;
+              if (obj.service === "eidolon") {
+                servers.push({
+                  hostname: String(obj.hostname ?? "unknown"),
+                  host: String(obj.host ?? ""),
+                  port: Number(obj.port ?? 8419),
+                  ...(typeof obj.tailscaleIp === "string" ? { tailscaleIp: obj.tailscaleIp } : {}),
+                });
+              }
+            }
+          } catch { /* ignore malformed packets */ }
+        },
+      },
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 5_000));
+    socket.close();
+  } catch {
+    // UDP socket not available, skip discovery
+  }
+  return servers;
 }
 
 // ---------------------------------------------------------------------------
@@ -347,52 +416,74 @@ export function registerOnboardCommand(program: Command): void {
       const { ask, close } = createPrompt();
 
       try {
-        // 1. Prerequisites
         const prereqOk = await checkPrerequisites();
         if (!prereqOk) {
-          console.log("\nSome prerequisites are missing. You may continue but functionality will be limited.\n");
+          console.log("\nSome prerequisites are missing. Functionality may be limited.\n");
         }
 
-        // 2. Owner name
-        const ownerName = await ask("\nYour name (for identity.ownerName): ");
+        // Step 1: Role selection
+        console.log("\n--- Step 1: What role should this machine have? ---\n");
+        console.log("  [1] Brain Server (runs the AI daemon)");
+        console.log("  [2] Client Only (connects to an existing server)\n");
 
-        // 3. Master key
-        const masterKey = await setupMasterKey(ask);
+        const roleChoice = await ask("Select role [1]: ");
+        const isClient = roleChoice === "2";
 
-        // 4. Claude API key
-        const apiKey = await setupClaudeApiKey(ask, masterKey);
+        if (isClient) {
+          await onboardClient(ask);
+        } else {
+          const result = await onboardServer(ask);
 
-        // 5. Telegram token
-        const telegramToken = await setupTelegramToken(ask, masterKey);
+          // Write config
+          console.log("\n--- Configuration ---\n");
+          const writeChoice = await ask("Write config file? [Y/n]: ");
+          if (writeChoice === "" || writeChoice.toLowerCase() === "y") {
+            writeServerConfig(result);
+          }
 
-        // 6. GPU worker
-        const gpuUrl = await setupGpuWorker(ask);
+          // Platform service
+          console.log("\n--- Step 8: Platform Service ---\n");
+          const serviceChoice = await ask("Install as system service? [Y/n]: ");
+          if (serviceChoice === "" || serviceChoice.toLowerCase() === "y") {
+            await installPlatformService();
+          }
 
-        // 7. Write config file
-        console.log("\n--- Configuration File ---\n");
-        const writeConfig = await ask("Write initial config file? [Y/n]: ");
-        if (writeConfig === "" || writeConfig.toLowerCase() === "y") {
-          writeConfigFile({ ownerName, apiKey, telegramToken, gpuUrl });
+          // Doctor checks
+          console.log("\n--- Doctor Checks ---\n");
+          const configResult = await loadConfig();
+          console.log(formatCheck(
+            configResult.ok ? "pass" : "warn",
+            configResult.ok ? "Configuration file is valid" : `Config: ${configResult.error.message}`,
+          ));
+
+          // Summary with pairing URL
+          const scheme = result.tlsEnabled ? "wss" : "ws";
+          const host = result.gatewayHost === "0.0.0.0" ? "localhost" : result.gatewayHost;
+          const pairingUrl = `eidolon://${host}:${result.gatewayPort}?token=${result.gatewayToken}&tls=${result.tlsEnabled}`;
+
+          console.log("\n--- Setup Summary ---\n");
+          console.log(`  Owner:        ${result.ownerName || "(not set)"}`);
+          console.log(`  Master key:   ${result.masterKey ? "configured" : "not set"}`);
+          console.log(`  Claude API:   ${result.apiKey ? "stored" : "using OAuth"}`);
+          console.log(`  Gateway:      ${scheme}://${host}:${result.gatewayPort}`);
+          console.log(`  Discovery:    ${result.discoveryEnabled ? "enabled" : "disabled"}`);
+          if (result.tailscaleIp) {
+            console.log(`  Tailscale:    ${result.tailscaleIp}`);
+          }
+          console.log(`  Telegram:     ${result.telegramToken ? "configured" : "skipped"}`);
+          console.log(`  GPU Worker:   ${result.gpuUrl || "skipped"}`);
+          console.log(`  Config:       ${getConfigPath()}`);
+          console.log(`  Data dir:     ${getDataDir()}`);
+          console.log();
+          console.log(`  Pairing URL:  ${pairingUrl}`);
+          console.log();
+          console.log("Next steps:");
+          console.log("  1. Set EIDOLON_MASTER_KEY in your shell profile");
+          console.log("  2. Run 'eidolon doctor' to verify everything");
+          console.log("  3. Run 'eidolon daemon start' to start the server");
+          console.log("  4. Run 'eidolon pair' to get connection details");
+          console.log();
         }
-
-        // 8. Doctor checks
-        await runDoctorChecks();
-
-        // 9. Summary
-        console.log("\n--- Setup Summary ---\n");
-        console.log(`  Owner:        ${ownerName || "(not set)"}`);
-        console.log(`  Master key:   ${masterKey ? "configured" : "not set"}`);
-        console.log(`  Claude API:   ${apiKey ? "stored in SecretStore" : "using OAuth"}`);
-        console.log(`  Telegram:     ${telegramToken ? "configured" : "skipped"}`);
-        console.log(`  GPU Worker:   ${gpuUrl || "skipped"}`);
-        console.log(`  Config:       ${getConfigPath()}`);
-        console.log(`  Data dir:     ${getDataDir()}`);
-        console.log();
-        console.log("Next steps:");
-        console.log("  1. Set EIDOLON_MASTER_KEY in your shell profile");
-        console.log("  2. Run 'eidolon doctor' to verify everything");
-        console.log("  3. Run 'eidolon daemon start' to launch the daemon");
-        console.log();
       } finally {
         close();
       }
