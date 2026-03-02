@@ -156,8 +156,13 @@ private struct HealthResponse: Decodable {
 /// Minimal Keychain wrapper for storing the auth token securely.
 enum KeychainHelper {
 
+    private static let logCategory = "Keychain"
+
     static func save(key: String, value: String) {
-        guard let data = value.data(using: .utf8) else { return }
+        guard let data = value.data(using: .utf8) else {
+            EidolonLogger.error(category: logCategory, message: "Failed to encode value for key '\(key)' to UTF-8")
+            return
+        }
 
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
@@ -166,7 +171,10 @@ enum KeychainHelper {
         ]
 
         // Delete existing item
-        SecItemDelete(query as CFDictionary)
+        let deleteStatus = SecItemDelete(query as CFDictionary)
+        if deleteStatus != errSecSuccess && deleteStatus != errSecItemNotFound {
+            EidolonLogger.warning(category: logCategory, message: "SecItemDelete for '\(key)' returned OSStatus \(deleteStatus)")
+        }
 
         // Add new item with restrictive access flags:
         // - Only accessible when the device is unlocked
@@ -174,7 +182,10 @@ enum KeychainHelper {
         var addQuery = query
         addQuery[kSecValueData as String] = data
         addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
-        SecItemAdd(addQuery as CFDictionary, nil)
+        let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
+        if addStatus != errSecSuccess {
+            EidolonLogger.error(category: logCategory, message: "SecItemAdd for '\(key)' failed with OSStatus \(addStatus)")
+        }
     }
 
     static func load(key: String) -> String? {
@@ -189,6 +200,10 @@ enum KeychainHelper {
         var result: AnyObject?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
 
+        if status != errSecSuccess && status != errSecItemNotFound {
+            EidolonLogger.error(category: logCategory, message: "SecItemCopyMatching for '\(key)' failed with OSStatus \(status)")
+        }
+
         guard status == errSecSuccess, let data = result as? Data else { return nil }
         return String(data: data, encoding: .utf8)
     }
@@ -199,7 +214,10 @@ enum KeychainHelper {
             kSecAttrAccount as String: key,
             kSecAttrService as String: "com.eidolon.ios",
         ]
-        SecItemDelete(query as CFDictionary)
+        let status = SecItemDelete(query as CFDictionary)
+        if status != errSecSuccess && status != errSecItemNotFound {
+            EidolonLogger.warning(category: logCategory, message: "SecItemDelete for '\(key)' returned OSStatus \(status)")
+        }
     }
 }
 

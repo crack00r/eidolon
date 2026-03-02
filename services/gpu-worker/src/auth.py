@@ -19,12 +19,18 @@ class AuthMiddleware(BaseHTTPMiddleware):
         if request.url.path == "/health":
             return await call_next(request)
 
+        request_id = getattr(request.state, "request_id", "unknown")
+
         api_key = os.environ.get("EIDOLON_GPU_API_KEY", "").strip()
         if not api_key:
-            logger.error("EIDOLON_GPU_API_KEY not configured — rejecting request to %s", request.url.path)
+            logger.error(
+                "EIDOLON_GPU_API_KEY not configured — rejecting request to %s",
+                request.url.path,
+                extra={"request_id": request_id},
+            )
             return JSONResponse(
                 status_code=503,
-                content={"error": "Authentication not configured"},
+                content={"detail": "Authentication not configured"},
             )
 
         provided_key = (request.headers.get("X-API-Key") or "").strip()
@@ -36,10 +42,11 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 client_ip,
                 request.method,
                 request.url.path,
+                extra={"request_id": request_id},
             )
             return JSONResponse(
                 status_code=401,
-                content={"error": "Invalid or missing API key"},
+                content={"detail": "Invalid or missing API key"},
             )
 
         return await call_next(request)

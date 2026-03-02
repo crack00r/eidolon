@@ -1,5 +1,6 @@
 """GPU health check endpoint."""
 
+import logging
 import subprocess
 import time
 
@@ -7,6 +8,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 
 router = APIRouter()
+logger = logging.getLogger("eidolon.gpu.health")
 
 
 class GpuInfo(BaseModel):
@@ -31,13 +33,25 @@ class HealthResponse(BaseModel):
 
 _start_time = time.time()
 _loaded_models: list[str] = []
+_last_gpu_status: bool | None = None
 
 
 @router.get("")
 async def health_check() -> HealthResponse:
     """Return service health including GPU status and loaded models."""
+    global _last_gpu_status
+
     gpu = _get_gpu_info()
     status = "healthy" if gpu.available else "degraded"
+
+    # Log GPU status changes
+    if _last_gpu_status is not None and _last_gpu_status != gpu.available:
+        if gpu.available:
+            logger.info("GPU status changed: unavailable -> available")
+        else:
+            logger.warning("GPU status changed: available -> unavailable")
+    _last_gpu_status = gpu.available
+
     return HealthResponse(
         status=status,
         uptime_seconds=time.time() - _start_time,
@@ -60,6 +74,11 @@ def _get_gpu_info() -> GpuInfo:
             timeout=5,
         )
         if result.returncode != 0:
+            logger.warning(
+                "nvidia-smi returned non-zero exit code %d: %s",
+                result.returncode,
+                result.stderr.strip() or "(no stderr)",
+            )
             return GpuInfo(available=False)
 
         parts = result.stdout.strip().split(", ")
@@ -71,5 +90,12 @@ def _get_gpu_info() -> GpuInfo:
             temperature_c=int(parts[3]),
             utilization_pct=int(parts[4]),
         )
-    except (FileNotFoundError, subprocess.TimeoutExpired, IndexError, ValueError):
+    except FileNotFoundError:
+        logger.debug("nvidia-smi not found — GPU monitoring unavailable")
+        return GpuInfo(available=False)
+    except subprocess.TimeoutExpired:
+        logger.error("nvidia-smi timed out after 5 seconds")
+        return GpuInfo(available=False)
+    except (IndexError, ValueError) as exc:
+        logger.error("Failed to parse nvidia-smi output: %s", exc)
         return GpuInfo(available=False)

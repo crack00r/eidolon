@@ -16,6 +16,8 @@ import Foundation
 import UserNotifications
 import Combine
 
+private let logCategory = "PushNotification"
+
 @MainActor
 final class PushNotificationService: ObservableObject {
 
@@ -38,17 +40,13 @@ final class PushNotificationService: ObservableObject {
             let settings = await center.notificationSettings()
             permissionStatus = settings.authorizationStatus
 
-            #if DEBUG
             if granted {
-                print("[PushNotificationService] Notification permission granted")
+                EidolonLogger.info(category: logCategory, message: "Notification permission granted")
             } else {
-                print("[PushNotificationService] Notification permission denied")
+                EidolonLogger.warning(category: logCategory, message: "Notification permission denied by user")
             }
-            #endif
         } catch {
-            #if DEBUG
-            print("[PushNotificationService] Failed to request permission: \(error)")
-            #endif
+            EidolonLogger.error(category: logCategory, message: "Failed to request notification permission: \(error.localizedDescription)")
         }
     }
 
@@ -58,16 +56,7 @@ final class PushNotificationService: ObservableObject {
     /// When ready, uncomment the `UIApplication.shared.registerForRemoteNotifications()` call
     /// and implement the `AppDelegate` methods for token handling.
     func registerForRemoteNotifications() {
-        #if DEBUG
-        print("""
-        [PushNotificationService] APNs registration is NOT ACTIVE.
-        To activate:
-          1. Enroll in the Apple Developer Program
-          2. Enable Push Notifications in Xcode capabilities
-          3. Configure APNs key/certificate
-          4. Uncomment the registration call in PushNotificationService.swift
-        """)
-        #endif
+        EidolonLogger.info(category: logCategory, message: "APNs registration is NOT ACTIVE — requires Apple Developer Account")
 
         // Uncomment when Apple Developer Account is available:
         // UIApplication.shared.registerForRemoteNotifications()
@@ -77,9 +66,7 @@ final class PushNotificationService: ObservableObject {
     func didRegisterForRemoteNotifications(deviceToken data: Data) {
         let token = data.map { String(format: "%02.2hhx", $0) }.joined()
         self.deviceToken = token
-        #if DEBUG
-        print("[PushNotificationService] Device token: \(token)")
-        #endif
+        EidolonLogger.info(category: logCategory, message: "Registered for remote notifications (token length: \(token.count))")
 
         // TODO: Send token to Eidolon Core server via WebSocket
         // webSocketService.call("push.register", params: ["token": token, "platform": "ios"])
@@ -87,9 +74,7 @@ final class PushNotificationService: ObservableObject {
 
     /// Called when APNs registration fails.
     func didFailToRegisterForRemoteNotifications(error: Error) {
-        #if DEBUG
-        print("[PushNotificationService] Failed to register: \(error.localizedDescription)")
-        #endif
+        EidolonLogger.error(category: logCategory, message: "Failed to register for remote notifications: \(error.localizedDescription)")
     }
 
     // MARK: - Local Notifications (available without Developer Account)
@@ -106,11 +91,9 @@ final class PushNotificationService: ObservableObject {
         let request = UNNotificationRequest(identifier: id, content: content, trigger: trigger)
 
         UNUserNotificationCenter.current().add(request) { error in
-            #if DEBUG
             if let error {
-                print("[PushNotificationService] Local notification error: \(error)")
+                EidolonLogger.error(category: logCategory, message: "Failed to schedule local notification '\(id)': \(error.localizedDescription)")
             }
-            #endif
         }
     }
 

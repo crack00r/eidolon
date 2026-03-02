@@ -32,6 +32,8 @@ const VALID_METHODS: ReadonlySet<string> = new Set<GatewayMethod>([
   "learning.reject",
   "system.status",
   "system.health",
+  "system.subscribe",
+  "error.report",
   "voice.start",
   "voice.stop",
 ]);

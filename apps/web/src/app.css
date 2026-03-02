@@ -29,10 +29,8 @@ body {
   background-color: var(--bg-primary);
   color: var(--text-primary);
   font-family:
-    "SF Mono", "Fira Code", "JetBrains Mono",
-    ui-monospace, "Cascadia Mono",
-    "Segoe UI Mono", "Liberation Mono",
-    Menlo, Monaco, Consolas, monospace;
+    "SF Mono", "Fira Code", "JetBrains Mono", ui-monospace, "Cascadia Mono", "Segoe UI Mono", "Liberation Mono", Menlo,
+    Monaco, Consolas, monospace;
   font-size: 14px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;

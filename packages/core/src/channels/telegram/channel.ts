@@ -16,10 +16,25 @@ import type {
   Result,
 } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
-import { Bot } from "grammy";
+import { Bot, GrammyError, HttpError } from "grammy";
 import type { Logger } from "../../logging/logger.js";
 import { formatForTelegram, splitMessage } from "./formatter.js";
 import { downloadTelegramFile, toAttachment } from "./media.js";
+
+// ---------------------------------------------------------------------------
+// Retry configuration for transient API failures
+// ---------------------------------------------------------------------------
+
+const MAX_RETRIES = 3;
+const INITIAL_RETRY_DELAY_MS = 500;
+
+/** Fatal error descriptions that indicate the bot token is invalid or revoked. */
+const FATAL_ERROR_PATTERNS: readonly RegExp[] = [
+  /unauthorized/i,
+  /bot.*was.*blocked/i,
+  /bot.*was.*kicked/i,
+  /not found/i,
+];
 
 export interface TelegramConfig {
   readonly botToken: string;
@@ -79,14 +94,33 @@ export class TelegramChannel implements Channel {
       const bot = new Bot(this.config.botToken);
       this.bot = bot;
 
+      // Global error handler: log and check for fatal errors
+      bot.catch((err) => {
+        const isFatal = this.isFatalBotError(err.error);
+        if (isFatal) {
+          this.logger.error("telegram", "Fatal bot error — marking channel as disconnected", err.error);
+          this.connected = false;
+        } else {
+          this.logger.error("telegram", "Bot error caught", err.error, {
+            update: String(err.ctx?.update?.update_id ?? "unknown"),
+          });
+        }
+      });
+
       this.registerHandlers(bot);
 
-      // Start long polling (non-blocking)
-      bot.start({
-        onStart: () => {
-          this.logger.info("telegram", "Bot started polling");
-        },
-      });
+      // Start long polling (non-blocking) with error callback for fatal polling failures
+      bot
+        .start({
+          onStart: () => {
+            this.logger.info("telegram", "Bot started polling");
+          },
+        })
+        .catch((err: unknown) => {
+          this.logger.error("telegram", "Fatal polling error — bot stopped", err);
+          this.connected = false;
+          this.bot = null;
+        });
 
       this.connected = true;
       return Ok(undefined);
@@ -121,14 +155,28 @@ export class TelegramChannel implements Channel {
       const chunks = splitMessage(formatted);
 
       for (const chunk of chunks) {
+        // Typing indicator is best-effort: failure must not block message delivery
         if (typingEnabled) {
-          await this.bot.api.sendChatAction(chatId, "typing");
+          try {
+            await this.bot.api.sendChatAction(chatId, "typing");
+          } catch (typingErr) {
+            this.logger.debug("telegram", "Typing indicator failed (non-fatal)", {
+              error: typingErr instanceof Error ? typingErr.message : String(typingErr),
+              chatId,
+            });
+          }
         }
 
         const parseMode = message.format === "markdown" ? ("MarkdownV2" as const) : undefined;
-        await this.bot.api.sendMessage(chatId, chunk, {
-          parse_mode: parseMode,
-        });
+        const bot = this.bot;
+        if (!bot) {
+          return Err(createError(ErrorCode.CHANNEL_SEND_FAILED, "Telegram bot disconnected during send"));
+        }
+        await this.sendWithRetry(() =>
+          bot.api.sendMessage(chatId, chunk, {
+            parse_mode: parseMode,
+          }),
+        );
       }
 
       return Ok(undefined);
@@ -325,4 +373,74 @@ export class TelegramChannel implements Channel {
       this.logger.error("telegram", "Message handler error", err, { id: message.id });
     }
   }
+
+  /**
+   * Execute an API call with retry logic for transient failures.
+   * Handles HTTP 429 (rate limit) by respecting Telegram's `retry_after` parameter.
+   */
+  private async sendWithRetry<T>(fn: () => Promise<T>): Promise<T> {
+    let lastError: unknown;
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        return await fn();
+      } catch (err) {
+        lastError = err;
+
+        // Don't retry fatal errors
+        if (this.isFatalBotError(err)) {
+          throw err;
+        }
+
+        // Last attempt — give up
+        if (attempt === MAX_RETRIES) break;
+
+        // Handle HTTP 429 with retry_after from Telegram
+        let delayMs = INITIAL_RETRY_DELAY_MS * 2 ** attempt;
+        if (err instanceof GrammyError && err.error_code === 429) {
+          const parameters = (err as GrammyError & { parameters?: { retry_after?: number } }).parameters;
+          const retryAfter = parameters?.retry_after;
+          if (typeof retryAfter === "number" && retryAfter > 0) {
+            delayMs = retryAfter * 1000;
+          }
+        }
+
+        // Only retry on transient HTTP errors (429, 5xx) or network errors
+        const isRetryable =
+          err instanceof HttpError || (err instanceof GrammyError && (err.error_code === 429 || err.error_code >= 500));
+
+        if (!isRetryable) {
+          throw err;
+        }
+
+        this.logger.warn(
+          "telegram",
+          `API call failed (attempt ${attempt + 1}/${MAX_RETRIES}), retrying in ${delayMs}ms`,
+          {
+            error: err instanceof Error ? err.message : String(err),
+          },
+        );
+        await sleep(delayMs);
+      }
+    }
+    throw lastError;
+  }
+
+  /** Check whether an error indicates a fatal, non-recoverable bot issue. */
+  private isFatalBotError(err: unknown): boolean {
+    if (err instanceof GrammyError) {
+      // 401 Unauthorized = token revoked
+      if (err.error_code === 401) return true;
+      // Check description against known fatal patterns
+      const desc = err.description ?? "";
+      return FATAL_ERROR_PATTERNS.some((p) => p.test(desc));
+    }
+    return false;
+  }
+}
+
+/** Promise-based sleep for retry delays. */
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 }

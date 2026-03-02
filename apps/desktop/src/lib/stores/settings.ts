@@ -4,6 +4,7 @@
  */
 
 import { writable } from "svelte/store";
+import { clientLog } from "../logger";
 
 export interface Settings {
   host: string;
@@ -35,8 +36,8 @@ function loadSettings(): Settings {
         useTls: typeof parsed.useTls === "boolean" ? parsed.useTls : DEFAULT_SETTINGS.useTls,
       };
     }
-  } catch {
-    // Ignore parse errors, use defaults
+  } catch (err) {
+    clientLog("warn", "settings", "Failed to load settings from sessionStorage", err);
   }
   return { ...DEFAULT_SETTINGS };
 }
@@ -44,8 +45,8 @@ function loadSettings(): Settings {
 function persistSettings(settings: Settings): void {
   try {
     sessionStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
-  } catch {
-    // Ignore storage errors (e.g. quota exceeded)
+  } catch (err) {
+    clientLog("warn", "settings", "Failed to persist settings to sessionStorage", err);
   }
 }
 

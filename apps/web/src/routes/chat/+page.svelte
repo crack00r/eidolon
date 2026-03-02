@@ -1,46 +1,51 @@
 <script lang="ts">
-  import { messages, isStreaming, sendMessage, clearMessages } from "$lib/stores/chat";
-  import { isConnected } from "$lib/stores/connection";
+import { clientLog } from "$lib/logger";
+import { clearMessages, isStreaming, messages, sendMessage } from "$lib/stores/chat";
+import { isConnected } from "$lib/stores/connection";
 
-  let inputValue = $state("");
-  let messagesContainer: HTMLDivElement | undefined = $state();
+let inputValue = $state("");
+let messagesContainer: HTMLDivElement | undefined = $state();
 
-  function scrollToBottom(): void {
-    if (messagesContainer) {
-      requestAnimationFrame(() => {
-        messagesContainer!.scrollTop = messagesContainer!.scrollHeight;
-      });
-    }
-  }
-
-  async function handleSend(): Promise<void> {
-    const content = inputValue.trim();
-    if (!content || $isStreaming || !$isConnected) return;
-
-    inputValue = "";
-    await sendMessage(content);
-    scrollToBottom();
-  }
-
-  function handleKeydown(event: KeyboardEvent): void {
-    if (event.key === "Enter" && !event.shiftKey) {
-      event.preventDefault();
-      handleSend();
-    }
-  }
-
-  function formatTime(timestamp: number): string {
-    return new Date(timestamp).toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
+function scrollToBottom(): void {
+  if (messagesContainer) {
+    requestAnimationFrame(() => {
+      messagesContainer!.scrollTop = messagesContainer!.scrollHeight;
     });
   }
+}
 
-  // Auto-scroll when messages change
-  $effect(() => {
-    void $messages;
-    scrollToBottom();
+async function handleSend(): Promise<void> {
+  const content = inputValue.trim();
+  if (!content || $isStreaming || !$isConnected) return;
+
+  inputValue = "";
+  try {
+    await sendMessage(content);
+  } catch (err) {
+    clientLog("error", "chat-page", "handleSend failed", err);
+  }
+  scrollToBottom();
+}
+
+function handleKeydown(event: KeyboardEvent): void {
+  if (event.key === "Enter" && !event.shiftKey) {
+    event.preventDefault();
+    handleSend();
+  }
+}
+
+function formatTime(timestamp: number): string {
+  return new Date(timestamp).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
   });
+}
+
+// Auto-scroll when messages change
+$effect(() => {
+  void $messages;
+  scrollToBottom();
+});
 </script>
 
 <div class="chat-page">

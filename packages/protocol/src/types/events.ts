@@ -31,7 +31,8 @@ export type EventType =
   | "channel:error"
   | "scheduler:task_due"
   | "gateway:client_connected"
-  | "gateway:client_disconnected";
+  | "gateway:client_disconnected"
+  | "gateway:client_error_report";
 
 export interface BusEvent<T = unknown> {
   readonly id: string;

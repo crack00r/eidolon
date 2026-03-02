@@ -10,12 +10,7 @@ export interface GatewayConfig {
   useTls?: boolean;
 }
 
-export type ConnectionState =
-  | "disconnected"
-  | "connecting"
-  | "authenticating"
-  | "connected"
-  | "error";
+export type ConnectionState = "disconnected" | "connecting" | "authenticating" | "connected" | "error";
 
 interface JsonRpcRequest {
   jsonrpc: "2.0";
@@ -129,7 +124,13 @@ export class GatewayClient {
         timer,
       });
 
-      this.ws!.send(JSON.stringify(request));
+      try {
+        this.ws!.send(JSON.stringify(request));
+      } catch (sendErr) {
+        this.pendingRequests.delete(id);
+        clearTimeout(timer);
+        reject(sendErr instanceof Error ? sendErr : new Error("WebSocket send failed"));
+      }
     });
   }
 
@@ -287,9 +288,7 @@ export class GatewayClient {
       clearTimeout(pending.timer);
 
       if (message.error) {
-        pending.reject(
-          new Error(`RPC Error (${message.error.code}): ${message.error.message}`),
-        );
+        pending.reject(new Error(`RPC Error (${message.error.code}): ${message.error.message}`));
       } else {
         pending.resolve(message.result);
       }
@@ -316,10 +315,7 @@ export class GatewayClient {
       return;
     }
 
-    const baseDelay = Math.min(
-      BASE_RECONNECT_DELAY_MS * Math.pow(2, this.reconnectAttempts),
-      MAX_RECONNECT_DELAY_MS,
-    );
+    const baseDelay = Math.min(BASE_RECONNECT_DELAY_MS * 2 ** this.reconnectAttempts, MAX_RECONNECT_DELAY_MS);
     // Add random jitter (0-25% of base delay) to prevent thundering herd
     const jitter = Math.random() * baseDelay * 0.25;
     const delay = baseDelay + jitter;

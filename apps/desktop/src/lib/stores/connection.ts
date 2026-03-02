@@ -3,8 +3,8 @@
  * and exposes reactive connection state.
  */
 
-import { writable, derived, get } from "svelte/store";
-import { GatewayClient, type ConnectionState, type GatewayConfig } from "../api";
+import { derived, get, writable } from "svelte/store";
+import { type ConnectionState, GatewayClient, type GatewayConfig } from "../api";
 import { settingsStore } from "./settings";
 
 const clientStore = writable<GatewayClient | null>(null);

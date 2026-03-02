@@ -4,6 +4,7 @@
  */
 
 import { writable } from "svelte/store";
+import { clientLog } from "$lib/logger";
 
 export interface Settings {
   host: string;
@@ -35,22 +36,14 @@ function loadSettings(): Settings {
     if (stored) {
       const parsed = JSON.parse(stored) as Partial<Settings>;
       return {
-        host:
-          typeof parsed.host === "string" ? parsed.host : DEFAULT_SETTINGS.host,
-        port:
-          typeof parsed.port === "number" ? parsed.port : DEFAULT_SETTINGS.port,
-        token:
-          typeof parsed.token === "string"
-            ? parsed.token
-            : DEFAULT_SETTINGS.token,
-        useTls:
-          typeof parsed.useTls === "boolean"
-            ? parsed.useTls
-            : DEFAULT_SETTINGS.useTls,
+        host: typeof parsed.host === "string" ? parsed.host : DEFAULT_SETTINGS.host,
+        port: typeof parsed.port === "number" ? parsed.port : DEFAULT_SETTINGS.port,
+        token: typeof parsed.token === "string" ? parsed.token : DEFAULT_SETTINGS.token,
+        useTls: typeof parsed.useTls === "boolean" ? parsed.useTls : DEFAULT_SETTINGS.useTls,
       };
     }
-  } catch {
-    // Ignore parse errors, use defaults
+  } catch (err) {
+    clientLog("warn", "settings", "Failed to load settings from sessionStorage", err);
   }
   return { ...DEFAULT_SETTINGS };
 }
@@ -60,8 +53,8 @@ function persistSettings(settings: Settings): void {
 
   try {
     sessionStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
-  } catch {
-    // Ignore storage errors (e.g. quota exceeded)
+  } catch (err) {
+    clientLog("warn", "settings", "Failed to persist settings to sessionStorage", err);
   }
 }
 

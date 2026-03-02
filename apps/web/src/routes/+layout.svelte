@@ -1,39 +1,39 @@
 <script lang="ts">
-  import "../app.css";
-  import type { Snippet } from "svelte";
-  import { page } from "$app/stores";
-  import { connectionState } from "$lib/stores/connection";
+import "../app.css";
+import type { Snippet } from "svelte";
+import { page } from "$app/stores";
+import { connectionState } from "$lib/stores/connection";
 
-  interface Props {
-    children: Snippet;
+interface Props {
+  children: Snippet;
+}
+
+let { children }: Props = $props();
+
+const navItems = [
+  { href: "/chat", label: "Chat", icon: "\u{1F4AC}" },
+  { href: "/memory", label: "Memory", icon: "\u{1F9E0}" },
+  { href: "/learning", label: "Learning", icon: "\u{1F4D6}" },
+  { href: "/settings", label: "Settings", icon: "\u{2699}" },
+] as const;
+
+function stateColor(state: string): string {
+  switch (state) {
+    case "connected":
+      return "var(--success)";
+    case "connecting":
+    case "authenticating":
+      return "var(--warning)";
+    case "error":
+      return "var(--error)";
+    default:
+      return "var(--text-secondary)";
   }
+}
 
-  let { children }: Props = $props();
-
-  const navItems = [
-    { href: "/chat", label: "Chat", icon: "\u{1F4AC}" },
-    { href: "/memory", label: "Memory", icon: "\u{1F9E0}" },
-    { href: "/learning", label: "Learning", icon: "\u{1F4D6}" },
-    { href: "/settings", label: "Settings", icon: "\u{2699}" },
-  ] as const;
-
-  function stateColor(state: string): string {
-    switch (state) {
-      case "connected":
-        return "var(--success)";
-      case "connecting":
-      case "authenticating":
-        return "var(--warning)";
-      case "error":
-        return "var(--error)";
-      default:
-        return "var(--text-secondary)";
-    }
-  }
-
-  function isActive(pathname: string, href: string): boolean {
-    return pathname.startsWith(href);
-  }
+function isActive(pathname: string, href: string): boolean {
+  return pathname.startsWith(href);
+}
 </script>
 
 <div class="layout">

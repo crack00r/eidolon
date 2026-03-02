@@ -1,15 +1,15 @@
 <script lang="ts">
-  import Layout from "./routes/+layout.svelte";
-  import ChatPage from "./routes/chat/+page.svelte";
-  import MemoryPage from "./routes/memory/+page.svelte";
-  import LearningPage from "./routes/learning/+page.svelte";
-  import SettingsPage from "./routes/settings/+page.svelte";
+import Layout from "./routes/+layout.svelte";
+import ChatPage from "./routes/chat/+page.svelte";
+import LearningPage from "./routes/learning/+page.svelte";
+import MemoryPage from "./routes/memory/+page.svelte";
+import SettingsPage from "./routes/settings/+page.svelte";
 
-  let currentRoute = $state("chat");
+let currentRoute = $state("chat");
 
-  function navigate(route: string): void {
-    currentRoute = route;
-  }
+function navigate(route: string): void {
+  currentRoute = route;
+}
 </script>
 
 <Layout {currentRoute} onNavigate={navigate}>

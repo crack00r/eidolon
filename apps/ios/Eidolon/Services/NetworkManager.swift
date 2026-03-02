@@ -5,6 +5,8 @@ import Foundation
 import Network
 import Combine
 
+private let logCategory = "Network"
+
 // MARK: - Connection Method
 
 enum ConnectionMethod: String, CaseIterable, Identifiable {
@@ -27,6 +29,7 @@ final class NetworkManager: ObservableObject {
     @Published private(set) var connectionMethod: ConnectionMethod = .manual
     @Published private(set) var isDiscovering = false
     @Published private(set) var discoveredEndpoints: [DiscoveredEndpoint] = []
+    @Published private(set) var discoveryError: String?
 
     // MARK: Configuration (set from Settings)
 
@@ -45,7 +48,9 @@ final class NetworkManager: ObservableObject {
         isDiscovering = true
         discoveredEndpoints = []
         discoveredHost = nil
+        discoveryError = nil
 
+        EidolonLogger.info(category: logCategory, message: "Starting network discovery")
         startBonjourBrowse()
 
         // After a delay, check Tailscale and Cloudflare if Bonjour hasn't found anything
@@ -88,12 +93,16 @@ final class NetworkManager: ObservableObject {
         newBrowser.stateUpdateHandler = { [weak self] state in
             Task { @MainActor in
                 switch state {
+                case .ready:
+                    EidolonLogger.debug(category: logCategory, message: "Bonjour browser ready")
                 case .failed(let error):
-                    #if DEBUG
-                    print("[NetworkManager] Bonjour browse failed: \(error)")
-                    #endif
+                    let errorMessage = "Bonjour browse failed: \(error)"
+                    EidolonLogger.error(category: logCategory, message: errorMessage)
+                    self?.discoveryError = errorMessage
                     self?.browser?.cancel()
                     self?.browser = nil
+                case .cancelled:
+                    EidolonLogger.debug(category: logCategory, message: "Bonjour browser cancelled")
                 default:
                     break
                 }
@@ -113,6 +122,7 @@ final class NetworkManager: ObservableObject {
                         )
                         if !self.discoveredEndpoints.contains(where: { $0.name == name }) {
                             self.discoveredEndpoints.append(endpoint)
+                            EidolonLogger.info(category: logCategory, message: "Bonjour discovered service: \(name) (\(type))")
                         }
 
                         // Resolve to IP via NWConnection
@@ -138,9 +148,13 @@ final class NetworkManager: ObservableObject {
                         let hostString = "\(host)"
                         self.discoveredHost = hostString
                         self.connectionMethod = .bonjour
+                        EidolonLogger.info(category: logCategory, message: "Bonjour resolved host: \(hostString)")
                     }
                     connection.cancel()
-                case .failed, .cancelled:
+                case .failed(let error):
+                    EidolonLogger.warning(category: logCategory, message: "Bonjour service resolution failed: \(error)")
+                    connection.cancel()
+                case .cancelled:
                     connection.cancel()
                 default:
                     break
@@ -155,11 +169,14 @@ final class NetworkManager: ObservableObject {
     private func tryTailscale() async {
         guard !tailscaleHost.isEmpty else { return }
 
-        // Attempt a TCP connection to verify reachability
+        EidolonLogger.debug(category: logCategory, message: "Checking Tailscale reachability: \(tailscaleHost)")
         let reachable = await checkReachability(host: tailscaleHost, port: 8419)
         if reachable {
             discoveredHost = tailscaleHost
             connectionMethod = .tailscale
+            EidolonLogger.info(category: logCategory, message: "Tailscale host reachable: \(tailscaleHost)")
+        } else {
+            EidolonLogger.debug(category: logCategory, message: "Tailscale host not reachable: \(tailscaleHost)")
         }
     }
 
@@ -168,15 +185,21 @@ final class NetworkManager: ObservableObject {
     private func tryCloudflare() async {
         guard !cloudflareUrl.isEmpty else { return }
 
-        // Extract host from the tunnel URL
         guard let url = URL(string: cloudflareUrl),
-              let host = url.host else { return }
+              let host = url.host else {
+            EidolonLogger.warning(category: logCategory, message: "Invalid Cloudflare URL: \(cloudflareUrl)")
+            return
+        }
 
+        EidolonLogger.debug(category: logCategory, message: "Checking Cloudflare tunnel reachability: \(host)")
         let port = url.port ?? 443
         let reachable = await checkReachability(host: host, port: port)
         if reachable {
             discoveredHost = cloudflareUrl
             connectionMethod = .cloudflare
+            EidolonLogger.info(category: logCategory, message: "Cloudflare tunnel reachable: \(host)")
+        } else {
+            EidolonLogger.debug(category: logCategory, message: "Cloudflare tunnel not reachable: \(host)")
         }
     }
 

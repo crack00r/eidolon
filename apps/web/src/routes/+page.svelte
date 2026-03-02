@@ -1,10 +1,10 @@
 <script lang="ts">
-  import { goto } from "$app/navigation";
-  import { onMount } from "svelte";
+import { onMount } from "svelte";
+import { goto } from "$app/navigation";
 
-  onMount(() => {
-    goto("/chat", { replaceState: true });
-  });
+onMount(() => {
+  goto("/chat", { replaceState: true });
+});
 </script>
 
 <div class="redirect">

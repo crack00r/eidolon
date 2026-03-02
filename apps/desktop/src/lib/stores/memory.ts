@@ -4,6 +4,8 @@
  */
 
 import { writable } from "svelte/store";
+import { clientLog } from "../logger";
+import { sanitizeErrorForDisplay } from "../utils";
 import { getClient } from "./connection";
 
 export interface MemoryItem {
@@ -45,6 +47,7 @@ export async function searchMemory(query: string): Promise<void> {
     });
     resultsStore.set(response.items);
   } catch (err) {
+    clientLog("error", "memory", "searchMemory failed", err);
     const msg = sanitizeErrorForDisplay(err, "Search failed");
     errorStore.set(msg);
     resultsStore.set([]);
@@ -62,19 +65,6 @@ export function clearSearch(): void {
   resultsStore.set([]);
   errorStore.set(null);
   selectedStore.set(null);
-}
-
-/**
- * Strip internal details from error messages shown to users.
- */
-function sanitizeErrorForDisplay(err: unknown, fallback: string): string {
-  if (!(err instanceof Error)) return fallback;
-  const msg = err.message
-    .replace(/\/[^\s:]+\.[a-z]+/gi, "[path]")
-    .replace(/[A-Z]:\\[^\s:]+\.[a-z]+/gi, "[path]")
-    .replace(/\n\s+at\s+.*/g, "")
-    .trim();
-  return msg || fallback;
 }
 
 export const memoryResults = { subscribe: resultsStore.subscribe };

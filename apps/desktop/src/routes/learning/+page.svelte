@@ -1,67 +1,72 @@
 <script lang="ts">
-  import {
-    learningItems,
-    isLoadingLearning,
-    learningError,
-    pendingCount,
-    fetchPendingItems,
-    approveItem,
-    rejectItem,
-    type SafetyClassification,
-  } from "../../lib/stores/learning";
-  import { isConnected } from "../../lib/stores/connection";
+import { clientLog } from "../../lib/logger";
+import { isConnected } from "../../lib/stores/connection";
+import {
+  approveItem,
+  fetchPendingItems,
+  isLoadingLearning,
+  learningError,
+  learningItems,
+  pendingCount,
+  rejectItem,
+  type SafetyClassification,
+} from "../../lib/stores/learning";
 
-  function safetyColor(safety: SafetyClassification): string {
-    const colors: Record<SafetyClassification, string> = {
-      safe: "var(--success)",
-      review: "var(--warning)",
-      unsafe: "var(--error)",
-    };
-    return colors[safety];
-  }
+function safetyColor(safety: SafetyClassification): string {
+  const colors: Record<SafetyClassification, string> = {
+    safe: "var(--success)",
+    review: "var(--warning)",
+    unsafe: "var(--error)",
+  };
+  return colors[safety];
+}
 
-  function safetyLabel(safety: SafetyClassification): string {
-    const labels: Record<SafetyClassification, string> = {
-      safe: "Safe",
-      review: "Needs Review",
-      unsafe: "Unsafe",
-    };
-    return labels[safety];
-  }
+function safetyLabel(safety: SafetyClassification): string {
+  const labels: Record<SafetyClassification, string> = {
+    safe: "Safe",
+    review: "Needs Review",
+    unsafe: "Unsafe",
+  };
+  return labels[safety];
+}
 
-  function formatDate(timestamp: number): string {
-    return new Date(timestamp).toLocaleDateString([], {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  }
+function formatDate(timestamp: number): string {
+  return new Date(timestamp).toLocaleDateString([], {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
 
-  function relevanceDisplay(score: number): string {
-    return `${Math.round(score * 100)}%`;
-  }
+function relevanceDisplay(score: number): string {
+  return `${Math.round(score * 100)}%`;
+}
 
-  async function handleApprove(id: string): Promise<void> {
-    try {
-      await approveItem(id);
-    } catch (err) {
-      console.error("Failed to approve item:", err);
-    }
+async function handleApprove(id: string): Promise<void> {
+  try {
+    await approveItem(id);
+  } catch (err) {
+    console.error("Failed to approve item:", err);
   }
+}
 
-  async function handleReject(id: string): Promise<void> {
-    try {
-      await rejectItem(id);
-    } catch (err) {
-      console.error("Failed to reject item:", err);
-    }
+async function handleReject(id: string): Promise<void> {
+  try {
+    await rejectItem(id);
+  } catch (err) {
+    console.error("Failed to reject item:", err);
   }
+}
 
-  function handleRefresh(): void {
-    fetchPendingItems();
+async function handleRefresh(): Promise<void> {
+  try {
+    await fetchPendingItems();
+  } catch (err) {
+    clientLog("error", "learning-page", "handleRefresh failed", err);
   }
+}
 </script>
 
 <div class="learning-page">

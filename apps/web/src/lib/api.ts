@@ -13,12 +13,7 @@ export interface GatewayConfig {
   useTls?: boolean;
 }
 
-export type ConnectionState =
-  | "disconnected"
-  | "connecting"
-  | "authenticating"
-  | "connected"
-  | "error";
+export type ConnectionState = "disconnected" | "connecting" | "authenticating" | "connected" | "error";
 
 interface JsonRpcRequest {
   jsonrpc: "2.0";
@@ -59,9 +54,7 @@ export class GatewayClient {
   private ws: WebSocket | null = null;
   private requestId = 0;
   private pendingRequests = new Map<string, PendingRequest>();
-  private pushHandlers = new Set<
-    (method: string, params: Record<string, unknown>) => void
-  >();
+  private pushHandlers = new Set<(method: string, params: Record<string, unknown>) => void>();
   private stateHandlers = new Set<(state: ConnectionState) => void>();
   private currentState: ConnectionState = "disconnected";
   private reconnectAttempts = 0;
@@ -82,11 +75,7 @@ export class GatewayClient {
   }
 
   connect(): void {
-    if (
-      this.ws &&
-      this.currentState !== "disconnected" &&
-      this.currentState !== "error"
-    ) {
+    if (this.ws && this.currentState !== "disconnected" && this.currentState !== "error") {
       return;
     }
 
@@ -113,14 +102,9 @@ export class GatewayClient {
     this.setState("disconnected");
   }
 
-  async call<T = unknown>(
-    method: string,
-    params?: Record<string, unknown>,
-  ): Promise<T> {
+  async call<T = unknown>(method: string, params?: Record<string, unknown>): Promise<T> {
     if (this.currentState !== "connected") {
-      throw new Error(
-        `Cannot send request: connection state is "${this.currentState}"`,
-      );
+      throw new Error(`Cannot send request: connection state is "${this.currentState}"`);
     }
 
     const id = this.nextId();
@@ -143,13 +127,17 @@ export class GatewayClient {
         timer,
       });
 
-      this.ws!.send(JSON.stringify(request));
+      try {
+        this.ws!.send(JSON.stringify(request));
+      } catch (sendErr) {
+        this.pendingRequests.delete(id);
+        clearTimeout(timer);
+        reject(sendErr instanceof Error ? sendErr : new Error("WebSocket send failed"));
+      }
     });
   }
 
-  onPush(
-    handler: (method: string, params: Record<string, unknown>) => void,
-  ): () => void {
+  onPush(handler: (method: string, params: Record<string, unknown>) => void): () => void {
     this.pushHandlers.add(handler);
     return () => {
       this.pushHandlers.delete(handler);
@@ -295,10 +283,7 @@ export class GatewayClient {
     if (message.id !== undefined) {
       const pending = this.pendingRequests.get(message.id);
       if (!pending) {
-        console.warn(
-          "Received response for unknown request id:",
-          message.id,
-        );
+        console.warn("Received response for unknown request id:", message.id);
         return;
       }
 
@@ -306,11 +291,7 @@ export class GatewayClient {
       clearTimeout(pending.timer);
 
       if (message.error) {
-        pending.reject(
-          new Error(
-            `RPC Error (${message.error.code}): ${message.error.message}`,
-          ),
-        );
+        pending.reject(new Error(`RPC Error (${message.error.code}): ${message.error.message}`));
       } else {
         pending.resolve(message.result);
       }
@@ -337,10 +318,7 @@ export class GatewayClient {
       return;
     }
 
-    const baseDelay = Math.min(
-      BASE_RECONNECT_DELAY_MS * Math.pow(2, this.reconnectAttempts),
-      MAX_RECONNECT_DELAY_MS,
-    );
+    const baseDelay = Math.min(BASE_RECONNECT_DELAY_MS * 2 ** this.reconnectAttempts, MAX_RECONNECT_DELAY_MS);
     // Add random jitter (0-25% of base delay) to prevent thundering herd
     const jitter = Math.random() * baseDelay * 0.25;
     const delay = baseDelay + jitter;

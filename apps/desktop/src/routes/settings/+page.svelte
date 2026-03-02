@@ -1,51 +1,51 @@
 <script lang="ts">
-  import { settingsStore, updateSettings, resetSettings } from "../../lib/stores/settings";
-  import { connectionState, isConnected, connect, disconnect } from "../../lib/stores/connection";
+import { connect, connectionState, disconnect, isConnected } from "../../lib/stores/connection";
+import { resetSettings, settingsStore, updateSettings } from "../../lib/stores/settings";
 
-  let host = $state($settingsStore.host);
-  let port = $state($settingsStore.port);
-  let token = $state($settingsStore.token);
-  let useTls = $state($settingsStore.useTls);
-  let saved = $state(false);
+let host = $state($settingsStore.host);
+let port = $state($settingsStore.port);
+let token = $state($settingsStore.token);
+let useTls = $state($settingsStore.useTls);
+let saved = $state(false);
 
-  function handleSave(): void {
-    updateSettings({ host, port, token, useTls });
-    saved = true;
-    setTimeout(() => {
-      saved = false;
-    }, 2000);
+function handleSave(): void {
+  updateSettings({ host, port, token, useTls });
+  saved = true;
+  setTimeout(() => {
+    saved = false;
+  }, 2000);
+}
+
+function handleReset(): void {
+  resetSettings();
+  host = "127.0.0.1";
+  port = 8419;
+  token = "";
+  useTls = true;
+}
+
+function handleConnect(): void {
+  handleSave();
+  connect();
+}
+
+function handleDisconnect(): void {
+  disconnect();
+}
+
+function stateColor(state: string): string {
+  switch (state) {
+    case "connected":
+      return "var(--success)";
+    case "connecting":
+    case "authenticating":
+      return "var(--warning)";
+    case "error":
+      return "var(--error)";
+    default:
+      return "var(--text-secondary)";
   }
-
-  function handleReset(): void {
-    resetSettings();
-    host = "127.0.0.1";
-    port = 8419;
-    token = "";
-    useTls = true;
-  }
-
-  function handleConnect(): void {
-    handleSave();
-    connect();
-  }
-
-  function handleDisconnect(): void {
-    disconnect();
-  }
-
-  function stateColor(state: string): string {
-    switch (state) {
-      case "connected":
-        return "var(--success)";
-      case "connecting":
-      case "authenticating":
-        return "var(--warning)";
-      case "error":
-        return "var(--error)";
-      default:
-        return "var(--text-secondary)";
-    }
-  }
+}
 </script>
 
 <div class="settings-page">

@@ -1,35 +1,35 @@
 <script lang="ts">
-  import type { Snippet } from "svelte";
-  import { connectionState } from "../lib/stores/connection";
+import type { Snippet } from "svelte";
+import { connectionState } from "../lib/stores/connection";
 
-  interface Props {
-    currentRoute: string;
-    onNavigate: (route: string) => void;
-    children: Snippet;
+interface Props {
+  currentRoute: string;
+  onNavigate: (route: string) => void;
+  children: Snippet;
+}
+
+let { currentRoute, onNavigate, children }: Props = $props();
+
+const navItems = [
+  { route: "chat", label: "Chat", icon: "\u{1F4AC}" },
+  { route: "memory", label: "Memory", icon: "\u{1F9E0}" },
+  { route: "learning", label: "Learning", icon: "\u{1F4D6}" },
+  { route: "settings", label: "Settings", icon: "\u{2699}" },
+] as const;
+
+function stateColor(state: string): string {
+  switch (state) {
+    case "connected":
+      return "var(--success)";
+    case "connecting":
+    case "authenticating":
+      return "var(--warning)";
+    case "error":
+      return "var(--error)";
+    default:
+      return "var(--text-secondary)";
   }
-
-  let { currentRoute, onNavigate, children }: Props = $props();
-
-  const navItems = [
-    { route: "chat", label: "Chat", icon: "\u{1F4AC}" },
-    { route: "memory", label: "Memory", icon: "\u{1F9E0}" },
-    { route: "learning", label: "Learning", icon: "\u{1F4D6}" },
-    { route: "settings", label: "Settings", icon: "\u{2699}" },
-  ] as const;
-
-  function stateColor(state: string): string {
-    switch (state) {
-      case "connected":
-        return "var(--success)";
-      case "connecting":
-      case "authenticating":
-        return "var(--warning)";
-      case "error":
-        return "var(--error)";
-      default:
-        return "var(--text-secondary)";
-    }
-  }
+}
 </script>
 
 <div class="layout">

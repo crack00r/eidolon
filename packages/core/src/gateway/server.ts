@@ -21,7 +21,9 @@ import type { EventBus } from "../loop/event-bus.js";
 import {
   createJsonRpcError,
   createJsonRpcResponse,
+  createPushEvent,
   JSON_RPC_INTERNAL_ERROR,
+  JSON_RPC_INVALID_PARAMS,
   JSON_RPC_METHOD_NOT_FOUND,
   parseJsonRpcRequest,
 } from "./protocol.js";
@@ -141,6 +143,17 @@ function secureResponse(body: string, status: number, tlsEnabled?: boolean): Res
 export { anonymizeIp, constantTimeCompare, normalizeIp, normalizeOrigin };
 
 // ---------------------------------------------------------------------------
+// RPC validation error (used to return -32602 instead of -32603)
+// ---------------------------------------------------------------------------
+
+class RpcValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "RpcValidationError";
+  }
+}
+
+// ---------------------------------------------------------------------------
 // GatewayServer
 // ---------------------------------------------------------------------------
 
@@ -152,6 +165,9 @@ export class GatewayServer {
 
   private readonly clients: Map<string, ClientState> = new Map();
   private readonly handlers: Map<GatewayMethod, MethodHandler> = new Map();
+  private readonly statusSubscribers: Set<string> = new Set();
+  private broadcastFailureCount = 0;
+  private startTime = 0;
   private server: ReturnType<typeof Bun.serve> | undefined;
 
   constructor(deps: { config: GatewayConfig; logger: Logger; eventBus: EventBus }) {
@@ -159,6 +175,74 @@ export class GatewayServer {
     this.logger = deps.logger.child("gateway");
     this.eventBus = deps.eventBus;
     this.rateLimiter = new AuthRateLimiter(deps.config.rateLimiting, this.logger);
+
+    this.registerBuiltinHandlers();
+  }
+
+  // -------------------------------------------------------------------------
+  // Built-in RPC handlers
+  // -------------------------------------------------------------------------
+
+  private registerBuiltinHandlers(): void {
+    // error.report: clients report errors back to the server
+    this.registerHandler("error.report", async (params, clientId) => {
+      const errors = params.errors;
+      const clientInfo = params.clientInfo;
+
+      if (!Array.isArray(errors)) {
+        throw new RpcValidationError("errors must be an array");
+      }
+      if (typeof clientInfo !== "object" || clientInfo === null) {
+        throw new RpcValidationError("clientInfo must be an object");
+      }
+
+      const info = clientInfo as Record<string, unknown>;
+      const platform = typeof info.platform === "string" ? info.platform : "unknown";
+      const version = typeof info.version === "string" ? info.version : "unknown";
+
+      for (const entry of errors) {
+        if (typeof entry !== "object" || entry === null) continue;
+        const e = entry as Record<string, unknown>;
+        this.logger.warn(
+          "client-error",
+          `[${platform}@${version}] ${String(e.module ?? "unknown")}: ${String(e.message ?? "")}`,
+          {
+            clientId,
+            level: String(e.level ?? "error"),
+            timestamp: String(e.timestamp ?? ""),
+            ...(e.data !== undefined ? { data: e.data as Record<string, unknown> } : {}),
+          },
+        );
+      }
+
+      this.eventBus.publish(
+        "gateway:client_error_report",
+        { clientId, platform, version, errorCount: errors.length },
+        { source: "gateway" },
+      );
+
+      return { received: errors.length };
+    });
+
+    // system.status: return current system status skeleton
+    this.registerHandler("system.status", async () => {
+      const uptimeMs = this.server ? Date.now() - this.startTime : 0;
+      return {
+        state: "running",
+        energy: { current: 0, max: 100 },
+        activeTasks: 0,
+        memoryCount: 0,
+        uptime: uptimeMs,
+        connectedClients: this.clients.size,
+      };
+    });
+
+    // system.subscribe: subscribe to real-time status push updates
+    this.registerHandler("system.subscribe", async (_params, clientId) => {
+      this.statusSubscribers.add(clientId);
+      this.logger.debug("subscribe", `Client ${clientId} subscribed to status updates`);
+      return { subscribed: true };
+    });
   }
 
   // -------------------------------------------------------------------------
@@ -247,6 +331,7 @@ export class GatewayServer {
       },
     });
 
+    this.startTime = Date.now();
     const scheme = this.config.tls.enabled ? "wss" : "ws";
     this.logger.info("start", `Gateway server listening on ${scheme}://${host}:${port}`);
   }
@@ -290,13 +375,40 @@ export class GatewayServer {
   /** Broadcast a push event to all authenticated clients. */
   broadcast(event: GatewayPushEvent): void {
     const data = JSON.stringify(event);
+    let failures = 0;
     for (const client of this.clients.values()) {
       if (client.authenticated) {
         try {
           client.ws.send(data);
         } catch {
-          this.logger.warn("broadcast", `Failed to send to client ${client.id}`);
+          failures++;
         }
+      }
+    }
+    if (failures > 0) {
+      this.broadcastFailureCount += failures;
+      this.logger.warn("broadcast", `Failed to send to ${failures} client(s)`, {
+        totalFailures: this.broadcastFailureCount,
+      });
+    }
+  }
+
+  /** Broadcast a status update to subscribed clients only. */
+  broadcastStatus(status: Record<string, unknown>): void {
+    if (this.statusSubscribers.size === 0) return;
+    const event = createPushEvent("system.statusUpdate", status);
+    const data = JSON.stringify(event);
+    for (const clientId of this.statusSubscribers) {
+      const client = this.clients.get(clientId);
+      if (!client || !client.authenticated) {
+        this.statusSubscribers.delete(clientId);
+        continue;
+      }
+      try {
+        client.ws.send(data);
+      } catch {
+        this.statusSubscribers.delete(clientId);
+        this.logger.warn("broadcast-status", `Removed unreachable subscriber ${clientId}`);
       }
     }
   }
@@ -386,7 +498,7 @@ export class GatewayServer {
     // Parse JSON-RPC request
     const result = parseJsonRpcRequest(text);
     if (!result.ok) {
-      ws.send(JSON.stringify(result.error));
+      this.safeSend(ws, JSON.stringify(result.error));
       return;
     }
 
@@ -400,7 +512,7 @@ export class GatewayServer {
         JSON_RPC_METHOD_NOT_FOUND,
         `No handler registered for ${request.method}`,
       );
-      ws.send(JSON.stringify(errResp));
+      this.safeSend(ws, JSON.stringify(errResp));
       return;
     }
 
@@ -408,11 +520,16 @@ export class GatewayServer {
     try {
       const handlerResult = await handler(request.params ?? {}, clientId);
       const response = createJsonRpcResponse(request.id, handlerResult);
-      ws.send(JSON.stringify(response));
+      this.safeSend(ws, JSON.stringify(response));
     } catch (err) {
-      this.logger.error("handler", `Handler error for ${request.method}`, err);
-      const errResp = createJsonRpcError(request.id, JSON_RPC_INTERNAL_ERROR, "Internal server error");
-      ws.send(JSON.stringify(errResp));
+      const isValidation = err instanceof RpcValidationError;
+      if (!isValidation) {
+        this.logger.error("handler", `Handler error for ${request.method}`, err);
+      }
+      const code = isValidation ? JSON_RPC_INVALID_PARAMS : JSON_RPC_INTERNAL_ERROR;
+      const message = isValidation ? (err as RpcValidationError).message : "Internal server error";
+      const errResp = createJsonRpcError(request.id, code, message);
+      this.safeSend(ws, JSON.stringify(errResp));
     }
   }
 
@@ -509,10 +626,25 @@ export class GatewayServer {
     );
   }
 
-  private handleClose(ws: ServerWS, _code: number, _reason: string): void {
+  private handleClose(ws: ServerWS, code: number, reason: string): void {
     const clientId = ws.data.clientId;
     this.clients.delete(clientId);
-    this.logger.info("close", `Client ${clientId} disconnected`);
-    this.eventBus.publish("gateway:client_disconnected", { clientId }, { source: "gateway" });
+    this.statusSubscribers.delete(clientId);
+    this.logger.info("close", `Client ${clientId} disconnected`, {
+      code,
+      reason: reason || "none",
+    });
+    this.eventBus.publish("gateway:client_disconnected", { clientId, code, reason }, { source: "gateway" });
+  }
+
+  /** Send data over a WebSocket, catching errors to prevent unhandled throws. */
+  private safeSend(ws: ServerWS, data: string): void {
+    try {
+      ws.send(data);
+    } catch (err) {
+      this.logger.warn("send", `Failed to send response to client ${ws.data.clientId}`, {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
   }
 }

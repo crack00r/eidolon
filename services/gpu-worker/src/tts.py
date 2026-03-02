@@ -1,9 +1,12 @@
 """Text-to-Speech endpoint (Qwen3-TTS stub)."""
 
-from fastapi import APIRouter, HTTPException
+import logging
+
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, field_validator
 
 router = APIRouter()
+logger = logging.getLogger("eidolon.gpu.tts")
 
 # Maximum text length for a single TTS request
 MAX_TTS_TEXT_LENGTH = 10_000
@@ -56,8 +59,18 @@ class TtsResponse(BaseModel):
 
 
 @router.post("/synthesize")
-async def synthesize(request: TtsRequest) -> TtsResponse:
+async def synthesize(request_body: TtsRequest, request: Request) -> TtsResponse:
     """Synthesize text to speech. Stub: model not loaded."""
+    request_id = getattr(request.state, "request_id", "unknown")
+
+    logger.info(
+        "TTS synthesis requested (voice=%s, format=%s, text_length=%d) — model not loaded",
+        request_body.voice,
+        request_body.format,
+        len(request_body.text),
+        extra={"request_id": request_id},
+    )
+
     return TtsResponse(
         status="unavailable",
         message="TTS model not loaded. Install GPU dependencies and configure the model.",
@@ -65,8 +78,17 @@ async def synthesize(request: TtsRequest) -> TtsResponse:
 
 
 @router.post("/stream")
-async def stream_tts(request: TtsRequest):
+async def stream_tts(request_body: TtsRequest, request: Request):
     """Stream TTS audio. Stub: not implemented."""
+    request_id = getattr(request.state, "request_id", "unknown")
+
+    logger.info(
+        "TTS streaming requested (voice=%s, format=%s) — not available",
+        request_body.voice,
+        request_body.format,
+        extra={"request_id": request_id},
+    )
+
     raise HTTPException(
         status_code=503,
         detail="TTS streaming not available. Model not loaded.",

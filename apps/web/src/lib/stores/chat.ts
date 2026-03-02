@@ -3,7 +3,9 @@
  * communicates with the Core gateway for message exchange.
  */
 
-import { writable, derived } from "svelte/store";
+import { derived, writable } from "svelte/store";
+import { clientLog } from "$lib/logger";
+import { sanitizeErrorForDisplay } from "$lib/utils";
 import { getClient } from "./connection";
 
 export interface ChatMessage {
@@ -61,13 +63,10 @@ export async function sendMessage(content: string): Promise<void> {
     });
 
     messagesStore.update((msgs) =>
-      msgs.map((msg) =>
-        msg.id === assistantId
-          ? { ...msg, content: response.content, streaming: false }
-          : msg,
-      ),
+      msgs.map((msg) => (msg.id === assistantId ? { ...msg, content: response.content, streaming: false } : msg)),
     );
   } catch (err) {
+    clientLog("error", "chat", "sendMessage failed", err);
     const errorMsg = sanitizeErrorForDisplay(err);
     messagesStore.update((msgs) =>
       msgs.map((msg) =>
@@ -88,29 +87,12 @@ export async function sendMessage(content: string): Promise<void> {
 
 export function appendStreamChunk(messageId: string, chunk: string): void {
   messagesStore.update((msgs) =>
-    msgs.map((msg) =>
-      msg.id === messageId ? { ...msg, content: msg.content + chunk } : msg,
-    ),
+    msgs.map((msg) => (msg.id === messageId ? { ...msg, content: msg.content + chunk } : msg)),
   );
 }
 
 export function clearMessages(): void {
   messagesStore.set([]);
-}
-
-/**
- * Strip internal details (file paths, stack traces) from error messages
- * shown to users. Only exposes the high-level error description.
- */
-function sanitizeErrorForDisplay(err: unknown): string {
-  if (!(err instanceof Error)) return "An unexpected error occurred";
-  // Strip file paths (Unix and Windows) and stack traces
-  const msg = err.message
-    .replace(/\/[^\s:]+\.[a-z]+/gi, "[path]")
-    .replace(/[A-Z]:\\[^\s:]+\.[a-z]+/gi, "[path]")
-    .replace(/\n\s+at\s+.*/g, "")
-    .trim();
-  return msg || "An unexpected error occurred";
 }
 
 export const messages = { subscribe: messagesStore.subscribe };

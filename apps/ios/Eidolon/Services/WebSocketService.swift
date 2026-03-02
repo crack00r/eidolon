@@ -4,6 +4,8 @@
 import Foundation
 import Combine
 
+private let logCategory = "WebSocket"
+
 // MARK: - WebSocketService
 
 @MainActor
@@ -31,6 +33,10 @@ final class WebSocketService: ObservableObject {
     private var shouldReconnect = false
     private var reconnectAttempts = 0
     private var reconnectWorkItem: DispatchWorkItem?
+
+    /// Ring buffer of recent connection errors for phone-home reporting.
+    private var errorRingBuffer: [ConnectionErrorEntry] = []
+    private let errorRingBufferCapacity = 50
 
     private let maxReconnectDelay: TimeInterval = 30.0
     private let baseReconnectDelay: TimeInterval = 1.0
@@ -174,9 +180,7 @@ final class WebSocketService: ObservableObject {
                 }
             } else {
                 isAuthenticated = false
-                #if DEBUG
-                print("[WebSocketService] WARNING: Connecting without authentication token")
-                #endif
+                EidolonLogger.warning(category: logCategory, message: "Connecting without authentication token")
                 connectionState = .connected
             }
         }
@@ -234,9 +238,7 @@ final class WebSocketService: ObservableObject {
 
         guard let data = jsonString.data(using: .utf8),
               let response = try? JSONDecoder().decode(GatewayResponse.self, from: data) else {
-            #if DEBUG
-            print("[WebSocketService] Malformed JSON message dropped: \(jsonString.prefix(200))")
-            #endif
+            EidolonLogger.warning(category: logCategory, message: "Malformed JSON message dropped: \(jsonString.prefix(200))")
             return
         }
 
@@ -266,6 +268,14 @@ final class WebSocketService: ObservableObject {
     private func handleDisconnect(error: Error?) {
         webSocketTask = nil
         rejectAllPending(reason: "Connection closed")
+
+        if let error {
+            let errorMessage = error.localizedDescription
+            EidolonLogger.error(category: logCategory, message: "Connection lost: \(errorMessage)")
+            recordConnectionError(errorMessage)
+        } else {
+            EidolonLogger.info(category: logCategory, message: "Connection closed")
+        }
 
         if shouldReconnect {
             connectionState = .disconnected
@@ -350,11 +360,36 @@ final class WebSocketService: ObservableObject {
     }
 
     private func rejectAllPending(reason: String) {
+        let count = pendingRequests.count
         for (_, pending) in pendingRequests {
             pending.timer.cancel()
             pending.continuation.resume(throwing: WebSocketError.disconnected(reason: reason))
         }
         pendingRequests.removeAll()
+        if count > 0 {
+            EidolonLogger.warning(category: logCategory, message: "Rejected \(count) pending request(s): \(reason)")
+        }
+    }
+
+    // MARK: - Error Ring Buffer
+
+    /// Record a connection error for phone-home reporting.
+    private func recordConnectionError(_ message: String) {
+        let entry = ConnectionErrorEntry(timestamp: Date(), message: message)
+        errorRingBuffer.append(entry)
+        if errorRingBuffer.count > errorRingBufferCapacity {
+            errorRingBuffer.removeFirst(errorRingBuffer.count - errorRingBufferCapacity)
+        }
+    }
+
+    /// Retrieve recent connection errors for diagnostic reporting.
+    func getRecentConnectionErrors() -> [ConnectionErrorEntry] {
+        errorRingBuffer
+    }
+
+    /// Clear recorded connection errors.
+    func clearConnectionErrors() {
+        errorRingBuffer.removeAll()
     }
 }
 
@@ -363,6 +398,14 @@ final class WebSocketService: ObservableObject {
 private struct PendingRequestEntry {
     let continuation: CheckedContinuation<AnyCodable?, Error>
     let timer: DispatchWorkItem
+}
+
+// MARK: - ConnectionErrorEntry
+
+/// A recorded connection error with timestamp.
+struct ConnectionErrorEntry {
+    let timestamp: Date
+    let message: String
 }
 
 // MARK: - WebSocketError

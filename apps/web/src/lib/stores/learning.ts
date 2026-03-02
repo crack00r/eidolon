@@ -3,7 +3,9 @@
  * and user approval/rejection workflow.
  */
 
-import { writable, derived } from "svelte/store";
+import { derived, writable } from "svelte/store";
+import { clientLog } from "$lib/logger";
+import { sanitizeErrorForDisplay } from "$lib/utils";
 import { getClient } from "./connection";
 
 export type SafetyClassification = "safe" | "review" | "unsafe";
@@ -34,11 +36,10 @@ export async function fetchPendingItems(): Promise<void> {
   errorStore.set(null);
 
   try {
-    const response = await client.call<{ items: LearningItem[] }>(
-      "learning.listPending",
-    );
+    const response = await client.call<{ items: LearningItem[] }>("learning.listPending");
     itemsStore.set(response.items);
   } catch (err) {
+    clientLog("error", "learning", "fetchPendingItems failed", err);
     const msg = sanitizeErrorForDisplay(err, "Failed to fetch items");
     errorStore.set(msg);
   } finally {
@@ -54,11 +55,7 @@ export async function approveItem(id: string): Promise<void> {
 
   await client.call("learning.approve", { id });
 
-  itemsStore.update((items) =>
-    items.map((item) =>
-      item.id === id ? { ...item, status: "approved" as const } : item,
-    ),
-  );
+  itemsStore.update((items) => items.map((item) => (item.id === id ? { ...item, status: "approved" as const } : item)));
 }
 
 export async function rejectItem(id: string): Promise<void> {
@@ -69,31 +66,11 @@ export async function rejectItem(id: string): Promise<void> {
 
   await client.call("learning.reject", { id });
 
-  itemsStore.update((items) =>
-    items.map((item) =>
-      item.id === id ? { ...item, status: "rejected" as const } : item,
-    ),
-  );
+  itemsStore.update((items) => items.map((item) => (item.id === id ? { ...item, status: "rejected" as const } : item)));
 }
 
 export const learningItems = { subscribe: itemsStore.subscribe };
 export const isLoadingLearning = { subscribe: loadingStore.subscribe };
 export const learningError = { subscribe: errorStore.subscribe };
 
-export const pendingCount = derived(itemsStore, (items) =>
-  items.filter((i) => i.status === "pending").length,
-);
-
-/**
- * Strip internal details (file paths, stack traces) from error messages
- * shown to users. Only exposes the high-level error description.
- */
-function sanitizeErrorForDisplay(err: unknown, fallback: string): string {
-  if (!(err instanceof Error)) return fallback;
-  const msg = err.message
-    .replace(/\/[^\s:]+\.[a-z]+/gi, "[path]")
-    .replace(/[A-Z]:\\[^\s:]+\.[a-z]+/gi, "[path]")
-    .replace(/\n\s+at\s+.*/g, "")
-    .trim();
-  return msg || fallback;
-}
+export const pendingCount = derived(itemsStore, (items) => items.filter((i) => i.status === "pending").length);

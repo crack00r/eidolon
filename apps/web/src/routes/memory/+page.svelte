@@ -1,68 +1,68 @@
 <script lang="ts">
-  import {
-    memoryResults,
-    memoryQuery,
-    isSearching,
-    memoryError,
-    selectedMemory,
-    searchMemory,
-    selectMemoryItem,
-    clearSearch,
-    type MemoryItem,
-  } from "$lib/stores/memory";
-  import { isConnected } from "$lib/stores/connection";
+import { isConnected } from "$lib/stores/connection";
+import {
+  clearSearch,
+  isSearching,
+  type MemoryItem,
+  memoryError,
+  memoryQuery,
+  memoryResults,
+  searchMemory,
+  selectedMemory,
+  selectMemoryItem,
+} from "$lib/stores/memory";
 
-  let searchInput = $state("");
-  let debounceTimer: ReturnType<typeof setTimeout> | undefined;
+let searchInput = $state("");
+let debounceTimer: ReturnType<typeof setTimeout> | undefined;
 
-  function handleInput(): void {
-    if (debounceTimer) clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(() => {
-      searchMemory(searchInput);
-    }, 300);
-  }
+function handleInput(): void {
+  if (debounceTimer) clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(() => {
+    searchMemory(searchInput);
+  }, 300);
+}
 
-  function handleClear(): void {
-    searchInput = "";
-    clearSearch();
-  }
+function handleClear(): void {
+  searchInput = "";
+  clearSearch();
+}
 
-  function typeLabel(type: MemoryItem["type"]): string {
-    const labels: Record<MemoryItem["type"], string> = {
-      episodic: "Episodic",
-      semantic: "Semantic",
-      procedural: "Procedural",
-      working: "Working",
-      meta: "Meta",
-    };
-    return labels[type];
-  }
+function typeLabel(type: MemoryItem["type"]): string {
+  const labels: Record<MemoryItem["type"], string> = {
+    episodic: "Episodic",
+    semantic: "Semantic",
+    procedural: "Procedural",
+    working: "Working",
+    meta: "Meta",
+  };
+  return labels[type];
+}
 
-  function typeColor(type: MemoryItem["type"]): string {
-    const colors: Record<MemoryItem["type"], string> = {
-      episodic: "var(--accent)",
-      semantic: "var(--success)",
-      procedural: "var(--warning)",
-      working: "#3498db",
-      meta: "#9b59b6",
-    };
-    return colors[type];
-  }
+function typeColor(type: MemoryItem["type"]): string {
+  const colors: Record<MemoryItem["type"], string> = {
+    episodic: "var(--accent)",
+    semantic: "var(--success)",
+    procedural: "var(--warning)",
+    working: "#3498db",
+    meta: "#9b59b6",
+  };
+  return colors[type];
+}
 
-  function formatDate(timestamp: number): string {
-    return new Date(timestamp).toLocaleDateString([], {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  }
+function formatDate(timestamp: number): string {
+  return new Date(timestamp).toLocaleDateString([], {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
 
-  function importanceBar(score: number): string {
-    const pct = Math.round(score * 100);
-    return `${pct}%`;
-  }
+function importanceBar(score: number): string {
+  const pct = Math.round(score * 100);
+  return `${pct}%`;
+}
 </script>
 
 <div class="memory-page">

@@ -51,6 +51,7 @@ const VALID_EVENT_TYPES = new Set<string>([
   "scheduler:task_due",
   "gateway:client_connected",
   "gateway:client_disconnected",
+  "gateway:client_error_report",
 ]);
 const VALID_PRIORITIES = new Set<string>(["critical", "high", "normal", "low"]);
 
