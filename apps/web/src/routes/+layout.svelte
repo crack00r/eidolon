@@ -11,6 +11,7 @@ interface Props {
 let { children }: Props = $props();
 
 const navItems = [
+  { href: "/dashboard", label: "Dashboard", icon: "\u{25A6}" },
   { href: "/chat", label: "Chat", icon: "\u{1F4AC}" },
   { href: "/memory", label: "Memory", icon: "\u{1F9E0}" },
   { href: "/learning", label: "Learning", icon: "\u{1F4D6}" },

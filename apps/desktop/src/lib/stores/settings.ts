@@ -1,6 +1,7 @@
 /**
  * Settings store — persists gateway connection settings
  * to sessionStorage (cleared on window close to avoid token leakage).
+ * Update preferences are persisted to localStorage (survive restarts).
  */
 
 import { writable } from "svelte/store";
@@ -13,7 +14,13 @@ export interface Settings {
   useTls: boolean;
 }
 
+export interface UpdateSettings {
+  autoCheck: boolean;
+  lastChecked: string | null;
+}
+
 const STORAGE_KEY = "eidolon-settings";
+const UPDATE_STORAGE_KEY = "eidolon-update-settings";
 /** Allowed characters for hostname to prevent URL injection. */
 const HOSTNAME_RE = /^[a-zA-Z0-9._-]+$/;
 
@@ -22,6 +29,11 @@ const DEFAULT_SETTINGS: Settings = {
   port: 8419,
   token: "",
   useTls: true,
+};
+
+const DEFAULT_UPDATE_SETTINGS: UpdateSettings = {
+  autoCheck: true,
+  lastChecked: null,
 };
 
 function loadSettings(): Settings {
@@ -69,4 +81,48 @@ export function resetSettings(): void {
   const defaults = { ...DEFAULT_SETTINGS };
   settingsStore.set(defaults);
   persistSettings(defaults);
+}
+
+// --- Update settings (persisted to localStorage, not sessionStorage) ---
+
+function loadUpdateSettings(): UpdateSettings {
+  try {
+    const stored = localStorage.getItem(UPDATE_STORAGE_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored) as Partial<UpdateSettings>;
+      return {
+        autoCheck: typeof parsed.autoCheck === "boolean" ? parsed.autoCheck : DEFAULT_UPDATE_SETTINGS.autoCheck,
+        lastChecked: typeof parsed.lastChecked === "string" ? parsed.lastChecked : DEFAULT_UPDATE_SETTINGS.lastChecked,
+      };
+    }
+  } catch (err) {
+    clientLog("warn", "settings", "Failed to load update settings from localStorage", err);
+  }
+  return { ...DEFAULT_UPDATE_SETTINGS };
+}
+
+function persistUpdateSettings(settings: UpdateSettings): void {
+  try {
+    localStorage.setItem(UPDATE_STORAGE_KEY, JSON.stringify(settings));
+  } catch (err) {
+    clientLog("warn", "settings", "Failed to persist update settings to localStorage", err);
+  }
+}
+
+export const updateSettingsStore = writable<UpdateSettings>(loadUpdateSettings());
+
+export function setAutoCheck(enabled: boolean): void {
+  updateSettingsStore.update((current) => {
+    const next = { ...current, autoCheck: enabled };
+    persistUpdateSettings(next);
+    return next;
+  });
+}
+
+export function setLastChecked(timestamp: string): void {
+  updateSettingsStore.update((current) => {
+    const next = { ...current, lastChecked: timestamp };
+    persistUpdateSettings(next);
+    return next;
+  });
 }

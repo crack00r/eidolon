@@ -15,7 +15,13 @@
  */
 
 import { randomUUID, timingSafeEqual } from "node:crypto";
-import type { GatewayConfig, GatewayMethod, GatewayPushEvent } from "@eidolon/protocol";
+import type {
+  ConnectedClientInfo,
+  GatewayConfig,
+  GatewayMethod,
+  GatewayPushEvent,
+  GatewayPushType,
+} from "@eidolon/protocol";
 import type { Logger } from "../logging/logger.js";
 import type { EventBus } from "../loop/event-bus.js";
 import {
@@ -47,6 +53,12 @@ interface ClientState {
   readonly ip: string;
   readonly ws: ServerWS;
   authenticated: boolean;
+  /** Client-reported platform identifier (e.g., "desktop", "web", "ios"). */
+  platform: string;
+  /** Client-reported version string. */
+  version: string;
+  /** Timestamp (ms) when the WebSocket connection was established. */
+  readonly connectedAt: number;
 }
 
 interface WSData {
@@ -243,6 +255,160 @@ export class GatewayServer {
       this.logger.debug("subscribe", `Client ${clientId} subscribed to status updates`);
       return { subscribed: true };
     });
+
+    // -----------------------------------------------------------------------
+    // Brain control handlers
+    // -----------------------------------------------------------------------
+
+    // brain.pause: pause the cognitive loop
+    this.registerHandler("brain.pause", async (_params, clientId) => {
+      this.logger.info("brain.pause", `Client ${clientId} requested cognitive loop pause`);
+      this.eventBus.publish(
+        "system:config_changed",
+        { action: "pause", requestedBy: clientId },
+        { source: "gateway", priority: "high" },
+      );
+      this.pushToSubscribers("push.stateChange", {
+        previousState: "running",
+        currentState: "paused",
+        timestamp: Date.now(),
+      });
+      return { paused: true };
+    });
+
+    // brain.resume: resume the cognitive loop
+    this.registerHandler("brain.resume", async (_params, clientId) => {
+      this.logger.info("brain.resume", `Client ${clientId} requested cognitive loop resume`);
+      this.eventBus.publish(
+        "system:config_changed",
+        { action: "resume", requestedBy: clientId },
+        { source: "gateway", priority: "high" },
+      );
+      this.pushToSubscribers("push.stateChange", {
+        previousState: "paused",
+        currentState: "running",
+        timestamp: Date.now(),
+      });
+      return { resumed: true };
+    });
+
+    // brain.triggerAction: trigger a specific action (e.g., "dream", "learn")
+    this.registerHandler("brain.triggerAction", async (params, clientId) => {
+      const action = params.action;
+      if (typeof action !== "string" || action.length === 0) {
+        throw new RpcValidationError("action must be a non-empty string");
+      }
+
+      const ALLOWED_ACTIONS = new Set(["dream", "learn", "check_telegram", "health_check", "consolidate"]);
+      if (!ALLOWED_ACTIONS.has(action)) {
+        throw new RpcValidationError(`Unknown action: ${action}. Allowed: ${[...ALLOWED_ACTIONS].join(", ")}`);
+      }
+
+      const args = typeof params.args === "object" && params.args !== null ? params.args : {};
+      this.logger.info("brain.triggerAction", `Client ${clientId} triggered action: ${action}`);
+      this.eventBus.publish(
+        "system:config_changed",
+        { action: "trigger", triggerAction: action, args, requestedBy: clientId },
+        { source: "gateway", priority: "high" },
+      );
+      return { triggered: true, action };
+    });
+
+    // brain.getLog: get recent log entries
+    this.registerHandler("brain.getLog", async (params) => {
+      const limit = typeof params.limit === "number" ? Math.min(Math.max(1, params.limit), 500) : 50;
+      // Log retrieval is delegated to external handler registration.
+      // Return a placeholder indicating the handler should be overridden
+      // by the core system when the logging subsystem is wired up.
+      return { entries: [], limit, note: "Override this handler with actual log retrieval" };
+    });
+
+    // -----------------------------------------------------------------------
+    // Client management handlers
+    // -----------------------------------------------------------------------
+
+    // client.list: list all connected clients with metadata
+    this.registerHandler("client.list", async () => {
+      const clients: ConnectedClientInfo[] = [];
+      for (const client of this.clients.values()) {
+        if (!client.authenticated) continue;
+        clients.push({
+          id: client.id,
+          platform: client.platform,
+          version: client.version,
+          connectedAt: client.connectedAt,
+          subscribed: this.statusSubscribers.has(client.id),
+        });
+      }
+      return { clients };
+    });
+
+    // client.execute: forward a command to a specific target client
+    this.registerHandler("client.execute", async (params, fromClientId) => {
+      const targetClientId = params.targetClientId;
+      const command = params.command;
+
+      if (typeof targetClientId !== "string" || targetClientId.length === 0) {
+        throw new RpcValidationError("targetClientId must be a non-empty string");
+      }
+      if (typeof command !== "string" || command.length === 0) {
+        throw new RpcValidationError("command must be a non-empty string");
+      }
+
+      const targetClient = this.clients.get(targetClientId);
+      if (!targetClient || !targetClient.authenticated) {
+        throw new RpcValidationError(`Target client ${targetClientId} not found or not authenticated`);
+      }
+
+      const commandId = randomUUID();
+      const pushPayload = createPushEvent("push.executeCommand", {
+        commandId,
+        command,
+        args: params.args ?? null,
+        fromClientId,
+      });
+
+      try {
+        targetClient.ws.send(JSON.stringify(pushPayload));
+      } catch {
+        throw new RpcValidationError(`Failed to send command to target client ${targetClientId}`);
+      }
+
+      this.logger.info(
+        "client.execute",
+        `Client ${fromClientId} sent command "${command}" to ${targetClientId} (${commandId})`,
+      );
+      return { sent: true, commandId, targetClientId };
+    });
+
+    // command.result: a client reports the result of an executed command
+    this.registerHandler("command.result", async (params, clientId) => {
+      const commandId = params.commandId;
+      if (typeof commandId !== "string" || commandId.length === 0) {
+        throw new RpcValidationError("commandId must be a non-empty string");
+      }
+
+      const success = typeof params.success === "boolean" ? params.success : false;
+      this.logger.info(
+        "command.result",
+        `Client ${clientId} reported command ${commandId} result: ${success ? "success" : "failure"}`,
+      );
+
+      // Publish the result so interested components can react
+      this.eventBus.publish(
+        "gateway:client_error_report",
+        {
+          clientId,
+          commandId,
+          success,
+          result: params.result ?? null,
+          error: typeof params.error === "string" ? params.error : undefined,
+        },
+        { source: "gateway" },
+      );
+
+      return { received: true, commandId };
+    });
   }
 
   // -------------------------------------------------------------------------
@@ -413,6 +579,29 @@ export class GatewayServer {
     }
   }
 
+  /**
+   * Push a notification to all subscribed (status-subscriber) clients.
+   * Uses JSON-RPC 2.0 notification format (no id, no response expected).
+   */
+  pushToSubscribers(type: GatewayPushType, data: Record<string, unknown>): void {
+    if (this.statusSubscribers.size === 0) return;
+    const event = createPushEvent(type, data);
+    const payload = JSON.stringify(event);
+    for (const clientId of this.statusSubscribers) {
+      const client = this.clients.get(clientId);
+      if (!client || !client.authenticated) {
+        this.statusSubscribers.delete(clientId);
+        continue;
+      }
+      try {
+        client.ws.send(payload);
+      } catch {
+        this.statusSubscribers.delete(clientId);
+        this.logger.warn("push", `Removed unreachable subscriber ${clientId}`);
+      }
+    }
+  }
+
   /** Send a push event to a specific client by id. */
   sendTo(clientId: string, event: GatewayPushEvent): void {
     const client = this.clients.get(clientId);
@@ -455,12 +644,21 @@ export class GatewayServer {
       ip,
       ws,
       authenticated: !requiresAuth,
+      platform: "unknown",
+      version: "unknown",
+      connectedAt: Date.now(),
     };
     this.clients.set(clientId, state);
 
     if (!requiresAuth) {
       this.logger.info("open", `Client ${clientId} connected (auth: none)`);
       this.eventBus.publish("gateway:client_connected", { clientId, authenticated: true }, { source: "gateway" });
+      this.pushToSubscribers("push.clientConnected", {
+        clientId,
+        platform: state.platform,
+        version: state.version,
+        timestamp: state.connectedAt,
+      });
     } else {
       this.logger.info("open", `Client ${clientId} connected from ${anonIp}, awaiting auth`);
 
@@ -590,12 +788,32 @@ export class GatewayServer {
     // Auth succeeded
     this.rateLimiter.recordSuccess(client.ip);
     client.authenticated = true;
+
+    // Extract client metadata from auth params if provided
+    if (isJsonRpc) {
+      const params = obj.params as Record<string, unknown> | undefined;
+      if (params) {
+        if (typeof params.platform === "string") {
+          client.platform = params.platform;
+        }
+        if (typeof params.version === "string") {
+          client.version = params.version;
+        }
+      }
+    }
+
     this.logger.info("auth", `Client ${client.id} authenticated from ${anonymizeIp(client.ip)}`);
     this.eventBus.publish(
       "gateway:client_connected",
       { clientId: client.id, authenticated: true },
       { source: "gateway" },
     );
+    this.pushToSubscribers("push.clientConnected", {
+      clientId: client.id,
+      platform: client.platform,
+      version: client.version,
+      timestamp: client.connectedAt,
+    });
 
     // If JSON-RPC format, send a proper JSON-RPC response
     if (isJsonRpc && jsonRpcId) {
@@ -628,6 +846,7 @@ export class GatewayServer {
 
   private handleClose(ws: ServerWS, code: number, reason: string): void {
     const clientId = ws.data.clientId;
+    const client = this.clients.get(clientId);
     this.clients.delete(clientId);
     this.statusSubscribers.delete(clientId);
     this.logger.info("close", `Client ${clientId} disconnected`, {
@@ -635,6 +854,12 @@ export class GatewayServer {
       reason: reason || "none",
     });
     this.eventBus.publish("gateway:client_disconnected", { clientId, code, reason }, { source: "gateway" });
+    this.pushToSubscribers("push.clientDisconnected", {
+      clientId,
+      platform: client?.platform ?? "unknown",
+      version: client?.version ?? "unknown",
+      timestamp: Date.now(),
+    });
   }
 
   /** Send data over a WebSocket, catching errors to prevent unhandled throws. */

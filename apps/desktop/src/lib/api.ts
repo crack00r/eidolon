@@ -1,6 +1,11 @@
 /**
  * WebSocket client for communicating with the Eidolon Core gateway.
  * Uses JSON-RPC 2.0 protocol over WebSocket on port 8419.
+ *
+ * Supports bidirectional communication:
+ * - Client → Server: JSON-RPC 2.0 requests (call method)
+ * - Server → Client: Push notifications (on method + typed event handlers)
+ * - Client → Client: via client.execute / push.executeCommand relay
  */
 
 export interface GatewayConfig {
@@ -8,9 +13,29 @@ export interface GatewayConfig {
   port: number;
   token?: string;
   useTls?: boolean;
+  /** Client platform identifier sent during authentication. */
+  platform?: string;
+  /** Client version string sent during authentication. */
+  version?: string;
 }
 
 export type ConnectionState = "disconnected" | "connecting" | "authenticating" | "connected" | "error";
+
+/** Known push notification types from the server. */
+export type PushEventType =
+  | "push.stateChange"
+  | "push.taskStarted"
+  | "push.taskCompleted"
+  | "push.memoryCreated"
+  | "push.learningDiscovery"
+  | "push.energyUpdate"
+  | "push.error"
+  | "push.clientConnected"
+  | "push.clientDisconnected"
+  | "push.executeCommand"
+  | "system.statusUpdate";
+
+type PushEventHandler = (params: Record<string, unknown>) => void;
 
 interface JsonRpcRequest {
   jsonrpc: "2.0";
@@ -52,6 +77,7 @@ export class GatewayClient {
   private requestId = 0;
   private pendingRequests = new Map<string, PendingRequest>();
   private pushHandlers = new Set<(method: string, params: Record<string, unknown>) => void>();
+  private typedPushHandlers = new Map<string, Set<PushEventHandler>>();
   private stateHandlers = new Set<(state: ConnectionState) => void>();
   private currentState: ConnectionState = "disconnected";
   private reconnectAttempts = 0;
@@ -125,7 +151,10 @@ export class GatewayClient {
       });
 
       try {
-        this.ws!.send(JSON.stringify(request));
+        if (!this.ws) {
+          throw new Error("WebSocket is not connected");
+        }
+        this.ws.send(JSON.stringify(request));
       } catch (sendErr) {
         this.pendingRequests.delete(id);
         clearTimeout(timer);
@@ -134,10 +163,102 @@ export class GatewayClient {
     });
   }
 
+  // -------------------------------------------------------------------------
+  // Brain control convenience methods
+  // -------------------------------------------------------------------------
+
+  /** Pause the cognitive loop. */
+  async pauseBrain(): Promise<{ paused: boolean }> {
+    return this.call<{ paused: boolean }>("brain.pause");
+  }
+
+  /** Resume the cognitive loop. */
+  async resumeBrain(): Promise<{ resumed: boolean }> {
+    return this.call<{ resumed: boolean }>("brain.resume");
+  }
+
+  /** Trigger a specific brain action. */
+  async triggerAction(action: string, args?: Record<string, unknown>): Promise<{ triggered: boolean; action: string }> {
+    return this.call<{ triggered: boolean; action: string }>("brain.triggerAction", { action, ...(args ? { args } : {}) });
+  }
+
+  /** Get recent log entries. */
+  async getLog(limit?: number): Promise<{ entries: unknown[]; limit: number }> {
+    return this.call<{ entries: unknown[]; limit: number }>("brain.getLog", limit !== undefined ? { limit } : {});
+  }
+
+  /** List all connected clients. */
+  async listClients(): Promise<{ clients: ReadonlyArray<{
+    id: string;
+    platform: string;
+    version: string;
+    connectedAt: number;
+    subscribed: boolean;
+  }> }> {
+    return this.call("client.list");
+  }
+
+  /** Send a command to a specific client via the server relay. */
+  async executeOnClient(
+    targetClientId: string,
+    command: string,
+    args?: unknown,
+  ): Promise<{ sent: boolean; commandId: string; targetClientId: string }> {
+    return this.call("client.execute", {
+      targetClientId,
+      command,
+      ...(args !== undefined ? { args } : {}),
+    });
+  }
+
+  /** Report the result of an executed command back to the server. */
+  async reportCommandResult(
+    commandId: string,
+    success: boolean,
+    result?: unknown,
+    error?: string,
+  ): Promise<{ received: boolean; commandId: string }> {
+    return this.call("command.result", {
+      commandId,
+      success,
+      ...(result !== undefined ? { result } : {}),
+      ...(error !== undefined ? { error } : {}),
+    });
+  }
+
+  /** Subscribe to real-time status updates from the server. */
+  async subscribe(): Promise<{ subscribed: boolean }> {
+    return this.call<{ subscribed: boolean }>("system.subscribe");
+  }
+
+  // -------------------------------------------------------------------------
+  // Push notification handlers
+  // -------------------------------------------------------------------------
+
+  /** Register a generic handler for all push notifications. */
   onPush(handler: (method: string, params: Record<string, unknown>) => void): () => void {
     this.pushHandlers.add(handler);
     return () => {
       this.pushHandlers.delete(handler);
+    };
+  }
+
+  /**
+   * Register a typed handler for a specific push event type.
+   * Example: `api.on('push.stateChange', (params) => { ... })`
+   */
+  on(eventType: PushEventType, handler: PushEventHandler): () => void {
+    let handlers = this.typedPushHandlers.get(eventType);
+    if (!handlers) {
+      handlers = new Set();
+      this.typedPushHandlers.set(eventType, handlers);
+    }
+    handlers.add(handler);
+    return () => {
+      handlers.delete(handler);
+      if (handlers.size === 0) {
+        this.typedPushHandlers.delete(eventType);
+      }
     };
   }
 
@@ -215,7 +336,11 @@ export class GatewayClient {
       jsonrpc: "2.0",
       id,
       method: "auth.authenticate",
-      params: { token: this.config.token },
+      params: {
+        token: this.config.token,
+        platform: this.config.platform ?? "desktop",
+        version: this.config.version ?? "0.0.0",
+      },
     };
 
     const timer = setTimeout(() => {
@@ -266,6 +391,27 @@ export class GatewayClient {
     // Push notification (no id, has method)
     if (message.id === undefined && message.method) {
       const params = message.params ?? {};
+
+      // Handle push.executeCommand specially — log and notify user
+      if (message.method === "push.executeCommand") {
+        const cmd = typeof params.command === "string" ? params.command : "unknown";
+        const from = typeof params.fromClientId === "string" ? params.fromClientId : "unknown";
+        console.info(`[Eidolon] Received remote command "${cmd}" from client ${from}`);
+      }
+
+      // Dispatch to typed handlers
+      const typedHandlers = this.typedPushHandlers.get(message.method);
+      if (typedHandlers) {
+        for (const handler of typedHandlers) {
+          try {
+            handler(params);
+          } catch (err) {
+            console.error("Typed push handler error:", err);
+          }
+        }
+      }
+
+      // Dispatch to generic handlers
       for (const handler of this.pushHandlers) {
         try {
           handler(message.method, params);

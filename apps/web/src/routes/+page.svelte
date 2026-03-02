@@ -3,12 +3,12 @@ import { onMount } from "svelte";
 import { goto } from "$app/navigation";
 
 onMount(() => {
-  goto("/chat", { replaceState: true });
+  goto("/dashboard", { replaceState: true });
 });
 </script>
 
 <div class="redirect">
-  <p>Redirecting to chat...</p>
+  <p>Redirecting to dashboard...</p>
 </div>
 
 <style>

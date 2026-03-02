@@ -22,7 +22,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self'; connect-src 'self' wss://localhost:* wss://127.0.0.1:*; style-src 'self' 'unsafe-inline'"
+      "csp": "default-src 'self'; script-src 'self'; connect-src 'self' wss://localhost:* wss://127.0.0.1:* https://github.com https://objects.githubusercontent.com; style-src 'self' 'unsafe-inline'"
     },
     "trayIcon": {
       "iconPath": "icons/icon.png",
@@ -45,6 +45,12 @@
   "plugins": {
     "shell": {
       "open": "^https?://"
+    },
+    "updater": {
+      "endpoints": [
+        "https://github.com/crack00r/eidolon/releases/latest/download/latest.json"
+      ],
+      "pubkey": ""
     }
   }
 }

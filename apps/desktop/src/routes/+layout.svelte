@@ -11,6 +11,7 @@ interface Props {
 let { currentRoute, onNavigate, children }: Props = $props();
 
 const navItems = [
+  { route: "dashboard", label: "Dashboard", icon: "\u{25A6}" },
   { route: "chat", label: "Chat", icon: "\u{1F4AC}" },
   { route: "memory", label: "Memory", icon: "\u{1F9E0}" },
   { route: "learning", label: "Learning", icon: "\u{1F4D6}" },

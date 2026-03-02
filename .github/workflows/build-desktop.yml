@@ -106,6 +106,7 @@ jobs:
           NODE_ENV: production
 
       - name: Build Tauri app
+        id: tauri-build
         uses: tauri-apps/tauri-action@73fb865345c54760d875b94642314f8c0c894afa # v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -122,6 +123,19 @@ jobs:
           releaseDraft: false
           prerelease: ${{ contains(inputs.version || '0.', '0.') }}
           updaterJsonPreferNsis: true
+          includeUpdaterJson: true
+
+      # --- Upload updater signature files ---
+      - name: Upload updater signature artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: updater-${{ matrix.config.rust-target }}
+          path: |
+            apps/desktop/src-tauri/target/${{ matrix.config.rust-target }}/release/bundle/**/*.sig
+            apps/desktop/src-tauri/target/${{ matrix.config.rust-target }}/release/bundle/**/*.tar.gz
+            apps/desktop/src-tauri/target/${{ matrix.config.rust-target }}/release/bundle/**/*.zip
+          retention-days: 30
+          if-no-files-found: warn
 
       # --- Upload artifacts (always, even without release) ---
       - name: Upload build artifacts
@@ -136,3 +150,74 @@ jobs:
             apps/desktop/src-tauri/target/${{ matrix.config.rust-target }}/release/bundle/**/*.AppImage
           retention-days: 30
           if-no-files-found: warn
+
+  # --- Generate and upload latest.json updater manifest ---
+  upload-updater-manifest:
+    name: Upload Updater Manifest
+    needs: build-tauri
+    runs-on: ubuntu-latest
+    if: inputs.tag_name != ''
+    steps:
+      - name: Download all updater artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: updater-*
+          merge-multiple: true
+
+      - name: Generate latest.json
+        env:
+          VERSION: ${{ inputs.version || '0.0.0' }}
+          REPO: crack00r/eidolon
+          TAG: ${{ inputs.tag_name }}
+        run: |
+          # Read signatures from .sig files if they exist
+          DARWIN_SIG=""
+          LINUX_SIG=""
+          WINDOWS_SIG=""
+
+          # Find and read signature files
+          for sig_file in $(find . -name "*.sig" 2>/dev/null); do
+            sig_content=$(cat "$sig_file")
+            case "$sig_file" in
+              *aarch64*|*darwin*|*.app.tar.gz.sig)
+                DARWIN_SIG="$sig_content"
+                ;;
+              *AppImage*|*linux*|*appimage*)
+                LINUX_SIG="$sig_content"
+                ;;
+              *nsis*|*setup*|*windows*)
+                WINDOWS_SIG="$sig_content"
+                ;;
+            esac
+          done
+
+          cat > latest.json << MANIFEST
+          {
+            "version": "${VERSION}",
+            "notes": "See https://github.com/${REPO}/releases/tag/${TAG} for release notes.",
+            "pub_date": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "platforms": {
+              "darwin-aarch64": {
+                "signature": "${DARWIN_SIG}",
+                "url": "https://github.com/${REPO}/releases/download/${TAG}/Eidolon.app.tar.gz"
+              },
+              "linux-x86_64": {
+                "signature": "${LINUX_SIG}",
+                "url": "https://github.com/${REPO}/releases/download/${TAG}/Eidolon.AppImage.tar.gz"
+              },
+              "windows-x86_64": {
+                "signature": "${WINDOWS_SIG}",
+                "url": "https://github.com/${REPO}/releases/download/${TAG}/Eidolon_${VERSION}_x64-setup.nsis.zip"
+              }
+            }
+          }
+          MANIFEST
+
+          echo "Generated latest.json:"
+          cat latest.json
+
+      - name: Upload latest.json to release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ inputs.tag_name }}" latest.json --clobber --repo "${{ github.repository }}"

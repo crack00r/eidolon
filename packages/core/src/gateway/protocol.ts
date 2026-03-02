@@ -36,6 +36,16 @@ const VALID_METHODS: ReadonlySet<string> = new Set<GatewayMethod>([
   "error.report",
   "voice.start",
   "voice.stop",
+  // Brain control
+  "brain.pause",
+  "brain.resume",
+  "brain.triggerAction",
+  "brain.getLog",
+  // Client management
+  "client.list",
+  "client.execute",
+  // Command result reporting
+  "command.result",
 ]);
 
 // ---------------------------------------------------------------------------
