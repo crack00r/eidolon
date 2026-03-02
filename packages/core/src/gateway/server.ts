@@ -252,7 +252,7 @@ export class GatewayServer {
       const parsed = ErrorReportParamsSchema.safeParse(params);
       if (!parsed.success) {
         throw new RpcValidationError(
-          `Invalid error.report params: ${parsed.error.issues.map((i) => i.message).join(", ")}`,
+          `Invalid error.report params: ${parsed.error.issues.map((issue: z.ZodIssue) => issue.message).join(", ")}`,
         );
       }
       const { errors, clientInfo } = parsed.data;
@@ -343,7 +343,7 @@ export class GatewayServer {
       const parsed = BrainTriggerActionParamsSchema.safeParse(params);
       if (!parsed.success) {
         throw new RpcValidationError(
-          `Invalid brain.triggerAction params: ${parsed.error.issues.map((i) => i.message).join(", ")}`,
+          `Invalid brain.triggerAction params: ${parsed.error.issues.map((issue: z.ZodIssue) => issue.message).join(", ")}`,
         );
       }
       const { action, args } = parsed.data;
@@ -367,7 +367,7 @@ export class GatewayServer {
       const parsed = BrainGetLogParamsSchema.safeParse(params);
       if (!parsed.success) {
         throw new RpcValidationError(
-          `Invalid brain.getLog params: ${parsed.error.issues.map((i) => i.message).join(", ")}`,
+          `Invalid brain.getLog params: ${parsed.error.issues.map((issue: z.ZodIssue) => issue.message).join(", ")}`,
         );
       }
       const limit = parsed.data.limit ?? 50;
@@ -402,7 +402,7 @@ export class GatewayServer {
       const parsed = ClientExecuteParamsSchema.safeParse(params);
       if (!parsed.success) {
         throw new RpcValidationError(
-          `Invalid client.execute params: ${parsed.error.issues.map((i) => i.message).join(", ")}`,
+          `Invalid client.execute params: ${parsed.error.issues.map((issue: z.ZodIssue) => issue.message).join(", ")}`,
         );
       }
       const { targetClientId, command, args } = parsed.data;
@@ -438,7 +438,7 @@ export class GatewayServer {
       const parsed = CommandResultParamsSchema.safeParse(params);
       if (!parsed.success) {
         throw new RpcValidationError(
-          `Invalid command.result params: ${parsed.error.issues.map((i) => i.message).join(", ")}`,
+          `Invalid command.result params: ${parsed.error.issues.map((issue: z.ZodIssue) => issue.message).join(", ")}`,
         );
       }
       const { commandId, success, result, error } = parsed.data;

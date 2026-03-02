@@ -22,7 +22,8 @@
   "dependencies": {
     "@eidolon/protocol": "workspace:*",
     "@huggingface/transformers": "^3.8.1",
-    "grammy": "^1.41.0"
+    "grammy": "^1.41.0",
+    "zod": "^3.24"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.0.0",
