@@ -17,6 +17,7 @@ from .health import router as health_router
 from .logging_config import configure_logging
 from .stt import router as stt_router
 from .tts import router as tts_router
+from .voice_ws import router as voice_ws_router
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -146,6 +147,7 @@ app.add_middleware(RequestIdMiddleware)
 app.include_router(health_router, prefix="/health", tags=["health"])
 app.include_router(tts_router, prefix="/tts", tags=["tts"])
 app.include_router(stt_router, prefix="/stt", tags=["stt"])
+app.include_router(voice_ws_router, prefix="/voice", tags=["voice"])
 
 
 # ---------------------------------------------------------------------------

@@ -7,26 +7,8 @@
 
 import type { Database } from "bun:sqlite";
 import type { CostSummary, EidolonError, Result, SessionType, TokenUsage } from "@eidolon/protocol";
-import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
+import { createError, DEFAULT_MODEL_PRICING, Err, ErrorCode, MODEL_PRICING, Ok } from "@eidolon/protocol";
 import type { Logger } from "../logging/logger.js";
-
-/** Model pricing in cents per 1M tokens. */
-const MODEL_PRICING: Record<
-  string,
-  { inputPer1M: number; outputPer1M: number; cacheReadPer1M: number; cacheWritePer1M: number }
-> = {
-  "claude-opus-4-20250514": { inputPer1M: 1500, outputPer1M: 7500, cacheReadPer1M: 150, cacheWritePer1M: 1875 },
-  "claude-sonnet-4-20250514": { inputPer1M: 300, outputPer1M: 1500, cacheReadPer1M: 30, cacheWritePer1M: 375 },
-  "claude-haiku-3-20250414": { inputPer1M: 80, outputPer1M: 400, cacheReadPer1M: 8, cacheWritePer1M: 100 },
-};
-
-/** Default pricing (Sonnet) for unknown models. */
-const DEFAULT_PRICING = {
-  inputPer1M: 300,
-  outputPer1M: 1500,
-  cacheReadPer1M: 30,
-  cacheWritePer1M: 375,
-} as const;
 
 /** Period durations in milliseconds. */
 const PERIOD_MS: Record<"hour" | "day" | "week" | "month", number> = {
@@ -45,7 +27,7 @@ export function calculateCost(
   cacheWrite = 0,
 ): number {
   const looked = MODEL_PRICING[model];
-  const pricing = looked ?? DEFAULT_PRICING;
+  const pricing = looked ?? DEFAULT_MODEL_PRICING;
   const costCents =
     (inputTokens / 1_000_000) * pricing.inputPer1M +
     (outputTokens / 1_000_000) * pricing.outputPer1M +

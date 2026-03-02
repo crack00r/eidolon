@@ -2,6 +2,8 @@ export type { TtsFallbackProvider } from "./fallback.js";
 export { TtsFallbackChain, textOnlyProvider } from "./fallback.js";
 export type { GpuHealth, GpuWorkerConfig } from "./manager.js";
 export { GPUManager } from "./manager.js";
+export type { AudioCallback, ErrorCallback, RealtimeClientConfig, TranscriptionCallback } from "./realtime-client.js";
+export { RealtimeVoiceClient } from "./realtime-client.js";
 export type { SttResult } from "./stt-client.js";
 export { STTClient } from "./stt-client.js";
 export type { TtsRequest, TtsResult } from "./tts-client.js";

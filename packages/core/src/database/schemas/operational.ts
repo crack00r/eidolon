@@ -166,4 +166,24 @@ export const OPERATIONAL_MIGRATIONS: ReadonlyArray<Migration> = [
       DROP INDEX IF EXISTS idx_token_usage_model;
     `,
   },
+  {
+    version: 4,
+    name: "add_device_tokens",
+    database: "operational",
+    up: `
+      CREATE TABLE device_tokens (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        token TEXT NOT NULL UNIQUE,
+        platform TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        last_used_at INTEGER NOT NULL
+      );
+
+      CREATE INDEX idx_device_tokens_platform ON device_tokens(platform);
+    `,
+    down: `
+      DROP INDEX IF EXISTS idx_device_tokens_platform;
+      DROP TABLE IF EXISTS device_tokens;
+    `,
+  },
 ];
