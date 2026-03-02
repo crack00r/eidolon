@@ -9,6 +9,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > [release-please](https://github.com/googleapis/release-please).
 > Do not edit manually.
 
+## [0.1.2](https://github.com/crack00r/eidolon/compare/v0.1.1...v0.1.2) (2026-03-02)
+
+
+### Features
+
+* **all:** add real-time dashboard, bidirectional client control, and auto-update ([cb29370](https://github.com/crack00r/eidolon/commit/cb293704dfbb960f8251d5d9ebdb49557eebd3b0))
+* **all:** add setup documentation, fix 44 logging gaps, implement error reporting ([a766897](https://github.com/crack00r/eidolon/commit/a7668977d7be5691c103b339808ec67baa75fb0f))
+* **all:** close implementation plan gaps — CLI tests, KG communities, realtime voice, APNs, constants ([508b595](https://github.com/crack00r/eidolon/commit/508b595fe930906b289b19d1faf788244c64e076))
+
+
+### Bug Fixes
+
+* **all:** change .js to .ts in all import/export paths for Linux Bun compatibility ([59fbd49](https://github.com/crack00r/eidolon/commit/59fbd496c2e22375cbb9ee22820a5c73a2cacce7))
+* **ci:** move build step before test to ensure dist/ exists for cross-package imports ([fe41c34](https://github.com/crack00r/eidolon/commit/fe41c3421987fe18d0a04c74bb2f5fcb1dab60cf))
+* **cli:** add mock.module for @eidolon/core before command imports in CI ([162bdd0](https://github.com/crack00r/eidolon/commit/162bdd0d8ea0893ad4b7cf63232a263dd8b84b33))
+* **cli:** add test preload file for global @eidolon/core mock in CI ([e3e3237](https://github.com/crack00r/eidolon/commit/e3e3237749bfb65893c5bf7567b47eb8d637013f))
+* **cli:** run each test file in separate Bun process to fix Linux mock.module bug ([2ca3c46](https://github.com/crack00r/eidolon/commit/2ca3c46cda77a5acb957ec10e878d9c683989609))
+* **core:** add exports map for reliable Bun workspace resolution on Linux ([ef23963](https://github.com/crack00r/eidolon/commit/ef23963cfbe7be42a68208f0ef54e89bf9439f93))
+* **core:** change main field to dist/index.js for Linux CI compatibility ([a83ee6f](https://github.com/crack00r/eidolon/commit/a83ee6f57b9e4d1ad35431bd15a9c82a3e1a23b6))
+
 ## [0.1.1](https://github.com/crack00r/eidolon/compare/v0.1.0...v0.1.1) (2026-03-01)
 
 
