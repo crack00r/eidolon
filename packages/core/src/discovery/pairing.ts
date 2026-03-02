@@ -31,9 +31,7 @@ export function generateAuthToken(): string {
  */
 export function buildPairingUrl(config: GatewayConfig, tailscale?: TailscaleDetector): PairingUrl {
   const addresses = getLocalIpAddresses();
-  const host = config.host === "0.0.0.0" || config.host === "::"
-    ? addresses[0] ?? "127.0.0.1"
-    : config.host;
+  const host = config.host === "0.0.0.0" || config.host === "::" ? (addresses[0] ?? "127.0.0.1") : config.host;
   const token = typeof config.auth.token === "string" ? config.auth.token : "";
   const tls = config.tls.enabled;
   const tailscaleIp = tailscale?.getCachedIp();
@@ -64,15 +62,19 @@ export function buildPairingUrl(config: GatewayConfig, tailscale?: TailscaleDete
  */
 export function buildPairingJson(config: GatewayConfig, tailscale?: TailscaleDetector): string {
   const pairing = buildPairingUrl(config, tailscale);
-  return JSON.stringify({
-    host: pairing.host,
-    port: pairing.port,
-    token: pairing.token,
-    tls: pairing.tls,
-    ...(pairing.tailscaleIp ? { tailscaleIp: pairing.tailscaleIp } : {}),
-    version: pairing.version,
-    hostname: hostname(),
-  }, null, 2);
+  return JSON.stringify(
+    {
+      host: pairing.host,
+      port: pairing.port,
+      token: pairing.token,
+      tls: pairing.tls,
+      ...(pairing.tailscaleIp ? { tailscaleIp: pairing.tailscaleIp } : {}),
+      version: pairing.version,
+      hostname: hostname(),
+    },
+    null,
+    2,
+  );
 }
 
 /**

@@ -133,7 +133,9 @@ async function setupMasterKey(ask: AskFn): Promise<string | undefined> {
           const fs = require("node:fs") as typeof import("node:fs");
           fs.writeFileSync(keyFilePath, randomBytes(64));
           fs.unlinkSync(keyFilePath);
-        } catch { /* best effort */ }
+        } catch {
+          /* best effort */
+        }
       }, 60_000).unref();
     } catch {
       console.log("  Warning: Could not write key file. Set EIDOLON_MASTER_KEY manually.");
@@ -154,12 +156,7 @@ async function setupMasterKey(ask: AskFn): Promise<string | undefined> {
 // Secret storage helper
 // ---------------------------------------------------------------------------
 
-async function storeSecret(
-  name: string,
-  value: string,
-  masterKey: string,
-  description: string,
-): Promise<boolean> {
+async function storeSecret(name: string, value: string, masterKey: string, description: string): Promise<boolean> {
   let keyBuffer: Buffer | undefined;
   try {
     const { SecretStore } = await import("@eidolon/core");
@@ -249,7 +246,9 @@ async function onboardServer(ask: AskFn): Promise<ServerSetupResult> {
       tailscaleIp = result.stdout.toString().trim();
       if (tailscaleIp) console.log(`  Tailscale detected: ${tailscaleIp}`);
     }
-  } catch { /* Tailscale not installed */ }
+  } catch {
+    /* Tailscale not installed */
+  }
 
   if (discoveryEnabled) {
     console.log("  Clients on your network will auto-discover this server.");
@@ -264,10 +263,17 @@ async function onboardServer(ask: AskFn): Promise<ServerSetupResult> {
   const gpuUrl = await ask("GPU worker URL (Enter to skip): ");
 
   return {
-    ownerName, masterKey, apiKey: apiKey || undefined,
-    telegramToken: telegramToken || undefined, gpuUrl: gpuUrl || undefined,
-    gatewayPort, gatewayToken, gatewayHost, tlsEnabled,
-    discoveryEnabled, tailscaleIp,
+    ownerName,
+    masterKey,
+    apiKey: apiKey || undefined,
+    telegramToken: telegramToken || undefined,
+    gpuUrl: gpuUrl || undefined,
+    gatewayPort,
+    gatewayToken,
+    gatewayHost,
+    tlsEnabled,
+    discoveryEnabled,
+    tailscaleIp,
   };
 }
 
@@ -387,7 +393,9 @@ async function discoverServers(): Promise<DiscoveredServer[]> {
                 });
               }
             }
-          } catch { /* ignore malformed packets */ }
+          } catch {
+            /* ignore malformed packets */
+          }
         },
       },
     });
@@ -451,10 +459,12 @@ export function registerOnboardCommand(program: Command): void {
           // Doctor checks
           console.log("\n--- Doctor Checks ---\n");
           const configResult = await loadConfig();
-          console.log(formatCheck(
-            configResult.ok ? "pass" : "warn",
-            configResult.ok ? "Configuration file is valid" : `Config: ${configResult.error.message}`,
-          ));
+          console.log(
+            formatCheck(
+              configResult.ok ? "pass" : "warn",
+              configResult.ok ? "Configuration file is valid" : `Config: ${configResult.error.message}`,
+            ),
+          );
 
           // Summary with pairing URL
           const scheme = result.tlsEnabled ? "wss" : "ws";

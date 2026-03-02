@@ -290,10 +290,7 @@ export class EidolonDaemon {
             eventBus,
           });
           await this.modules.gatewayServer.start();
-          logger.info(
-            "daemon",
-            `GatewayServer started on ${config.gateway.host}:${config.gateway.port}`,
-          );
+          logger.info("daemon", `GatewayServer started on ${config.gateway.host}:${config.gateway.port}`);
         },
       });
 

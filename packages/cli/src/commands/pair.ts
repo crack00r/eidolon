@@ -29,8 +29,9 @@ export function registerPairCommand(program: Command): void {
       }
 
       // Dynamic imports to avoid mock.module issues in test suite
-      const { buildPairingUrl, formatConnectionDetails, getLocalIpAddresses, TailscaleDetector } =
-        await import("@eidolon/core");
+      const { buildPairingUrl, formatConnectionDetails, getLocalIpAddresses, TailscaleDetector } = await import(
+        "@eidolon/core"
+      );
 
       const config = configResult.value;
       const logger = createLogger();
@@ -41,15 +42,21 @@ export function registerPairCommand(program: Command): void {
 
       if (opts.json) {
         const pairing = buildPairingUrl(config.gateway, tailscale);
-        console.log(JSON.stringify({
-          host: pairing.host,
-          port: pairing.port,
-          token: pairing.token,
-          tls: pairing.tls,
-          ...(pairing.tailscaleIp ? { tailscaleIp: pairing.tailscaleIp } : {}),
-          version: pairing.version,
-          localAddresses: getLocalIpAddresses(),
-        }, null, 2));
+        console.log(
+          JSON.stringify(
+            {
+              host: pairing.host,
+              port: pairing.port,
+              token: pairing.token,
+              tls: pairing.tls,
+              ...(pairing.tailscaleIp ? { tailscaleIp: pairing.tailscaleIp } : {}),
+              version: pairing.version,
+              localAddresses: getLocalIpAddresses(),
+            },
+            null,
+            2,
+          ),
+        );
       } else {
         console.log(`\n  Eidolon v${VERSION} -- Pairing Information`);
         console.log(formatConnectionDetails(config.gateway, tailscale));
