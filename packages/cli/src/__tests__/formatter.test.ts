@@ -1,4 +1,13 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, mock, test } from "bun:test";
+
+// Re-register @eidolon/core mock for this file (belt-and-suspenders with preload).
+// formatter.ts doesn't import @eidolon/core, but other test files in the same
+// bun test run do, and module resolution can fail between files on Linux.
+mock.module("@eidolon/core", () => ({
+  loadConfig: async () => ({ ok: true, value: {} }),
+  getDataDir: () => "/tmp/eidolon-test/data",
+}));
+
 import { formatCheck, formatTable } from "../utils/formatter.js";
 
 // ---------------------------------------------------------------------------

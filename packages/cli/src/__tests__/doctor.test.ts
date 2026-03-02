@@ -6,7 +6,16 @@
  * filesystem operations).
  */
 
-import { describe, expect, test } from "bun:test";
+import { describe, expect, mock, test } from "bun:test";
+
+// Re-register @eidolon/core mock for this file (belt-and-suspenders with preload).
+mock.module("@eidolon/core", () => ({
+  getConfigPath: () => "/tmp/eidolon-test/config.json",
+  getDataDir: () => "/tmp/eidolon-test/data",
+  getLogDir: () => "/tmp/eidolon-test/logs",
+  loadConfig: async () => ({ ok: true, value: {} }),
+}));
+
 import { formatCheck } from "../utils/formatter.js";
 
 // ---------------------------------------------------------------------------
