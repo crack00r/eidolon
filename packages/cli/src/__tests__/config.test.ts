@@ -43,6 +43,7 @@ const { registerConfigCommand } = await import("../commands/config.js");
 function createConfigProgram(): Command {
   const program = new Command();
   program.exitOverride();
+  program.configureOutput({ writeErr: () => {} });
   registerConfigCommand(program);
   return program;
 }
@@ -77,13 +78,14 @@ function restoreConsole(): void {
 // ---------------------------------------------------------------------------
 
 beforeEach(() => {
-  process.exitCode = undefined;
+  process.exitCode = 0;
   captureConsole();
 });
 
 afterEach(() => {
   restoreConsole();
-  process.exitCode = undefined;
+  // Use 0 instead of undefined — Bun does not reset exit code when set to undefined
+  process.exitCode = 0;
 });
 
 // ---------------------------------------------------------------------------

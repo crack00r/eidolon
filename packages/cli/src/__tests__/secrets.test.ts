@@ -93,6 +93,8 @@ const { registerSecretsCommand } = await import("../commands/secrets.js");
 function createSecretsProgram(): Command {
   const program = new Command();
   program.exitOverride();
+  // Suppress commander's stderr output to avoid Bun test runner exit code 1
+  program.configureOutput({ writeErr: () => {} });
   registerSecretsCommand(program);
   return program;
 }
@@ -132,13 +134,14 @@ beforeEach(() => {
   mockSecrets = new Map();
   mockMasterKeyOk = true;
   mockMasterKeyError = "";
-  process.exitCode = undefined;
+  process.exitCode = 0;
   captureConsole();
 });
 
 afterEach(() => {
   restoreConsole();
-  process.exitCode = undefined;
+  // Use 0 instead of undefined — Bun does not reset exit code when set to undefined
+  process.exitCode = 0;
 });
 
 // ---------------------------------------------------------------------------
@@ -177,6 +180,10 @@ describe("secrets set", () => {
 
   test("requires --value option", async () => {
     const program = createSecretsProgram();
+    // Suppress commander's stderr to prevent Bun test runner from picking up
+    // the error output and setting a non-zero exit code
+    const origWrite = process.stderr.write;
+    process.stderr.write = (() => true) as typeof process.stderr.write;
 
     try {
       await program.parseAsync(["secrets", "set", "key"], { from: "user" });
@@ -185,6 +192,8 @@ describe("secrets set", () => {
     } catch (err: unknown) {
       // Commander throws CommanderError for missing required options
       expect(err).toBeDefined();
+    } finally {
+      process.stderr.write = origWrite;
     }
   });
 });
