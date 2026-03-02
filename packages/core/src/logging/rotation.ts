@@ -29,15 +29,24 @@ export class LogRotator {
     await appendFile(this.currentPath, `${line}\n`, "utf-8");
   }
 
-  /** Check if the current log file exceeds the size limit and rotate if so. */
+  /**
+   * Check if the current log file exceeds the size limit and rotate if so.
+   * SEC-L2: Wrapped in try/catch to handle TOCTOU race where the file
+   * may be deleted or moved between existsSync() and statSync().
+   */
   private checkRotation(): void {
-    if (!existsSync(this.currentPath)) return;
+    try {
+      if (!existsSync(this.currentPath)) return;
 
-    const stats = statSync(this.currentPath);
-    const sizeMb = stats.size / (1024 * 1024);
+      const stats = statSync(this.currentPath);
+      const sizeMb = stats.size / (1024 * 1024);
 
-    if (sizeMb < this.config.maxSizeMb) return;
-    this.rotate();
+      if (sizeMb < this.config.maxSizeMb) return;
+      this.rotate();
+    } catch {
+      // File may have been deleted/moved between existsSync and statSync (TOCTOU).
+      // This is non-fatal -- the next writeLine call will recreate the file.
+    }
   }
 
   /** Shift existing rotated files and move the current file to .1 */

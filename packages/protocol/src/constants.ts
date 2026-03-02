@@ -38,12 +38,12 @@ export const RETRY_DEFAULTS = {
 // See docs/design/CLAUDE_INTEGRATION.md for design rationale.
 
 export const SESSION_TOOL_WHITELIST: Record<SessionType, readonly string[]> = {
-  main: ["Read", "Write", "Edit", "Bash", "Glob", "Grep", "WebFetch"],
-  task: ["Read", "Write", "Edit", "Bash", "Glob", "Grep"],
-  learning: ["Read", "Write", "Edit", "Bash", "Glob", "Grep", "WebFetch"],
+  main: ["Read", "Write", "Edit", "Glob", "Grep", "Bash", "WebFetch"],
+  task: ["Read", "Write", "Edit", "Glob", "Grep", "Bash"],
+  learning: ["Read", "Glob", "Grep"],  // restricted: no write, no shell
   dream: ["Read", "Glob", "Grep"],
-  voice: ["Read", "Glob", "Grep"],
-  review: ["Read", "Glob", "Grep", "WebFetch"],
+  voice: ["Read", "Glob", "Grep", "Bash", "WebFetch"],
+  review: ["Read", "Glob", "Grep"],
 } as const;
 
 // ---------------------------------------------------------------------------

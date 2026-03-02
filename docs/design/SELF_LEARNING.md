@@ -1,5 +1,7 @@
 # Self-Learning Engine
 
+> **Status: Implemented — v0.1.x. This document describes the design; see source code for implementation details.**
+
 ## What Self-Learning Means
 
 Self-learning in Eidolon is the ability to autonomously:

@@ -15,21 +15,13 @@
 import { randomBytes, scryptSync } from "node:crypto";
 import type { EidolonError, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
-import { KEY_LENGTH, SCRYPT_MAXMEM, SCRYPT_N, SCRYPT_P, SCRYPT_R } from "./crypto.ts";
+import { KEY_LENGTH, PASSPHRASE_SALT, SCRYPT_MAXMEM, SCRYPT_N, SCRYPT_P, SCRYPT_R } from "./crypto.ts";
 
 /** Environment variable name for the master key. */
 const ENV_KEY = "EIDOLON_MASTER_KEY";
 
-/**
- * Fixed application-level salt for passphrase-based key derivation.
- *
- * Using a fixed salt is an accepted trade-off because:
- * 1. The scrypt cost factor (N=2^17) makes brute-force infeasible.
- * 2. The key protects a local secret store, not a multi-user password database.
- * 3. A per-installation random salt would require persistent storage, adding
- *    complexity without meaningful security gain for a single-user daemon.
- */
-const PASSPHRASE_SALT = Buffer.from("eidolon-master-key-v1", "utf-8");
+// SEC-H3: PASSPHRASE_SALT is imported from crypto.ts (single source of truth)
+// to prevent drift between the two modules.
 
 /** Minimum recommended passphrase length (characters). */
 const MIN_PASSPHRASE_LENGTH = 12;
@@ -76,7 +68,11 @@ export function getMasterKey(): Result<Buffer, EidolonError> {
     return Ok(Buffer.from(envValue, "hex"));
   }
 
-  // Warn if passphrase is too short for meaningful key derivation security
+  // SEC-H4: console.warn is intentional here -- this runs during early startup
+  // before the structured Logger is initialized. The master key is needed to
+  // decrypt secrets, which happens before any other subsystem (including logging)
+  // can be bootstrapped. Using console.warn is the only reliable output mechanism
+  // at this stage.
   if (envValue.length < MIN_PASSPHRASE_LENGTH) {
     console.warn(
       `[eidolon:master-key] WARNING: Passphrase is shorter than ${MIN_PASSPHRASE_LENGTH} characters. ` +

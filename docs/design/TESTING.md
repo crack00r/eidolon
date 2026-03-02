@@ -1,6 +1,6 @@
 # Testing Strategy
 
-> **Status: Design — not yet implemented.**
+> **Status: Implemented — v0.1.x. This document describes the design; see source code for implementation details.**
 > Created 2026-03-01 based on [expert review findings](../REVIEW_FINDINGS.md) (C-1).
 
 ## Overview

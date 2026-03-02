@@ -209,4 +209,51 @@ describe("EventBus", () => {
     expect(second?.priority).toBe("normal");
     expect(third?.priority).toBe("low");
   });
+
+  test("backpressure drops normal/low events when queue exceeds max", () => {
+    const db = makeDb();
+    const bus = new EventBus(db, logger, { maxPendingEvents: 3 });
+
+    // Fill up the queue with 3 normal events
+    bus.publish("user:message", { text: "one" }, { priority: "normal" });
+    bus.publish("user:message", { text: "two" }, { priority: "normal" });
+    bus.publish("user:message", { text: "three" }, { priority: "normal" });
+
+    // Queue is now at capacity (3). Normal and low events should be dropped.
+    const normalResult = bus.publish("user:message", { text: "dropped" }, { priority: "normal" });
+    expect(normalResult.ok).toBe(false);
+
+    const lowResult = bus.publish("system:health_check", {}, { priority: "low" });
+    expect(lowResult.ok).toBe(false);
+
+    // Verify pending count is still 3 (dropped events were not persisted)
+    const countResult = bus.pendingCount();
+    expect(countResult.ok).toBe(true);
+    if (countResult.ok) {
+      expect(countResult.value).toBe(3);
+    }
+  });
+
+  test("backpressure never drops critical or high events", () => {
+    const db = makeDb();
+    const bus = new EventBus(db, logger, { maxPendingEvents: 2 });
+
+    // Fill up the queue
+    bus.publish("user:message", { text: "one" }, { priority: "normal" });
+    bus.publish("user:message", { text: "two" }, { priority: "normal" });
+
+    // Queue is at capacity. Critical and high events should still be accepted.
+    const criticalResult = bus.publish("user:message", { text: "urgent" }, { priority: "critical" });
+    expect(criticalResult.ok).toBe(true);
+
+    const highResult = bus.publish("user:message", { text: "important" }, { priority: "high" });
+    expect(highResult.ok).toBe(true);
+
+    // Verify all 4 events are in the queue
+    const countResult = bus.pendingCount();
+    expect(countResult.ok).toBe(true);
+    if (countResult.ok) {
+      expect(countResult.value).toBe(4);
+    }
+  });
 });

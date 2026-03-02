@@ -15,7 +15,8 @@
 import { Database } from "bun:sqlite";
 import { chmodSync, existsSync } from "node:fs";
 import type { EidolonConfig, EidolonError, Result, SecretMetadata } from "@eidolon/protocol";
-import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
+import { createError, EidolonConfigSchema, Err, ErrorCode, Ok } from "@eidolon/protocol";
+import type { Logger } from "../logging/logger.ts";
 import { decrypt, encrypt } from "./crypto.ts";
 
 // ---------------------------------------------------------------------------
@@ -62,15 +63,18 @@ interface MetadataRow {
 export class SecretStore {
   private readonly db: Database;
   private readonly masterKey: Buffer;
+  private readonly logger: Logger | undefined;
 
   /**
    * @param dbPath    - Path to the SQLite database file, or `":memory:"` for tests.
    * @param masterKey - 32-byte master encryption key. The buffer is referenced (not copied)
    *                    and must remain valid for the lifetime of the store.
+   * @param logger    - Optional structured logger for audit-grade secret access logging.
    */
-  constructor(dbPath: string, masterKey: Buffer) {
+  constructor(dbPath: string, masterKey: Buffer, logger?: Logger) {
     this.db = new Database(dbPath, { create: true });
     this.masterKey = masterKey;
+    this.logger = logger?.child("secrets");
     this.restrictFilePermissions(dbPath);
     this.initialize();
   }
@@ -150,6 +154,7 @@ export class SecretStore {
           now,
           key,
         );
+      this.logger?.info("set", `Secret updated: ${key}`);
     } else {
       this.db
         .query(
@@ -167,6 +172,7 @@ export class SecretStore {
           now,
           now,
         );
+      this.logger?.info("set", `Secret created: ${key}`);
     }
 
     return Ok(undefined);
@@ -191,13 +197,14 @@ export class SecretStore {
       .get(key) as SecretRow | null;
 
     if (!row) {
+      this.logger?.warn("get", `Secret not found: ${key}`);
       return Err(createError(ErrorCode.SECRET_NOT_FOUND, `Secret '${key}' not found`));
     }
 
-    // Update accessed_at
-    this.db.query("UPDATE secrets SET accessed_at = ? WHERE key = ?").run(Date.now(), key);
-
-    return decrypt(
+    // SEC: Decrypt BEFORE updating accessed_at to prevent timing oracle.
+    // If we update accessed_at first, an attacker can determine key existence
+    // by measuring response time (existing keys take longer due to the UPDATE).
+    const result = decrypt(
       {
         ciphertext: Buffer.from(row.encrypted_value),
         iv: Buffer.from(row.iv),
@@ -206,6 +213,15 @@ export class SecretStore {
       },
       this.masterKey,
     );
+
+    if (result.ok) {
+      // Only update accessed_at on successful decryption
+      this.db.query("UPDATE secrets SET accessed_at = ? WHERE key = ?").run(Date.now(), key);
+    } else {
+      this.logger?.warn("get", `Decryption failed for secret: ${key}`);
+    }
+
+    return result;
   }
 
   /**
@@ -219,8 +235,10 @@ export class SecretStore {
 
     const result = this.db.query("DELETE FROM secrets WHERE key = ?").run(key);
     if (result.changes === 0) {
+      this.logger?.warn("delete", `Secret not found for deletion: ${key}`);
       return Err(createError(ErrorCode.SECRET_NOT_FOUND, `Secret '${key}' not found`));
     }
+    this.logger?.info("delete", `Secret deleted: ${key}`);
     return Ok(undefined);
   }
 
@@ -261,19 +279,40 @@ export class SecretStore {
    */
   rotate(key: string, newValue: string): Result<void, EidolonError> {
     if (!this.has(key)) {
+      this.logger?.warn("rotate", `Secret not found for rotation: ${key}`);
       return Err(createError(ErrorCode.SECRET_NOT_FOUND, `Secret '${key}' not found`));
     }
+    this.logger?.info("rotate", `Secret rotated: ${key}`);
     return this.set(key, newValue);
   }
 
   /**
    * Resolve `{ "$secret": "KEY" }` references in a config object.
    * Walks the config tree and replaces SecretRef objects with decrypted values.
+   * Re-validates the resolved config against the Zod schema to ensure type safety.
    */
   resolveSecretRefs(config: EidolonConfig): Result<EidolonConfig, EidolonError> {
     const resolved = this.resolveRefs(structuredClone(config) as unknown);
     if (!resolved.ok) return resolved as Result<EidolonConfig, EidolonError>;
-    return Ok(resolved.value as EidolonConfig);
+
+    // SEC: Re-validate with Zod after secret resolution to prevent unsafe type casts.
+    // Secret values may not match the expected schema (e.g., empty string for a required field).
+    const parseResult = EidolonConfigSchema.safeParse(resolved.value);
+    if (!parseResult.success) {
+      this.logger?.error(
+        "resolveSecretRefs",
+        "Config validation failed after secret resolution",
+        parseResult.error,
+      );
+      return Err(
+        createError(
+          ErrorCode.CONFIG_INVALID,
+          `Config invalid after secret resolution: ${parseResult.error.issues.map((i) => i.message).join(", ")}`,
+        ),
+      );
+    }
+
+    return Ok(parseResult.data);
   }
 
   private resolveRefs(obj: unknown): Result<unknown, EidolonError> {

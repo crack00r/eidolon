@@ -1,6 +1,6 @@
 # Architecture
 
-> **Status: Design — not yet implemented.**
+> **Status: Implemented — v0.1.x. This document describes the design; see source code for implementation details.**
 > Updated 2026-03-01 based on [expert review findings](../REVIEW_FINDINGS.md).
 
 ## Overview
@@ -278,25 +278,18 @@ Sessions do NOT share:
 
 ## Communication Protocols
 
-### Core API: WebSocket + REST
+### Core API: WebSocket + JSON-RPC
 
-The Core exposes two API surfaces:
+The Core exposes a WebSocket + JSON-RPC 2.0 API for all client communication. This is the only client-facing protocol.
 
-**1. WebSocket + JSON-RPC** (primary, for clients)
 Real-time bidirectional communication for desktop apps, iOS, and interactive use.
 
-**2. OpenAI-compatible REST API** (secondary, for tool integration)
-A subset of the OpenAI Chat Completions API at `/v1/chat/completions`. This allows any tool that speaks the OpenAI protocol (Jan, Open WebUI, LM Studio, custom scripts) to use Eidolon as a backend.
-
 ```
-GET  /v1/models                    # List available models/sessions
-POST /v1/chat/completions          # Send message, get response (streaming SSE)
+WS   /                             # WebSocket endpoint (JSON-RPC 2.0)
 GET  /health                       # Daemon status
-GET  /metrics                      # Token usage, session count, memory stats
-POST /config/reload                # Hot-reload configuration
 ```
 
-The REST API is intentionally limited -- it doesn't expose memory management, learning control, or session orchestration. Those require the full WebSocket protocol. But it means any OpenAI-compatible client can chat with Eidolon out of the box.
+> **Note:** An OpenAI-compatible REST API (`/v1/chat/completions`) is planned for a future release (post v1.0) to allow integration with third-party tools like Jan, Open WebUI, and LM Studio. It is not currently implemented.
 
 ### Core <-> Clients: WebSocket + JSON-RPC
 

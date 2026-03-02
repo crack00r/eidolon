@@ -24,6 +24,7 @@ const LOCKED_FIELDS: ReadonlySet<string> = new Set([
   "database",
   "daemon.pidFile",
   "daemon.socketPath",
+  "gateway.auth",
 ]);
 
 export type ConfigChangeHandler = (config: EidolonConfig) => void;
@@ -103,10 +104,13 @@ export class ConfigWatcher {
       }
       return true;
     } catch {
-      // On non-POSIX systems (Windows) statSync may not return meaningful mode bits.
-      // Allow reload to proceed but log a warning.
-      this.logger?.warn("watcher", "Could not verify config file permissions (non-POSIX system?)");
-      return true;
+      // SEC-M1: On non-POSIX systems (Windows) statSync may not return meaningful
+      // mode bits. Deny by default to fail-safe rather than fail-open.
+      this.logger?.warn(
+        "watcher",
+        "Could not verify config file permissions (non-POSIX system?). Refusing reload as a precaution.",
+      );
+      return false;
     }
   }
 
@@ -132,16 +136,17 @@ export class ConfigWatcher {
 
     const result = await loadConfig(this.configPath);
     if (result.ok) {
-      // SEC: Block changes to security-critical fields via hot-reload
-      if (this.currentConfig) {
-        const lockedChanges = this.getLockedFieldChanges(this.currentConfig, result.value);
-        if (lockedChanges.length > 0) {
-          this.logger?.warn(
-            "watcher",
-            `Blocked hot-reload: locked field(s) changed: ${lockedChanges.join(", ")}. Restart the daemon to apply.`,
-          );
-          return;
-        }
+      // SEC-C3: Block changes to security-critical fields via hot-reload.
+      // Always check locked fields, including on first reload when currentConfig
+      // may be null (use the newly loaded config as both old and new to initialize).
+      const oldConfig = this.currentConfig ?? result.value;
+      const lockedChanges = this.getLockedFieldChanges(oldConfig, result.value);
+      if (lockedChanges.length > 0) {
+        this.logger?.warn(
+          "watcher",
+          `Blocked hot-reload: locked field(s) changed: ${lockedChanges.join(", ")}. Restart the daemon to apply.`,
+        );
+        return;
       }
 
       this.currentConfig = result.value;

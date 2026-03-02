@@ -26,7 +26,14 @@ export class VoicePipeline {
   private readonly stt: STTClient;
   private readonly logger: Logger;
   private currentState: VoiceState = "idle";
-  private interrupted = false;
+
+  /**
+   * AbortController for the currently active TTS operation.
+   * Each call to textToSpeechChunked creates a new controller,
+   * ensuring interrupt() only affects the current operation and
+   * avoids shared mutable state across concurrent calls.
+   */
+  private activeAbort: AbortController | null = null;
 
   constructor(ttsClient: TTSClient, sttClient: STTClient, logger: Logger) {
     this.tts = ttsClient;
@@ -42,6 +49,7 @@ export class VoicePipeline {
   /**
    * Process text response: split into sentences, TTS each, return audio chunks.
    * Returns an array of audio buffers, one per sentence.
+   * Each call gets its own AbortSignal, preventing shared mutable state issues.
    */
   async textToSpeechChunked(text: string): Promise<Result<Uint8Array[], EidolonError>> {
     const sentences = VoicePipeline.splitSentences(text);
@@ -49,7 +57,8 @@ export class VoicePipeline {
       return Ok([]);
     }
 
-    this.interrupted = false;
+    const abort = new AbortController();
+    this.activeAbort = abort;
     this.currentState = "processing";
     const chunks: Uint8Array[] = [];
 
@@ -58,29 +67,37 @@ export class VoicePipeline {
       totalLength: text.length,
     });
 
-    for (const sentence of sentences) {
-      if (this.interrupted) {
-        this.currentState = "interrupted";
-        this.logger.info("tts-chunked", "TTS interrupted", {
-          completedChunks: chunks.length,
-          totalSentences: sentences.length,
-        });
-        return Ok(chunks);
+    try {
+      for (const sentence of sentences) {
+        if (abort.signal.aborted) {
+          this.currentState = "interrupted";
+          this.logger.info("tts-chunked", "TTS interrupted", {
+            completedChunks: chunks.length,
+            totalSentences: sentences.length,
+          });
+          return Ok(chunks);
+        }
+
+        const result = await this.tts.synthesize({ text: sentence });
+
+        if (!result.ok) {
+          this.currentState = "idle";
+          return Err(
+            createError(ErrorCode.TTS_FAILED, `TTS failed on sentence: ${result.error.message}`, result.error),
+          );
+        }
+
+        chunks.push(result.value.audio);
+        this.currentState = "speaking";
       }
 
-      const result = await this.tts.synthesize({ text: sentence });
-
-      if (!result.ok) {
-        this.currentState = "idle";
-        return Err(createError(ErrorCode.TTS_FAILED, `TTS failed on sentence: ${result.error.message}`, result.error));
+      this.currentState = "idle";
+      return Ok(chunks);
+    } finally {
+      if (this.activeAbort === abort) {
+        this.activeAbort = null;
       }
-
-      chunks.push(result.value.audio);
-      this.currentState = "speaking";
     }
-
-    this.currentState = "idle";
-    return Ok(chunks);
   }
 
   /** Transcribe audio input. */
@@ -115,9 +132,11 @@ export class VoicePipeline {
       .filter((s) => s.length > 0);
   }
 
-  /** Interrupt current speech processing. */
+  /** Interrupt current speech processing by aborting the active AbortController. */
   interrupt(): void {
-    this.interrupted = true;
+    if (this.activeAbort) {
+      this.activeAbort.abort();
+    }
     this.currentState = "interrupted";
     this.logger.info("interrupt", "Voice pipeline interrupted");
   }

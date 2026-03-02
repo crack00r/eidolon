@@ -62,9 +62,11 @@ function formatPretty(entry: LogEntry): string {
   }
 
   if (entry.error) {
-    parts.push(`  Error: ${entry.error.message}`);
+    // SEC-H11: Sanitize error.message and error.stack in pretty format to
+    // prevent log injection via control characters in error strings.
+    parts.push(`  Error: ${sanitizeLogMessage(entry.error.message)}`);
     if (entry.error.stack) {
-      parts.push(`  ${entry.error.stack}`);
+      parts.push(`  ${sanitizeLogMessage(entry.error.stack)}`);
     }
   }
 

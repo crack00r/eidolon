@@ -5,6 +5,7 @@
  * Uses Bun.spawn() for subprocess management.
  */
 
+import { randomUUID } from "node:crypto";
 import type { ClaudeSessionOptions, EidolonError, IClaudeProcess, Result, StreamEvent } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 import type { Subprocess } from "bun";
@@ -30,7 +31,7 @@ export class ClaudeCodeManager implements IClaudeProcess {
    */
   async *run(prompt: string, options: ClaudeSessionOptions): AsyncGenerator<StreamEvent> {
     const args = buildClaudeArgs(prompt, options);
-    const sessionId = options.sessionId ?? `session-${Date.now()}`;
+    const sessionId = options.sessionId ?? `session-${randomUUID()}`;
 
     this.logger.info("manager", "Starting Claude Code session", {
       sessionId,
@@ -105,19 +106,24 @@ export class ClaudeCodeManager implements IClaudeProcess {
 
     this.activeSessions.set(sessionId, proc);
 
-    try {
-      // Set up timeout if configured
-      const timeoutId =
-        options.timeoutMs !== undefined
-          ? setTimeout(() => {
-              try {
-                proc.kill();
-              } catch {
-                // Process may have already exited; ignore ESRCH / similar errors
-              }
-            }, options.timeoutMs)
-          : null;
+    // Drain stderr unconditionally in the background to prevent pipe deadlocks
+    const stderrPromise: Promise<string> = proc.stderr
+      ? new Response(proc.stderr).text()
+      : Promise.resolve("");
 
+    // Set up timeout if configured
+    const timeoutId =
+      options.timeoutMs !== undefined
+        ? setTimeout(() => {
+            try {
+              proc.kill();
+            } catch {
+              // Process may have already exited; ignore ESRCH / similar errors
+            }
+          }, options.timeoutMs)
+        : null;
+
+    try {
       // Stream stdout line by line
       if (proc.stdout) {
         const reader = proc.stdout.getReader();
@@ -160,10 +166,8 @@ export class ClaudeCodeManager implements IClaudeProcess {
       // Wait for process to exit
       const exitCode = await proc.exited;
 
-      if (timeoutId !== null) clearTimeout(timeoutId);
-
       if (exitCode !== 0) {
-        const stderr = proc.stderr ? await new Response(proc.stderr).text() : "";
+        const stderr = await stderrPromise;
         yield {
           type: "error",
           error: `Claude Code exited with code ${String(exitCode)}`,
@@ -174,7 +178,10 @@ export class ClaudeCodeManager implements IClaudeProcess {
 
       yield { type: "done", timestamp: Date.now() };
     } finally {
+      if (timeoutId !== null) clearTimeout(timeoutId);
       this.activeSessions.delete(sessionId);
+      // Ensure stderr is consumed even if generator is abandoned early
+      stderrPromise.catch(() => {});
     }
   }
 

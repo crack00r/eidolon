@@ -71,6 +71,9 @@ const MAX_REPLAY_BATCH_SIZE = 1000;
 /** Maximum serialized payload size in bytes (1 MB). */
 const MAX_PAYLOAD_SIZE = 1_048_576;
 
+/** Default maximum pending events before backpressure kicks in. */
+const DEFAULT_MAX_PENDING_EVENTS = 1000;
+
 /**
  * Recursively strip prototype-pollution keys from parsed JSON payloads.
  * Handles nested objects and arrays to prevent deep pollution attacks.
@@ -114,18 +117,28 @@ function rowToEvent(row: EventRow, logger?: Logger): BusEvent {
   };
 }
 
+export interface EventBusOptions {
+  /** Maximum pending (unprocessed) events before backpressure drops low-priority events. Default: 1000. */
+  readonly maxPendingEvents?: number;
+}
+
 export class EventBus {
   private readonly db: Database;
   private readonly logger: Logger;
   private readonly subscribers: Map<EventType | "*", Set<EventHandler>>;
+  private readonly maxPendingEvents: number;
 
-  constructor(db: Database, logger: Logger) {
+  constructor(db: Database, logger: Logger, options?: EventBusOptions) {
     this.db = db;
     this.logger = logger;
     this.subscribers = new Map();
+    this.maxPendingEvents = options?.maxPendingEvents ?? DEFAULT_MAX_PENDING_EVENTS;
   }
 
-  /** Publish an event. Persists to SQLite, then notifies in-memory subscribers. */
+  /** Publish an event. Persists to SQLite, then notifies in-memory subscribers.
+   *  Applies backpressure: when the pending queue exceeds maxPendingEvents,
+   *  'normal' and 'low' priority events are dropped. 'critical' and 'high'
+   *  priority events are never dropped. */
   publish<T>(
     type: EventType,
     payload: T,
@@ -135,6 +148,21 @@ export class EventBus {
     const priority = options?.priority ?? "normal";
     const source = options?.source ?? "system";
     const timestamp = Date.now();
+
+    // Backpressure: drop low-priority events when queue is overloaded
+    if (priority !== "critical" && priority !== "high") {
+      const countResult = this.pendingCount();
+      if (countResult.ok && countResult.value >= this.maxPendingEvents) {
+        this.logger.warn("event-bus", `Backpressure: dropping ${priority} event ${type} (queue depth: ${countResult.value}, max: ${this.maxPendingEvents})`);
+        return Err(
+          createError(
+            ErrorCode.EVENT_BUS_ERROR,
+            `Backpressure: event dropped (queue depth ${countResult.value} >= max ${this.maxPendingEvents})`,
+          ),
+        );
+      }
+    }
+
     const payloadJson = JSON.stringify(payload);
 
     if (payloadJson.length > MAX_PAYLOAD_SIZE) {
@@ -369,28 +397,58 @@ export class EventBus {
     }
   }
 
-  /** Drain all pending events (non-blocking). */
+  /**
+   * Drain all pending unclaimed events (non-blocking).
+   * Atomically claims all returned events so subsequent drain() calls
+   * will not return them again, preventing double-processing.
+   */
   drain(): Result<BusEvent[], EidolonError> {
     try {
-      const rows = this.db
-        .query(
-          `SELECT * FROM events WHERE processed_at IS NULL
-           ORDER BY
-             CASE priority
-               WHEN 'critical' THEN 0
-               WHEN 'high' THEN 1
-               WHEN 'normal' THEN 2
-               WHEN 'low' THEN 3
-             END,
-             timestamp ASC
-            LIMIT ?`,
-        )
-        .all(MAX_REPLAY_BATCH_SIZE) as EventRow[];
+      const claimToken = Date.now();
+      let rows: EventRow[] = [];
+
+      const drainFn = this.db.transaction(() => {
+        rows = this.db
+          .query(
+            `SELECT * FROM events WHERE processed_at IS NULL AND claimed_at IS NULL
+             ORDER BY
+               CASE priority
+                 WHEN 'critical' THEN 0
+                 WHEN 'high' THEN 1
+                 WHEN 'normal' THEN 2
+                 WHEN 'low' THEN 3
+               END,
+               timestamp ASC
+              LIMIT ?`,
+          )
+          .all(MAX_REPLAY_BATCH_SIZE) as EventRow[];
+
+        if (rows.length > 0) {
+          const ids = rows.map((r) => r.id);
+          for (const id of ids) {
+            this.db
+              .query("UPDATE events SET claimed_at = ? WHERE id = ? AND claimed_at IS NULL")
+              .run(claimToken, id);
+          }
+        }
+      });
+
+      drainFn();
 
       return Ok(rows.map((r) => rowToEvent(r, this.logger)));
     } catch (cause) {
       return Err(createError(ErrorCode.EVENT_BUS_ERROR, "Failed to drain events", cause));
     }
+  }
+
+  /**
+   * SEC-L1: Dispose of all in-memory state (subscribers).
+   * Should be called during graceful shutdown to release handler references
+   * and prevent stale subscriptions from firing after shutdown begins.
+   */
+  dispose(): void {
+    this.subscribers.clear();
+    this.logger.debug("event-bus", "Disposed all subscribers");
   }
 
   /** Invoke a single handler safely, catching both sync throws and async rejections. */

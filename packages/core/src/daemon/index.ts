@@ -31,12 +31,14 @@ import {
 import { createHealthServer } from "../health/server.ts";
 import type { Logger } from "../logging/logger.ts";
 import { createLogger } from "../logging/logger.ts";
+import { LogRotator } from "../logging/rotation.ts";
 import { EventBus } from "../loop/event-bus.ts";
 import { SessionSupervisor } from "../loop/session-supervisor.ts";
 import { EmbeddingModel } from "../memory/embeddings.ts";
 import { MemorySearch } from "../memory/search.ts";
 import { MemoryStore } from "../memory/store.ts";
 import { TokenTracker } from "../metrics/token-tracker.ts";
+import { AuditLogger } from "../audit/logger.ts";
 import { getMasterKey } from "../secrets/master-key.ts";
 import { SecretStore } from "../secrets/store.ts";
 
@@ -55,6 +57,7 @@ interface InitializedModules {
   config?: EidolonConfig;
   secretStore?: SecretStore;
   dbManager?: DatabaseManager;
+  auditLogger?: AuditLogger;
   healthChecker?: HealthChecker;
   healthServer?: ReturnType<typeof createHealthServer>;
   tokenTracker?: TokenTracker;
@@ -123,8 +126,15 @@ export class EidolonDaemon {
             throw new Error(`Config load failed: ${result.error.message}`);
           }
           this.modules.config = result.value;
-          // Re-create logger with config-based settings
-          this.modules.logger = createLogger(result.value.logging);
+          // Re-create logger with config-based settings, including file rotation
+          const logDir = result.value.logging.directory;
+          const rotator = logDir
+            ? new LogRotator(join(logDir, "daemon.log"), {
+                maxSizeMb: result.value.logging.maxSizeMb,
+                maxFiles: result.value.logging.maxFiles,
+              })
+            : undefined;
+          this.modules.logger = createLogger(result.value.logging, { rotator });
           this.modules.logger.info("daemon", "Configuration loaded");
         },
       });
@@ -141,7 +151,7 @@ export class EidolonDaemon {
           const dataDir = this.modules.config?.database.directory || getDataDir();
           ensureDir(dataDir);
           const dbPath = join(dataDir, SECRETS_DB_FILENAME);
-          this.modules.secretStore = new SecretStore(dbPath, masterKeyResult.value);
+          this.modules.secretStore = new SecretStore(dbPath, masterKeyResult.value, this.modules.logger);
           this.modules.logger?.info("daemon", "SecretStore initialized");
         },
       });
@@ -181,6 +191,19 @@ export class EidolonDaemon {
             throw new Error(`Database init failed: ${result.error.message}`);
           }
           logger.info("daemon", "Databases initialized (memory, operational, audit)");
+        },
+      });
+
+      // 5b. AuditLogger (needs DatabaseManager, Logger)
+      initOrder.push({
+        name: "AuditLogger",
+        fn: () => {
+          const dbManager = this.modules.dbManager;
+          const logger = this.modules.logger;
+          if (!dbManager || !logger) return;
+
+          this.modules.auditLogger = new AuditLogger(dbManager.audit, logger);
+          logger.info("daemon", "AuditLogger initialized");
         },
       });
 
@@ -478,6 +501,31 @@ export class EidolonDaemon {
           });
           await this.modules.gatewayServer.start();
           logger.info("daemon", `GatewayServer started on ${config.gateway.host}:${config.gateway.port}`);
+        },
+      });
+
+      // 19b. Wire gateway auth events to AuditLogger (needs EventBus, AuditLogger)
+      initOrder.push({
+        name: "GatewayAuditWiring",
+        fn: () => {
+          const eventBus = this.modules.eventBus;
+          const auditLogger = this.modules.auditLogger;
+          const logger = this.modules.logger;
+          if (!eventBus || !auditLogger) return;
+
+          eventBus.subscribe("gateway:client_connected", (event) => {
+            const payload = event.payload as { clientId?: string; authenticated?: boolean };
+            const authenticated = payload.authenticated === true;
+            auditLogger.log({
+              actor: `client:${payload.clientId ?? "unknown"}`,
+              action: "gateway.auth",
+              target: "gateway",
+              result: authenticated ? "success" : "failure",
+              details: { clientId: payload.clientId },
+            });
+          });
+
+          logger?.info("daemon", "Gateway auth events wired to AuditLogger");
         },
       });
 

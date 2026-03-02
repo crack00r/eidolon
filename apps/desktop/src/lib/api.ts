@@ -8,6 +8,8 @@
  * - Client → Client: via client.execute / push.executeCommand relay
  */
 
+import { clientLog, getRecentErrors, clearErrorBuffer } from "./logger";
+
 export interface GatewayConfig {
   host: string;
   port: number;
@@ -282,7 +284,7 @@ export class GatewayClient {
     this.setState("connecting");
 
     if (!HOSTNAME_RE.test(this.config.host)) {
-      console.error("Invalid hostname:", this.config.host);
+      clientLog("error", "gateway", "Invalid hostname", { host: this.config.host });
       this.setState("error");
       return;
     }
@@ -303,8 +305,10 @@ export class GatewayClient {
 
       // CLIENT-003: Warn when sending a token over unencrypted ws:// connection
       if (this.config.token && scheme === "ws") {
-        console.warn(
-          "[SECURITY WARNING] Auth token is being sent over an unencrypted ws:// connection. " +
+        clientLog(
+          "warn",
+          "gateway",
+          "SECURITY WARNING: Auth token is being sent over an unencrypted ws:// connection. " +
             "The token will be transmitted in plaintext. Use wss:// (TLS) in production.",
         );
       }
@@ -314,8 +318,10 @@ export class GatewayClient {
         this.sendAuth();
       } else {
         // CLIENT-002: Warn when connecting without authentication
-        console.warn(
-          "[SECURITY WARNING] Connecting to gateway without an authentication token. " +
+        clientLog(
+          "warn",
+          "gateway",
+          "SECURITY WARNING: Connecting to gateway without an authentication token. " +
             "The connection is unauthenticated and should not be used in production.",
         );
         this.setState("connected");
@@ -373,7 +379,7 @@ export class GatewayClient {
       },
       reject: (err: Error) => {
         this.setState("error");
-        console.error("Authentication failed:", err.message);
+        clientLog("error", "gateway", "Authentication failed", { error: err.message });
         this.ws?.close(4002, "Auth failed");
       },
       timer,

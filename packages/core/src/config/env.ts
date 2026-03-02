@@ -29,6 +29,37 @@ const CONFIG_SECTIONS = new Set([
   "daemon",
 ]);
 
+/**
+ * SEC-C2: Config paths that MUST NOT be overridden via environment variables.
+ * These are security-critical sections where env-based override could bypass
+ * file permission checks and locked-field protections in the config watcher.
+ * Paths are matched as prefixes against the lowercased env var path segments.
+ */
+const LOCKED_ENV_PATHS: ReadonlySet<string> = new Set([
+  "security",
+  "database",
+  "daemon",
+]);
+
+/**
+ * SEC-C2: Specific sub-paths within otherwise-allowed sections that must not
+ * be overridden via environment variables.
+ */
+const LOCKED_ENV_SUBPATHS: ReadonlyArray<readonly string[]> = [
+  ["brain", "accounts"],
+  ["gateway", "auth"],
+];
+
+/** Check whether a given config path (lowercased segments) is locked from env override. */
+function isLockedEnvPath(path: readonly string[]): boolean {
+  const first = path[0];
+  if (first !== undefined && LOCKED_ENV_PATHS.has(first)) return true;
+  for (const locked of LOCKED_ENV_SUBPATHS) {
+    if (locked.length <= path.length && locked.every((seg, i) => path[i] === seg)) return true;
+  }
+  return false;
+}
+
 export function applyEnvOverrides(config: EidolonConfig): EidolonConfig {
   const result = structuredClone(config) as Record<string, unknown>;
 
@@ -42,6 +73,9 @@ export function applyEnvOverrides(config: EidolonConfig): EidolonConfig {
     // Only process env vars whose first segment matches a config section
     const firstSegment = path[0];
     if (firstSegment === undefined || !CONFIG_SECTIONS.has(firstSegment)) continue;
+
+    // SEC-C2: Block env overrides for security-critical config paths
+    if (isLockedEnvPath(path)) continue;
 
     setNestedValue(result, path, coerceValue(value));
   }

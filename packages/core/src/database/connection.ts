@@ -73,6 +73,10 @@ export function createConnection(path: string, options?: ConnectionOptions): Res
       if ((afterSet?.auto_vacuum ?? 0) !== 2) {
         // Existing DB -- cannot change auto_vacuum mode without VACUUM INTO
         // This is non-fatal; the DB will continue to work but won't shrink on delete.
+        // SEC-H4: console.warn is used here intentionally instead of Logger because
+        // createConnection() runs during DatabaseManager initialization, before
+        // the Logger subsystem is fully wired up. This is the only safe output
+        // channel at this stage of the boot sequence.
         if (typeof console !== "undefined") {
           console.warn(
             `[eidolon] auto_vacuum=INCREMENTAL could not be set on "${path}" (current mode: ${currentMode}). ` +

@@ -5,6 +5,7 @@
  * the --mcp-config flag. Reads server definitions from BrainConfig.
  */
 
+import { chmodSync } from "node:fs";
 import { join } from "node:path";
 import type { BrainConfig, EidolonError, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
@@ -45,6 +46,13 @@ export async function generateMcpConfig(
 
   try {
     await Bun.write(configPath, JSON.stringify(mcpConfig, null, 2));
+    // SEC-H5: MCP config may contain env vars with secrets (e.g. HA_TOKEN).
+    // Restrict file permissions to owner-only to prevent other users from reading.
+    try {
+      chmodSync(configPath, 0o600);
+    } catch {
+      // Non-fatal: may fail on some filesystems (e.g. FAT32 on Windows)
+    }
     return Ok(configPath);
   } catch (cause) {
     return Err(createError(ErrorCode.CONFIG_PARSE_ERROR, "Failed to write MCP config", cause));

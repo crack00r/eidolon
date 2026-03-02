@@ -1,6 +1,8 @@
 # Configuration Reference
 
-All configuration lives in `~/.eidolon/eidolon.json`. Secrets are never stored in this file -- they are referenced via `{ "$secret": "KEY_NAME" }` and resolved from the encrypted secret store (`secrets.enc`).
+> **Status: Synchronized with the Zod schema in `packages/protocol/src/config.ts` as of v0.1.5.**
+
+All configuration lives in `eidolon.json` (searched in: explicit path, `$EIDOLON_CONFIG`, `./eidolon.json`, `~/.config/eidolon/eidolon.json`). Secrets are never stored in this file -- they are referenced via `{ "$secret": "KEY_NAME" }` and resolved from the encrypted secret store (`secrets.db`).
 
 ## Minimal Configuration
 
@@ -8,283 +10,270 @@ The smallest viable `eidolon.json`:
 
 ```jsonc
 {
+  "identity": {
+    "ownerName": "Manuel"
+  },
   "brain": {
     "accounts": [
-      { "type": "oauth", "name": "main" }
+      { "type": "oauth", "name": "primary", "credential": "oauth" }
     ]
+  },
+  "gateway": {
+    "auth": { "type": "none" }
   }
 }
 ```
 
-Everything else has sensible defaults.
+`identity.ownerName` and `brain.accounts` (min 1) are required. `gateway.auth` requires a token when type is `"token"`, so set `"none"` or provide a token. Everything else has sensible defaults.
 
 ## Full Schema
 
+The following reflects the actual Zod schema in `packages/protocol/src/config.ts`. Field names, types, and defaults are exact.
+
 ```jsonc
 {
-  // ─── Identity ───────────────────────────────────────────
+  // --- Identity --------------------------------------------------------
   "identity": {
-    "name": "Eidolon",                    // Display name
-    "timezone": "Europe/Berlin",          // IANA timezone
-    "locale": "de-DE",                    // Locale for date/number formatting
-    "owner": {
-      "name": "Manuel",                   // User's name
-      "pronouns": "he/him"               // Optional
-    }
+    "name": "Eidolon",                    // string, default "Eidolon"
+    "ownerName": "Manuel"                 // string, REQUIRED
   },
 
-  // ─── Brain (Claude Code Integration) ────────────────────
+  // --- Brain (Claude Code Integration) ---------------------------------
   "brain": {
-    "accounts": [
+    "accounts": [                         // array, min 1, REQUIRED
       {
-        "type": "oauth",                  // 'oauth' | 'api-key'
-        "name": "max-primary",            // Human-readable name
-        "priority": 1,                    // Lower = preferred
-        "model": "claude-sonnet-4-20250514"    // Default model for this account
-      },
-      {
-        "type": "oauth",
-        "name": "max-secondary",
-        "priority": 2,
-        "model": "claude-sonnet-4-20250514"
-      },
-      {
-        "type": "api-key",
-        "name": "api-fallback",
-        "priority": 10,
-        "keyRef": { "$secret": "ANTHROPIC_KEY_1" },
-        "model": "claude-sonnet-4-20250514"
+        "type": "oauth",                  // "oauth" | "api-key"
+        "name": "primary",               // string
+        "credential": "oauth",            // string | { "$secret": "KEY" }
+        "priority": 50,                   // int 1-100, default 50
+        "maxTokensPerHour": 200000,       // positive int, optional
+        "enabled": true                   // boolean, default true
       }
     ],
-    "defaultModel": "claude-sonnet-4-20250514",    // Model when not specified per-account
-    "maxTurns": 25,                       // Max tool-use turns per session
-    "sessionTimeout": 3600,               // Session timeout in seconds (1h)
-    "warmPool": {
-      "enabled": true,                    // Keep a warm process for main session
-      "maxProcesses": 2                   // Max warm processes
+    "model": {
+      "default": "claude-sonnet-4-20250514",  // string
+      "complex": "claude-opus-4-20250514",    // string
+      "fast": "claude-haiku-3-20250414"       // string
+    },
+    "session": {
+      "maxTurns": 50,                     // positive int, default 50
+      "compactAfter": 40,                 // positive int, default 40
+      "timeoutMs": 300000                 // positive int, default 300000 (5 min)
+    },
+    "mcpServers": {                       // optional record<string, object>
+      "home-assistant": {
+        "command": "npx",
+        "args": ["-y", "mcp-server-home-assistant"],
+        "env": { "HA_TOKEN": "..." }      // optional record<string, string>
+      }
     }
   },
 
-  // ─── Cognitive Loop ─────────────────────────────────────
+  // --- Cognitive Loop ---------------------------------------------------
   "loop": {
     "energyBudget": {
-      "tokensPerHour": 50000,             // Max tokens consumed per hour
-      "responseAllocation": 0.6,          // 60% for user responses
-      "learningAllocation": 0.3,          // 30% for learning
-      "dreamingAllocation": 0.1           // 10% for dreaming
+      "maxTokensPerHour": 100000,         // positive int, default 100000
+      "categories": {
+        "user": 0.5,                      // 0.0-1.0, default 0.5
+        "tasks": 0.2,                     // 0.0-1.0, default 0.2
+        "learning": 0.2,                  // 0.0-1.0, default 0.2
+        "dreaming": 0.1                   // 0.0-1.0, default 0.1
+      }
     },
     "rest": {
-      "activeTyping": 2000,               // ms: user just typed
-      "recentActivity": 5000,             // ms: user active within 1 min
-      "businessHours": 30000,             // ms: during configured business hours
-      "hasPendingLearning": 60000,        // ms: learning queue not empty
-      "idle": 300000                      // ms: deep idle (5 min)
+      "activeMinMs": 2000,               // positive int, default 2000
+      "idleMinMs": 30000,                // positive int, default 30000
+      "maxMs": 300000,                   // positive int, default 300000
+      "nightModeStartHour": 23,          // int 0-23, default 23
+      "nightModeEndHour": 7,             // int 0-23, default 7
+      "nightModeMultiplier": 3           // 1-10, default 3
     },
     "businessHours": {
-      "start": "08:00",                   // 24h format in configured timezone
-      "end": "22:00",
-      "days": [1, 2, 3, 4, 5, 6, 7]      // 1=Monday, 7=Sunday
+      "start": "07:00",                  // HH:MM format, default "07:00"
+      "end": "23:00",                    // HH:MM format, default "23:00"
+      "timezone": "Europe/Berlin"        // IANA timezone, default "Europe/Berlin"
     }
   },
 
-  // ─── Memory Engine ──────────────────────────────────────
+  // --- Memory Engine ----------------------------------------------------
   "memory": {
     "extraction": {
-      "enabled": true,                    // Auto-extract after every interaction
-      "model": "claude-haiku",            // Lightweight model for extraction
-      "minConfidence": 0.7                // Minimum confidence to store a memory
+      "strategy": "hybrid",              // "llm" | "rule-based" | "hybrid", default "hybrid"
+      "minConfidence": 0.7               // 0.0-1.0, default 0.7
     },
     "dreaming": {
-      "enabled": true,
-      "schedule": "02:00",                // When to start dreaming (local time)
-      "maxDuration": 3600,                // Max dreaming duration in seconds
-      "phases": {
-        "housekeeping": true,             // Phase 1: cleanup, dedup, decay
-        "rem": true,                      // Phase 2: associative discovery
-        "nrem": true                      // Phase 3: schema abstraction
-      }
+      "enabled": true,                   // boolean, default true
+      "schedule": "02:00",              // string, default "02:00"
+      "maxDurationMinutes": 30          // positive int, default 30
     },
     "search": {
-      "hybridWeight": 0.7,                // 0=pure BM25, 1=pure vector
-      "maxResults": 20,                   // Max memories per search
-      "embedding": {
-        "provider": "local",              // 'local' | 'voyage' | 'openai'
-        "model": "all-MiniLM-L6-v2",     // Local: ONNX model via @huggingface/transformers
-        "dimensions": 384                 // Embedding vector dimensions
-        // For 'voyage': model = "voyage-3-lite", requires VOYAGE_API_KEY secret
-        // For 'openai': model = "text-embedding-3-small", requires OPENAI_API_KEY secret
-      }
+      "maxResults": 20,                  // positive int, default 20
+      "rrfK": 60,                        // positive int, default 60 (RRF constant)
+      "bm25Weight": 0.4,                // 0.0-1.0, default 0.4
+      "vectorWeight": 0.4,              // 0.0-1.0, default 0.4
+      "graphWeight": 0.2                 // 0.0-1.0, default 0.2
+    },
+    "embedding": {
+      "model": "Xenova/multilingual-e5-small",  // string
+      "dimensions": 384,                // positive int, default 384
+      "batchSize": 32                   // positive int, default 32
     },
     "retention": {
-      "shortTermDays": 90,                // Short-term memory TTL in days (90d)
-      "episodicDays": 365,                // Episodic memory TTL in days (1 year)
-      "decayEnabled": true,               // Enable confidence decay over time
-      "decayRate": 0.01                   // Confidence decay per day
+      "shortTermDays": 90,              // positive int, default 90
+      "decayRate": 0.01                 // 0.0-1.0, default 0.01
+    },
+    "entityResolution": {
+      "personThreshold": 0.95,          // 0.0-1.0, default 0.95
+      "technologyThreshold": 0.90,      // 0.0-1.0, default 0.90
+      "conceptThreshold": 0.85          // 0.0-1.0, default 0.85
     }
   },
 
-  // ─── Self-Learning ──────────────────────────────────────
+  // --- Self-Learning ----------------------------------------------------
   "learning": {
-    "enabled": true,
-    "sources": [
+    "enabled": false,                     // boolean, default false
+    "sources": [                          // array, default []
       {
-        "type": "reddit",
-        "subreddits": ["programming", "typescript", "linux", "selfhosted"],
-        "minScore": 50,                   // Minimum upvotes
-        "interval": 3600                  // Check interval in seconds
-      },
-      {
-        "type": "hackernews",
-        "minScore": 100,
-        "interval": 1800
-      },
-      {
-        "type": "github",
-        "topics": ["ai", "typescript", "personal-assistant"],
-        "interval": 7200
-      },
-      {
-        "type": "rss",
-        "feeds": [
-          "https://example.com/feed.xml"
-        ],
-        "interval": 3600
+        "type": "reddit",                // "reddit" | "hackernews" | "github" | "rss" | "arxiv"
+        "config": {                       // record<string, string|number|boolean>
+          "subreddits": "selfhosted,homelab"
+        },
+        "schedule": "*/6 * * * *"        // cron expression (5 fields), default "*/6 * * * *"
       }
     ],
-    "relevanceThreshold": 60,             // Min relevance score (0-100) to keep
-    "autoImplement": false,               // Auto-implement safe discoveries
-    "maxDiscoveriesPerDay": 50,           // Prevent runaway scraping
-    "implementationBranch": "eidolon/learning"  // Git branch for auto-implementations
+    "relevance": {
+      "minScore": 0.6,                   // 0.0-1.0, default 0.6
+      "userInterests": []                // string array, default []
+    },
+    "autoImplement": {
+      "enabled": false,                  // boolean, default false
+      "requireApproval": true,           // boolean, default true
+      "allowedScopes": []               // string array, default []
+    },
+    "budget": {
+      "maxTokensPerDay": 50000,          // positive int, default 50000
+      "maxDiscoveriesPerDay": 20         // positive int, default 20
+    }
   },
 
-  // ─── Channels ───────────────────────────────────────────
+  // --- Channels ---------------------------------------------------------
   "channels": {
-    "telegram": {
-      "enabled": true,
-      "botToken": { "$secret": "TELEGRAM_BOT_TOKEN" },
-      "allowedUsers": [123456789],        // Telegram user IDs
-      "mode": "polling",                  // 'polling' | 'webhook'
-      "webhook": {
-        "url": "https://example.com/telegram/webhook",
-        "port": 8443,
-        "certPath": "/path/to/cert.pem"
-      },
-      "features": {
-        "voice": true,                    // Process voice messages (STT)
-        "images": true,                   // Process image attachments
-        "documents": true,                // Process document attachments
-        "reactions": true                 // React to messages
+    "telegram": {                         // optional
+      "enabled": false,                  // boolean, default false
+      "botToken": { "$secret": "TELEGRAM_BOT_TOKEN" },  // string | SecretRef
+      "allowedUserIds": [123456789],     // int array, REQUIRED when telegram is set
+      "notifyOnDiscovery": true,         // boolean, default true
+      "dndSchedule": {                   // optional
+        "start": "22:00",               // string, default "22:00"
+        "end": "07:00"                  // string, default "07:00"
       }
     }
-    // Future channels will follow the same pattern
   },
 
-  // ─── Gateway (WebSocket API) ────────────────────────────
+  // --- Gateway (WebSocket API) ------------------------------------------
   "gateway": {
-    "enabled": true,
-    "host": "0.0.0.0",                    // Bind address
-    "port": 8419,                         // WebSocket port
-    "authToken": { "$secret": "GATEWAY_TOKEN" },
-    "tls": {
-      "enabled": false,                   // TLS handled by Tailscale
-      "certPath": "",
-      "keyPath": ""
+    "host": "127.0.0.1",                 // string, default "127.0.0.1"
+    "port": 8419,                         // positive int, default 8419
+    "tls": {                              // default {} (disabled)
+      "enabled": false,                  // boolean, default false
+      "cert": "/path/to/cert.pem",      // string, optional (required when enabled=true)
+      "key": "/path/to/key.pem"         // string, optional (required when enabled=true)
     },
-    "maxConnections": 10,                 // Max simultaneous clients
-    "heartbeatInterval": 30000            // Client keepalive (ms)
+    "maxMessageBytes": 1048576,           // positive int, default 1048576 (1 MB)
+    "maxClients": 10,                     // positive int, default 10
+    "allowedOrigins": [],                 // string array, default []
+    "rateLimiting": {                     // default {}
+      "maxFailures": 5,                  // positive int, default 5
+      "windowMs": 60000,                // positive int, default 60000
+      "blockMs": 300000,                // positive int, default 300000
+      "maxBlockMs": 3600000             // positive int, default 3600000
+    },
+    "auth": {                             // REQUIRED
+      "type": "token",                   // "token" | "none", default "token"
+      "token": { "$secret": "GATEWAY_TOKEN" }  // string | SecretRef (required when type="token")
+    }
   },
 
-  // ─── GPU Workers ────────────────────────────────────────
+  // --- GPU Workers ------------------------------------------------------
   "gpu": {
-    "workers": [
+    "workers": [                          // array, default []
       {
-        "name": "windows-pc",
-        "host": "windows-pc.tailnet.ts.net",  // Tailscale hostname
-        "port": 8420,
-        "capabilities": ["tts", "stt"],
-        "healthCheckInterval": 30000      // ms between health checks
+        "name": "windows-5080",
+        "host": "100.64.0.2",
+        "port": 8420,                    // positive int, default 8420
+        "token": { "$secret": "GPU_WORKER_TOKEN" },  // string | SecretRef
+        "capabilities": ["tts", "stt"]   // ("tts"|"stt"|"realtime")[], default ["tts","stt"]
       }
     ],
     "tts": {
-      "model": "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice",
-      "defaultVoice": "Vivian",           // Qwen3-TTS voice preset (see GPU_AND_VOICE.md)
-      "defaultLanguage": "de",            // ISO 639-1 language code
-      "sampleRate": 24000,
-      "streaming": true
+      "model": "Qwen/Qwen3-TTS-1.7B",   // string
+      "defaultSpeaker": "Chelsie",       // string, default "Chelsie"
+      "sampleRate": 24000                // positive int, default 24000
     },
     "stt": {
-      "model": "openai/whisper-large-v3",
-      "language": "de"
+      "model": "large-v3",               // string, default "large-v3"
+      "language": "auto"                 // string, default "auto"
     },
     "fallback": {
-      "ttsDisabled": "text-only",         // 'text-only' | 'cloud-tts'
-      "sttDisabled": "text-only"          // 'text-only' | 'cloud-stt'
+      "cpuTts": true,                    // boolean, default true
+      "systemTts": true                  // boolean, default true
     }
   },
 
-  // ─── Security ───────────────────────────────────────────
+  // --- Security ---------------------------------------------------------
   "security": {
     "policies": {
-      "file_read": "safe",
-      "file_write_workspace": "safe",
-      "file_write_outside": "needs_approval",
-      "file_delete": "needs_approval",
-      "shell_read_only": "safe",
-      "shell_write": "needs_approval",
-      "shell_system": "dangerous",
-      "shell_network": "needs_approval",
-      "api_call_read": "safe",
-      "api_call_write": "needs_approval",
-      "send_message": "needs_approval",
-      "send_email": "dangerous",
-      "modify_own_code": "needs_approval",
-      "modify_config": "needs_approval",
-      "modify_secrets": "dangerous",
-      "store_memory": "safe",
-      "implement_discovery": "needs_approval",
-      "tts_generate": "safe",
-      "stt_transcribe": "safe"
+      "shellExecution": "needs_approval",  // "safe"|"needs_approval"|"dangerous", default "needs_approval"
+      "fileModification": "needs_approval",// "safe"|"needs_approval"|"dangerous", default "needs_approval"
+      "networkAccess": "safe",             // "safe"|"needs_approval"|"dangerous", default "safe"
+      "secretAccess": "dangerous"          // "safe"|"needs_approval"|"dangerous", default "dangerous"
     },
-    "approvalTimeout": {
-      "interactive": 300,                 // seconds (5 min)
-      "learning": 86400                   // seconds (24h)
+    "approval": {
+      "timeout": 300000,                   // positive int (ms), default 300000
+      "defaultAction": "deny"              // "deny" | "allow", default "deny"
     },
     "sandbox": {
-      "enabled": false,
-      "runtime": "docker",               // 'docker' | 'podman'
-      "image": "eidolon-sandbox",
-      "network": "none",
-      "mounts": []
+      "enabled": false,                    // boolean, default false
+      "runtime": "none"                    // "none" | "docker" | "bubblewrap", default "none"
     },
     "audit": {
-      "enabled": true,
-      "retentionDays": 90,                // Keep audit logs for 90 days
-      "logFile": "~/.eidolon/logs/audit.log"
+      "enabled": true,                     // boolean, default true
+      "retentionDays": 365                 // positive int, default 365
     }
   },
 
-  // ─── Database ───────────────────────────────────────────
+  // --- Privacy & Retention ----------------------------------------------
+  "privacy": {                             // default {}
+    "retention": {                         // default {}
+      "conversationsDays": 365,           // positive int, default 365
+      "eventsDays": 90,                   // positive int, default 90
+      "tokenUsageDays": 180,             // positive int, default 180
+      "auditLogDays": -1                  // -1 (never delete) | positive int, default -1
+    },
+    "encryptBackups": true                // boolean, default true
+  },
+
+  // --- Database ---------------------------------------------------------
   "database": {
-    "path": "~/.eidolon/eidolon.db",      // SQLite database path
-    "walMode": true,                      // Write-ahead logging
-    "backupInterval": 86400,              // Auto-backup interval in seconds (24h)
-    "backupRetention": 7                  // Keep N backups
+    "directory": "",                       // string, default "" (resolved at runtime to platform default)
+    "walMode": true,                       // boolean, default true
+    "backupPath": "/mnt/backup/eidolon",   // string, optional
+    "backupSchedule": "0 3 * * *"         // cron expression, default "0 3 * * *"
   },
 
-  // ─── Logging ────────────────────────────────────────────
+  // --- Logging ----------------------------------------------------------
   "logging": {
-    "level": "info",                      // 'debug' | 'info' | 'warn' | 'error'
-    "file": "~/.eidolon/logs/daemon.log",
-    "maxSize": "50MB",                    // Rotate at this size
-    "maxFiles": 5,                        // Keep N rotated files
-    "console": true                       // Also log to stdout
+    "level": "info",                       // "debug"|"info"|"warn"|"error", default "info"
+    "format": "json",                      // "json"|"pretty", default "json"
+    "directory": "",                       // string, default "" (resolved at runtime)
+    "maxSizeMb": 50,                       // positive number, default 50
+    "maxFiles": 10                         // positive int, default 10
   },
 
-  // ─── Daemon ─────────────────────────────────────────────
+  // --- Daemon -----------------------------------------------------------
   "daemon": {
-    "pidFile": "~/.eidolon/eidolon.pid",
-    "autoStart": false,                   // Start on system boot
-    "gracefulShutdownTimeout": 30000      // ms to wait for cleanup on shutdown
+    "pidFile": "",                         // string, default "" (resolved at runtime)
+    "gracefulShutdownMs": 10000           // positive int, default 10000
   }
 }
 ```
@@ -295,11 +284,12 @@ Environment variables override config file values. The naming convention is `EID
 
 | Variable | Config Path | Description |
 |---|---|---|
-| `EIDOLON_BRAIN__DEFAULT_MODEL` | `brain.defaultModel` | Override default model |
-| `EIDOLON_LOOP__ENERGY_BUDGET__TOKENS_PER_HOUR` | `loop.energyBudget.tokensPerHour` | Override token budget |
-| `EIDOLON_GATEWAY__PORT` | `gateway.port` | Override WebSocket port |
 | `EIDOLON_LOGGING__LEVEL` | `logging.level` | Override log level |
-| `EIDOLON_DATA_DIR` | (special) | Override `~/.eidolon/` base directory |
+| `EIDOLON_GATEWAY__PORT` | `gateway.port` | Override WebSocket port |
+| `EIDOLON_LOOP__ENERGY_BUDGET__MAX_TOKENS_PER_HOUR` | `loop.energyBudget.maxTokensPerHour` | Override token budget |
+| `EIDOLON_DATA_DIR` | (special) | Override base data directory |
+| `EIDOLON_MASTER_KEY` | (special) | Master encryption key for secret store |
+| `EIDOLON_CONFIG` | (special) | Path to config file |
 
 ## Secret References
 
@@ -311,23 +301,35 @@ Anywhere in the config where a secret value is needed, use the `$secret` referen
 }
 ```
 
-This resolves at runtime from the encrypted `secrets.enc` file. The secret must have been previously set via:
+This resolves at runtime from the encrypted secret store (`secrets.db`). The secret must have been previously set via:
 
 ```bash
 eidolon secrets set TELEGRAM_BOT_TOKEN
 ```
 
+Fields that accept secret references (`stringOrSecret()` in the Zod schema):
+- `brain.accounts[].credential`
+- `channels.telegram.botToken`
+- `gateway.auth.token`
+- `gpu.workers[].token`
+
 ## Configuration Validation
 
-When the daemon starts, the configuration is validated against a Zod schema. Invalid configurations fail fast with descriptive error messages:
+When the daemon starts, the configuration is validated against the Zod schema. Invalid configurations fail fast with descriptive error messages:
 
 ```
-$ eidolon start
+$ eidolon daemon start
 Error: Configuration validation failed:
-  - brain.accounts: At least one account is required
-  - channels.telegram.allowedUsers: Must contain at least one user ID
-  - gateway.port: Must be between 1024 and 65535
+  - identity.ownerName: Required
+  - brain.accounts: Array must contain at least 1 element(s)
+  - gateway.auth: Token value is required when auth type is 'token'
 ```
+
+Notable validation rules:
+- `gateway.tls`: When `enabled` is `true`, both `cert` and `key` are required.
+- `gateway.auth`: When `type` is `"token"`, a `token` value is required.
+- `loop.businessHours.start/end`: Must match `HH:MM` format with valid hours (00-23) and minutes (00-59).
+- `learning.sources[].schedule`: Must be a valid 5-field cron expression.
 
 ## Hot-Reload
 
@@ -337,13 +339,13 @@ The following configuration sections support hot-reload (no daemon restart requi
 |---|---|---|
 | `identity` | Yes | |
 | `brain.accounts` | Yes | New accounts added to rotation immediately |
-| `brain.defaultModel` | Yes | |
+| `brain.model` | Yes | |
 | `loop.energyBudget` | Yes | |
 | `loop.rest` | Yes | |
 | `memory.extraction` | Yes | |
 | `memory.dreaming.schedule` | Yes | |
 | `learning.sources` | Yes | Sources added/removed on next cycle |
-| `learning.relevanceThreshold` | Yes | |
+| `learning.relevance` | Yes | |
 | `channels.telegram` | No | Requires restart |
 | `gateway` | No | Requires restart |
 | `gpu.workers` | Yes | Workers re-discovered |
@@ -353,7 +355,6 @@ The following configuration sections support hot-reload (no daemon restart requi
 Hot-reload is triggered by:
 1. File system watcher on `eidolon.json`
 2. CLI command: `eidolon config reload`
-3. API call: `POST /config/reload`
 
 ## CLI Configuration Commands
 
@@ -366,26 +367,13 @@ eidolon config show brain
 
 # Validate configuration without starting
 eidolon config validate
-
-# Reload configuration (hot-reload)
-eidolon config reload
-
-# Edit configuration in $EDITOR
-eidolon config edit
-
-# Reset to defaults
-eidolon config reset --section loop
-
-# Show effective config (with env overrides applied)
-eidolon config effective
 ```
 
 ## Default Data Directory
 
 | Platform | Default Path |
 |---|---|
-| Linux | `~/.eidolon/` |
-| macOS | `~/.eidolon/` |
-| Windows | `%APPDATA%\eidolon\` |
+| Linux | `~/.local/share/eidolon/` |
+| macOS | `~/Library/Application Support/eidolon/` |
 
-Override with `EIDOLON_DATA_DIR` environment variable or `--data-dir` CLI flag.
+Override with `EIDOLON_DATA_DIR` environment variable.

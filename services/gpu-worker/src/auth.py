@@ -78,7 +78,12 @@ class AuthMiddleware(BaseHTTPMiddleware):
     """
 
     async def dispatch(self, request: Request, call_next):
-        # Exact match for health endpoint path — skip auth
+        # SEC-H12: /health is intentionally exempt from authentication.
+        # Rationale: Health checks are used by load balancers, monitoring tools,
+        # and the Eidolon core's GpuManager for liveness probes. Requiring auth
+        # on health checks would break standard monitoring infrastructure.
+        # The endpoint returns only operational metrics (GPU utilization, VRAM,
+        # temperature) — no user data, secrets, or PII.
         if request.url.path == "/health":
             return await call_next(request)
 

@@ -175,6 +175,12 @@ export class BackupManager {
         }
         const safePath = pathResult.value;
 
+        // SEC-H6: VACUUM INTO requires a string literal path and does NOT support
+        // parameterized queries (? placeholders). The path is safe because:
+        //   1. validateBackupPath() canonicalizes it via resolve()
+        //   2. validateBackupPath() rejects paths containing ' \ ; NUL (FORBIDDEN_PATH_CHARS)
+        //   3. validateBackupPath() ensures the path stays under backupRoot
+        // This is SQLite's exec(), not shell exec() -- no command injection risk.
         db.exec(`VACUUM INTO '${safePath}'`);
 
         // Restrict backup file permissions to owner-only

@@ -222,7 +222,11 @@ async function onboardServer(ask: AskFn): Promise<ServerSetupResult> {
   const { generateAuthToken } = await import("@eidolon/core");
   const gatewayToken = tokenChoice || generateAuthToken();
   if (!tokenChoice) {
-    console.log(`  Generated token: ${gatewayToken}`);
+    const masked = gatewayToken.length > 8
+      ? `${gatewayToken.slice(0, 4)}..${gatewayToken.slice(-4)}`
+      : "****";
+    console.log(`  Generated token: ${masked} (stored in secret store)`);
+    console.log("  To view the full token, run: eidolon secrets get gateway-auth-token");
   }
   if (masterKey) {
     await storeSecret("gateway-auth-token", gatewayToken, masterKey, "Gateway auth token from onboarding");
@@ -353,11 +357,11 @@ function writeClientConfig(host: string, port: number, token: string, tls: boole
   console.log(`\n  Client config written to: ${configPath} (mode 0600)`);
 }
 
-async function testConnection(host: string, _port: number, tls: boolean): Promise<void> {
+async function testConnection(host: string, port: number, tls: boolean): Promise<void> {
   console.log("\n--- Testing connection... ---\n");
   const protocol = tls ? "https" : "http";
   try {
-    const response = await fetch(`${protocol}://${host}:9419/health`, {
+    const response = await fetch(`${protocol}://${host}:${port}/health`, {
       signal: AbortSignal.timeout(3000),
     });
     if (response.ok) {
@@ -551,7 +555,10 @@ export function registerOnboardCommand(program: Command): void {
           // Summary with pairing URL
           const scheme = result.tlsEnabled ? "wss" : "ws";
           const host = result.gatewayHost === "0.0.0.0" ? "localhost" : result.gatewayHost;
-          const pairingUrl = `eidolon://${host}:${result.gatewayPort}?token=${result.gatewayToken}&tls=${result.tlsEnabled}`;
+          const maskedPairingToken = result.gatewayToken.length > 8
+            ? `${result.gatewayToken.slice(0, 4)}..${result.gatewayToken.slice(-4)}`
+            : "****";
+          const pairingUrl = `eidolon://${host}:${result.gatewayPort}?token=${maskedPairingToken}&tls=${result.tlsEnabled}`;
 
           console.log("\n--- Setup Summary ---\n");
           console.log(`  Owner:        ${result.ownerName || "(not set)"}`);

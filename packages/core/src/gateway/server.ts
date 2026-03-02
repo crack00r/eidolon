@@ -544,7 +544,11 @@ export class GatewayServer {
           self.handleOpen(ws);
         },
         message(ws, message) {
-          void self.handleMessage(ws, message);
+          self.handleMessage(ws, message).catch((err: unknown) => {
+            self.logger.error("message", "Unhandled error in message handler", err, {
+              clientId: ws.data.clientId,
+            });
+          });
         },
         close(ws, code, reason) {
           self.handleClose(ws, code, reason);
@@ -720,7 +724,8 @@ export class GatewayServer {
     this.clients.set(clientId, state);
 
     if (!requiresAuth) {
-      this.logger.info("open", `Client ${clientId} connected (auth: none)`);
+      // SEC-M6: Log at warn level when auth is disabled to ensure visibility
+      this.logger.warn("open", `Client ${clientId} connected (auth: none) -- authentication is disabled`);
       this.eventBus.publish("gateway:client_connected", { clientId, authenticated: true }, { source: "gateway" });
       this.pushToSubscribers("push.clientConnected", {
         clientId,

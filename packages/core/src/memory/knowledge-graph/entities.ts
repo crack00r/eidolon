@@ -10,6 +10,7 @@ import { randomUUID } from "node:crypto";
 import type { EidolonError, KGEntity, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 import type { Logger } from "../../logging/logger.ts";
+import { stringSimilarity } from "../dreaming/housekeeping.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -19,6 +20,43 @@ export type EntityType = "person" | "technology" | "device" | "project" | "conce
 
 /** Valid entity types for runtime validation. */
 const VALID_ENTITY_TYPES = new Set<string>(["person", "technology", "device", "project", "concept", "place"]);
+
+/**
+ * Per-type similarity thresholds for entity resolution.
+ * Matches the `entityResolution` config schema from protocol.
+ */
+export interface EntityResolutionThresholds {
+  readonly personThreshold: number;
+  readonly technologyThreshold: number;
+  readonly conceptThreshold: number;
+}
+
+/** Default thresholds matching the Zod schema defaults in protocol. */
+const DEFAULT_ENTITY_RESOLUTION_THRESHOLDS: EntityResolutionThresholds = {
+  personThreshold: 0.95,
+  technologyThreshold: 0.9,
+  conceptThreshold: 0.85,
+};
+
+/**
+ * Map entity type to the appropriate resolution threshold.
+ * Types not explicitly configured fall back to the technology threshold.
+ */
+function getThresholdForType(type: string, thresholds: EntityResolutionThresholds): number {
+  switch (type) {
+    case "person":
+      return thresholds.personThreshold;
+    case "technology":
+    case "device":
+    case "project":
+      return thresholds.technologyThreshold;
+    case "concept":
+    case "place":
+      return thresholds.conceptThreshold;
+    default:
+      return thresholds.technologyThreshold;
+  }
+}
 
 export interface CreateEntityInput {
   readonly name: string;

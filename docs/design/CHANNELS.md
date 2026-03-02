@@ -1,5 +1,7 @@
 # Channels
 
+> **Status: Implemented — v0.1.x. This document describes the design; see source code for implementation details.**
+
 ## Philosophy: Focused, Not Exhaustive
 
 OpenClaw supports 15+ messaging channels. Most of them are fragile, poorly tested, and maintained by drive-by contributors. The result: setup instructions that don't work, edge cases everywhere, and a support burden that forced the project into "stabilization mode."

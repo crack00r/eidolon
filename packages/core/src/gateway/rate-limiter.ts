@@ -58,6 +58,12 @@ function anonymizeIpForLog(ip: string): string {
 
 const CLEANUP_INTERVAL_MS = 60_000;
 
+/**
+ * SEC-M9: Maximum number of tracked IP entries to prevent unbounded memory growth.
+ * An attacker could send auth attempts from many spoofed IPs to exhaust memory.
+ */
+const MAX_ENTRIES = 10_000;
+
 export class AuthRateLimiter {
   private readonly config: RateLimitConfig;
   private readonly logger: Logger;
@@ -110,6 +116,10 @@ export class AuthRateLimiter {
     let entry = this.entries.get(ip);
 
     if (!entry) {
+      // SEC-M9: Enforce maximum entries to prevent unbounded memory growth
+      if (this.entries.size >= MAX_ENTRIES) {
+        this.evictOldest();
+      }
       entry = { failures: 0, firstFailureAt: now, blockedUntil: 0, blockCount: 0, lastViolationAt: 0 };
       this.entries.set(ip, entry);
     }
@@ -185,6 +195,28 @@ export class AuthRateLimiter {
       this.cleanupTimer = undefined;
     }
     this.entries.clear();
+  }
+
+  /**
+   * SEC-M9: Evict the oldest non-blocked entry when MAX_ENTRIES is reached.
+   * Prefers removing fully decayed entries first, then the oldest by firstFailureAt.
+   */
+  private evictOldest(): void {
+    let oldestKey: string | undefined;
+    let oldestTime = Infinity;
+
+    for (const [ip, entry] of this.entries) {
+      // Skip currently blocked IPs -- they must not be evicted
+      if (entry.blockedUntil > 0 && Date.now() < entry.blockedUntil) continue;
+      if (entry.firstFailureAt < oldestTime) {
+        oldestTime = entry.firstFailureAt;
+        oldestKey = ip;
+      }
+    }
+
+    if (oldestKey !== undefined) {
+      this.entries.delete(oldestKey);
+    }
   }
 
   /** Remove expired entries (no longer blocked, outside failure window, and fully decayed). */

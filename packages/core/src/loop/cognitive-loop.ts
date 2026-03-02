@@ -6,6 +6,7 @@
  * Rests adaptively when the queue is empty.
  */
 
+import { randomUUID } from "node:crypto";
 import type { BusEvent, EidolonError, Result } from "@eidolon/protocol";
 import { Err, Ok } from "@eidolon/protocol";
 import type { Logger } from "../logging/logger.ts";
@@ -43,6 +44,7 @@ export interface CycleResult {
   readonly tokensUsed: number;
   readonly restMs: number;
   readonly deferred: boolean;
+  readonly traceId: string;
 }
 
 export interface LoopStats {
@@ -170,6 +172,8 @@ export class CognitiveLoop {
 
   /** Run a single PEAR cycle. Exposed for testing. */
   async runOneCycle(): Promise<Result<CycleResult, EidolonError>> {
+    const traceId = randomUUID();
+
     // Reset hourly budget if needed
     this.energyBudget.resetIfNewHour();
 
@@ -209,6 +213,7 @@ export class CognitiveLoop {
         tokensUsed: 0,
         restMs,
         deferred: false,
+        traceId,
       });
     }
 
@@ -254,6 +259,7 @@ export class CognitiveLoop {
         tokensUsed: 0,
         restMs: 0,
         deferred: true,
+        traceId,
       });
     }
 
@@ -317,6 +323,7 @@ export class CognitiveLoop {
       tokensUsed,
       restMs: 0,
       deferred: false,
+      traceId,
     });
   }
 

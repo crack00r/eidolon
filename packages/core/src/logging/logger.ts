@@ -7,6 +7,7 @@
 
 import type { LogEntry, LoggingConfig, LogLevel } from "@eidolon/protocol";
 import { formatLogEntry } from "./formatter.ts";
+import type { LogRotator } from "./rotation.ts";
 
 export interface Logger {
   debug(module: string, message: string, data?: Record<string, unknown>): void;
@@ -14,6 +15,14 @@ export interface Logger {
   warn(module: string, message: string, data?: Record<string, unknown>): void;
   error(module: string, message: string, error?: unknown, data?: Record<string, unknown>): void;
   child(module: string): Logger;
+}
+
+/** Options for creating a logger with optional file rotation and traceId. */
+export interface CreateLoggerOptions {
+  /** If provided, log entries are also written to a rotating file. */
+  readonly rotator?: LogRotator;
+  /** If provided, this traceId is attached to every log entry. */
+  readonly traceId?: string;
 }
 
 const LEVEL_ORDER: Record<LogLevel, number> = {
@@ -94,6 +103,7 @@ function buildEntry(
   message: string,
   data?: Record<string, unknown>,
   error?: unknown,
+  traceId?: string,
 ): LogEntry {
   const safeData = data && Object.keys(data).length > 0 ? redactSensitiveKeys(data) : undefined;
   const entry: LogEntry = {
@@ -103,54 +113,62 @@ function buildEntry(
     message,
     ...(safeData ? { data: safeData } : {}),
     ...(error !== undefined ? { error: normalizeError(error) } : {}),
+    ...(traceId ? { traceId } : {}),
   };
   return entry;
 }
 
 /**
- * Write a formatted log entry to stdout.
+ * Write a formatted log entry to stdout and optionally to a rotating file.
  */
-function writeEntry(entry: LogEntry, format: "json" | "pretty"): void {
+function writeEntry(entry: LogEntry, format: "json" | "pretty", rotator?: LogRotator): void {
   const line = formatLogEntry(entry, format);
   process.stdout.write(`${line}\n`);
+  if (rotator) {
+    // Fire-and-forget; rotation errors should not crash the caller
+    rotator.writeLine(line).catch(() => {});
+  }
 }
 
 /**
  * Create a Logger instance with the given configuration.
+ * Optionally accepts a LogRotator for file output and a traceId for correlation.
  */
-export function createLogger(config: LoggingConfig): Logger {
-  return createLoggerWithPrefix(config, "");
+export function createLogger(config: LoggingConfig, options?: CreateLoggerOptions): Logger {
+  return createLoggerWithPrefix(config, "", options);
 }
 
 /**
  * Internal factory that supports module prefixing for child loggers.
  */
-function createLoggerWithPrefix(config: LoggingConfig, prefix: string): Logger {
+function createLoggerWithPrefix(config: LoggingConfig, prefix: string, options?: CreateLoggerOptions): Logger {
   const resolveModule = (module: string): string => (prefix ? `${prefix}:${module}` : module);
+  const rotator = options?.rotator;
+  const traceId = options?.traceId;
 
   const logger: Logger = {
     debug(module: string, message: string, data?: Record<string, unknown>): void {
       if (!shouldLog("debug", config.level)) return;
-      writeEntry(buildEntry("debug", resolveModule(module), message, data), config.format);
+      writeEntry(buildEntry("debug", resolveModule(module), message, data, undefined, traceId), config.format, rotator);
     },
 
     info(module: string, message: string, data?: Record<string, unknown>): void {
       if (!shouldLog("info", config.level)) return;
-      writeEntry(buildEntry("info", resolveModule(module), message, data), config.format);
+      writeEntry(buildEntry("info", resolveModule(module), message, data, undefined, traceId), config.format, rotator);
     },
 
     warn(module: string, message: string, data?: Record<string, unknown>): void {
       if (!shouldLog("warn", config.level)) return;
-      writeEntry(buildEntry("warn", resolveModule(module), message, data), config.format);
+      writeEntry(buildEntry("warn", resolveModule(module), message, data, undefined, traceId), config.format, rotator);
     },
 
     error(module: string, message: string, error?: unknown, data?: Record<string, unknown>): void {
       if (!shouldLog("error", config.level)) return;
-      writeEntry(buildEntry("error", resolveModule(module), message, data, error), config.format);
+      writeEntry(buildEntry("error", resolveModule(module), message, data, error, traceId), config.format, rotator);
     },
 
     child(module: string): Logger {
-      return createLoggerWithPrefix(config, resolveModule(module));
+      return createLoggerWithPrefix(config, resolveModule(module), options);
     },
   };
 
