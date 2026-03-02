@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > [release-please](https://github.com/googleapis/release-please).
 > Do not edit manually.
 
+## [0.1.3](https://github.com/crack00r/eidolon/compare/v0.1.2...v0.1.3) (2026-03-02)
+
+
+### Features
+
+* **all:** add network discovery, enhanced onboarding, and cross-platform service support ([8cfdb3d](https://github.com/crack00r/eidolon/commit/8cfdb3de3f91af5093fdfcafe8cfd231afc199ef))
+
+
+### Bug Fixes
+
+* **all:** auto-fix biome lint formatting issues in discovery and onboard modules ([bff0716](https://github.com/crack00r/eidolon/commit/bff0716bdca9c56d1239ea6c91a6c1dcc076cb70))
+* **desktop:** use Builder pattern for tauri-plugin-updater v2 ([13a60fe](https://github.com/crack00r/eidolon/commit/13a60febf3ab203ef555c59c480ed47b65ec68d8))
+
 ## [0.1.2](https://github.com/crack00r/eidolon/compare/v0.1.1...v0.1.2) (2026-03-02)
 
 
