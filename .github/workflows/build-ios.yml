@@ -15,6 +15,9 @@ on:
         description: "Version number (e.g., 0.1.0)"
         required: false
         type: string
+  # Also listed under push so GitHub does not report phantom failures on push events.
+  push:
+    branches: ["__never__"]
 
 permissions:
   contents: read
