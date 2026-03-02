@@ -28,7 +28,14 @@ function makeTurn(overrides?: Partial<ConversationTurn>): ConversationTurn {
 }
 
 const mockLlm: LlmExtractFn = async () => [
-  { type: "fact", content: "mock fact from LLM", confidence: 0.8, tags: ["llm-extracted"], source: "llm" },
+  {
+    type: "fact",
+    content: "mock fact from LLM",
+    confidence: 0.8,
+    tags: ["llm-extracted"],
+    source: "llm",
+    sensitive: false,
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -275,6 +282,7 @@ describe("MemoryExtractor.extract", () => {
         confidence: 0.75,
         tags: ["llm-extracted"],
         source: "llm",
+        sensitive: false,
       },
     ];
 
@@ -369,13 +377,21 @@ describe("MemoryExtractor.toCreateInputs", () => {
     const extractor = new MemoryExtractor(createSilentLogger(), { strategy: "rule-based" });
 
     const extracted: ExtractedMemory[] = [
-      { type: "fact", content: "Server runs Ubuntu 22.04", confidence: 0.95, tags: ["explicit"], source: "rule_based" },
+      {
+        type: "fact",
+        content: "Server runs Ubuntu 22.04",
+        confidence: 0.95,
+        tags: ["explicit"],
+        source: "rule_based",
+        sensitive: false,
+      },
       {
         type: "preference",
         content: "dark mode for editors",
         confidence: 0.85,
         tags: ["preference"],
         source: "rule_based",
+        sensitive: false,
       },
     ];
 
@@ -399,7 +415,7 @@ describe("MemoryExtractor.toCreateInputs", () => {
     const extractor = new MemoryExtractor(createSilentLogger(), { strategy: "rule-based" });
 
     const extracted: ExtractedMemory[] = [
-      { type: "fact", content: "some important fact here", confidence: 0.9, tags: [], source: "llm" },
+      { type: "fact", content: "some important fact here", confidence: 0.9, tags: [], source: "llm", sensitive: false },
     ];
 
     const inputs = extractor.toCreateInputs(extracted);
@@ -407,5 +423,131 @@ describe("MemoryExtractor.toCreateInputs", () => {
     expect(inputs).toHaveLength(1);
     expect(inputs[0]?.metadata).toBeUndefined();
     expect(inputs[0]?.source).toBe("extraction:llm");
+  });
+
+  test("passes sensitive flag to CreateMemoryInput", () => {
+    const extractor = new MemoryExtractor(createSilentLogger(), { strategy: "rule-based" });
+
+    const extracted: ExtractedMemory[] = [
+      {
+        type: "fact",
+        content: "my email is user@example.com for the account",
+        confidence: 0.9,
+        tags: ["personal"],
+        source: "rule_based",
+        sensitive: true,
+      },
+      {
+        type: "preference",
+        content: "dark mode for editors",
+        confidence: 0.85,
+        tags: ["preference"],
+        source: "rule_based",
+        sensitive: false,
+      },
+    ];
+
+    const inputs = extractor.toCreateInputs(extracted);
+
+    expect(inputs).toHaveLength(2);
+    expect(inputs[0]?.sensitive).toBe(true);
+    expect(inputs[1]?.sensitive).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// PRIV-001: Consent check
+// ---------------------------------------------------------------------------
+
+describe("MemoryExtractor consent check", () => {
+  test("skips extraction when consent is not granted", async () => {
+    const extractor = new MemoryExtractor(createSilentLogger(), {
+      strategy: "rule-based",
+      consentCheckFn: () => false,
+    });
+
+    const result = await extractor.extract(
+      makeTurn({ userMessage: "Remember that my server is Ubuntu", assistantResponse: "Noted." }),
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value).toEqual([]);
+  });
+
+  test("proceeds with extraction when consent is granted", async () => {
+    const extractor = new MemoryExtractor(createSilentLogger(), {
+      strategy: "rule-based",
+      consentCheckFn: () => true,
+    });
+
+    const result = await extractor.extract(
+      makeTurn({ userMessage: "Remember that my server is Ubuntu", assistantResponse: "Noted." }),
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.length).toBeGreaterThanOrEqual(1);
+  });
+
+  test("proceeds with extraction when no consentCheckFn is provided", async () => {
+    const extractor = new MemoryExtractor(createSilentLogger(), {
+      strategy: "rule-based",
+    });
+
+    const result = await extractor.extract(
+      makeTurn({ userMessage: "Remember that my server is Ubuntu", assistantResponse: "Noted." }),
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.length).toBeGreaterThanOrEqual(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// PRIV-006: PII screening
+// ---------------------------------------------------------------------------
+
+describe("MemoryExtractor PII screening", () => {
+  const extractor = new MemoryExtractor(createSilentLogger(), { strategy: "rule-based" });
+
+  test("flags memories containing email addresses as sensitive", () => {
+    const results = extractor.extractRuleBased(
+      makeTurn({
+        userMessage: "my email is john.doe@example.com",
+        assistantResponse: "Noted.",
+      }),
+    );
+
+    const personal = results.find((r) => r.tags.includes("personal"));
+    expect(personal).toBeDefined();
+    expect(personal?.sensitive).toBe(true);
+  });
+
+  test("flags memories containing phone numbers as sensitive", () => {
+    const results = extractor.extractRuleBased(
+      makeTurn({
+        userMessage: "my phone is +49 170 1234567",
+        assistantResponse: "Noted.",
+      }),
+    );
+
+    const personal = results.find((r) => r.tags.includes("personal"));
+    expect(personal).toBeDefined();
+    expect(personal?.sensitive).toBe(true);
+  });
+
+  test("does not flag memories without PII as sensitive", () => {
+    const results = extractor.extractRuleBased(
+      makeTurn({
+        userMessage: "I prefer TypeScript over JavaScript for all projects",
+        assistantResponse: "Good choice.",
+      }),
+    );
+
+    expect(results.length).toBeGreaterThanOrEqual(1);
+    const pref = results.find((r) => r.type === "preference");
+    expect(pref?.sensitive).toBe(false);
   });
 });

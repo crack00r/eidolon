@@ -54,6 +54,12 @@ const MAX_RETRIES = 3;
 /** JWT tokens are valid for up to 60 minutes; we refresh at 50 min. */
 const JWT_REFRESH_INTERVAL_MS = 50 * 60 * 1_000;
 
+/**
+ * APNs device token format: 64-character hex string (production).
+ * Sandbox tokens can also be 64 hex chars; we enforce hex-only with length 64.
+ */
+const DEVICE_TOKEN_PATTERN = /^[0-9a-fA-F]{64}$/;
+
 const APNS_PRODUCTION_HOST = "api.push.apple.com";
 const APNS_SANDBOX_HOST = "api.sandbox.push.apple.com";
 
@@ -81,6 +87,10 @@ export class ApnsClient {
 
   /** Register a device token for push notifications. */
   registerDeviceToken(token: string, platform: string): Result<void, EidolonError> {
+    if (!DEVICE_TOKEN_PATTERN.test(token)) {
+      return Err(createError(ErrorCode.APNS_SEND_FAILED, "Invalid device token: must be a 64-character hex string"));
+    }
+
     try {
       const now = Date.now();
       this.db
@@ -133,6 +143,10 @@ export class ApnsClient {
 
   /** Send a push notification to a single device. */
   async sendPushNotification(deviceToken: string, payload: ApnsPayload): Promise<Result<void, EidolonError>> {
+    if (!DEVICE_TOKEN_PATTERN.test(deviceToken)) {
+      return Err(createError(ErrorCode.APNS_SEND_FAILED, "Invalid device token: must be a 64-character hex string"));
+    }
+
     const jwtResult = this.getJwt();
     if (!jwtResult.ok) return jwtResult;
 

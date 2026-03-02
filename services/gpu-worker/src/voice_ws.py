@@ -4,7 +4,15 @@ Endpoint: WS /voice/realtime
 Protocol: Opus frames (binary) in, Opus frames (binary) + JSON text out
 State machine: idle -> listening -> processing -> speaking -> interrupted
 
-Authentication: query parameter `token` validated against EIDOLON_GPU_API_KEY.
+Authentication: query parameter ``token`` validated against EIDOLON_GPU_API_KEY.
+
+SECURITY NOTE: The auth token is passed as a query parameter because the WebSocket
+protocol does not support custom headers during the handshake in browser contexts.
+This means the token may appear in server access logs, browser history, and proxy logs.
+This is a known limitation of WebSocket authentication. To mitigate:
+  - Use TLS (wss://) to prevent network sniffing.
+  - Ensure server access logs are protected and rotated.
+  - Consider short-lived tokens where possible.
 """
 
 import asyncio
@@ -205,6 +213,21 @@ async def voice_realtime(ws: WebSocket, token: str = ""):
     Server -> Client binary messages:
         Opus-encoded audio chunks (TTS output)
     """
+    # ---- Security: warn about token in URL ----
+    if token:
+        logger.warning(
+            "Auth token provided via query parameter — token visible in server logs and browser history"
+        )
+
+    # ---- Security: reject if token leaks via Referer header ----
+    referer = ws.headers.get("referer", "") or ""
+    if token and token in referer:
+        logger.warning(
+            "Rejecting WebSocket — auth token found in Referer header (token leak risk)"
+        )
+        await ws.close(code=4003, reason="Token detected in Referer header")
+        return
+
     # ---- Authentication ----
     if not _validate_token(token):
         logger.warning("WebSocket auth failure — invalid or missing token")

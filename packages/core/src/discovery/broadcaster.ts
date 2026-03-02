@@ -5,8 +5,15 @@
  * Clients listen on the same port to auto-discover servers on the LAN.
  * Also attempts mDNS advertisement via platform-native tools
  * (dns-sd on macOS, avahi-publish on Linux).
+ *
+ * SECURITY NOTE (NET-002/003): UDP beacons are inherently unauthenticated and
+ * can be spoofed by any device on the local network. When a beacon signing key
+ * is provided, beacons include an HMAC-SHA256 signature so receivers can verify
+ * authenticity. Without a key (e.g., pre-pairing), beacons are unsigned and
+ * MUST NOT be trusted for security-critical decisions.
  */
 
+import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { hostname, networkInterfaces } from "node:os";
 import type { DiscoveryBeacon } from "@eidolon/protocol";
 import { VERSION } from "@eidolon/protocol";
@@ -49,11 +56,19 @@ export function getLocalIpAddresses(): string[] {
 // DiscoveryBroadcaster
 // ---------------------------------------------------------------------------
 
+/** Signed beacon payload sent over UDP, wrapping the base beacon with HMAC authentication. */
+export interface SignedBeacon {
+  readonly beacon: DiscoveryBeacon;
+  readonly nonce: string;
+  readonly hmac: string;
+}
+
 export class DiscoveryBroadcaster {
   private readonly logger: Logger;
   private readonly gatewayPort: number;
   private readonly tlsEnabled: boolean;
   private readonly tailscale: TailscaleDetector | null;
+  private readonly beaconKey: string | null;
   private readonly startedAt: number;
 
   private broadcastTimer: ReturnType<typeof setInterval> | null = null;
@@ -65,11 +80,14 @@ export class DiscoveryBroadcaster {
     gatewayPort: number;
     tlsEnabled: boolean;
     tailscale?: TailscaleDetector;
+    /** Key used to HMAC-sign beacons. If omitted, beacons are sent unsigned. */
+    beaconKey?: string;
   }) {
     this.logger = deps.logger.child("discovery");
     this.gatewayPort = deps.gatewayPort;
     this.tlsEnabled = deps.tlsEnabled;
     this.tailscale = deps.tailscale ?? null;
+    this.beaconKey = deps.beaconKey ?? null;
     this.startedAt = Date.now();
   }
 
@@ -96,6 +114,13 @@ export class DiscoveryBroadcaster {
 
       // Start platform-specific mDNS advertisement
       this.startMdns();
+
+      if (!this.beaconKey) {
+        this.logger.debug(
+          "start",
+          "No beacon signing key configured — beacons are unsigned and can be spoofed on the local network",
+        );
+      }
 
       this.logger.info("start", `Broadcasting on UDP port ${DISCOVERY_PORT}`);
     } catch (err) {
@@ -140,13 +165,46 @@ export class DiscoveryBroadcaster {
     };
   }
 
+  /**
+   * Sign a beacon payload with HMAC-SHA256.
+   *
+   * The HMAC is computed over `JSON(beacon) + nonce` using the beacon key.
+   * Receivers must verify this HMAC before trusting beacon data.
+   */
+  signBeacon(beacon: DiscoveryBeacon): SignedBeacon {
+    const nonce = randomBytes(16).toString("hex");
+    const beaconJson = JSON.stringify(beacon);
+    const hmac = createHmac("sha256", this.beaconKey ?? "")
+      .update(beaconJson + nonce)
+      .digest("hex");
+    return { beacon, nonce, hmac };
+  }
+
+  /**
+   * Verify a signed beacon's HMAC using the provided key.
+   * Returns true if the HMAC is valid, false otherwise.
+   */
+  static verifyBeacon(signed: SignedBeacon, key: string): boolean {
+    const beaconJson = JSON.stringify(signed.beacon);
+    const expected = createHmac("sha256", key)
+      .update(beaconJson + signed.nonce)
+      .digest("hex");
+    // Constant-time comparison to prevent timing attacks
+    if (expected.length !== signed.hmac.length) return false;
+    const bufExpected = Buffer.from(expected, "utf-8");
+    const bufActual = Buffer.from(signed.hmac, "utf-8");
+    return timingSafeEqual(bufExpected, bufActual);
+  }
+
   /** Send a beacon via UDP broadcast. */
   private async sendBeacon(): Promise<void> {
     if (!this.socket) return;
 
     try {
       const beacon = this.buildBeacon();
-      const payload = JSON.stringify(beacon);
+      // NET-002/003: Sign beacon with HMAC if a key is available
+      const envelope = this.beaconKey ? this.signBeacon(beacon) : beacon;
+      const payload = JSON.stringify(envelope);
 
       if (payload.length > MAX_BEACON_SIZE) {
         this.logger.warn("beacon", "Beacon payload exceeds max size, skipping");

@@ -166,6 +166,33 @@ async function startForeground(configPath?: string): Promise<void> {
   }
 }
 
+/** ERR-003: Env whitelist for daemon spawn — only pass safe env vars to child process. */
+function buildSafeDaemonEnv(): Record<string, string> {
+  const SAFE_PREFIXES = ["EIDOLON_", "NODE_", "BUN_", "XDG_"];
+  const SAFE_KEYS = new Set([
+    "PATH",
+    "HOME",
+    "USER",
+    "LANG",
+    "TERM",
+    "SHELL",
+    "TMPDIR",
+    "TZ",
+    "LC_ALL",
+    "LC_CTYPE",
+    "NODE_ENV",
+  ]);
+
+  const safeEnv: Record<string, string> = {};
+  for (const [key, val] of Object.entries(process.env)) {
+    if (val === undefined) continue;
+    if (SAFE_KEYS.has(key) || SAFE_PREFIXES.some((prefix) => key.startsWith(prefix))) {
+      safeEnv[key] = val;
+    }
+  }
+  return safeEnv;
+}
+
 function startBackground(configPath?: string): void {
   // Spawn this CLI as a detached child in foreground mode
   const args = ["eidolon", "daemon", "start", "--foreground"];
@@ -174,9 +201,10 @@ function startBackground(configPath?: string): void {
   }
 
   try {
+    // ERR-003: Use filtered env instead of raw process.env
     const proc = Bun.spawn(["bun", "run", ...args], {
       stdio: ["ignore", "ignore", "ignore"],
-      env: process.env,
+      env: buildSafeDaemonEnv(),
     });
 
     // Detach from parent so parent can exit

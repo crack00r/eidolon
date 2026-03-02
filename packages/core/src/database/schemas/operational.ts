@@ -199,4 +199,49 @@ export const OPERATIONAL_MIGRATIONS: ReadonlyArray<Migration> = [
       ALTER TABLE events DROP COLUMN retention_days;
     `,
   },
+  {
+    version: 6,
+    name: "add_user_consent",
+    database: "operational",
+    up: `
+      CREATE TABLE user_consent (
+        id TEXT PRIMARY KEY,
+        consent_type TEXT NOT NULL CHECK(consent_type IN ('memory_extraction','data_processing')),
+        granted INTEGER NOT NULL CHECK(granted IN (0, 1)),
+        granted_at INTEGER,
+        revoked_at INTEGER,
+        updated_at INTEGER NOT NULL
+      );
+
+      CREATE UNIQUE INDEX idx_user_consent_type ON user_consent(consent_type);
+    `,
+    down: `
+      DROP INDEX IF EXISTS idx_user_consent_type;
+      DROP TABLE IF EXISTS user_consent;
+    `,
+  },
+  {
+    version: 7,
+    name: "add_learning_journal",
+    database: "operational",
+    up: `
+      -- ERR-007: Persist learning journal entries so they survive daemon restarts.
+      CREATE TABLE learning_journal (
+        id TEXT PRIMARY KEY,
+        type TEXT NOT NULL CHECK(type IN ('discovery','evaluation','approval','rejection','implementation','error')),
+        timestamp INTEGER NOT NULL,
+        title TEXT NOT NULL,
+        content TEXT NOT NULL,
+        metadata TEXT NOT NULL DEFAULT '{}'
+      );
+
+      CREATE INDEX idx_learning_journal_timestamp ON learning_journal(timestamp);
+      CREATE INDEX idx_learning_journal_type ON learning_journal(type);
+    `,
+    down: `
+      DROP INDEX IF EXISTS idx_learning_journal_type;
+      DROP INDEX IF EXISTS idx_learning_journal_timestamp;
+      DROP TABLE IF EXISTS learning_journal;
+    `,
+  },
 ];

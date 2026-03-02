@@ -110,6 +110,43 @@ mock.module("@eidolon/core", () => ({
   },
   generateMcpConfig: async () => ({ ok: false }),
 
+  // ── Privacy / Consent ────────────────────────────────────────────────────
+  ConsentManager: class {
+    checkConsentStatus() {
+      return false;
+    }
+    getConsentStatus() {
+      return { ok: true, value: null };
+    }
+    grantConsent() {
+      return { ok: true };
+    }
+    revokeConsent() {
+      return { ok: true };
+    }
+  },
+  RetentionEnforcer: class {
+    enforce() {
+      return { ok: true, value: { timestamp: 0, deletedCounts: {}, totalDeleted: 0, errors: [] } };
+    }
+  },
+
+  // ── Backup ──────────────────────────────────────────────────────────────
+  BackupManager: class {
+    runBackup() {
+      return { ok: true, value: "2025-01-01_00-00-00" };
+    }
+    listBackups() {
+      return { ok: true, value: [] };
+    }
+    pruneOldBackups() {
+      return { ok: true, value: 0 };
+    }
+    deleteAllBackups() {
+      return { ok: true, value: 0 };
+    }
+  },
+
   // ── Memory ──────────────────────────────────────────────────────────────
   MemoryStore: class {
     searchText() {

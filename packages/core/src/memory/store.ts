@@ -4,6 +4,16 @@
  * Provides create, read, update, delete, list, count, full-text search,
  * batch create, and housekeeping (prune) operations. All methods return
  * Result<T, EidolonError> for consistent error handling.
+ *
+ * SECURITY NOTE (DB-004): Memory content is stored in PLAINTEXT.
+ * This is an accepted risk because:
+ * 1. FTS5 full-text search requires cleartext content for indexing
+ * 2. sqlite-vec vector search needs plaintext for embedding generation
+ * 3. Encrypting content would break all search functionality
+ * 4. The database file itself should be protected via filesystem permissions (0600)
+ *
+ * Memories containing PII should be flagged with `sensitive: true` so they can
+ * receive special handling (GDPR deletion, export exclusion, future at-rest encryption).
  */
 
 import type { Database } from "bun:sqlite";
@@ -24,6 +34,8 @@ export interface CreateMemoryInput {
   readonly source: string;
   readonly tags?: readonly string[];
   readonly metadata?: Record<string, unknown>;
+  /** Flag for PII-containing memories that may need special handling (GDPR, encryption). */
+  readonly sensitive?: boolean;
 }
 
 export interface UpdateMemoryInput {
@@ -32,6 +44,8 @@ export interface UpdateMemoryInput {
   readonly layer?: MemoryLayer;
   readonly tags?: readonly string[];
   readonly metadata?: Record<string, unknown>;
+  /** Flag for PII-containing memories that may need special handling (GDPR, encryption). */
+  readonly sensitive?: boolean;
 }
 
 export interface MemoryListOptions {
@@ -61,6 +75,7 @@ interface MemoryRow {
   readonly accessed_at: number;
   readonly access_count: number;
   readonly metadata: string;
+  readonly sensitive: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -115,6 +130,7 @@ function rowToMemory(row: MemoryRow): Memory {
     accessedAt: row.accessed_at,
     accessCount: row.access_count,
     metadata,
+    sensitive: row.sensitive === 1,
   };
 }
 
@@ -176,13 +192,27 @@ export class MemoryStore {
       const now = Date.now();
       const tags = JSON.stringify(input.tags ?? []);
       const metadata = JSON.stringify(input.metadata ?? {});
+      const sensitive = input.sensitive ? 1 : 0;
 
       this.db
         .query(
-          `INSERT INTO memories (id, type, layer, content, confidence, source, tags, created_at, updated_at, accessed_at, access_count, metadata)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)`,
+          `INSERT INTO memories (id, type, layer, content, confidence, source, tags, created_at, updated_at, accessed_at, access_count, metadata, sensitive)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
         )
-        .run(id, input.type, input.layer, input.content, input.confidence, input.source, tags, now, now, now, metadata);
+        .run(
+          id,
+          input.type,
+          input.layer,
+          input.content,
+          input.confidence,
+          input.source,
+          tags,
+          now,
+          now,
+          now,
+          metadata,
+          sensitive,
+        );
 
       const memory: Memory = {
         id,
@@ -197,6 +227,7 @@ export class MemoryStore {
         accessedAt: now,
         accessCount: 0,
         metadata: input.metadata ?? {},
+        sensitive: input.sensitive ?? false,
       };
 
       this.logger.debug("create", `Created memory ${id}`, { type: input.type, layer: input.layer });
@@ -258,42 +289,53 @@ export class MemoryStore {
       );
     }
     try {
-      // Check existence first
-      const existing = this.db.query("SELECT * FROM memories WHERE id = ?").get(id) as MemoryRow | null;
-      if (!existing) {
+      // Wrap check + update + re-read in a transaction for atomicity
+      const txn = this.db.transaction(() => {
+        const existing = this.db.query("SELECT * FROM memories WHERE id = ?").get(id) as MemoryRow | null;
+        if (!existing) {
+          return null;
+        }
+
+        const now = Date.now();
+        const setClauses: string[] = ["updated_at = ?"];
+        const params: Array<string | number> = [now];
+
+        if (input.content !== undefined) {
+          setClauses.push("content = ?");
+          params.push(input.content);
+        }
+        if (input.confidence !== undefined) {
+          setClauses.push("confidence = ?");
+          params.push(input.confidence);
+        }
+        if (input.layer !== undefined) {
+          setClauses.push("layer = ?");
+          params.push(input.layer);
+        }
+        if (input.tags !== undefined) {
+          setClauses.push("tags = ?");
+          params.push(JSON.stringify(input.tags));
+        }
+        if (input.metadata !== undefined) {
+          setClauses.push("metadata = ?");
+          params.push(JSON.stringify(input.metadata));
+        }
+        if (input.sensitive !== undefined) {
+          setClauses.push("sensitive = ?");
+          params.push(input.sensitive ? 1 : 0);
+        }
+
+        params.push(id);
+        this.db.query(`UPDATE memories SET ${setClauses.join(", ")} WHERE id = ?`).run(...params);
+
+        // Re-read the updated row
+        return this.db.query("SELECT * FROM memories WHERE id = ?").get(id) as MemoryRow;
+      });
+
+      const updated = txn();
+      if (!updated) {
         return Err(createError(ErrorCode.DB_QUERY_FAILED, `Memory ${id} not found`));
       }
-
-      const now = Date.now();
-      const setClauses: string[] = ["updated_at = ?"];
-      const params: Array<string | number> = [now];
-
-      if (input.content !== undefined) {
-        setClauses.push("content = ?");
-        params.push(input.content);
-      }
-      if (input.confidence !== undefined) {
-        setClauses.push("confidence = ?");
-        params.push(input.confidence);
-      }
-      if (input.layer !== undefined) {
-        setClauses.push("layer = ?");
-        params.push(input.layer);
-      }
-      if (input.tags !== undefined) {
-        setClauses.push("tags = ?");
-        params.push(JSON.stringify(input.tags));
-      }
-      if (input.metadata !== undefined) {
-        setClauses.push("metadata = ?");
-        params.push(JSON.stringify(input.metadata));
-      }
-
-      params.push(id);
-      this.db.query(`UPDATE memories SET ${setClauses.join(", ")} WHERE id = ?`).run(...params);
-
-      // Re-read the updated row
-      const updated = this.db.query("SELECT * FROM memories WHERE id = ?").get(id) as MemoryRow;
       return Ok(rowToMemory(updated));
     } catch (cause) {
       return Err(createError(ErrorCode.DB_QUERY_FAILED, `Failed to update memory ${id}`, cause));
@@ -303,11 +345,20 @@ export class MemoryStore {
   /** Delete a memory by ID. */
   delete(id: string): Result<void, EidolonError> {
     try {
-      const existing = this.db.query("SELECT 1 FROM memories WHERE id = ?").get(id);
-      if (!existing) {
+      // Wrap check + delete in a transaction for atomicity
+      const txn = this.db.transaction(() => {
+        const existing = this.db.query("SELECT 1 FROM memories WHERE id = ?").get(id);
+        if (!existing) {
+          return false;
+        }
+        this.db.query("DELETE FROM memories WHERE id = ?").run(id);
+        return true;
+      });
+
+      const deleted = txn();
+      if (!deleted) {
         return Err(createError(ErrorCode.DB_QUERY_FAILED, `Memory ${id} not found`));
       }
-      this.db.query("DELETE FROM memories WHERE id = ?").run(id);
       this.logger.debug("delete", `Deleted memory ${id}`);
       return Ok(undefined);
     } catch (cause) {
@@ -419,16 +470,22 @@ export class MemoryStore {
   /** Delete short_term memories older than cutoffMs. Returns number of deleted rows. */
   pruneExpired(cutoffMs: number): Result<number, EidolonError> {
     try {
-      // Count matching rows first (DELETE changes count is inflated by FTS triggers)
-      const countRow = this.db
-        .query("SELECT COUNT(*) as count FROM memories WHERE layer = 'short_term' AND created_at < ?")
-        .get(cutoffMs) as { count: number };
-      const count = countRow.count;
+      // Wrap count + delete in a transaction for atomicity
+      const txn = this.db.transaction(() => {
+        // Count matching rows first (DELETE changes count is inflated by FTS triggers)
+        const countRow = this.db
+          .query("SELECT COUNT(*) as count FROM memories WHERE layer = 'short_term' AND created_at < ?")
+          .get(cutoffMs) as { count: number };
+        const count = countRow.count;
 
-      if (count > 0) {
-        this.db.query("DELETE FROM memories WHERE layer = 'short_term' AND created_at < ?").run(cutoffMs);
-      }
+        if (count > 0) {
+          this.db.query("DELETE FROM memories WHERE layer = 'short_term' AND created_at < ?").run(cutoffMs);
+        }
 
+        return count;
+      });
+
+      const count = txn();
       this.logger.debug("prune", `Pruned ${count} expired short_term memories`);
       return Ok(count);
     } catch (cause) {
@@ -470,11 +527,12 @@ export class MemoryStore {
           const now = Date.now();
           const tags = JSON.stringify(input.tags ?? []);
           const metadata = JSON.stringify(input.metadata ?? {});
+          const sensitive = input.sensitive ? 1 : 0;
 
           this.db
             .query(
-              `INSERT INTO memories (id, type, layer, content, confidence, source, tags, created_at, updated_at, accessed_at, access_count, metadata)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)`,
+              `INSERT INTO memories (id, type, layer, content, confidence, source, tags, created_at, updated_at, accessed_at, access_count, metadata, sensitive)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
             )
             .run(
               id,
@@ -488,6 +546,7 @@ export class MemoryStore {
               now,
               now,
               metadata,
+              sensitive,
             );
 
           memories.push({
@@ -503,6 +562,7 @@ export class MemoryStore {
             accessedAt: now,
             accessCount: 0,
             metadata: input.metadata ?? {},
+            sensitive: input.sensitive ?? false,
           });
         }
       });

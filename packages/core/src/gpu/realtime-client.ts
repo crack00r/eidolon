@@ -420,15 +420,21 @@ export class RealtimeVoiceClient {
       delayMs: delay,
     });
 
+    // ERR-002: Properly handle reconnect promise to prevent unhandled rejections
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
-      this.openConnection().then((result) => {
-        if (!result.ok) {
-          this.logger.warn("reconnect", `Reconnect attempt ${this.reconnectAttempts} failed`, {
-            error: result.error.message,
-          });
-        }
-      });
+      this.openConnection()
+        .then((result) => {
+          if (!result.ok) {
+            this.logger.warn("reconnect", `Reconnect attempt ${this.reconnectAttempts} failed`, {
+              error: result.error.message,
+            });
+          }
+        })
+        .catch((err: unknown) => {
+          this.logger.error("reconnect", "Reconnect attempt threw unexpected error", err);
+          this.notifyError(err instanceof Error ? err : new Error(String(err)));
+        });
     }, delay);
   }
 

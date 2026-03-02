@@ -486,11 +486,12 @@ describe("privacy command", () => {
   const program = createProgram();
   const privacy = requireCommand(program, "privacy");
 
-  test("has forget and export subcommands", () => {
+  test("has consent, forget and export subcommands", () => {
     const subNames = privacy.commands.map((c) => c.name());
+    expect(subNames).toContain("consent");
     expect(subNames).toContain("forget");
     expect(subNames).toContain("export");
-    expect(subNames).toHaveLength(2);
+    expect(subNames).toHaveLength(3);
   });
 
   test("export has --output option", () => {

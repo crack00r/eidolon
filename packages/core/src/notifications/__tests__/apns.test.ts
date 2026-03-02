@@ -157,9 +157,12 @@ describe("ApnsClient - Device Token Management", () => {
   });
 
   test("getDeviceTokens returns all tokens", () => {
-    client.registerDeviceToken("token-1", "ios");
-    client.registerDeviceToken("token-2", "ios");
-    client.registerDeviceToken("token-3", "macos");
+    const token1 = "1111111111111111111111111111111111111111111111111111111111111111";
+    const token2 = "2222222222222222222222222222222222222222222222222222222222222222";
+    const token3 = "3333333333333333333333333333333333333333333333333333333333333333";
+    client.registerDeviceToken(token1, "ios");
+    client.registerDeviceToken(token2, "ios");
+    client.registerDeviceToken(token3, "macos");
 
     const result = client.getDeviceTokens();
     expect(result.ok).toBe(true);
@@ -169,17 +172,36 @@ describe("ApnsClient - Device Token Management", () => {
   });
 
   test("getDeviceTokens filters by platform", () => {
-    client.registerDeviceToken("token-1", "ios");
-    client.registerDeviceToken("token-2", "ios");
-    client.registerDeviceToken("token-3", "macos");
+    const token1 = "1111111111111111111111111111111111111111111111111111111111111111";
+    const token2 = "2222222222222222222222222222222222222222222222222222222222222222";
+    const token3 = "3333333333333333333333333333333333333333333333333333333333333333";
+    client.registerDeviceToken(token1, "ios");
+    client.registerDeviceToken(token2, "ios");
+    client.registerDeviceToken(token3, "macos");
 
     const result = client.getDeviceTokens("ios");
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.value).toHaveLength(2);
-      expect(result.value).toContain("token-1");
-      expect(result.value).toContain("token-2");
+      expect(result.value).toContain(token1);
+      expect(result.value).toContain(token2);
     }
+  });
+
+  test("registerDeviceToken rejects invalid token format", () => {
+    const result = client.registerDeviceToken("invalid-token", "ios");
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.message).toContain("64-character hex string");
+    }
+  });
+
+  test("registerDeviceToken rejects token with non-hex characters", () => {
+    const result = client.registerDeviceToken(
+      "gggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg",
+      "ios",
+    );
+    expect(result.ok).toBe(false);
   });
 
   test("getDeviceTokens returns empty array when no tokens", () => {

@@ -170,4 +170,21 @@ export const MEMORY_MIGRATIONS: ReadonlyArray<Migration> = [
       ALTER TABLE kg_complex_embeddings_new RENAME TO kg_complex_embeddings;
     `,
   },
+  {
+    version: 4,
+    name: "add_sensitive_flag",
+    database: "memory",
+    up: `
+      -- DB-004: Add 'sensitive' boolean flag for PII-containing memories.
+      -- Memories marked sensitive may require special handling (e.g., encryption at rest,
+      -- exclusion from exports, GDPR deletion). Content remains plaintext for now because
+      -- FTS5 and sqlite-vec require cleartext for indexing/search. See DB-004 in security docs.
+      ALTER TABLE memories ADD COLUMN sensitive INTEGER NOT NULL DEFAULT 0;
+      CREATE INDEX IF NOT EXISTS idx_memories_sensitive ON memories(sensitive) WHERE sensitive = 1;
+    `,
+    down: `
+      DROP INDEX IF EXISTS idx_memories_sensitive;
+      -- SQLite cannot drop columns in older versions; sensitive column remains.
+    `,
+  },
 ];

@@ -5,11 +5,13 @@
  * evaluations, approvals, rejections, implementations, and errors
  * as structured entries that can be exported to markdown.
  *
- * NOTE: This journal is currently in-memory only. In a future phase, entries
- * will be persisted to the audit database so they survive daemon restarts
- * and can be queried historically. See ROADMAP.md Phase 3.
+ * ERR-007: Now supports optional SQLite persistence via operational.db.
+ * When a database is provided, entries are written to the learning_journal table
+ * on every addEntry() call, surviving daemon restarts.
+ * Falls back to in-memory-only when no database is provided (e.g. in tests).
  */
 
+import type { Database } from "bun:sqlite";
 import type { Logger } from "../logging/logger.ts";
 
 export type JournalEntryType = "discovery" | "evaluation" | "approval" | "rejection" | "implementation" | "error";
@@ -44,15 +46,46 @@ function generateEntryId(): string {
   return `journal-${Date.now()}-${nextEntryId}`;
 }
 
+/** Valid entry types for DB CHECK constraint validation. */
+const VALID_ENTRY_TYPES = new Set<string>([
+  "discovery",
+  "evaluation",
+  "approval",
+  "rejection",
+  "implementation",
+  "error",
+]);
+
+export interface LearningJournalOptions {
+  readonly maxEntries?: number;
+  /** Optional SQLite database (operational.db) for persistence. */
+  readonly db?: Database;
+}
+
 export class LearningJournal {
   private entries: JournalEntry[];
   private readonly logger: Logger;
   private readonly maxEntries: number;
+  private readonly db: Database | null;
+  /** ERR-007: Track periodic flush timer for cleanup. */
+  private flushTimer: ReturnType<typeof setInterval> | null = null;
 
-  constructor(logger: Logger, maxEntries?: number) {
+  constructor(logger: Logger, options?: LearningJournalOptions | number) {
     this.logger = logger;
-    this.maxEntries = maxEntries ?? DEFAULT_MAX_ENTRIES;
+    // Support legacy signature: constructor(logger, maxEntries?)
+    if (typeof options === "number") {
+      this.maxEntries = options;
+      this.db = null;
+    } else {
+      this.maxEntries = options?.maxEntries ?? DEFAULT_MAX_ENTRIES;
+      this.db = options?.db ?? null;
+    }
     this.entries = [];
+
+    // ERR-007: Load existing entries from DB on startup
+    if (this.db) {
+      this.loadFromDb();
+    }
   }
 
   /** Add a journal entry. Evicts oldest entries when maxEntries is exceeded. */
@@ -72,6 +105,11 @@ export class LearningJournal {
     if (this.entries.length > this.maxEntries) {
       const excess = this.entries.length - this.maxEntries;
       this.entries.splice(0, excess);
+    }
+
+    // ERR-007: Persist to DB immediately
+    if (this.db) {
+      this.persistEntry(entry);
     }
 
     this.logger.debug("learning", `Journal entry added: ${type}`, {
@@ -133,10 +171,96 @@ export class LearningJournal {
     return this.entries.length;
   }
 
-  /** Clear all entries. */
+  /** Clear all entries (in-memory and DB). */
   clear(): void {
     this.entries = [];
+    if (this.db) {
+      try {
+        this.db.query("DELETE FROM learning_journal").run();
+      } catch (err: unknown) {
+        this.logger.error("learning", "Failed to clear journal from DB", err);
+      }
+    }
     this.logger.debug("learning", "Journal cleared");
+  }
+
+  /** ERR-007: Dispose of the journal, clearing any periodic timers. */
+  dispose(): void {
+    if (this.flushTimer !== null) {
+      clearInterval(this.flushTimer);
+      this.flushTimer = null;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Private: SQLite persistence
+  // ---------------------------------------------------------------------------
+
+  /** Persist a single entry to the database. */
+  private persistEntry(entry: JournalEntry): void {
+    if (!this.db) return;
+    try {
+      this.db
+        .query(
+          "INSERT OR REPLACE INTO learning_journal (id, type, timestamp, title, content, metadata) VALUES (?, ?, ?, ?, ?, ?)",
+        )
+        .run(entry.id, entry.type, entry.timestamp, entry.title, entry.content, JSON.stringify(entry.metadata));
+    } catch (err: unknown) {
+      this.logger.error("learning", `Failed to persist journal entry ${entry.id}`, err);
+    }
+  }
+
+  /** Load entries from the database on startup. */
+  private loadFromDb(): void {
+    if (!this.db) return;
+    try {
+      // Check if the table exists first (might be running before migrations)
+      const tableCheck = this.db
+        .query("SELECT name FROM sqlite_master WHERE type='table' AND name='learning_journal'")
+        .get() as { name: string } | null;
+      if (!tableCheck) {
+        this.logger.debug("learning", "learning_journal table not found, starting with empty journal");
+        return;
+      }
+
+      const rows = this.db
+        .query("SELECT * FROM learning_journal ORDER BY timestamp ASC LIMIT ?")
+        .all(this.maxEntries) as Array<{
+        id: string;
+        type: string;
+        timestamp: number;
+        title: string;
+        content: string;
+        metadata: string;
+      }>;
+
+      for (const row of rows) {
+        if (!VALID_ENTRY_TYPES.has(row.type)) continue;
+        let metadata: Record<string, unknown> = {};
+        try {
+          const parsed: unknown = JSON.parse(row.metadata);
+          if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
+            metadata = parsed as Record<string, unknown>;
+          }
+        } catch {
+          // Use empty metadata on parse failure
+        }
+        this.entries.push({
+          id: row.id,
+          type: row.type as JournalEntryType,
+          timestamp: row.timestamp,
+          title: row.title,
+          content: row.content,
+          metadata,
+        });
+      }
+
+      if (this.entries.length > 0) {
+        this.logger.info("learning", `Loaded ${this.entries.length} journal entries from DB`);
+      }
+    } catch (err: unknown) {
+      this.logger.error("learning", "Failed to load journal from DB, starting empty", err);
+    }
   }
 }
 

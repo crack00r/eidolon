@@ -16,8 +16,18 @@ export const handle: Handle = async ({ event, resolve }) => {
   // since the gateway port is user-configurable via Settings.
   // TODO: In production, add a `report-to` directive pointing at a CSP
   // violation reporting endpoint (e.g. report-uri.com or a self-hosted collector).
-  const gatewayConnectSrc =
+  const rawConnectSrc =
     process.env.EIDOLON_CSP_CONNECT_SRC ?? "ws://localhost:* wss://localhost:* ws://127.0.0.1:* wss://127.0.0.1:*";
+
+  // CLIENT-006: Validate the env-provided CSP connect-src to prevent directive injection.
+  // Only allow URL-like tokens (scheme://host:port patterns and 'self'). Reject anything
+  // that looks like a CSP directive separator (semicolons) or script injection attempt.
+  const CSP_TOKEN_RE = /^(?:'self'|(?:wss?|https?):\/\/[a-zA-Z0-9.*_:[\]-]+)$/;
+  const gatewayConnectSrc = rawConnectSrc
+    .split(/\s+/)
+    .filter((token) => CSP_TOKEN_RE.test(token))
+    .join(" ");
+
   response.headers.set(
     "Content-Security-Policy",
     [
@@ -30,6 +40,7 @@ export const handle: Handle = async ({ event, resolve }) => {
       "frame-ancestors 'none'",
       "base-uri 'self'",
       "form-action 'self'",
+      "upgrade-insecure-requests",
     ].join("; "),
   );
 

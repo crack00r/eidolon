@@ -22,6 +22,7 @@ import type {
   GatewayPushEvent,
   GatewayPushType,
 } from "@eidolon/protocol";
+import { z } from "zod";
 import type { Logger } from "../logging/logger.ts";
 import type { EventBus } from "../loop/event-bus.ts";
 import {
@@ -34,6 +35,54 @@ import {
   parseJsonRpcRequest,
 } from "./protocol.ts";
 import { AuthRateLimiter } from "./rate-limiter.ts";
+
+// ---------------------------------------------------------------------------
+// Zod schemas for RPC method parameters
+// ---------------------------------------------------------------------------
+
+const ErrorReportParamsSchema = z.object({
+  errors: z
+    .array(
+      z
+        .object({
+          module: z.string().max(256).optional(),
+          message: z.string().max(4096).optional(),
+          level: z.string().max(64).optional(),
+          timestamp: z.string().max(64).optional(),
+          data: z.record(z.unknown()).optional(),
+        })
+        .passthrough(),
+    )
+    .max(100),
+  clientInfo: z
+    .object({
+      platform: z.string().max(64).optional(),
+      version: z.string().max(64).optional(),
+    })
+    .passthrough(),
+});
+
+const BrainTriggerActionParamsSchema = z.object({
+  action: z.string().min(1).max(64),
+  args: z.record(z.unknown()).optional(),
+});
+
+const BrainGetLogParamsSchema = z.object({
+  limit: z.number().int().min(1).max(500).optional(),
+});
+
+const ClientExecuteParamsSchema = z.object({
+  targetClientId: z.string().min(1).max(256),
+  command: z.string().min(1).max(1024),
+  args: z.unknown().optional(),
+});
+
+const CommandResultParamsSchema = z.object({
+  commandId: z.string().min(1).max(256),
+  success: z.boolean().optional(),
+  result: z.unknown().optional(),
+  error: z.string().max(4096).optional(),
+});
 
 // ---------------------------------------------------------------------------
 // Types
@@ -178,6 +227,8 @@ export class GatewayServer {
   private readonly clients: Map<string, ClientState> = new Map();
   private readonly handlers: Map<GatewayMethod, MethodHandler> = new Map();
   private readonly statusSubscribers: Set<string> = new Set();
+  /** ERR-001: Track auth timeout timers per client for proper cleanup. */
+  private readonly authTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
   private broadcastFailureCount = 0;
   private startTime = 0;
   private server: ReturnType<typeof Bun.serve> | undefined;
@@ -198,31 +249,26 @@ export class GatewayServer {
   private registerBuiltinHandlers(): void {
     // error.report: clients report errors back to the server
     this.registerHandler("error.report", async (params, clientId) => {
-      const errors = params.errors;
-      const clientInfo = params.clientInfo;
-
-      if (!Array.isArray(errors)) {
-        throw new RpcValidationError("errors must be an array");
+      const parsed = ErrorReportParamsSchema.safeParse(params);
+      if (!parsed.success) {
+        throw new RpcValidationError(
+          `Invalid error.report params: ${parsed.error.issues.map((i) => i.message).join(", ")}`,
+        );
       }
-      if (typeof clientInfo !== "object" || clientInfo === null) {
-        throw new RpcValidationError("clientInfo must be an object");
-      }
+      const { errors, clientInfo } = parsed.data;
 
-      const info = clientInfo as Record<string, unknown>;
-      const platform = typeof info.platform === "string" ? info.platform : "unknown";
-      const version = typeof info.version === "string" ? info.version : "unknown";
+      const platform = clientInfo.platform ?? "unknown";
+      const version = clientInfo.version ?? "unknown";
 
       for (const entry of errors) {
-        if (typeof entry !== "object" || entry === null) continue;
-        const e = entry as Record<string, unknown>;
         this.logger.warn(
           "client-error",
-          `[${platform}@${version}] ${String(e.module ?? "unknown")}: ${String(e.message ?? "")}`,
+          `[${platform}@${version}] ${String(entry.module ?? "unknown")}: ${String(entry.message ?? "")}`,
           {
             clientId,
-            level: String(e.level ?? "error"),
-            timestamp: String(e.timestamp ?? ""),
-            ...(e.data !== undefined ? { data: e.data as Record<string, unknown> } : {}),
+            level: String(entry.level ?? "error"),
+            timestamp: String(entry.timestamp ?? ""),
+            ...(entry.data !== undefined ? { data: entry.data } : {}),
           },
         );
       }
@@ -294,21 +340,23 @@ export class GatewayServer {
 
     // brain.triggerAction: trigger a specific action (e.g., "dream", "learn")
     this.registerHandler("brain.triggerAction", async (params, clientId) => {
-      const action = params.action;
-      if (typeof action !== "string" || action.length === 0) {
-        throw new RpcValidationError("action must be a non-empty string");
+      const parsed = BrainTriggerActionParamsSchema.safeParse(params);
+      if (!parsed.success) {
+        throw new RpcValidationError(
+          `Invalid brain.triggerAction params: ${parsed.error.issues.map((i) => i.message).join(", ")}`,
+        );
       }
+      const { action, args } = parsed.data;
 
       const ALLOWED_ACTIONS = new Set(["dream", "learn", "check_telegram", "health_check", "consolidate"]);
       if (!ALLOWED_ACTIONS.has(action)) {
         throw new RpcValidationError(`Unknown action: ${action}. Allowed: ${[...ALLOWED_ACTIONS].join(", ")}`);
       }
 
-      const args = typeof params.args === "object" && params.args !== null ? params.args : {};
       this.logger.info("brain.triggerAction", `Client ${clientId} triggered action: ${action}`);
       this.eventBus.publish(
         "system:config_changed",
-        { action: "trigger", triggerAction: action, args, requestedBy: clientId },
+        { action: "trigger", triggerAction: action, args: args ?? {}, requestedBy: clientId },
         { source: "gateway", priority: "high" },
       );
       return { triggered: true, action };
@@ -316,7 +364,13 @@ export class GatewayServer {
 
     // brain.getLog: get recent log entries
     this.registerHandler("brain.getLog", async (params) => {
-      const limit = typeof params.limit === "number" ? Math.min(Math.max(1, params.limit), 500) : 50;
+      const parsed = BrainGetLogParamsSchema.safeParse(params);
+      if (!parsed.success) {
+        throw new RpcValidationError(
+          `Invalid brain.getLog params: ${parsed.error.issues.map((i) => i.message).join(", ")}`,
+        );
+      }
+      const limit = parsed.data.limit ?? 50;
       // Log retrieval is delegated to external handler registration.
       // Return a placeholder indicating the handler should be overridden
       // by the core system when the logging subsystem is wired up.
@@ -345,15 +399,13 @@ export class GatewayServer {
 
     // client.execute: forward a command to a specific target client
     this.registerHandler("client.execute", async (params, fromClientId) => {
-      const targetClientId = params.targetClientId;
-      const command = params.command;
-
-      if (typeof targetClientId !== "string" || targetClientId.length === 0) {
-        throw new RpcValidationError("targetClientId must be a non-empty string");
+      const parsed = ClientExecuteParamsSchema.safeParse(params);
+      if (!parsed.success) {
+        throw new RpcValidationError(
+          `Invalid client.execute params: ${parsed.error.issues.map((i) => i.message).join(", ")}`,
+        );
       }
-      if (typeof command !== "string" || command.length === 0) {
-        throw new RpcValidationError("command must be a non-empty string");
-      }
+      const { targetClientId, command, args } = parsed.data;
 
       const targetClient = this.clients.get(targetClientId);
       if (!targetClient || !targetClient.authenticated) {
@@ -364,7 +416,7 @@ export class GatewayServer {
       const pushPayload = createPushEvent("push.executeCommand", {
         commandId,
         command,
-        args: params.args ?? null,
+        args: args ?? null,
         fromClientId,
       });
 
@@ -383,15 +435,18 @@ export class GatewayServer {
 
     // command.result: a client reports the result of an executed command
     this.registerHandler("command.result", async (params, clientId) => {
-      const commandId = params.commandId;
-      if (typeof commandId !== "string" || commandId.length === 0) {
-        throw new RpcValidationError("commandId must be a non-empty string");
+      const parsed = CommandResultParamsSchema.safeParse(params);
+      if (!parsed.success) {
+        throw new RpcValidationError(
+          `Invalid command.result params: ${parsed.error.issues.map((i) => i.message).join(", ")}`,
+        );
       }
+      const { commandId, success, result, error } = parsed.data;
 
-      const success = typeof params.success === "boolean" ? params.success : false;
+      const wasSuccessful = success ?? false;
       this.logger.info(
         "command.result",
-        `Client ${clientId} reported command ${commandId} result: ${success ? "success" : "failure"}`,
+        `Client ${clientId} reported command ${commandId} result: ${wasSuccessful ? "success" : "failure"}`,
       );
 
       // Publish the result so interested components can react
@@ -400,9 +455,9 @@ export class GatewayServer {
         {
           clientId,
           commandId,
-          success,
-          result: params.result ?? null,
-          error: typeof params.error === "string" ? params.error : undefined,
+          success: wasSuccessful,
+          result: result ?? null,
+          error,
         },
         { source: "gateway" },
       );
@@ -500,6 +555,14 @@ export class GatewayServer {
     this.startTime = Date.now();
     const scheme = this.config.tls.enabled ? "wss" : "ws";
     this.logger.info("start", `Gateway server listening on ${scheme}://${host}:${port}`);
+
+    // NET-001: Warn when auth tokens will be transmitted in plaintext
+    if (!this.config.tls.enabled && this.config.auth.type === "token" && typeof this.config.auth.token === "string") {
+      this.logger.warn(
+        "security",
+        "Gateway running without TLS. Auth tokens transmitted in plaintext. Enable TLS in production.",
+      );
+    }
   }
 
   /** Graceful shutdown: close all connections and stop the server. */
@@ -507,6 +570,12 @@ export class GatewayServer {
     if (!this.server) {
       return;
     }
+
+    // ERR-001: Clear all pending auth timeout timers before closing
+    for (const timer of this.authTimers.values()) {
+      clearTimeout(timer);
+    }
+    this.authTimers.clear();
 
     // Close all connected clients with 1001 (going away)
     for (const client of this.clients.values()) {
@@ -662,8 +731,9 @@ export class GatewayServer {
     } else {
       this.logger.info("open", `Client ${clientId} connected from ${anonIp}, awaiting auth`);
 
-      // Enforce auth timeout: close unauthenticated connections
-      setTimeout(() => {
+      // ERR-001: Enforce auth timeout — track timer for cleanup on auth/disconnect/shutdown
+      const authTimer = setTimeout(() => {
+        this.authTimers.delete(clientId);
         const client = this.clients.get(clientId);
         if (client && !client.authenticated) {
           this.logger.warn("auth-timeout", `Client ${clientId} auth timeout`, {
@@ -673,6 +743,7 @@ export class GatewayServer {
           this.clients.delete(clientId);
         }
       }, AUTH_TIMEOUT_MS);
+      this.authTimers.set(clientId, authTimer);
     }
   }
 
@@ -789,6 +860,13 @@ export class GatewayServer {
     this.rateLimiter.recordSuccess(client.ip);
     client.authenticated = true;
 
+    // ERR-001: Clear auth timeout timer now that client has authenticated
+    const authTimer = this.authTimers.get(client.id);
+    if (authTimer) {
+      clearTimeout(authTimer);
+      this.authTimers.delete(client.id);
+    }
+
     // Extract client metadata from auth params if provided
     if (isJsonRpc) {
       const params = obj.params as Record<string, unknown> | undefined;
@@ -847,6 +925,14 @@ export class GatewayServer {
   private handleClose(ws: ServerWS, code: number, reason: string): void {
     const clientId = ws.data.clientId;
     const client = this.clients.get(clientId);
+
+    // ERR-001: Clear auth timeout timer on disconnect
+    const authTimer = this.authTimers.get(clientId);
+    if (authTimer) {
+      clearTimeout(authTimer);
+      this.authTimers.delete(clientId);
+    }
+
     this.clients.delete(clientId);
     this.statusSubscribers.delete(clientId);
     this.logger.info("close", `Client ${clientId} disconnected`, {

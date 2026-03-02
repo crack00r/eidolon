@@ -5,6 +5,9 @@
  * 1. Rule-based (instant, free): regex patterns for dates, names, preferences, etc.
  * 2. LLM-based (optional, costs tokens): injected function analyzes conversation turns
  * 3. Merge: deduplicate extracted memories, keep highest confidence
+ *
+ * PRIV-001: GDPR consent must be checked before extracting memories.
+ * PRIV-006: PII screening marks sensitive memories for special handling.
  */
 
 import type { EidolonError, MemoryType, Result } from "@eidolon/protocol";
@@ -23,6 +26,8 @@ export interface ExtractedMemory {
   readonly confidence: number;
   readonly tags: readonly string[];
   readonly source: "rule_based" | "llm";
+  /** Whether PII was detected in this memory's content. */
+  readonly sensitive: boolean;
 }
 
 /** Input: a conversation turn (user message + assistant response). */
@@ -36,12 +41,53 @@ export interface ConversationTurn {
 /** LLM extraction function signature — injected dependency. */
 export type LlmExtractFn = (turn: ConversationTurn) => Promise<ExtractedMemory[]>;
 
+/** Consent check function signature — injected dependency. */
+export type ConsentCheckFn = () => boolean;
+
 /** Configuration for the MemoryExtractor. */
 export interface ExtractorOptions {
   readonly strategy: "rule-based" | "llm" | "hybrid";
   readonly llmExtractFn?: LlmExtractFn;
   readonly minContentLength?: number;
   readonly deduplicateThreshold?: number;
+  /** Function to check GDPR consent status. If not provided, extraction always proceeds. */
+  readonly consentCheckFn?: ConsentCheckFn;
+}
+
+// ---------------------------------------------------------------------------
+// PII detection patterns (PRIV-006)
+// ---------------------------------------------------------------------------
+
+/** Regex patterns that indicate PII presence in memory content. */
+const PII_PATTERNS: readonly RegExp[] = [
+  // Email addresses
+  /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/,
+  // Phone numbers (international, US, DE formats)
+  /(?:\+?\d{1,3}[-.\s]?)?\(?\d{2,4}\)?[-.\s]?\d{3,4}[-.\s]?\d{3,4}/,
+  // German phone numbers (with area code)
+  /0\d{2,4}[-/\s]?\d{4,8}/,
+  // Street addresses (number + street name patterns)
+  /\d{1,5}\s+(?:[A-Z][a-z]+\s+){1,3}(?:St(?:reet|r\.?)?|Ave(?:nue)?|Rd|Blvd|Dr(?:ive)?|Ln|Way|Pl(?:ace)?|Ct)/i,
+  // German addresses (Straße/str. + number)
+  /(?:[A-ZÄÖÜ][a-zäöüß]+(?:straße|str\.|weg|gasse|platz|allee))\s+\d{1,5}/i,
+  // Postal codes (DE: 5 digits, US: 5 or 5+4)
+  /\b\d{5}(?:-\d{4})?\b/,
+  // Social security / tax IDs (common patterns)
+  /\b\d{3}-\d{2}-\d{4}\b/,
+  // Credit card numbers (basic pattern)
+  /\b\d{4}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4}\b/,
+  // IBAN
+  /\b[A-Z]{2}\d{2}[\s]?\d{4}[\s]?\d{4}[\s]?\d{4}[\s]?\d{4}[\s]?\d{0,2}\b/,
+  // Date of birth patterns
+  /(?:born|geboren|birthday|geburtstag|dob)[:\s]+\d{1,2}[./-]\d{1,2}[./-]\d{2,4}/i,
+];
+
+/**
+ * Detect if content contains PII patterns.
+ * Returns true if any PII pattern matches.
+ */
+function containsPii(content: string): boolean {
+  return PII_PATTERNS.some((pattern) => pattern.test(content));
 }
 
 // ---------------------------------------------------------------------------
@@ -202,7 +248,10 @@ function validateExtractedMemory(mem: unknown): ExtractedMemory | null {
   // Validate source
   const source = record.source === "rule_based" || record.source === "llm" ? record.source : "llm";
 
-  return { type, content, confidence, tags, source };
+  // PII screening (PRIV-006)
+  const sensitive = containsPii(content);
+
+  return { type, content, confidence, tags, source, sensitive };
 }
 
 export class MemoryExtractor {
@@ -210,20 +259,34 @@ export class MemoryExtractor {
   private readonly strategy: ExtractorOptions["strategy"];
   private readonly llmExtractFn?: LlmExtractFn;
   private readonly minContentLength: number;
+  private readonly consentCheckFn?: ConsentCheckFn;
 
   constructor(logger: Logger, options?: ExtractorOptions) {
     this.logger = logger.child("memory-extractor");
     this.strategy = options?.strategy ?? DEFAULT_STRATEGY;
     this.llmExtractFn = options?.llmExtractFn;
     this.minContentLength = options?.minContentLength ?? DEFAULT_MIN_CONTENT_LENGTH;
+    this.consentCheckFn = options?.consentCheckFn;
   }
 
   /**
    * Extract memories from a conversation turn using the configured strategy.
    * Returns Ok with extracted memories or Err on failure.
+   *
+   * PRIV-001: Checks GDPR consent before proceeding. If consent is not
+   * granted and a consentCheckFn was provided, returns empty array with warning.
    */
   async extract(turn: ConversationTurn): Promise<Result<ExtractedMemory[], EidolonError>> {
     try {
+      // PRIV-001: Check GDPR consent before extracting
+      if (this.consentCheckFn && !this.consentCheckFn()) {
+        this.logger.warn(
+          "extract",
+          "Memory extraction skipped: GDPR consent not granted. Run 'eidolon privacy consent --grant' to enable.",
+        );
+        return Ok([]);
+      }
+
       if (!MemoryExtractor.isWorthExtracting(turn)) {
         return Ok([]);
       }
@@ -259,10 +322,20 @@ export class MemoryExtractor {
 
       const merged = deduplicateMemories([...ruleBased, ...llmBased]);
 
+      // Log PII detections
+      const sensitiveCount = merged.filter((m) => m.sensitive).length;
+      if (sensitiveCount > 0) {
+        this.logger.info(
+          "extract",
+          `PII detected in ${sensitiveCount} of ${merged.length} extracted memories — flagged as sensitive`,
+        );
+      }
+
       this.logger.debug("extract", `Extracted ${merged.length} memories`, {
         ruleBasedCount: ruleBased.length,
         llmCount: llmBased.length,
         mergedCount: merged.length,
+        sensitiveCount,
         strategy: this.strategy,
       });
 
@@ -275,6 +348,7 @@ export class MemoryExtractor {
   /**
    * Rule-based extraction only (synchronous, free).
    * Applies regex patterns to both user message and assistant response.
+   * PRIV-006: Screens extracted content for PII and marks sensitive.
    */
   extractRuleBased(turn: ConversationTurn): ExtractedMemory[] {
     const results: ExtractedMemory[] = [];
@@ -291,6 +365,7 @@ export class MemoryExtractor {
             confidence: entry.confidence,
             tags: [entry.tag],
             source: "rule_based",
+            sensitive: containsPii(content),
           });
         }
       }
@@ -308,6 +383,7 @@ export class MemoryExtractor {
             confidence: entry.confidence * ASSISTANT_CONFIDENCE_MULTIPLIER, // Lower confidence for assistant-sourced
             tags: [entry.tag, "assistant-sourced"],
             source: "rule_based",
+            sensitive: containsPii(content),
           });
         }
       }
@@ -319,6 +395,7 @@ export class MemoryExtractor {
   /**
    * Convert extracted memories to CreateMemoryInput format for MemoryStore.
    * Extracted memories start in the "short_term" layer — promotion happens during dreaming.
+   * PRIV-006: Passes through the sensitive flag from PII screening.
    */
   toCreateInputs(extracted: readonly ExtractedMemory[], sessionId?: string): CreateMemoryInput[] {
     return extracted.map((mem) => ({
@@ -329,6 +406,7 @@ export class MemoryExtractor {
       source: `extraction:${mem.source}`,
       tags: [...mem.tags],
       metadata: sessionId ? { sessionId } : undefined,
+      sensitive: mem.sensitive,
     }));
   }
 

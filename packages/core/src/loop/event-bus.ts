@@ -146,14 +146,30 @@ export class EventBus {
       );
     }
 
-    try {
-      this.db
-        .query(
-          "INSERT INTO events (id, type, priority, payload, source, timestamp, retry_count) VALUES (?, ?, ?, ?, ?, ?, 0)",
-        )
-        .run(id, type, priority, payloadJson, source, timestamp);
-    } catch (cause) {
-      return Err(createError(ErrorCode.EVENT_BUS_ERROR, `Failed to persist event: ${type}`, cause));
+    // ERR-005: Persist with retry on transient SQLite errors (e.g. SQLITE_BUSY)
+    const MAX_PERSIST_RETRIES = 3;
+    let lastCause: unknown;
+    for (let attempt = 0; attempt < MAX_PERSIST_RETRIES; attempt++) {
+      try {
+        this.db
+          .query(
+            "INSERT INTO events (id, type, priority, payload, source, timestamp, retry_count) VALUES (?, ?, ?, ?, ?, ?, 0)",
+          )
+          .run(id, type, priority, payloadJson, source, timestamp);
+        lastCause = undefined;
+        break;
+      } catch (cause) {
+        lastCause = cause;
+        const msg = cause instanceof Error ? cause.message : String(cause);
+        // Only retry on SQLITE_BUSY; other errors are non-transient
+        if (!msg.includes("SQLITE_BUSY") || attempt === MAX_PERSIST_RETRIES - 1) {
+          break;
+        }
+        this.logger.warn("event-bus", `Publish retry ${attempt + 1}/${MAX_PERSIST_RETRIES} for ${type}: ${msg}`);
+      }
+    }
+    if (lastCause !== undefined) {
+      return Err(createError(ErrorCode.EVENT_BUS_ERROR, `Failed to persist event: ${type}`, lastCause));
     }
 
     const event: BusEvent<T> = { id, type, priority, payload, source, timestamp };
@@ -336,8 +352,15 @@ export class EventBus {
 
       for (const event of events) {
         this.notifySubscribers(event);
-        // Mark each replayed event as processed to prevent infinite replay
-        this.markProcessed(event.id);
+        // ERR-005: Mark each replayed event as processed; log and continue on failure
+        const markResult = this.markProcessed(event.id);
+        if (!markResult.ok) {
+          this.logger.error(
+            "event-bus",
+            `Failed to mark replayed event ${event.id} as processed: ${markResult.error.message}`,
+            { eventId: event.id, type: event.type },
+          );
+        }
       }
 
       return Ok(events);

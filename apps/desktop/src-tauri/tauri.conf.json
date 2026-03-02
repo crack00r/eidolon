@@ -50,7 +50,7 @@
       "endpoints": [
         "https://github.com/crack00r/eidolon/releases/latest/download/latest.json"
       ],
-      "pubkey": ""
+      "pubkey": "PLACEHOLDER_GENERATE_WITH_tauri_signer_generate_BEFORE_RELEASE"
     }
   }
 }

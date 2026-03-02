@@ -135,8 +135,9 @@ export class DatabaseManager {
         .query("SELECT COUNT(*) as count FROM sqlite_master WHERE type='table' AND name NOT GLOB '_*'")
         .get() as { count: number } | null;
       tableCount = typeof tables?.count === "number" && Number.isFinite(tables.count) ? tables.count : 0;
-    } catch {
-      // Corrupt sqlite_master or inaccessible database -- report 0 tables
+    } catch (err: unknown) {
+      // Corrupt sqlite_master or inaccessible database -- log and report 0 tables
+      this.logger.error("stats", `Failed to query table count for ${basename(path)}`, err);
       tableCount = 0;
     }
 
@@ -150,8 +151,11 @@ export class DatabaseManager {
     try {
       const file = Bun.file(path);
       return file.size;
-    } catch {
-      // File might not exist yet for in-memory DBs
+    } catch (err: unknown) {
+      // File might not exist yet for in-memory DBs -- log at debug level
+      this.logger.debug("stats", `Could not read file size for ${basename(path)}`, {
+        error: err instanceof Error ? err.message : String(err),
+      });
       return 0;
     }
   }

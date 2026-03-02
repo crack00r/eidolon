@@ -7,6 +7,7 @@
 import type { Database } from "bun:sqlite";
 import type { EidolonError, Result, ScheduledTask, ScheduleType } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
+import { z } from "zod";
 import type { Logger } from "../logging/logger.ts";
 
 export interface CreateTaskInput {
@@ -34,16 +35,38 @@ interface TaskRow {
   created_at: number;
 }
 
+/** Zod schema for validating task payload from DB. */
+const TaskPayloadSchema = z.record(z.unknown());
+
+/** Zod schema for validating schedule type from DB. */
+const ScheduleTypeSchema = z.enum(["once", "recurring", "conditional"]);
+
 function rowToTask(row: TaskRow): ScheduledTask {
+  // Safely parse JSON payload from DB -- corrupted rows get an empty payload
+  let payload: Record<string, unknown> = {};
+  try {
+    const parsed: unknown = JSON.parse(row.payload);
+    const validated = TaskPayloadSchema.safeParse(parsed);
+    if (validated.success) {
+      payload = validated.data;
+    }
+  } catch {
+    // Corrupted JSON in DB -- use empty payload rather than crashing
+  }
+
+  // Validate schedule type from DB
+  const typeResult = ScheduleTypeSchema.safeParse(row.type);
+  const type: ScheduleType = typeResult.success ? typeResult.data : "once";
+
   return {
     id: row.id,
     name: row.name,
-    type: row.type as ScheduleType,
+    type,
     cron: row.cron ?? undefined,
     runAt: row.run_at ?? undefined,
     condition: row.condition ?? undefined,
     action: row.action,
-    payload: JSON.parse(row.payload) as Record<string, unknown>,
+    payload,
     enabled: row.enabled === 1,
     lastRunAt: row.last_run_at ?? undefined,
     nextRunAt: row.next_run_at ?? undefined,

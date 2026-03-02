@@ -324,6 +324,22 @@ export const LoggingConfigSchema = z.object({
 });
 
 // ---------------------------------------------------------------------------
+// Privacy & Retention
+// ---------------------------------------------------------------------------
+
+export const PrivacyConfigSchema = z.object({
+  retention: z
+    .object({
+      conversationsDays: z.number().int().positive().default(365),
+      eventsDays: z.number().int().positive().default(90),
+      tokenUsageDays: z.number().int().positive().default(180),
+      auditLogDays: z.literal(-1).or(z.number().int().positive()).default(-1), // -1 = NEVER delete (legal requirement)
+    })
+    .default({}),
+  encryptBackups: z.boolean().default(true),
+});
+
+// ---------------------------------------------------------------------------
 // Daemon
 // ---------------------------------------------------------------------------
 
@@ -349,6 +365,7 @@ export const EidolonConfigSchema = z.object({
   gateway: GatewayConfigSchema,
   gpu: GpuConfigSchema,
   security: SecurityConfigSchema,
+  privacy: PrivacyConfigSchema.default({}),
   database: DatabaseConfigSchema,
   logging: LoggingConfigSchema,
   daemon: DaemonConfigSchema,
@@ -369,5 +386,6 @@ export type GpuConfig = z.infer<typeof GpuConfigSchema>;
 export type SecurityConfig = z.infer<typeof SecurityConfigSchema>;
 export type DatabaseConfig = z.infer<typeof DatabaseConfigSchema>;
 export type LoggingConfig = z.infer<typeof LoggingConfigSchema>;
+export type PrivacyConfig = z.infer<typeof PrivacyConfigSchema>;
 export type DaemonConfig = z.infer<typeof DaemonConfigSchema>;
 export type ClaudeAccount = z.infer<typeof ClaudeAccountSchema>;

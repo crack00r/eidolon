@@ -3,6 +3,13 @@ mod tray;
 
 use tauri::Manager;
 
+// SECURITY: The updater pubkey in tauri.conf.json MUST be replaced with a real Ed25519
+// public key before any production release. Generate a key pair with:
+//   cargo tauri signer generate -w ~/.tauri/eidolon.key
+// Then set the pubkey field to the generated public key string.
+// An empty or placeholder pubkey disables update signature verification, allowing
+// arbitrary code execution via malicious update payloads.
+
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())

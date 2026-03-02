@@ -69,6 +69,10 @@ $effect(() => {
             <span class="message-role">{msg.role}</span>
             <span class="message-time">{formatTime(msg.timestamp)}</span>
           </div>
+          <!-- CLIENT-005: Svelte text interpolation ({msg.content}) auto-escapes HTML entities,
+               so there is no XSS risk here. Do NOT change this to {@html msg.content} without
+               first adding DOMPurify sanitization. If markdown rendering is added later, pipe
+               the output through DOMPurify.sanitize() before using {@html}. -->
           <div class="message-content">
             {#if msg.streaming}
               <span>{msg.content}</span><span class="cursor">|</span>

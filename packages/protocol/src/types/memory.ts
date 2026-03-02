@@ -20,6 +20,8 @@ export interface Memory {
   readonly accessCount: number;
   readonly embedding?: Float32Array;
   readonly metadata?: Record<string, unknown>;
+  /** Flag for PII-containing memories that may need special handling (GDPR, encryption). */
+  readonly sensitive?: boolean;
 }
 
 export interface MemoryEdge {

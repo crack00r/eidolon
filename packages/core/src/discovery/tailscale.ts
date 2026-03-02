@@ -26,6 +26,28 @@ export interface TailscaleInfo {
 /** How often to re-poll Tailscale status (ms). */
 const POLL_INTERVAL_MS = 30_000;
 
+/**
+ * Validate that an IP address falls within the Tailscale CGNAT range (100.64.0.0/10).
+ *
+ * Valid IPs: 100.64.0.0 – 100.127.255.255
+ * This prevents accepting spoofed or garbage output from the tailscale CLI.
+ */
+export function isValidTailscaleIp(ip: string): boolean {
+  const trimmed = ip.trim();
+  // Must look like a valid IPv4 address
+  const parts = trimmed.split(".");
+  if (parts.length !== 4) return false;
+
+  const octets = parts.map(Number);
+  if (octets.some((o) => !Number.isInteger(o) || o < 0 || o > 255)) return false;
+
+  // Tailscale CGNAT: 100.64.0.0/10 => first octet is 100, second octet 64-127
+  const first = octets[0];
+  const second = octets[1];
+  if (first === undefined || second === undefined) return false;
+  return first === 100 && second >= 64 && second <= 127;
+}
+
 // ---------------------------------------------------------------------------
 // TailscaleDetector
 // ---------------------------------------------------------------------------
@@ -80,6 +102,15 @@ export class TailscaleDetector {
         this.cache = info;
         this.lastPoll = Date.now();
         return Ok(info);
+      }
+
+      // NET-004: Validate the returned IP is within Tailscale CGNAT range (100.64.0.0/10)
+      if (!isValidTailscaleIp(ip)) {
+        this.logger.warn("poll", `Tailscale returned IP outside CGNAT range (100.64.0.0/10), rejecting: ${ip.trim()}`);
+        const info: TailscaleInfo = { ip: "", hostname: "", active: false };
+        this.cache = info;
+        this.lastPoll = Date.now();
+        return Err(new Error(`Invalid Tailscale IP: ${ip.trim()} — not in 100.64.0.0/10 range`));
       }
 
       let hostname = "";

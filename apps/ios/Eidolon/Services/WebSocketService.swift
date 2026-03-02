@@ -128,6 +128,15 @@ final class WebSocketService: ObservableObject {
         lastError = nil
 
         let scheme = useTls ? "wss" : "ws"
+
+        // CLIENT-003: Warn when sending a token over unencrypted ws:// connection
+        if let token, !token.isEmpty, scheme == "ws" {
+            EidolonLogger.warning(
+                category: logCategory,
+                message: "SECURITY WARNING: Auth token is being sent over an unencrypted ws:// connection. The token will be transmitted in plaintext. Use wss:// (TLS) in production."
+            )
+        }
+
         let urlString = "\(scheme)://\(host):\(port)/ws"
         guard let url = URL(string: urlString) else {
             connectionState = .error

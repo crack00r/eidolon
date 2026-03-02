@@ -2,6 +2,14 @@
  * Settings store — persists gateway connection settings
  * to sessionStorage (cleared on window close to avoid token leakage).
  * Update preferences are persisted to localStorage (survive restarts).
+ *
+ * SECURITY NOTE (CLIENT-004): Token storage in sessionStorage is acceptable for
+ * the desktop app because Tauri provides its own process-level sandboxing — the
+ * WebView does not share storage with arbitrary browser tabs, and there is no
+ * cross-origin risk from other websites. This is NOT safe for a regular web app
+ * where sessionStorage is accessible to any XSS payload running in the same origin.
+ * The web variant should migrate to httpOnly cookies or a server-side session once
+ * the gateway supports cookie-based auth.
  */
 
 import { writable } from "svelte/store";

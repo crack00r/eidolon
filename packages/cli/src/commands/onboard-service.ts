@@ -7,9 +7,9 @@
  * - Windows: startup script or scheduled task
  */
 
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 // ---------------------------------------------------------------------------
 // Bun path detection
@@ -52,19 +52,74 @@ function detectBunPath(): string {
 }
 
 // ---------------------------------------------------------------------------
+// Secure env file writer
+// ---------------------------------------------------------------------------
+
+/**
+ * Write a secret-bearing env file and restrict permissions to owner-only.
+ *
+ * @security
+ * - File is written with mode 0o600 (owner read/write only).
+ * - On Windows, chmod is skipped (not supported).
+ * - The master key NEVER appears in service unit files, plist files, or bat scripts.
+ */
+function writeSecureEnvFile(envFilePath: string, masterKey: string): void {
+  const envDir = dirname(envFilePath);
+  if (!existsSync(envDir)) {
+    mkdirSync(envDir, { recursive: true, mode: 0o700 });
+  }
+  writeFileSync(envFilePath, `EIDOLON_MASTER_KEY=${masterKey}\n`, { mode: 0o600 });
+  // Belt-and-suspenders: ensure mode is set even if umask interfered
+  if (process.platform !== "win32") {
+    chmodSync(envFilePath, 0o600);
+  }
+}
+
+/**
+ * Ensure log directory exists with restricted permissions.
+ * Returns the absolute path to the log directory.
+ */
+function ensureLogDir(): string {
+  const logDir =
+    process.platform === "darwin"
+      ? join(homedir(), "Library", "Logs", "Eidolon")
+      : join(homedir(), ".local", "share", "eidolon", "logs");
+
+  if (!existsSync(logDir)) {
+    mkdirSync(logDir, { recursive: true, mode: 0o700 });
+  }
+  if (process.platform !== "win32") {
+    chmodSync(logDir, 0o700);
+  }
+  return logDir;
+}
+
+// ---------------------------------------------------------------------------
 // macOS LaunchAgent
 // ---------------------------------------------------------------------------
 
-function buildPlistContent(masterKey?: string): string {
+function buildPlistContent(envFilePath?: string): string {
   const bunPath = detectBunPath();
-  const envSection = masterKey
-    ? `
-    <key>EnvironmentVariables</key>
-    <dict>
-        <key>EIDOLON_MASTER_KEY</key>
-        <string>${masterKey}</string>
-    </dict>`
-    : "";
+  const logDir = ensureLogDir();
+
+  // SEC: Never embed the master key in the plist file.
+  // Instead, use a wrapper script that sources the env file before launching.
+  // LaunchAgent does not natively support EnvironmentFile, so we reference the
+  // env file via a shell wrapper in ProgramArguments.
+  const programArgs = envFilePath
+    ? `    <array>
+        <string>/bin/sh</string>
+        <string>-c</string>
+        <string>. ${envFilePath} &amp;&amp; exec ${bunPath} run eidolon daemon start --foreground</string>
+    </array>`
+    : `    <array>
+        <string>${bunPath}</string>
+        <string>run</string>
+        <string>eidolon</string>
+        <string>daemon</string>
+        <string>start</string>
+        <string>--foreground</string>
+    </array>`;
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -73,14 +128,7 @@ function buildPlistContent(masterKey?: string): string {
     <key>Label</key>
     <string>com.eidolon.daemon</string>
     <key>ProgramArguments</key>
-    <array>
-        <string>${bunPath}</string>
-        <string>run</string>
-        <string>eidolon</string>
-        <string>daemon</string>
-        <string>start</string>
-        <string>--foreground</string>
-    </array>${envSection}
+${programArgs}
     <key>RunAtLoad</key>
     <true/>
     <key>KeepAlive</key>
@@ -89,9 +137,9 @@ function buildPlistContent(masterKey?: string): string {
         <false/>
     </dict>
     <key>StandardOutPath</key>
-    <string>/tmp/eidolon-stdout.log</string>
+    <string>${join(logDir, "eidolon-stdout.log")}</string>
     <key>StandardErrorPath</key>
-    <string>/tmp/eidolon-stderr.log</string>
+    <string>${join(logDir, "eidolon-stderr.log")}</string>
     <key>ThrottleInterval</key>
     <integer>10</integer>
 </dict>
@@ -103,11 +151,22 @@ function installMacOsService(masterKey?: string): boolean {
   const plistPath = join(launchAgentsDir, "com.eidolon.daemon.plist");
 
   try {
+    // SEC: Write master key to a separate env file, never in the plist
+    let envFilePath: string | undefined;
+    if (masterKey) {
+      const eidolonConfigDir = join(homedir(), ".config", "eidolon");
+      envFilePath = join(eidolonConfigDir, "env");
+      writeSecureEnvFile(envFilePath, masterKey);
+      console.log(`  Env file written: ${envFilePath} (mode 0600)`);
+    }
+
     if (!existsSync(launchAgentsDir)) {
       mkdirSync(launchAgentsDir, { recursive: true });
     }
-    writeFileSync(plistPath, buildPlistContent(masterKey), "utf-8");
-    console.log(`  Created LaunchAgent: ${plistPath}`);
+    writeFileSync(plistPath, buildPlistContent(envFilePath), "utf-8");
+    // SEC: Restrict plist permissions to owner-only
+    chmodSync(plistPath, 0o600);
+    console.log(`  Created LaunchAgent: ${plistPath} (mode 0600)`);
 
     // Auto-load the service
     try {
@@ -134,9 +193,10 @@ function installMacOsService(masterKey?: string): boolean {
 // Linux systemd user service
 // ---------------------------------------------------------------------------
 
-function buildSystemdService(masterKey?: string): string {
+function buildSystemdService(envFilePath?: string): string {
   const bunPath = detectBunPath();
-  const envLine = masterKey ? `Environment=EIDOLON_MASTER_KEY=${masterKey}\n` : "";
+  // SEC: Use EnvironmentFile instead of embedding secrets in the unit file.
+  const envLine = envFilePath ? `EnvironmentFile=${envFilePath}\n` : "";
   return `[Unit]
 Description=Eidolon AI Assistant Daemon
 After=network-online.target
@@ -160,11 +220,22 @@ function installLinuxService(masterKey?: string): boolean {
   const servicePath = join(systemdDir, "eidolon.service");
 
   try {
+    // SEC: Write master key to a separate env file, never in the unit file
+    let envFilePath: string | undefined;
+    if (masterKey) {
+      const eidolonConfigDir = join(homedir(), ".config", "eidolon");
+      envFilePath = join(eidolonConfigDir, "env");
+      writeSecureEnvFile(envFilePath, masterKey);
+      console.log(`  Env file written: ${envFilePath} (mode 0600)`);
+    }
+
     if (!existsSync(systemdDir)) {
       mkdirSync(systemdDir, { recursive: true });
     }
-    writeFileSync(servicePath, buildSystemdService(masterKey), "utf-8");
-    console.log(`  Created systemd user service: ${servicePath}`);
+    writeFileSync(servicePath, buildSystemdService(envFilePath), "utf-8");
+    // SEC: Restrict service file permissions
+    chmodSync(servicePath, 0o600);
+    console.log(`  Created systemd user service: ${servicePath} (mode 0600)`);
 
     // Try to reload systemd
     try {
@@ -204,11 +275,16 @@ function installLinuxService(masterKey?: string): boolean {
 // Windows startup script
 // ---------------------------------------------------------------------------
 
-function buildWindowsScript(masterKey?: string): string {
-  const envLine = masterKey ? `SET EIDOLON_MASTER_KEY=${masterKey}\n` : "";
+function buildWindowsScript(envFilePath?: string): string {
+  // SEC: Source the env file instead of embedding the master key in the script.
+  const envLines = envFilePath
+    ? `REM Load environment from secure env file
+for /f "usebackq tokens=*" %%a in ("${envFilePath}") do SET %%a
+`
+    : "";
   return `@echo off
 REM Eidolon AI Assistant -- Windows Startup Script
-${envLine}start /B bun run eidolon daemon start --foreground
+${envLines}start /B bun run eidolon daemon start --foreground
 `;
 }
 
@@ -224,10 +300,23 @@ function installWindowsService(masterKey?: string): boolean {
   const scriptPath = join(startupDir, "eidolon-startup.bat");
 
   try {
+    // SEC: Write master key to a separate env file, never in the bat script
+    let envFilePath: string | undefined;
+    if (masterKey) {
+      const eidolonDataDir = join(process.env.LOCALAPPDATA ?? join(homedir(), "AppData", "Local"), "eidolon");
+      envFilePath = join(eidolonDataDir, "env");
+      if (!existsSync(eidolonDataDir)) {
+        mkdirSync(eidolonDataDir, { recursive: true });
+      }
+      writeFileSync(envFilePath, `EIDOLON_MASTER_KEY=${masterKey}\n`, { mode: 0o600 });
+      // Note: chmod is not effective on Windows, but we set mode on write
+      console.log(`  Env file written: ${envFilePath}`);
+    }
+
     if (!existsSync(startupDir)) {
       mkdirSync(startupDir, { recursive: true });
     }
-    writeFileSync(scriptPath, buildWindowsScript(masterKey), "utf-8");
+    writeFileSync(scriptPath, buildWindowsScript(envFilePath), "utf-8");
     console.log(`  Created startup script: ${scriptPath}`);
     console.log("  Eidolon will start automatically on next login.");
     console.log("  To start now, run: eidolon daemon start --foreground");

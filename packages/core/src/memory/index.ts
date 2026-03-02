@@ -3,7 +3,7 @@ export { DocumentIndexer } from "./document-indexer.ts";
 export * from "./dreaming/index.ts";
 export type { EmbeddingModelOptions, EmbeddingPrefix } from "./embeddings.ts";
 export { EmbeddingModel } from "./embeddings.ts";
-export type { ConversationTurn, ExtractedMemory, ExtractorOptions, LlmExtractFn } from "./extractor.ts";
+export type { ConsentCheckFn, ConversationTurn, ExtractedMemory, ExtractorOptions, LlmExtractFn } from "./extractor.ts";
 export { MemoryExtractor } from "./extractor.ts";
 export type { CreateEdgeInput, EdgeRelation, GraphWalkResult } from "./graph.ts";
 export { GraphMemory } from "./graph.ts";

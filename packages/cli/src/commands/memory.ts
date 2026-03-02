@@ -36,6 +36,12 @@ const MAX_QUERY_LENGTH = 10_000;
 /** Maximum length for individual CLI arguments (tags, IDs, etc.). */
 const MAX_ARG_LENGTH = 1_000;
 
+/** Minimum allowed limit for query results. */
+const MIN_LIMIT = 1;
+
+/** Maximum allowed limit for query results. */
+const MAX_LIMIT = 1_000;
+
 const MEMORY_TYPES: readonly MemoryType[] = [
   "fact",
   "preference",
@@ -84,6 +90,21 @@ async function initMemorySystem(): Promise<MemorySystem | null> {
 // Helpers
 // ---------------------------------------------------------------------------
 
+/**
+ * Parse and validate a limit string from CLI options.
+ * Returns a valid integer within [MIN_LIMIT, MAX_LIMIT] or null on failure.
+ */
+function parseLimit(value: string): number | null {
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed) || parsed !== Number(value)) {
+    return null;
+  }
+  if (parsed < MIN_LIMIT || parsed > MAX_LIMIT) {
+    return null;
+  }
+  return parsed;
+}
+
 function truncate(text: string, maxLen: number): string {
   if (text.length <= maxLen) return text;
   return `${text.slice(0, maxLen - 3)}...`;
@@ -116,10 +137,15 @@ export function registerMemoryCommand(program: Command): void {
         process.exitCode = 1;
         return;
       }
+      const limit = parseLimit(options.limit);
+      if (limit === null) {
+        console.error(`Error: --limit must be a positive integer between ${MIN_LIMIT} and ${MAX_LIMIT}.`);
+        process.exitCode = 1;
+        return;
+      }
       const sys = await initMemorySystem();
       if (!sys) return;
       try {
-        const limit = parseInt(options.limit, 10) || 10;
         const result = sys.store.searchText(query, limit);
         if (!result.ok) {
           console.error(`Error: ${result.error.message}`);
@@ -158,10 +184,15 @@ export function registerMemoryCommand(program: Command): void {
     .option("--layer <layer>", "Filter by memory layer")
     .option("--limit <n>", "Max results", "20")
     .action(async (options: { readonly type?: string; readonly layer?: string; readonly limit: string }) => {
+      const limit = parseLimit(options.limit);
+      if (limit === null) {
+        console.error(`Error: --limit must be a positive integer between ${MIN_LIMIT} and ${MAX_LIMIT}.`);
+        process.exitCode = 1;
+        return;
+      }
       const sys = await initMemorySystem();
       if (!sys) return;
       try {
-        const limit = parseInt(options.limit, 10) || 20;
         const types = options.type ? [options.type as MemoryType] : undefined;
         const layers = options.layer ? [options.layer as MemoryLayer] : undefined;
 

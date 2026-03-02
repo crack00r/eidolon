@@ -37,7 +37,7 @@ export class ClaudeCodeManager implements IClaudeProcess {
       model: options.model,
     });
 
-    // Whitelist only safe env vars to avoid leaking secrets to subprocesses
+    // ERR-003: Whitelist only safe env vars to avoid leaking secrets to subprocesses
     const SAFE_ENV_KEYS = [
       "PATH",
       "HOME",
@@ -46,17 +46,26 @@ export class ClaudeCodeManager implements IClaudeProcess {
       "TERM",
       "SHELL",
       "TMPDIR",
+      "TZ",
+      "NODE_ENV",
       "XDG_CONFIG_HOME",
       "XDG_DATA_HOME",
     ];
+    /** Prefixes of env vars safe to pass through (non-secret EIDOLON_ config, ANTHROPIC_ API keys). */
+    const SAFE_ENV_PREFIXES = ["ANTHROPIC_", "EIDOLON_"];
+    /** Secret env vars within safe prefixes that must NOT leak to subprocesses. */
+    const SECRET_ENV_KEYS = new Set(["EIDOLON_MASTER_KEY", "EIDOLON_GPU_API_KEY"]);
+
     const safeEnv: Record<string, string> = {};
     for (const key of SAFE_ENV_KEYS) {
       const val = process.env[key];
       if (val) safeEnv[key] = val;
     }
-    // Also pass any ANTHROPIC_ prefixed vars for API keys
+    // Pass safe-prefix vars, excluding known secrets
     for (const [key, val] of Object.entries(process.env)) {
-      if (key.startsWith("ANTHROPIC_") && val) safeEnv[key] = val;
+      if (val && SAFE_ENV_PREFIXES.some((p) => key.startsWith(p)) && !SECRET_ENV_KEYS.has(key)) {
+        safeEnv[key] = val;
+      }
     }
 
     // Filter options.env to reject dangerous keys that could hijack the subprocess

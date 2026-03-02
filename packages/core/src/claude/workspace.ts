@@ -5,7 +5,7 @@
  * (CLAUDE.md, SOUL.md, etc.) injected before the subprocess starts.
  */
 
-import { existsSync, mkdirSync, readdirSync, rmSync, statSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, readdirSync, rmSync } from "node:fs";
 import { join, resolve } from "node:path";
 import type { EidolonError, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
@@ -88,6 +88,17 @@ export class WorkspacePreparer {
 
     const workspaceDir = join(this.workspacesDir, sessionId);
     if (existsSync(workspaceDir)) {
+      // ERR-006: Check for symlink before deleting to prevent following links outside workspace
+      try {
+        const lstats = lstatSync(workspaceDir);
+        if (lstats.isSymbolicLink()) {
+          this.logger.warn("workspace", `Cleanup rejected: workspace is a symlink: ${sessionId}`);
+          return;
+        }
+      } catch {
+        // If lstat fails, skip deletion for safety
+        return;
+      }
       rmSync(workspaceDir, { recursive: true });
       this.logger.debug("workspace", `Cleaned up workspace ${sessionId}`);
     }
@@ -101,15 +112,21 @@ export class WorkspacePreparer {
     const now = Date.now();
     const entries = readdirSync(this.workspacesDir);
     for (const entry of entries) {
-      const path = join(this.workspacesDir, entry);
+      const entryPath = join(this.workspacesDir, entry);
       try {
-        const stats = statSync(path);
-        if (now - stats.mtimeMs >= maxAgeMs) {
-          rmSync(path, { recursive: true });
+        // ERR-006: Use lstatSync to detect symlinks without following them.
+        // Symlinks are skipped (not deleted) to prevent escaping the workspace dir.
+        const lstats = lstatSync(entryPath);
+        if (lstats.isSymbolicLink()) {
+          this.logger.warn("workspace", `Skipping symlink during cleanup: ${entry}`);
+          continue;
+        }
+        if (now - lstats.mtimeMs >= maxAgeMs) {
+          rmSync(entryPath, { recursive: true });
           cleaned++;
         }
       } catch {
-        // Ignore stat errors
+        // Ignore stat errors (e.g. race with concurrent cleanup)
       }
     }
     if (cleaned > 0) {

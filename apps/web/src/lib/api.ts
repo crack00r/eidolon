@@ -182,7 +182,10 @@ export class GatewayClient {
 
   /** Trigger a specific brain action. */
   async triggerAction(action: string, args?: Record<string, unknown>): Promise<{ triggered: boolean; action: string }> {
-    return this.call<{ triggered: boolean; action: string }>("brain.triggerAction", { action, ...(args ? { args } : {}) });
+    return this.call<{ triggered: boolean; action: string }>("brain.triggerAction", {
+      action,
+      ...(args ? { args } : {}),
+    });
   }
 
   /** Get recent log entries. */
@@ -191,13 +194,15 @@ export class GatewayClient {
   }
 
   /** List all connected clients. */
-  async listClients(): Promise<{ clients: ReadonlyArray<{
-    id: string;
-    platform: string;
-    version: string;
-    connectedAt: number;
-    subscribed: boolean;
-  }> }> {
+  async listClients(): Promise<{
+    clients: ReadonlyArray<{
+      id: string;
+      platform: string;
+      version: string;
+      connectedAt: number;
+      subscribed: boolean;
+    }>;
+  }> {
     return this.call("client.list");
   }
 
@@ -299,10 +304,23 @@ export class GatewayClient {
     this.ws.onopen = (): void => {
       this.reconnectAttempts = 0;
 
+      // CLIENT-003: Warn when sending a token over unencrypted ws:// connection
+      if (this.config.token && scheme === "ws") {
+        console.warn(
+          "[SECURITY WARNING] Auth token is being sent over an unencrypted ws:// connection. " +
+            "The token will be transmitted in plaintext. Use wss:// (TLS) in production.",
+        );
+      }
+
       if (this.config.token) {
         this.setState("authenticating");
         this.sendAuth();
       } else {
+        // CLIENT-002: Warn when connecting without authentication
+        console.warn(
+          "[SECURITY WARNING] Connecting to gateway without an authentication token. " +
+            "The connection is unauthenticated and should not be used in production.",
+        );
         this.setState("connected");
       }
     };

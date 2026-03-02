@@ -3,12 +3,28 @@
  *
  * Uses `df` on Unix and `wmic` on Windows to check free space in the target directory.
  * Warns if < 500 MB free, fails if < 100 MB free.
+ *
+ * Security: validates all inputs before passing to shell commands to prevent injection.
+ * Uses Bun.spawnSync with array args (no shell interpolation).
  */
 
+import { resolve } from "node:path";
 import type { HealthCheck } from "@eidolon/protocol";
 
 const WARN_THRESHOLD_MB = 500;
 const FAIL_THRESHOLD_MB = 100;
+
+/**
+ * Validate a Windows drive letter (e.g., "C:").
+ * Only uppercase ASCII letter followed by colon is accepted.
+ */
+const WINDOWS_DRIVE_PATTERN = /^[A-Za-z]:$/;
+
+/**
+ * Validate a Unix path contains no shell metacharacters that could cause injection.
+ * Allows alphanumeric, slash, dot, dash, underscore, tilde, and space.
+ */
+const UNIX_SAFE_PATH_PATTERN = /^[a-zA-Z0-9/.\-_ ~]+$/;
 
 /** Create a health check that monitors available disk space in `directory`. */
 export function createDiskCheck(directory: string): () => Promise<HealthCheck> {
@@ -63,7 +79,13 @@ function getDiskFreeMb(directory: string): number | null {
 }
 
 function getDiskFreeMbUnix(directory: string): number | null {
-  const result = Bun.spawnSync(["df", "-m", directory], {
+  // Canonicalize and validate the path to prevent shell metacharacter injection
+  const canonical = resolve(directory);
+  if (!UNIX_SAFE_PATH_PATTERN.test(canonical)) {
+    return null;
+  }
+
+  const result = Bun.spawnSync(["df", "-m", canonical], {
     stdout: "pipe",
     stderr: "pipe",
   });
@@ -81,7 +103,14 @@ function getDiskFreeMbUnix(directory: string): number | null {
 }
 
 function getDiskFreeMbWindows(directory: string): number | null {
-  const drive = directory.slice(0, 2); // e.g. "C:"
+  // Extract and strictly validate the drive letter to prevent command injection
+  const drive = directory.slice(0, 2).toUpperCase(); // e.g. "C:"
+  if (!WINDOWS_DRIVE_PATTERN.test(drive)) {
+    return null;
+  }
+
+  // Use array args with Bun.spawnSync (no shell interpolation).
+  // The drive letter is validated above to be exactly "[A-Z]:" so it's safe.
   const result = Bun.spawnSync(["wmic", "logicaldisk", "where", `DeviceID='${drive}'`, "get", "FreeSpace", "/value"], {
     stdout: "pipe",
     stderr: "pipe",

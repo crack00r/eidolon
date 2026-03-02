@@ -282,7 +282,7 @@ async function onboardServer(ask: AskFn): Promise<ServerSetupResult> {
 // ---------------------------------------------------------------------------
 
 function writeServerConfig(r: ServerSetupResult): void {
-  const { existsSync, mkdirSync, writeFileSync } = require("node:fs") as typeof import("node:fs");
+  const { existsSync, mkdirSync, writeFileSync, chmodSync } = require("node:fs") as typeof import("node:fs");
   const configPath = getConfigPath();
   const configDir = getConfigDir();
   if (!existsSync(configDir)) mkdirSync(configDir, { recursive: true });
@@ -317,7 +317,11 @@ function writeServerConfig(r: ServerSetupResult): void {
   }
 
   writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`, "utf-8");
-  console.log(`\n  Config written to: ${configPath}`);
+  // SEC: Config may contain secret references; restrict to owner-only
+  if (process.platform !== "win32") {
+    chmodSync(configPath, 0o600);
+  }
+  console.log(`\n  Config written to: ${configPath} (mode 0600)`);
 }
 
 // ---------------------------------------------------------------------------
@@ -325,7 +329,7 @@ function writeServerConfig(r: ServerSetupResult): void {
 // ---------------------------------------------------------------------------
 
 function writeClientConfig(host: string, port: number, token: string, tls: boolean): void {
-  const { existsSync, mkdirSync, writeFileSync } = require("node:fs") as typeof import("node:fs");
+  const { existsSync, mkdirSync, writeFileSync, chmodSync } = require("node:fs") as typeof import("node:fs");
   const configPath = getConfigPath();
   const configDir = getConfigDir();
   if (!existsSync(configDir)) mkdirSync(configDir, { recursive: true });
@@ -342,7 +346,11 @@ function writeClientConfig(host: string, port: number, token: string, tls: boole
   };
 
   writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`, "utf-8");
-  console.log(`\n  Client config written to: ${configPath}`);
+  // SEC: Client config contains auth token; restrict to owner-only
+  if (process.platform !== "win32") {
+    chmodSync(configPath, 0o600);
+  }
+  console.log(`\n  Client config written to: ${configPath} (mode 0600)`);
 }
 
 async function testConnection(host: string, _port: number, tls: boolean): Promise<void> {

@@ -329,12 +329,19 @@ export class SecretStore {
   }
 
   /**
-   * Close the database connection.
+   * Close the database connection and zeroize the master key buffer.
    *
-   * After calling this, the master key buffer should be zeroized by the caller
-   * (e.g., via {@link import("./master-key.js").zeroBuffer}).
+   * @security The master key is overwritten with zeros before releasing
+   *           the reference. This is best-effort in a GC environment but
+   *           eliminates the primary copy from memory.
    */
   close(): void {
-    this.db.close();
+    try {
+      this.db.close();
+    } finally {
+      // SEC: Zero out the master key buffer to prevent residual key material
+      // in memory after the store is closed.
+      this.masterKey.fill(0);
+    }
   }
 }

@@ -9,8 +9,23 @@ import { randomBytes } from "node:crypto";
 import { hostname } from "node:os";
 import type { GatewayConfig, PairingUrl } from "@eidolon/protocol";
 import { VERSION } from "@eidolon/protocol";
+import type { Logger } from "../logging/logger.ts";
 import { getLocalIpAddresses } from "./broadcaster.ts";
 import type { TailscaleDetector } from "./tailscale.ts";
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Mask a token for safe logging: show first 4 characters followed by "...".
+ * Returns "[none]" for empty tokens.
+ */
+export function maskToken(token: string): string {
+  if (!token) return "[none]";
+  if (token.length <= 4) return "...";
+  return `${token.slice(0, 4)}...`;
+}
 
 // ---------------------------------------------------------------------------
 // Token generation
@@ -79,9 +94,14 @@ export function buildPairingJson(config: GatewayConfig, tailscale?: TailscaleDet
 
 /**
  * Format connection details as a human-readable table.
+ *
+ * The pairing URL is masked in the output — the full token is never shown.
+ * Use the debug-level log (via {@link logPairingUrl}) to see the full URL.
  */
 export function formatConnectionDetails(config: GatewayConfig, tailscale?: TailscaleDetector): string {
   const pairing = buildPairingUrl(config, tailscale);
+  // Build a masked URL for display — never show the full token
+  const maskedUrl = pairing.url.replace(/token=[^&]+/, `token=${maskToken(pairing.token)}`);
   const lines: string[] = [
     "",
     "  Connection Details",
@@ -97,8 +117,20 @@ export function formatConnectionDetails(config: GatewayConfig, tailscale?: Tails
   }
 
   lines.push("");
-  lines.push(`  Pairing URL:  ${pairing.url}`);
+  lines.push(`  Pairing URL:  ${maskedUrl}`);
   lines.push("");
 
   return lines.join("\n");
+}
+
+/**
+ * Log pairing URL at appropriate levels:
+ * - info: masked version (first 4 chars of token)
+ * - debug: full URL (for actual pairing/QR generation)
+ */
+export function logPairingUrl(logger: Logger, config: GatewayConfig, tailscale?: TailscaleDetector): void {
+  const pairing = buildPairingUrl(config, tailscale);
+  const maskedUrl = pairing.url.replace(/token=[^&]+/, `token=${maskToken(pairing.token)}`);
+  logger.info("pairing", `Pairing URL: ${maskedUrl}`);
+  logger.debug("pairing", `Full pairing URL: ${pairing.url}`);
 }
