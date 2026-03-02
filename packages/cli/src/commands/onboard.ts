@@ -321,6 +321,50 @@ function writeServerConfig(r: ServerSetupResult): void {
 }
 
 // ---------------------------------------------------------------------------
+// Client config writer + connection test
+// ---------------------------------------------------------------------------
+
+function writeClientConfig(host: string, port: number, token: string, tls: boolean): void {
+  const { existsSync, mkdirSync, writeFileSync } = require("node:fs") as typeof import("node:fs");
+  const configPath = getConfigPath();
+  const configDir = getConfigDir();
+  if (!existsSync(configDir)) mkdirSync(configDir, { recursive: true });
+
+  const config = {
+    role: "client",
+    server: {
+      host,
+      port,
+      token,
+      tls,
+    },
+    logging: { level: "info", format: "pretty" },
+  };
+
+  writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`, "utf-8");
+  console.log(`\n  Client config written to: ${configPath}`);
+}
+
+async function testConnection(host: string, _port: number, tls: boolean): Promise<void> {
+  console.log("\n--- Testing connection... ---\n");
+  const protocol = tls ? "https" : "http";
+  try {
+    const response = await fetch(`${protocol}://${host}:9419/health`, {
+      signal: AbortSignal.timeout(3000),
+    });
+    if (response.ok) {
+      const data = (await response.json()) as Record<string, unknown>;
+      console.log(`  Server is reachable! Status: ${String(data.status ?? "unknown")}`);
+    } else {
+      console.log(`  Server responded with HTTP ${response.status}. It may still work.`);
+    }
+  } catch {
+    console.log("  Could not reach health endpoint. Server may not be running yet.");
+    console.log("  The client apps will retry automatically when started.");
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Client onboard flow
 // ---------------------------------------------------------------------------
 
@@ -328,8 +372,12 @@ async function onboardClient(ask: AskFn): Promise<void> {
   console.log("\n--- Step 2: Searching for Eidolon servers... ---\n");
   console.log("  Listening for broadcast beacons (5 seconds)...");
 
-  // Try to discover servers via UDP broadcast
   const servers = await discoverServers();
+
+  let host: string | undefined;
+  let port = 8419;
+  let token = "";
+  let tls = false;
 
   if (servers.length > 0) {
     for (let i = 0; i < servers.length; i++) {
@@ -342,26 +390,52 @@ async function onboardClient(ask: AskFn): Promise<void> {
     const selIdx = (Number.parseInt(selInput, 10) || 1) - 1;
     const selected = servers[selIdx];
     if (selected) {
-      console.log(`\n  Selected: ${selected.host}:${selected.port}`);
-      const _token = await ask("Auth token: ");
-      console.log("\n--- Testing connection... ---\n");
-      console.log(`  Would connect to ${selected.host}:${selected.port} with provided token.`);
-      console.log("  (Full connection test requires the gateway client -- Phase 7+)");
-      console.log(`\n  Connection saved. Open the Desktop/iOS/Web app to get started!`);
-      return;
+      host = selected.tailscaleIp ?? selected.host;
+      port = selected.port;
+      console.log(`\n  Selected: ${host}:${port}`);
+      token = await ask("Auth token: ");
     }
-  } else {
-    console.log("  No servers found via broadcast.");
   }
 
-  const manual = await ask("\nEnter server address manually (host:port): ");
-  if (manual) {
-    const token = await ask("Auth token: ");
-    console.log(`\n  Configured connection to ${manual} (token: ${token ? "set" : "none"})`);
-    console.log("  Open the Desktop/iOS/Web app to get started!");
-  } else {
-    console.log("  No server configured. Run 'eidolon onboard' again when ready.");
+  if (!host) {
+    if (servers.length === 0) {
+      console.log("  No servers found via broadcast.");
+    }
+    const manual = await ask("\nEnter server address manually (host:port): ");
+    if (manual) {
+      const parts = manual.split(":");
+      host = parts[0] ?? manual;
+      if (parts.length > 1) {
+        port = Number.parseInt(parts[1] ?? "8419", 10) || 8419;
+      }
+      token = await ask("Auth token: ");
+    }
   }
+
+  if (!host) {
+    console.log("  No server configured. Run 'eidolon onboard' again when ready.");
+    return;
+  }
+
+  const tlsChoice = await ask("Server uses TLS? [y/N]: ");
+  tls = tlsChoice.toLowerCase() === "y";
+
+  // Write client config
+  writeClientConfig(host, port, token, tls);
+
+  // Try a quick connection test via HTTP health endpoint
+  await testConnection(host, port, tls);
+
+  console.log("\n--- Setup Complete ---\n");
+  console.log(`  Server:  ${tls ? "wss" : "ws"}://${host}:${port}`);
+  console.log(`  Token:   ${token ? "configured" : "not set"}`);
+  console.log(`  Config:  ${getConfigPath()}`);
+  console.log();
+  console.log("Next steps:");
+  console.log("  1. Open the Desktop, iOS, or Web app");
+  console.log("  2. The app will auto-connect using the saved config");
+  console.log("  3. Or run 'eidolon chat' for CLI interaction");
+  console.log();
 }
 
 interface DiscoveredServer {
@@ -453,7 +527,7 @@ export function registerOnboardCommand(program: Command): void {
           console.log("\n--- Step 8: Platform Service ---\n");
           const serviceChoice = await ask("Install as system service? [Y/n]: ");
           if (serviceChoice === "" || serviceChoice.toLowerCase() === "y") {
-            await installPlatformService();
+            await installPlatformService(result.masterKey);
           }
 
           // Doctor checks

@@ -181,6 +181,10 @@ export class DiscoveryBroadcaster {
         );
         this.mdnsProcess.unref();
         this.logger.debug("mdns", "Started avahi-publish-service advertisement");
+      } else if (process.platform === "win32") {
+        // Windows: no native mDNS tool available.
+        // Discovery relies on UDP broadcast (port 41920) and HTTP /discovery endpoint (port 9419).
+        this.logger.info("mdns", "mDNS not available on Windows; using UDP broadcast + HTTP discovery");
       }
     } catch {
       this.logger.debug("mdns", "mDNS advertisement not available on this platform");
