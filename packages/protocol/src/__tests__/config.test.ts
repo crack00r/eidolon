@@ -520,15 +520,15 @@ describe("LearningConfigSchema", () => {
     expect(result.success).toBe(false);
   });
 
-  test("cron regex rejects default schedule pattern (known schema bug)", () => {
-    // NOTE: The schema's default "*/6 * * * *" does not match its own regex.
-    // The regex ^(\*|[0-9,-/]+)(\s+(\*|[0-9,-/]+)){4}$ treats * as literal
-    // and doesn't handle */N notation. This test documents the behaviour.
-    const result = LearningConfigSchema.safeParse({
-      ...minimalLearning(),
-      sources: [{ type: "reddit", config: {}, schedule: "*/6 * * * *" }],
-    });
-    expect(result.success).toBe(false);
+  test("cron with step values passes (*/N notation)", () => {
+    const expressions = ["*/6 * * * *", "0 */2 * * *", "*/15 * * * 1-5"];
+    for (const schedule of expressions) {
+      const result = LearningConfigSchema.safeParse({
+        ...minimalLearning(),
+        sources: [{ type: "reddit", config: {}, schedule }],
+      });
+      expect(result.success).toBe(true);
+    }
   });
 
   test("learning budget defaults", () => {

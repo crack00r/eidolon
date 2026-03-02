@@ -163,7 +163,7 @@ export const LearningConfigSchema = z.object({
         schedule: z
           .string()
           .regex(
-            /^(\*|[0-9,-/]+)(\s+(\*|[0-9,-/]+)){4}$/,
+            /^([*0-9,-]+(?:\/[0-9]+)?)(\s+[*0-9,-]+(?:\/[0-9]+)?){4}$/,
             "Must be a valid cron expression with 5 fields (e.g. '*/6 * * * *')",
           )
           .default("*/6 * * * *"),

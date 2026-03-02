@@ -11,17 +11,31 @@ import { dirname, join } from "node:path";
 import type { EidolonConfig } from "@eidolon/protocol";
 import { SECRETS_DB_FILENAME, VERSION } from "@eidolon/protocol";
 import { BackupManager } from "../backup/manager.ts";
+import { MessageRouter } from "../channels/router.ts";
+import { ClaudeCodeManager } from "../claude/manager.ts";
 import { loadConfig } from "../config/loader.ts";
-import { getDataDir, getPidFilePath } from "../config/paths.ts";
+import { getConfigPath, getDataDir, getPidFilePath } from "../config/paths.ts";
 import { DatabaseManager } from "../database/manager.ts";
 import { DiscoveryBroadcaster } from "../discovery/broadcaster.ts";
 import { TailscaleDetector } from "../discovery/tailscale.ts";
 import { GatewayServer } from "../gateway/server.ts";
+import { GPUManager } from "../gpu/manager.ts";
 import { HealthChecker } from "../health/checker.ts";
+import {
+  createBunCheck,
+  createClaudeCheck,
+  createConfigCheck,
+  createDatabaseCheck,
+  createDiskCheck,
+} from "../health/checks/index.ts";
 import { createHealthServer } from "../health/server.ts";
 import type { Logger } from "../logging/logger.ts";
 import { createLogger } from "../logging/logger.ts";
 import { EventBus } from "../loop/event-bus.ts";
+import { SessionSupervisor } from "../loop/session-supervisor.ts";
+import { EmbeddingModel } from "../memory/embeddings.ts";
+import { MemorySearch } from "../memory/search.ts";
+import { MemoryStore } from "../memory/store.ts";
 import { TokenTracker } from "../metrics/token-tracker.ts";
 import { getMasterKey } from "../secrets/master-key.ts";
 import { SecretStore } from "../secrets/store.ts";
@@ -45,7 +59,14 @@ interface InitializedModules {
   healthServer?: ReturnType<typeof createHealthServer>;
   tokenTracker?: TokenTracker;
   backupManager?: BackupManager;
+  embeddingModel?: EmbeddingModel;
+  memoryStore?: MemoryStore;
+  memorySearch?: MemorySearch;
+  claudeManager?: ClaudeCodeManager;
   eventBus?: EventBus;
+  sessionSupervisor?: SessionSupervisor;
+  messageRouter?: MessageRouter;
+  gpuManager?: GPUManager;
   gatewayServer?: GatewayServer;
   tailscaleDetector?: TailscaleDetector;
   discoveryBroadcaster?: DiscoveryBroadcaster;
@@ -168,22 +189,25 @@ export class EidolonDaemon {
         name: "HealthChecker",
         fn: () => {
           const logger = this.modules.logger;
+          const config = this.modules.config;
           if (!logger) throw new Error("Logger required for HealthChecker");
 
           this.modules.healthChecker = new HealthChecker(logger);
 
-          // Register database health check
+          // Register individual health checks
+          this.modules.healthChecker.register("bun", createBunCheck());
+
           if (this.modules.dbManager) {
-            const dbManager = this.modules.dbManager;
-            this.modules.healthChecker.register("databases", async () => {
-              try {
-                dbManager.getStats();
-                return { name: "databases", status: "pass", message: "All databases accessible" };
-              } catch {
-                return { name: "databases", status: "fail", message: "Database access failed" };
-              }
-            });
+            this.modules.healthChecker.register("databases", createDatabaseCheck(this.modules.dbManager));
           }
+
+          const dataDir = config?.database.directory || getDataDir();
+          this.modules.healthChecker.register("disk", createDiskCheck(dataDir));
+
+          const configPath = options?.configPath ?? getConfigPath();
+          this.modules.healthChecker.register("config", createConfigCheck(configPath));
+
+          this.modules.healthChecker.register("claude", createClaudeCheck());
 
           logger.info("daemon", "HealthChecker initialized");
         },
@@ -238,28 +262,7 @@ export class EidolonDaemon {
         },
       });
 
-      // 10-14: Higher-phase modules (placeholder logging)
-      const placeholders = [
-        "EmbeddingModel (Phase 2)",
-        "MemoryStore (Phase 2)",
-        "MemorySearch (Phase 2)",
-        "ClaudeCodeManager (Phase 1)",
-        "SessionSupervisor (Phase 3)",
-        "CognitiveLoop (Phase 3)",
-        "Channels (Phase 4)",
-        "GPUManager (Phase 6)",
-      ];
-
-      for (const name of placeholders) {
-        initOrder.push({
-          name,
-          fn: () => {
-            this.modules.logger?.info("daemon", `${name} -- wiring deferred`);
-          },
-        });
-      }
-
-      // 15. EventBus (needs DatabaseManager, Logger)
+      // 10. EventBus (needs DatabaseManager, Logger) -- moved up since other modules depend on it
       initOrder.push({
         name: "EventBus",
         fn: () => {
@@ -272,7 +275,191 @@ export class EidolonDaemon {
         },
       });
 
-      // 16. GatewayServer (needs Config, Logger, EventBus)
+      // 11. EmbeddingModel (needs Logger, Config)
+      initOrder.push({
+        name: "EmbeddingModel",
+        fn: async () => {
+          const logger = this.modules.logger;
+          if (!logger) return;
+
+          try {
+            const memoryConfig = this.modules.config?.memory;
+            this.modules.embeddingModel = new EmbeddingModel(logger, {
+              modelId: memoryConfig?.embedding.model,
+              dimensions: memoryConfig?.embedding.dimensions,
+            });
+            // Note: we create the model but do NOT call initialize() here because
+            // it downloads/loads the ONNX model which can be slow. The model will
+            // be lazily initialized on first use.
+            logger.info("daemon", "EmbeddingModel created (lazy initialization)");
+          } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : String(err);
+            logger.warn("daemon", `EmbeddingModel skipped: ${message}`);
+          }
+        },
+      });
+
+      // 12. MemoryStore (needs DatabaseManager, Logger)
+      initOrder.push({
+        name: "MemoryStore",
+        fn: () => {
+          const dbManager = this.modules.dbManager;
+          const logger = this.modules.logger;
+          if (!dbManager || !logger) {
+            logger?.warn("daemon", "MemoryStore skipped: database not available");
+            return;
+          }
+
+          try {
+            this.modules.memoryStore = new MemoryStore(dbManager.memory, logger);
+            logger.info("daemon", "MemoryStore initialized");
+          } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : String(err);
+            logger.warn("daemon", `MemoryStore skipped: ${message}`);
+          }
+        },
+      });
+
+      // 13. MemorySearch (needs MemoryStore, EmbeddingModel, DatabaseManager, Logger)
+      initOrder.push({
+        name: "MemorySearch",
+        fn: () => {
+          const logger = this.modules.logger;
+          const store = this.modules.memoryStore;
+          const embedModel = this.modules.embeddingModel;
+          const dbManager = this.modules.dbManager;
+
+          if (!store || !embedModel || !dbManager || !logger) {
+            logger?.warn("daemon", "MemorySearch skipped: requires MemoryStore, EmbeddingModel, and DatabaseManager");
+            return;
+          }
+
+          try {
+            this.modules.memorySearch = new MemorySearch(store, embedModel, dbManager.memory, logger);
+            logger.info("daemon", "MemorySearch initialized");
+          } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : String(err);
+            logger.warn("daemon", `MemorySearch skipped: ${message}`);
+          }
+        },
+      });
+
+      // 14. ClaudeCodeManager (needs Logger, Config for brain.accounts)
+      initOrder.push({
+        name: "ClaudeCodeManager",
+        fn: () => {
+          const logger = this.modules.logger;
+          const config = this.modules.config;
+          if (!logger) return;
+
+          const accounts = config?.brain.accounts ?? [];
+          if (accounts.length === 0) {
+            logger.warn("daemon", "ClaudeCodeManager skipped: no API accounts configured in brain.accounts");
+            return;
+          }
+
+          try {
+            this.modules.claudeManager = new ClaudeCodeManager(logger);
+            logger.info("daemon", "ClaudeCodeManager initialized");
+          } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : String(err);
+            logger.warn("daemon", `ClaudeCodeManager skipped: ${message}`);
+          }
+        },
+      });
+
+      // 15. SessionSupervisor (needs Logger)
+      initOrder.push({
+        name: "SessionSupervisor",
+        fn: () => {
+          const logger = this.modules.logger;
+          if (!logger) return;
+
+          try {
+            this.modules.sessionSupervisor = new SessionSupervisor(logger);
+            logger.info("daemon", "SessionSupervisor initialized");
+          } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : String(err);
+            logger.warn("daemon", `SessionSupervisor skipped: ${message}`);
+          }
+        },
+      });
+
+      // 16. CognitiveLoop (requires EventBus, SessionSupervisor, EnergyBudget, StateMachine, etc.)
+      initOrder.push({
+        name: "CognitiveLoop",
+        fn: () => {
+          this.modules.logger?.info(
+            "daemon",
+            "CognitiveLoop skipped: requires full PEAR pipeline (StateMachine, PriorityEvaluator, EnergyBudget, RestCalculator)",
+          );
+        },
+      });
+
+      // 17. Channels / MessageRouter (needs EventBus, Logger, Config)
+      initOrder.push({
+        name: "Channels",
+        fn: () => {
+          const logger = this.modules.logger;
+          const config = this.modules.config;
+          const eventBus = this.modules.eventBus;
+
+          if (!eventBus || !logger) {
+            logger?.warn("daemon", "MessageRouter skipped: EventBus not available");
+            return;
+          }
+
+          try {
+            this.modules.messageRouter = new MessageRouter(eventBus, logger);
+
+            // Check for Telegram channel configuration
+            if (config?.channels.telegram?.enabled) {
+              logger.info("daemon", "Telegram channel configured but adapter not yet implemented");
+            } else {
+              logger.info("daemon", "No channel adapters configured");
+            }
+
+            logger.info("daemon", "MessageRouter initialized");
+          } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : String(err);
+            logger.warn("daemon", `MessageRouter skipped: ${message}`);
+          }
+        },
+      });
+
+      // 18. GPUManager (needs Config, Logger)
+      initOrder.push({
+        name: "GPUManager",
+        fn: () => {
+          const logger = this.modules.logger;
+          const config = this.modules.config;
+          if (!logger) return;
+
+          const workers = config?.gpu.workers ?? [];
+          if (workers.length === 0) {
+            logger.info("daemon", "GPUManager skipped: no GPU workers configured");
+            return;
+          }
+
+          try {
+            const firstWorker = workers[0];
+            if (!firstWorker) return;
+            this.modules.gpuManager = new GPUManager(
+              {
+                url: `http://${firstWorker.host}:${firstWorker.port}`,
+                apiKey: typeof firstWorker.token === "string" ? firstWorker.token : undefined,
+              },
+              logger,
+            );
+            logger.info("daemon", `GPUManager initialized (${workers.length} worker(s) configured)`);
+          } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : String(err);
+            logger.warn("daemon", `GPUManager skipped: ${message}`);
+          }
+        },
+      });
+
+      // 19. GatewayServer (needs Config, Logger, EventBus)
       initOrder.push({
         name: "GatewayServer",
         fn: async () => {
@@ -294,7 +481,7 @@ export class EidolonDaemon {
         },
       });
 
-      // 17. TailscaleDetector (needs Logger)
+      // 20. TailscaleDetector (needs Logger)
       initOrder.push({
         name: "TailscaleDetector",
         fn: () => {
@@ -307,7 +494,7 @@ export class EidolonDaemon {
         },
       });
 
-      // 18. DiscoveryBroadcaster (needs Config, Logger, TailscaleDetector)
+      // 21. DiscoveryBroadcaster (needs Config, Logger, TailscaleDetector)
       initOrder.push({
         name: "DiscoveryBroadcaster",
         fn: async () => {
