@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > [release-please](https://github.com/googleapis/release-please).
 > Do not edit manually.
 
+## [0.1.4](https://github.com/crack00r/eidolon/compare/v0.1.3...v0.1.4) (2026-03-02)
+
+
+### Features
+
+* **all:** fix cron regex, add health check modules, wire daemon placeholders, add test-database helper ([b0af387](https://github.com/crack00r/eidolon/commit/b0af387c11b68ebb787e07b7fc3bdb0c665db93d))
+
+
+### Bug Fixes
+
+* **core:** complete barrel exports for learning and knowledge-graph modules ([e127993](https://github.com/crack00r/eidolon/commit/e1279936a6dc030a21ccc00872156411965c7e7a))
+
 ## [0.1.3](https://github.com/crack00r/eidolon/compare/v0.1.2...v0.1.3) (2026-03-02)
 
 
