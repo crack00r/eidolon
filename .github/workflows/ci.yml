@@ -57,13 +57,13 @@ jobs:
         if: steps.check-packages.outputs.has_packages == 'true'
         run: pnpm -r typecheck
 
-      - name: Test
-        if: steps.check-packages.outputs.has_packages == 'true'
-        run: pnpm -r test
-
       - name: Build
         if: steps.check-packages.outputs.has_packages == 'true'
         run: pnpm -r build
+
+      - name: Test
+        if: steps.check-packages.outputs.has_packages == 'true'
+        run: pnpm -r test
 
       - name: No packages yet
         if: steps.check-packages.outputs.has_packages != 'true'
