@@ -1,4 +1,141 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, mock, test } from "bun:test";
+
+// ---------------------------------------------------------------------------
+// Mock @eidolon/core BEFORE any command imports (they transitively import it).
+// On Linux/CI, Bun's module resolution for re-exported .js → .ts fails when
+// the module is first loaded inside mock.module() boundaries. Providing all
+// exports here prevents SyntaxError for missing named exports.
+// ---------------------------------------------------------------------------
+
+mock.module("@eidolon/core", () => ({
+  // config
+  loadConfig: async () => ({ ok: true, value: {} }),
+  getConfigPath: () => "/tmp/eidolon-test/config.json",
+  getConfigDir: () => "/tmp/eidolon-test/config",
+  // directories
+  getDataDir: () => "/tmp/eidolon-test/data",
+  getLogDir: () => "/tmp/eidolon-test/logs",
+  // daemon
+  getPidFilePath: () => "/tmp/eidolon-test/eidolon.pid",
+  EidolonDaemon: class {},
+  // secrets
+  getMasterKey: () => ({ ok: true, value: Buffer.alloc(32) }),
+  SecretStore: class {
+    set() {
+      return { ok: true };
+    }
+    get() {
+      return { ok: true, value: "" };
+    }
+    delete() {
+      return { ok: true };
+    }
+    list() {
+      return { ok: true, value: [] };
+    }
+    close() {}
+  },
+  zeroBuffer: () => {},
+  generateMasterKey: () => "0".repeat(64),
+  KEY_LENGTH: 32,
+  PASSPHRASE_SALT: "eidolon-test-salt",
+  SCRYPT_N: 2,
+  SCRYPT_R: 8,
+  SCRYPT_P: 1,
+  SCRYPT_MAXMEM: 128 * 1024 * 1024,
+  // logging
+  createLogger: () => ({
+    info: () => {},
+    warn: () => {},
+    error: () => {},
+    debug: () => {},
+  }),
+  // database
+  DatabaseManager: class {
+    initialize() {
+      return { ok: true };
+    }
+    close() {}
+    get memory() {
+      return {};
+    }
+    get operational() {
+      return {};
+    }
+    get audit() {
+      return {};
+    }
+  },
+  // chat / claude
+  ClaudeCodeManager: class {
+    async isAvailable() {
+      return false;
+    }
+  },
+  AccountRotation: class {
+    selectAccount() {
+      return { ok: false, error: { message: "mock" } };
+    }
+  },
+  SessionManager: class {
+    create() {
+      return { ok: false, error: { message: "mock" } };
+    }
+    updateStatus() {}
+  },
+  WorkspacePreparer: class {
+    async prepare() {
+      return { ok: false, error: { message: "mock" } };
+    }
+    cleanup() {}
+  },
+  generateMcpConfig: async () => ({ ok: false }),
+  // memory
+  MemoryStore: class {
+    searchText() {
+      return { ok: true, value: [] };
+    }
+    list() {
+      return { ok: true, value: [] };
+    }
+    create() {
+      return { ok: false, error: { message: "mock" } };
+    }
+    delete() {
+      return { ok: false, error: { message: "mock" } };
+    }
+    count() {
+      return { ok: true, value: 0 };
+    }
+  },
+  MemorySearch: class {},
+  EmbeddingModel: class {},
+  GraphMemory: class {},
+  DocumentIndexer: class {
+    indexDirectory() {
+      return { ok: false, error: { message: "mock" } };
+    }
+    indexFile() {
+      return { ok: false, error: { message: "mock" } };
+    }
+  },
+  DreamRunner: class {
+    async runPhase() {
+      return { ok: false, error: { message: "mock" } };
+    }
+    async runAll() {
+      return { ok: false, error: { message: "mock" } };
+    }
+  },
+  HousekeepingPhase: class {},
+  RemPhase: class {},
+  NremPhase: class {},
+}));
+
+// ---------------------------------------------------------------------------
+// Import command registrations AFTER mocking
+// ---------------------------------------------------------------------------
+
 import { Command } from "commander";
 import { registerChannelCommand } from "../commands/channel.js";
 import { registerChatCommand } from "../commands/chat.js";
