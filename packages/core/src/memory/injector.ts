@@ -15,10 +15,10 @@ import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { EidolonError, Memory, MemoryType, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
-import type { Logger } from "../logging/logger.js";
-import type { KGRelationStore, TripleResult } from "./knowledge-graph/relations.js";
-import type { MemorySearch } from "./search.js";
-import type { MemoryStore } from "./store.js";
+import type { Logger } from "../logging/logger.ts";
+import type { KGRelationStore, TripleResult } from "./knowledge-graph/relations.ts";
+import type { MemorySearch } from "./search.ts";
+import type { MemoryStore } from "./store.ts";
 
 // ---------------------------------------------------------------------------
 // Options & context

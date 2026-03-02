@@ -8,7 +8,7 @@
  */
 
 import type { HealthCheck, HealthStatus } from "@eidolon/protocol";
-import type { Logger } from "../logging/logger.js";
+import type { Logger } from "../logging/logger.ts";
 
 interface RegisteredCheck {
   readonly name: string;

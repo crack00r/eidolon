@@ -3,9 +3,9 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync }
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DatabaseConfig } from "@eidolon/protocol";
-import { DatabaseManager } from "../../database/manager.js";
-import type { Logger } from "../../logging/logger.js";
-import { BackupManager } from "../manager.js";
+import { DatabaseManager } from "../../database/manager.ts";
+import type { Logger } from "../../logging/logger.ts";
+import { BackupManager } from "../manager.ts";
 
 function createSilentLogger(): Logger {
   const noop = (): void => {};

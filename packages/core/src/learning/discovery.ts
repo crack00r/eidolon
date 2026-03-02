@@ -9,8 +9,8 @@
 import type { Database } from "bun:sqlite";
 import type { EidolonError, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
-import type { Logger } from "../logging/logger.js";
-import type { SafetyLevel } from "./safety.js";
+import type { Logger } from "../logging/logger.ts";
+import type { SafetyLevel } from "./safety.ts";
 
 export type SourceType = "reddit" | "hackernews" | "github" | "rss" | "arxiv";
 

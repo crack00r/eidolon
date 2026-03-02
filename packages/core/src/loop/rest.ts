@@ -5,7 +5,7 @@
  * based on recent user activity, pending work, and time of day.
  */
 
-import type { Logger } from "../logging/logger.js";
+import type { Logger } from "../logging/logger.ts";
 
 export interface RestConfig {
   readonly activeMinMs: number;

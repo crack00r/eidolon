@@ -3,8 +3,8 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DatabaseConfig } from "@eidolon/protocol";
-import type { Logger } from "../../logging/logger.js";
-import { DatabaseManager } from "../manager.js";
+import type { Logger } from "../../logging/logger.ts";
+import { DatabaseManager } from "../manager.ts";
 
 function createSilentLogger(): Logger {
   const noop = (): void => {};

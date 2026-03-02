@@ -14,7 +14,7 @@ import {
   MemoryConfigSchema,
   SecretRefSchema,
   SecurityConfigSchema,
-} from "../config.js";
+} from "../config.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers -- minimal valid inputs for each schema

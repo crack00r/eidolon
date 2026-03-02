@@ -1,19 +1,19 @@
 import { Database } from "bun:sqlite";
 import { afterEach, describe, expect, test } from "bun:test";
 import type { BusEvent } from "@eidolon/protocol";
-import { runMigrations } from "../../database/migrations.js";
-import { OPERATIONAL_MIGRATIONS } from "../../database/schemas/operational.js";
-import type { Logger } from "../../logging/logger.js";
-import type { EventHandler } from "../cognitive-loop.js";
-import { CognitiveLoop } from "../cognitive-loop.js";
-import type { EnergyBudgetConfig } from "../energy-budget.js";
-import { EnergyBudget } from "../energy-budget.js";
-import { EventBus } from "../event-bus.js";
-import type { PriorityScore } from "../priority.js";
-import { PriorityEvaluator } from "../priority.js";
-import { DEFAULT_REST_CONFIG, RestCalculator } from "../rest.js";
-import { SessionSupervisor } from "../session-supervisor.js";
-import { CognitiveStateMachine } from "../state-machine.js";
+import { runMigrations } from "../../database/migrations.ts";
+import { OPERATIONAL_MIGRATIONS } from "../../database/schemas/operational.ts";
+import type { Logger } from "../../logging/logger.ts";
+import type { EventHandler } from "../cognitive-loop.ts";
+import { CognitiveLoop } from "../cognitive-loop.ts";
+import type { EnergyBudgetConfig } from "../energy-budget.ts";
+import { EnergyBudget } from "../energy-budget.ts";
+import { EventBus } from "../event-bus.ts";
+import type { PriorityScore } from "../priority.ts";
+import { PriorityEvaluator } from "../priority.ts";
+import { DEFAULT_REST_CONFIG, RestCalculator } from "../rest.ts";
+import { SessionSupervisor } from "../session-supervisor.ts";
+import { CognitiveStateMachine } from "../state-machine.ts";
 
 function createSilentLogger(): Logger {
   const noop = (): void => {};

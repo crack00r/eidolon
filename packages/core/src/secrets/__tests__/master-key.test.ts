@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test } from "bun:test";
-import { generateMasterKey, getMasterKey } from "../master-key.js";
+import { generateMasterKey, getMasterKey } from "../master-key.ts";
 
 describe("master-key", () => {
   const originalEnv = process.env.EIDOLON_MASTER_KEY;

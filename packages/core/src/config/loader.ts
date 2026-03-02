@@ -11,9 +11,9 @@
 import { join } from "node:path";
 import type { EidolonConfig, EidolonError, Result } from "@eidolon/protocol";
 import { createError, EidolonConfigSchema, Err, ErrorCode, Ok } from "@eidolon/protocol";
-import { resolveDefaults } from "./defaults.js";
-import { applyEnvOverrides } from "./env.js";
-import { getConfigPath } from "./paths.js";
+import { resolveDefaults } from "./defaults.ts";
+import { applyEnvOverrides } from "./env.ts";
+import { getConfigPath } from "./paths.ts";
 
 export async function loadConfig(path?: string): Promise<Result<EidolonConfig, EidolonError>> {
   // Determine config file path

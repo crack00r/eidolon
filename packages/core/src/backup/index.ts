@@ -1,1 +1,1 @@
-export { BackupManager } from "./manager.js";
+export { BackupManager } from "./manager.ts";

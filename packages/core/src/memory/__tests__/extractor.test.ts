@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import type { Logger } from "../../logging/logger.js";
-import type { ConversationTurn, ExtractedMemory, LlmExtractFn } from "../extractor.js";
-import { MemoryExtractor } from "../extractor.js";
+import type { Logger } from "../../logging/logger.ts";
+import type { ConversationTurn, ExtractedMemory, LlmExtractFn } from "../extractor.ts";
+import { MemoryExtractor } from "../extractor.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers

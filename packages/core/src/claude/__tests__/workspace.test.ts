@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
-import { createLogger } from "../../logging/logger.js";
-import type { WorkspaceContent } from "../workspace.js";
-import { WorkspacePreparer } from "../workspace.js";
+import { createLogger } from "../../logging/logger.ts";
+import type { WorkspaceContent } from "../workspace.ts";
+import { WorkspacePreparer } from "../workspace.ts";
 
 const TEST_DIR = join(import.meta.dir, ".tmp-workspace-test");
 const logger = createLogger({ level: "error", format: "json", directory: "", maxSizeMb: 10, maxFiles: 1 });

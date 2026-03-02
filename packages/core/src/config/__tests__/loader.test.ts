@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createTestConfig } from "@eidolon/test-utils";
-import { loadConfig } from "../loader.js";
+import { loadConfig } from "../loader.ts";
 
 describe("loadConfig", () => {
   let tempDir: string;

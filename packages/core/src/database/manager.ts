@@ -9,12 +9,12 @@ import type { Database } from "bun:sqlite";
 import { basename, join } from "node:path";
 import type { DatabaseConfig, EidolonError, Result } from "@eidolon/protocol";
 import { AUDIT_DB_FILENAME, MEMORY_DB_FILENAME, Ok, OPERATIONAL_DB_FILENAME } from "@eidolon/protocol";
-import type { Logger } from "../logging/logger.js";
-import { createConnection } from "./connection.js";
-import { runMigrations } from "./migrations.js";
-import { AUDIT_MIGRATIONS } from "./schemas/audit.js";
-import { MEMORY_MIGRATIONS } from "./schemas/memory.js";
-import { OPERATIONAL_MIGRATIONS } from "./schemas/operational.js";
+import type { Logger } from "../logging/logger.ts";
+import { createConnection } from "./connection.ts";
+import { runMigrations } from "./migrations.ts";
+import { AUDIT_MIGRATIONS } from "./schemas/audit.ts";
+import { MEMORY_MIGRATIONS } from "./schemas/memory.ts";
+import { OPERATIONAL_MIGRATIONS } from "./schemas/operational.ts";
 
 export interface DbStats {
   readonly path: string;

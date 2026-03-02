@@ -8,7 +8,7 @@
 import type { Database } from "bun:sqlite";
 import type { DatabaseName, EidolonError, Migration, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
-import type { Logger } from "../logging/logger.js";
+import type { Logger } from "../logging/logger.ts";
 
 /**
  * Run migrations on a database. Applies only migrations not yet applied.

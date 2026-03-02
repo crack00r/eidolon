@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import type { Logger } from "../../logging/logger.js";
-import { SafetyClassifier } from "../safety.js";
+import type { Logger } from "../../logging/logger.ts";
+import { SafetyClassifier } from "../safety.ts";
 
 function createSilentLogger(): Logger {
   const noop = (): void => {};

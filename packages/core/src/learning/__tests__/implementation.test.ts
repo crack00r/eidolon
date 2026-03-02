@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import type { EidolonError, Result } from "@eidolon/protocol";
 import { Err, Ok } from "@eidolon/protocol";
-import type { Logger } from "../../logging/logger.js";
-import { ImplementationPipeline, type ImplementFn, type RunCommandFn } from "../implementation.js";
+import type { Logger } from "../../logging/logger.ts";
+import { ImplementationPipeline, type ImplementFn, type RunCommandFn } from "../implementation.ts";
 
 function createSilentLogger(): Logger {
   const noop = (): void => {};

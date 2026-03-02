@@ -21,7 +21,7 @@ import {
 } from "@eidolon/core";
 import type { EidolonConfig, MemoryLayer, MemoryType } from "@eidolon/protocol";
 import type { Command } from "commander";
-import { formatTable } from "../utils/formatter.js";
+import { formatTable } from "../utils/formatter.ts";
 
 // ---------------------------------------------------------------------------
 // Constants

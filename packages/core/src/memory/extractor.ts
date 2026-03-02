@@ -9,8 +9,8 @@
 
 import type { EidolonError, MemoryType, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
-import type { Logger } from "../logging/logger.js";
-import type { CreateMemoryInput } from "./store.js";
+import type { Logger } from "../logging/logger.ts";
+import type { CreateMemoryInput } from "./store.ts";
 
 // ---------------------------------------------------------------------------
 // Types

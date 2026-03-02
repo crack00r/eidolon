@@ -1,7 +1,7 @@
 import { Database } from "bun:sqlite";
 import { afterEach, describe, expect, test } from "bun:test";
-import type { Logger } from "../../logging/logger.js";
-import { DiscoveryEngine } from "../discovery.js";
+import type { Logger } from "../../logging/logger.ts";
+import { DiscoveryEngine } from "../discovery.ts";
 
 function createSilentLogger(): Logger {
   const noop = (): void => {};

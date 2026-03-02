@@ -8,8 +8,8 @@
 
 import type { EidolonError, Memory, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
-import type { Logger } from "../../logging/logger.js";
-import type { MemoryStore } from "../store.js";
+import type { Logger } from "../../logging/logger.ts";
+import type { MemoryStore } from "../store.ts";
 
 // ---------------------------------------------------------------------------
 // Types

@@ -1,7 +1,7 @@
 import { Database } from "bun:sqlite";
 import { afterEach, describe, expect, test } from "bun:test";
-import type { Logger } from "../../logging/logger.js";
-import { TaskScheduler } from "../scheduler.js";
+import type { Logger } from "../../logging/logger.ts";
+import { TaskScheduler } from "../scheduler.ts";
 
 function createSilentLogger(): Logger {
   const noop = (): void => {};

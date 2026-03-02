@@ -5,7 +5,7 @@
  * exceeding the configured failure threshold.
  */
 
-import type { Logger } from "../logging/logger.js";
+import type { Logger } from "../logging/logger.ts";
 
 // ---------------------------------------------------------------------------
 // Types

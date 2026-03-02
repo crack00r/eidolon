@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { CircuitBreakerConfig } from "@eidolon/protocol";
-import type { Logger } from "../../logging/logger.js";
-import { CircuitBreaker } from "../circuit-breaker.js";
+import type { Logger } from "../../logging/logger.ts";
+import { CircuitBreaker } from "../circuit-breaker.ts";
 
 function createSilentLogger(): Logger {
   const noop = (): void => {};

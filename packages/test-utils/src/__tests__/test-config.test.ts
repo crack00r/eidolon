@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { createTestConfig } from "../test-config.js";
+import { createTestConfig } from "../test-config.ts";
 
 describe("createTestConfig", () => {
   test("creates valid config with defaults", () => {

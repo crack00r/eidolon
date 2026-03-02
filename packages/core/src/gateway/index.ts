@@ -1,6 +1,6 @@
 // Gateway -- WebSocket server for client communication via JSON-RPC 2.0
 
-export { certExists, generateSelfSignedCert } from "./cert-manager.js";
+export { certExists, generateSelfSignedCert } from "./cert-manager.ts";
 export {
   createJsonRpcError,
   createJsonRpcResponse,
@@ -12,6 +12,6 @@ export {
   JSON_RPC_PARSE_ERROR,
   parseJsonRpcRequest,
   validateMethod,
-} from "./protocol.js";
-export { AuthRateLimiter, DEFAULT_RATE_LIMIT_CONFIG, type RateLimitConfig } from "./rate-limiter.js";
-export { constantTimeCompare, GatewayServer, type MethodHandler } from "./server.js";
+} from "./protocol.ts";
+export { AuthRateLimiter, DEFAULT_RATE_LIMIT_CONFIG, type RateLimitConfig } from "./rate-limiter.ts";
+export { constantTimeCompare, GatewayServer, type MethodHandler } from "./server.ts";

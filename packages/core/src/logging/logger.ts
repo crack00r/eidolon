@@ -6,7 +6,7 @@
  */
 
 import type { LogEntry, LoggingConfig, LogLevel } from "@eidolon/protocol";
-import { formatLogEntry } from "./formatter.js";
+import { formatLogEntry } from "./formatter.ts";
 
 export interface Logger {
   debug(module: string, message: string, data?: Record<string, unknown>): void;

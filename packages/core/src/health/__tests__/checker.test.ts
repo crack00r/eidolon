@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { HealthCheck } from "@eidolon/protocol";
-import type { Logger } from "../../logging/logger.js";
-import { HealthChecker } from "../checker.js";
+import type { Logger } from "../../logging/logger.ts";
+import { HealthChecker } from "../checker.ts";
 
 function createSilentLogger(): Logger {
   const noop = (): void => {};

@@ -7,8 +7,8 @@
 
 import type { Channel, EidolonError, InboundMessage, OutboundMessage, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
-import type { Logger } from "../logging/logger.js";
-import type { EventBus } from "../loop/event-bus.js";
+import type { Logger } from "../logging/logger.ts";
+import type { EventBus } from "../loop/event-bus.ts";
 
 export class MessageRouter {
   private readonly channels: Map<string, Channel> = new Map();

@@ -8,7 +8,7 @@ import { getDataDir, getMasterKey, SecretStore, zeroBuffer } from "@eidolon/core
 import type { SecretMetadata } from "@eidolon/protocol";
 import { SECRETS_DB_FILENAME } from "@eidolon/protocol";
 import type { Command } from "commander";
-import { formatTable } from "../utils/formatter.js";
+import { formatTable } from "../utils/formatter.ts";
 
 /**
  * Open the secret store with the master key from the environment.

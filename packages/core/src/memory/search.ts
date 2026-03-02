@@ -13,9 +13,9 @@
 import type { Database } from "bun:sqlite";
 import type { EidolonError, Memory, MemorySearchQuery, MemorySearchResult, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
-import type { Logger } from "../logging/logger.js";
-import { EmbeddingModel } from "./embeddings.js";
-import type { MemoryStore } from "./store.js";
+import type { Logger } from "../logging/logger.ts";
+import { EmbeddingModel } from "./embeddings.ts";
+import type { MemoryStore } from "./store.ts";
 
 // ---------------------------------------------------------------------------
 // Options

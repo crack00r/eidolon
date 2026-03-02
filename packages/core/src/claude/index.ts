@@ -1,8 +1,8 @@
-export { AccountRotation } from "./account-rotation.js";
-export { buildClaudeArgs } from "./args.js";
-export { ClaudeCodeManager } from "./manager.js";
-export { generateMcpConfig } from "./mcp.js";
-export { parseStreamLine, parseStreamOutput } from "./parser.js";
-export { SessionManager } from "./session.js";
-export type { WorkspaceContent } from "./workspace.js";
-export { WorkspacePreparer } from "./workspace.js";
+export { AccountRotation } from "./account-rotation.ts";
+export { buildClaudeArgs } from "./args.ts";
+export { ClaudeCodeManager } from "./manager.ts";
+export { generateMcpConfig } from "./mcp.ts";
+export { parseStreamLine, parseStreamOutput } from "./parser.ts";
+export { SessionManager } from "./session.ts";
+export type { WorkspaceContent } from "./workspace.ts";
+export { WorkspacePreparer } from "./workspace.ts";

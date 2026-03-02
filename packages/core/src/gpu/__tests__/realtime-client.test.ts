@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import { ErrorCode } from "@eidolon/protocol";
-import type { Logger } from "../../logging/logger.js";
-import { RealtimeVoiceClient } from "../realtime-client.js";
+import type { Logger } from "../../logging/logger.ts";
+import { RealtimeVoiceClient } from "../realtime-client.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers

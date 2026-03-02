@@ -8,7 +8,7 @@
 import type { Database } from "bun:sqlite";
 import type { CostSummary, EidolonError, Result, SessionType, TokenUsage } from "@eidolon/protocol";
 import { createError, DEFAULT_MODEL_PRICING, Err, ErrorCode, MODEL_PRICING, Ok } from "@eidolon/protocol";
-import type { Logger } from "../logging/logger.js";
+import type { Logger } from "../logging/logger.ts";
 
 /** Period durations in milliseconds. */
 const PERIOD_MS: Record<"hour" | "day" | "week" | "month", number> = {

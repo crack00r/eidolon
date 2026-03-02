@@ -11,8 +11,8 @@
 
 import { type FSWatcher, statSync, watch } from "node:fs";
 import type { EidolonConfig } from "@eidolon/protocol";
-import type { Logger } from "../logging/logger.js";
-import { loadConfig } from "./loader.js";
+import type { Logger } from "../logging/logger.ts";
+import { loadConfig } from "./loader.ts";
 
 /**
  * Security-critical config paths that cannot change via hot-reload.

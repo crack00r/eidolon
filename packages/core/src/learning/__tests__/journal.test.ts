@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import type { Logger } from "../../logging/logger.js";
-import { LearningJournal } from "../journal.js";
+import type { Logger } from "../../logging/logger.ts";
+import { LearningJournal } from "../journal.ts";
 
 function createSilentLogger(): Logger {
   const noop = (): void => {};

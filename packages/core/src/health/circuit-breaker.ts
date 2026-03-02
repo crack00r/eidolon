@@ -10,7 +10,7 @@
 
 import type { CircuitBreakerConfig, CircuitBreakerStatus, CircuitState, EidolonError, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
-import type { Logger } from "../logging/logger.js";
+import type { Logger } from "../logging/logger.ts";
 
 export class CircuitBreaker {
   private state: CircuitState = "closed";

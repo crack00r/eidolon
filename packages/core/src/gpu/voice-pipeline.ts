@@ -7,9 +7,9 @@
 
 import type { EidolonError, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
-import type { Logger } from "../logging/logger.js";
-import type { STTClient } from "./stt-client.js";
-import type { TTSClient } from "./tts-client.js";
+import type { Logger } from "../logging/logger.ts";
+import type { STTClient } from "./stt-client.ts";
+import type { TTSClient } from "./tts-client.ts";
 
 // ---------------------------------------------------------------------------
 // Types

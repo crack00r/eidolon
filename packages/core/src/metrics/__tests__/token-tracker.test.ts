@@ -1,8 +1,8 @@
 import { Database } from "bun:sqlite";
 import { afterEach, describe, expect, test } from "bun:test";
 import type { TokenUsage } from "@eidolon/protocol";
-import type { Logger } from "../../logging/logger.js";
-import { calculateCost, TokenTracker } from "../token-tracker.js";
+import type { Logger } from "../../logging/logger.ts";
+import { calculateCost, TokenTracker } from "../token-tracker.ts";
 
 function createSilentLogger(): Logger {
   const noop = (): void => {};

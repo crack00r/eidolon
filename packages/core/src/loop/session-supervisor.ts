@@ -7,7 +7,7 @@
 
 import type { EidolonError, Result, SessionType } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
-import type { Logger } from "../logging/logger.js";
+import type { Logger } from "../logging/logger.ts";
 
 export interface SessionSlot {
   readonly sessionId: string;

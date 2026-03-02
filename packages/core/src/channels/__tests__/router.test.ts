@@ -2,11 +2,11 @@ import { Database } from "bun:sqlite";
 import { afterEach, describe, expect, test } from "bun:test";
 import type { Channel, ChannelCapabilities, InboundMessage, OutboundMessage } from "@eidolon/protocol";
 import { Ok } from "@eidolon/protocol";
-import { runMigrations } from "../../database/migrations.js";
-import { OPERATIONAL_MIGRATIONS } from "../../database/schemas/operational.js";
-import type { Logger } from "../../logging/logger.js";
-import { EventBus } from "../../loop/event-bus.js";
-import { MessageRouter } from "../router.js";
+import { runMigrations } from "../../database/migrations.ts";
+import { OPERATIONAL_MIGRATIONS } from "../../database/schemas/operational.ts";
+import type { Logger } from "../../logging/logger.ts";
+import { EventBus } from "../../loop/event-bus.ts";
+import { MessageRouter } from "../router.ts";
 
 function createSilentLogger(): Logger {
   const noop = (): void => {};

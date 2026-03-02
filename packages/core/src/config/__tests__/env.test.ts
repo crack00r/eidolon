@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { createTestConfig } from "@eidolon/test-utils";
-import { applyEnvOverrides } from "../env.js";
+import { applyEnvOverrides } from "../env.ts";
 
 describe("applyEnvOverrides", () => {
   const savedEnv: Record<string, string | undefined> = {};

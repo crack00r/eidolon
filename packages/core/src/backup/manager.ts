@@ -17,8 +17,8 @@ import {
   Ok,
   OPERATIONAL_DB_FILENAME,
 } from "@eidolon/protocol";
-import type { DatabaseManager } from "../database/manager.js";
-import type { Logger } from "../logging/logger.js";
+import type { DatabaseManager } from "../database/manager.ts";
+import type { Logger } from "../logging/logger.ts";
 
 /** Milliseconds in one day, used for backup age calculations. */
 const MS_PER_DAY = 86_400_000;

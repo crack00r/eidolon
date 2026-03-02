@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import type { Logger } from "../../logging/logger.js";
-import { DeduplicationChecker } from "../deduplication.js";
-import { RelevanceFilter } from "../relevance.js";
+import type { Logger } from "../../logging/logger.ts";
+import { DeduplicationChecker } from "../deduplication.ts";
+import { RelevanceFilter } from "../relevance.ts";
 
 function createSilentLogger(): Logger {
   const noop = (): void => {};

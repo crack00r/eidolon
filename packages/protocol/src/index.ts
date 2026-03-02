@@ -2,8 +2,8 @@
 // This package has ZERO runtime dependencies (except zod).
 // Every cross-package type lives here.
 
-export * from "./config.js";
-export * from "./constants.js";
-export * from "./errors.js";
-export * from "./result.js";
-export * from "./types/index.js";
+export * from "./config.ts";
+export * from "./constants.ts";
+export * from "./errors.ts";
+export * from "./result.ts";
+export * from "./types/index.ts";

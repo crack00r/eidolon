@@ -5,16 +5,16 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { EidolonError, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode } from "@eidolon/protocol";
-import { runMigrations } from "../../database/migrations.js";
-import { MEMORY_MIGRATIONS } from "../../database/schemas/memory.js";
-import type { Logger } from "../../logging/logger.js";
-import type { EmbeddingModel, EmbeddingPrefix } from "../embeddings.js";
-import { MemoryInjector } from "../injector.js";
-import { KGEntityStore } from "../knowledge-graph/entities.js";
-import { KGRelationStore } from "../knowledge-graph/relations.js";
-import { MemorySearch } from "../search.js";
-import type { CreateMemoryInput } from "../store.js";
-import { MemoryStore } from "../store.js";
+import { runMigrations } from "../../database/migrations.ts";
+import { MEMORY_MIGRATIONS } from "../../database/schemas/memory.ts";
+import type { Logger } from "../../logging/logger.ts";
+import type { EmbeddingModel, EmbeddingPrefix } from "../embeddings.ts";
+import { MemoryInjector } from "../injector.ts";
+import { KGEntityStore } from "../knowledge-graph/entities.ts";
+import { KGRelationStore } from "../knowledge-graph/relations.ts";
+import { MemorySearch } from "../search.ts";
+import type { CreateMemoryInput } from "../store.ts";
+import { MemoryStore } from "../store.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers

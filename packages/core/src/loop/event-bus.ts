@@ -10,7 +10,7 @@ import type { Database } from "bun:sqlite";
 import { randomUUID } from "node:crypto";
 import type { BusEvent, EidolonError, EventPriority, EventType, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
-import type { Logger } from "../logging/logger.js";
+import type { Logger } from "../logging/logger.ts";
 
 type EventHandler = (event: BusEvent) => void | Promise<void>;
 

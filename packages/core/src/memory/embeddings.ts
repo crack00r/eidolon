@@ -10,8 +10,8 @@
 import { join } from "node:path";
 import type { EidolonError, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
-import { getCacheDir } from "../config/paths.js";
-import type { Logger } from "../logging/logger.js";
+import { getCacheDir } from "../config/paths.ts";
+import type { Logger } from "../logging/logger.ts";
 
 // ---------------------------------------------------------------------------
 // Types

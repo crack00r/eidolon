@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { ClaudeSessionOptions } from "@eidolon/protocol";
-import { buildClaudeArgs } from "../args.js";
+import { buildClaudeArgs } from "../args.ts";
 
 function makeOptions(overrides: Partial<ClaudeSessionOptions> = {}): ClaudeSessionOptions {
   return {

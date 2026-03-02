@@ -1,2 +1,2 @@
-export type { ApnsConfig, ApnsPayload } from "./apns.js";
-export { ApnsClient } from "./apns.js";
+export type { ApnsConfig, ApnsPayload } from "./apns.ts";
+export { ApnsClient } from "./apns.ts";

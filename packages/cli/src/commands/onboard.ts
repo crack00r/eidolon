@@ -29,7 +29,7 @@ import { SECRETS_DB_FILENAME, VERSION } from "@eidolon/protocol";
 const SCRYPT_PARAMS = { N: SCRYPT_N, r: SCRYPT_R, p: SCRYPT_P, maxmem: SCRYPT_MAXMEM };
 
 import type { Command } from "commander";
-import { formatCheck } from "../utils/formatter.js";
+import { formatCheck } from "../utils/formatter.ts";
 
 // ---------------------------------------------------------------------------
 // ASCII banner

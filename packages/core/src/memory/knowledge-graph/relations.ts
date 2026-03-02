@@ -10,7 +10,7 @@ import type { Database } from "bun:sqlite";
 import { randomUUID } from "node:crypto";
 import type { EidolonError, KGRelation, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
-import type { Logger } from "../../logging/logger.js";
+import type { Logger } from "../../logging/logger.ts";
 
 // ---------------------------------------------------------------------------
 // Types

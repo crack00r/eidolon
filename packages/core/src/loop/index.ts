@@ -5,15 +5,15 @@ export type {
   EventHandler,
   EventHandlerResult,
   LoopStats,
-} from "./cognitive-loop.js";
-export { CognitiveLoop } from "./cognitive-loop.js";
-export type { BudgetCategory, EnergyBudgetConfig } from "./energy-budget.js";
-export { EnergyBudget } from "./energy-budget.js";
-export { EventBus } from "./event-bus.js";
-export type { PriorityScore } from "./priority.js";
-export { PriorityEvaluator } from "./priority.js";
-export type { RestConfig, RestContext } from "./rest.js";
-export { DEFAULT_REST_CONFIG, RestCalculator } from "./rest.js";
-export { SessionSupervisor } from "./session-supervisor.js";
-export type { ActionType, CognitivePhase, CognitiveState } from "./state-machine.js";
-export { CognitiveStateMachine } from "./state-machine.js";
+} from "./cognitive-loop.ts";
+export { CognitiveLoop } from "./cognitive-loop.ts";
+export type { BudgetCategory, EnergyBudgetConfig } from "./energy-budget.ts";
+export { EnergyBudget } from "./energy-budget.ts";
+export { EventBus } from "./event-bus.ts";
+export type { PriorityScore } from "./priority.ts";
+export { PriorityEvaluator } from "./priority.ts";
+export type { RestConfig, RestContext } from "./rest.ts";
+export { DEFAULT_REST_CONFIG, RestCalculator } from "./rest.ts";
+export { SessionSupervisor } from "./session-supervisor.ts";
+export type { ActionType, CognitivePhase, CognitiveState } from "./state-machine.ts";
+export { CognitiveStateMachine } from "./state-machine.ts";

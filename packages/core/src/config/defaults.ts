@@ -4,7 +4,7 @@
  */
 
 import type { EidolonConfig } from "@eidolon/protocol";
-import { getDataDir, getLogDir, getPidFilePath } from "./paths.js";
+import { getDataDir, getLogDir, getPidFilePath } from "./paths.ts";
 
 export function resolveDefaults(config: EidolonConfig): EidolonConfig {
   return {

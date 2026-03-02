@@ -10,17 +10,17 @@ import { existsSync, lstatSync, mkdirSync, readFileSync, renameSync, unlinkSync,
 import { dirname, join } from "node:path";
 import type { EidolonConfig } from "@eidolon/protocol";
 import { SECRETS_DB_FILENAME, VERSION } from "@eidolon/protocol";
-import { BackupManager } from "../backup/manager.js";
-import { loadConfig } from "../config/loader.js";
-import { getDataDir, getPidFilePath } from "../config/paths.js";
-import { DatabaseManager } from "../database/manager.js";
-import { HealthChecker } from "../health/checker.js";
-import { createHealthServer } from "../health/server.js";
-import type { Logger } from "../logging/logger.js";
-import { createLogger } from "../logging/logger.js";
-import { TokenTracker } from "../metrics/token-tracker.js";
-import { getMasterKey } from "../secrets/master-key.js";
-import { SecretStore } from "../secrets/store.js";
+import { BackupManager } from "../backup/manager.ts";
+import { loadConfig } from "../config/loader.ts";
+import { getDataDir, getPidFilePath } from "../config/paths.ts";
+import { DatabaseManager } from "../database/manager.ts";
+import { HealthChecker } from "../health/checker.ts";
+import { createHealthServer } from "../health/server.ts";
+import type { Logger } from "../logging/logger.ts";
+import { createLogger } from "../logging/logger.ts";
+import { TokenTracker } from "../metrics/token-tracker.ts";
+import { getMasterKey } from "../secrets/master-key.ts";
+import { SecretStore } from "../secrets/store.ts";
 
 // ---------------------------------------------------------------------------
 // Types

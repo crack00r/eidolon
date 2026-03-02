@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { parseStreamLine, parseStreamOutput } from "../parser.js";
+import { parseStreamLine, parseStreamOutput } from "../parser.ts";
 
 describe("parseStreamLine", () => {
   test("parses assistant text message", () => {

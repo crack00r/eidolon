@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import type { LogEntry, LoggingConfig } from "@eidolon/protocol";
-import { formatLogEntry } from "../formatter.js";
-import { createLogger } from "../logger.js";
+import { formatLogEntry } from "../formatter.ts";
+import { createLogger } from "../logger.ts";
 
 function captureStdout(): { getOutput: () => string; restore: () => void } {
   let output = "";

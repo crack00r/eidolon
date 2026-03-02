@@ -1,8 +1,8 @@
 import { Database } from "bun:sqlite";
 import { afterEach, describe, expect, test } from "bun:test";
 import type { Migration } from "@eidolon/protocol";
-import type { Logger } from "../../logging/logger.js";
-import { runMigrations } from "../migrations.js";
+import type { Logger } from "../../logging/logger.ts";
+import { runMigrations } from "../migrations.ts";
 
 const TEST_MIGRATIONS: ReadonlyArray<Migration> = [
   {

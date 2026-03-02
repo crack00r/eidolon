@@ -8,8 +8,8 @@
  * Binds to 127.0.0.1 by default for security (internal use only).
  */
 
-import type { Logger } from "../logging/logger.js";
-import type { HealthChecker } from "./checker.js";
+import type { Logger } from "../logging/logger.ts";
+import type { HealthChecker } from "./checker.ts";
 
 export interface HealthServerOptions {
   readonly port: number;

@@ -22,8 +22,8 @@ import type {
   GatewayPushEvent,
   GatewayPushType,
 } from "@eidolon/protocol";
-import type { Logger } from "../logging/logger.js";
-import type { EventBus } from "../loop/event-bus.js";
+import type { Logger } from "../logging/logger.ts";
+import type { EventBus } from "../loop/event-bus.ts";
 import {
   createJsonRpcError,
   createJsonRpcResponse,
@@ -32,8 +32,8 @@ import {
   JSON_RPC_INVALID_PARAMS,
   JSON_RPC_METHOD_NOT_FOUND,
   parseJsonRpcRequest,
-} from "./protocol.js";
-import { AuthRateLimiter } from "./rate-limiter.js";
+} from "./protocol.ts";
+import { AuthRateLimiter } from "./rate-limiter.ts";
 
 // ---------------------------------------------------------------------------
 // Types

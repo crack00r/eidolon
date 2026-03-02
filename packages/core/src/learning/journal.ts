@@ -10,7 +10,7 @@
  * and can be queried historically. See ROADMAP.md Phase 3.
  */
 
-import type { Logger } from "../logging/logger.js";
+import type { Logger } from "../logging/logger.ts";
 
 export type JournalEntryType = "discovery" | "evaluation" | "approval" | "rejection" | "implementation" | "error";
 

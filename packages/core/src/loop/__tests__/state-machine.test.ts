@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import type { Logger } from "../../logging/logger.js";
-import { CognitiveStateMachine } from "../state-machine.js";
+import type { Logger } from "../../logging/logger.ts";
+import { CognitiveStateMachine } from "../state-machine.ts";
 
 function createSilentLogger(): Logger {
   const noop = (): void => {};

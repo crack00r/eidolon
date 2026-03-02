@@ -8,13 +8,13 @@
 
 import type { BusEvent, EidolonError, Result } from "@eidolon/protocol";
 import { Err, Ok } from "@eidolon/protocol";
-import type { Logger } from "../logging/logger.js";
-import type { BudgetCategory, EnergyBudget } from "./energy-budget.js";
-import type { EventBus } from "./event-bus.js";
-import type { PriorityEvaluator, PriorityScore } from "./priority.js";
-import type { RestCalculator } from "./rest.js";
-import type { SessionSupervisor } from "./session-supervisor.js";
-import type { ActionType, CognitiveStateMachine } from "./state-machine.js";
+import type { Logger } from "../logging/logger.ts";
+import type { BudgetCategory, EnergyBudget } from "./energy-budget.ts";
+import type { EventBus } from "./event-bus.ts";
+import type { PriorityEvaluator, PriorityScore } from "./priority.ts";
+import type { RestCalculator } from "./rest.ts";
+import type { SessionSupervisor } from "./session-supervisor.ts";
+import type { ActionType, CognitiveStateMachine } from "./state-machine.ts";
 
 /** Handler function for processing events. Injected dependency. */
 export type EventHandler = (event: BusEvent, priority: PriorityScore) => Promise<EventHandlerResult>;

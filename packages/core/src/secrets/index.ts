@@ -1,4 +1,4 @@
-export type { EncryptedData } from "./crypto.js";
+export type { EncryptedData } from "./crypto.ts";
 export {
   decrypt,
   deriveKey,
@@ -9,6 +9,6 @@ export {
   SCRYPT_N,
   SCRYPT_P,
   SCRYPT_R,
-} from "./crypto.js";
-export { generateMasterKey, getMasterKey, zeroBuffer } from "./master-key.js";
-export { SecretStore } from "./store.js";
+} from "./crypto.ts";
+export { generateMasterKey, getMasterKey, zeroBuffer } from "./master-key.ts";
+export { SecretStore } from "./store.ts";

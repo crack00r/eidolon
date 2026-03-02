@@ -1,10 +1,10 @@
 import { Database } from "bun:sqlite";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { runMigrations } from "../../database/migrations.js";
-import { MEMORY_MIGRATIONS } from "../../database/schemas/memory.js";
-import type { Logger } from "../../logging/logger.js";
-import type { CreateMemoryInput } from "../store.js";
-import { MemoryStore } from "../store.js";
+import { runMigrations } from "../../database/migrations.ts";
+import { MEMORY_MIGRATIONS } from "../../database/schemas/memory.ts";
+import type { Logger } from "../../logging/logger.ts";
+import type { CreateMemoryInput } from "../store.ts";
+import { MemoryStore } from "../store.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers

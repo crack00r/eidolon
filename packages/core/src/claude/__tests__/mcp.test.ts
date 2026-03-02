@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import type { BrainConfig } from "@eidolon/protocol";
-import { generateMcpConfig } from "../mcp.js";
+import { generateMcpConfig } from "../mcp.ts";
 
 const TEST_DIR = join(import.meta.dir, ".tmp-mcp-test");
 

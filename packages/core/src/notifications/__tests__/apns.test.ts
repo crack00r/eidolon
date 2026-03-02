@@ -7,9 +7,9 @@
 
 import { Database } from "bun:sqlite";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
-import type { Logger } from "../../logging/logger.js";
-import type { ApnsConfig, ApnsPayload } from "../apns.js";
-import { ApnsClient } from "../apns.js";
+import type { Logger } from "../../logging/logger.ts";
+import type { ApnsConfig, ApnsPayload } from "../apns.ts";
+import { ApnsClient } from "../apns.ts";
 
 // ---------------------------------------------------------------------------
 // Test Helpers

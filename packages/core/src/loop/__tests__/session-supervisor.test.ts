@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import type { Logger } from "../../logging/logger.js";
-import { SessionSupervisor } from "../session-supervisor.js";
+import type { Logger } from "../../logging/logger.ts";
+import { SessionSupervisor } from "../session-supervisor.ts";
 
 function createSilentLogger(): Logger {
   const noop = (): void => {};

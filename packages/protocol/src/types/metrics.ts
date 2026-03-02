@@ -2,7 +2,7 @@
  * Token usage and cost tracking types.
  */
 
-import type { SessionType } from "./sessions.js";
+import type { SessionType } from "./sessions.ts";
 
 export interface TokenUsage {
   readonly sessionId: string;

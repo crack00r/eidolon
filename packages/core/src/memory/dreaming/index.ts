@@ -8,23 +8,23 @@
 
 import type { DreamingResult, EidolonError, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
-import type { Logger } from "../../logging/logger.js";
-import type { HousekeepingPhase } from "./housekeeping.js";
-import type { NremPhase } from "./nrem.js";
-import type { RemPhase } from "./rem.js";
+import type { Logger } from "../../logging/logger.ts";
+import type { HousekeepingPhase } from "./housekeeping.ts";
+import type { NremPhase } from "./nrem.ts";
+import type { RemPhase } from "./rem.ts";
 
 // ---------------------------------------------------------------------------
 // Re-exports
 // ---------------------------------------------------------------------------
 
-export type { HousekeepingResult } from "./housekeeping.js";
-export { HousekeepingPhase, stringSimilarity } from "./housekeeping.js";
-export type { AbstractRuleFn, NremResult } from "./nrem.js";
-export { NremPhase } from "./nrem.js";
-export type { AnalyzeConnectionsFn, RemResult } from "./rem.js";
-export { RemPhase } from "./rem.js";
-export type { DreamScheduleConfig } from "./scheduler.js";
-export { DreamScheduler } from "./scheduler.js";
+export type { HousekeepingResult } from "./housekeeping.ts";
+export { HousekeepingPhase, stringSimilarity } from "./housekeeping.ts";
+export type { AbstractRuleFn, NremResult } from "./nrem.ts";
+export { NremPhase } from "./nrem.ts";
+export type { AnalyzeConnectionsFn, RemResult } from "./rem.ts";
+export { RemPhase } from "./rem.ts";
+export type { DreamScheduleConfig } from "./scheduler.ts";
+export { DreamScheduler } from "./scheduler.ts";
 
 // ---------------------------------------------------------------------------
 // DreamRunner

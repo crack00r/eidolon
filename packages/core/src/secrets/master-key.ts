@@ -15,7 +15,7 @@
 import { randomBytes, scryptSync } from "node:crypto";
 import type { EidolonError, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
-import { KEY_LENGTH, SCRYPT_MAXMEM, SCRYPT_N, SCRYPT_P, SCRYPT_R } from "./crypto.js";
+import { KEY_LENGTH, SCRYPT_MAXMEM, SCRYPT_N, SCRYPT_P, SCRYPT_R } from "./crypto.ts";
 
 /** Environment variable name for the master key. */
 const ENV_KEY = "EIDOLON_MASTER_KEY";

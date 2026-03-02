@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { collectAsync, eventually, sleep, waitFor } from "../test-helpers.js";
+import { collectAsync, eventually, sleep, waitFor } from "../test-helpers.ts";
 
 describe("sleep", () => {
   test("resolves after delay", async () => {

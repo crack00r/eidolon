@@ -1,9 +1,9 @@
 import { Database } from "bun:sqlite";
 import { beforeEach, describe, expect, test } from "bun:test";
-import { runMigrations } from "../../database/migrations.js";
-import { OPERATIONAL_MIGRATIONS } from "../../database/schemas/operational.js";
-import { createLogger } from "../../logging/logger.js";
-import { SessionManager } from "../session.js";
+import { runMigrations } from "../../database/migrations.ts";
+import { OPERATIONAL_MIGRATIONS } from "../../database/schemas/operational.ts";
+import { createLogger } from "../../logging/logger.ts";
+import { SessionManager } from "../session.ts";
 
 const logger = createLogger({ level: "error", format: "json", directory: "", maxSizeMb: 10, maxFiles: 1 });
 

@@ -6,8 +6,8 @@
 
 import type { EidolonError, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
-import type { Logger } from "../logging/logger.js";
-import type { GPUManager } from "./manager.js";
+import type { Logger } from "../logging/logger.ts";
+import type { GPUManager } from "./manager.ts";
 
 // ---------------------------------------------------------------------------
 // Types

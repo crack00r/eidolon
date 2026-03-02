@@ -1,8 +1,8 @@
 import { Database } from "bun:sqlite";
 import { afterEach, describe, expect, test } from "bun:test";
 import type { GatewayConfig, GatewayMethod, GatewayResponse } from "@eidolon/protocol";
-import type { Logger } from "../../logging/logger.js";
-import { EventBus } from "../../loop/event-bus.js";
+import type { Logger } from "../../logging/logger.ts";
+import { EventBus } from "../../loop/event-bus.ts";
 import {
   createJsonRpcError,
   createJsonRpcResponse,
@@ -14,9 +14,9 @@ import {
   JSON_RPC_PARSE_ERROR,
   parseJsonRpcRequest,
   validateMethod,
-} from "../protocol.js";
-import { AuthRateLimiter } from "../rate-limiter.js";
-import { anonymizeIp, constantTimeCompare, GatewayServer, normalizeOrigin } from "../server.js";
+} from "../protocol.ts";
+import { AuthRateLimiter } from "../rate-limiter.ts";
+import { anonymizeIp, constantTimeCompare, GatewayServer, normalizeOrigin } from "../server.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers

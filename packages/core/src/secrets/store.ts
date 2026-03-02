@@ -16,7 +16,7 @@ import { Database } from "bun:sqlite";
 import { chmodSync, existsSync } from "node:fs";
 import type { EidolonConfig, EidolonError, Result, SecretMetadata } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
-import { decrypt, encrypt } from "./crypto.js";
+import { decrypt, encrypt } from "./crypto.ts";
 
 // ---------------------------------------------------------------------------
 // Validation constants

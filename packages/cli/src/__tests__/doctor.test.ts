@@ -16,7 +16,7 @@ mock.module("@eidolon/core", () => ({
   loadConfig: async () => ({ ok: true, value: {} }),
 }));
 
-import { formatCheck } from "../utils/formatter.js";
+import { formatCheck } from "../utils/formatter.ts";
 
 // ---------------------------------------------------------------------------
 // Since the doctor command functions (checkBunVersion, checkClaudeCli, etc.)

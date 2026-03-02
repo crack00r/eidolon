@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { createTestEvent, createTestUserMessageEvent } from "../test-events.js";
+import { createTestEvent, createTestUserMessageEvent } from "../test-events.ts";
 
 describe("createTestEvent", () => {
   test("creates event with required fields", () => {

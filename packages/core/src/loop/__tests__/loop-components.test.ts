@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, setSystemTime, test } from "bun:test";
 import type { BusEvent } from "@eidolon/protocol";
-import type { Logger } from "../../logging/logger.js";
-import type { EnergyBudgetConfig } from "../energy-budget.js";
-import { EnergyBudget } from "../energy-budget.js";
-import { PriorityEvaluator } from "../priority.js";
-import { DEFAULT_REST_CONFIG, RestCalculator } from "../rest.js";
+import type { Logger } from "../../logging/logger.ts";
+import type { EnergyBudgetConfig } from "../energy-budget.ts";
+import { EnergyBudget } from "../energy-budget.ts";
+import { PriorityEvaluator } from "../priority.ts";
+import { DEFAULT_REST_CONFIG, RestCalculator } from "../rest.ts";
 
 function createSilentLogger(): Logger {
   const noop = (): void => {};

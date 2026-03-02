@@ -1,14 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import type { EidolonError, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
-import type { Logger } from "../../logging/logger.js";
-import type { TtsFallbackProvider } from "../fallback.js";
-import { TtsFallbackChain } from "../fallback.js";
-import type { GpuWorkerConfig } from "../manager.js";
-import { GPUManager } from "../manager.js";
-import { STTClient } from "../stt-client.js";
-import { TTSClient } from "../tts-client.js";
-import { VoicePipeline } from "../voice-pipeline.js";
+import type { Logger } from "../../logging/logger.ts";
+import type { TtsFallbackProvider } from "../fallback.ts";
+import { TtsFallbackChain } from "../fallback.ts";
+import type { GpuWorkerConfig } from "../manager.ts";
+import { GPUManager } from "../manager.ts";
+import { STTClient } from "../stt-client.ts";
+import { TTSClient } from "../tts-client.ts";
+import { VoicePipeline } from "../voice-pipeline.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers

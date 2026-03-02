@@ -6,8 +6,8 @@
  */
 
 import type { BusEvent } from "@eidolon/protocol";
-import type { Logger } from "../logging/logger.js";
-import type { ActionType } from "./state-machine.js";
+import type { Logger } from "../logging/logger.ts";
+import type { ActionType } from "./state-machine.ts";
 
 export interface PriorityScore {
   readonly score: number;

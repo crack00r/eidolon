@@ -12,7 +12,7 @@
 import type { EidolonError, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 import { randomUUID } from "crypto";
-import type { Logger } from "../logging/logger.js";
+import type { Logger } from "../logging/logger.ts";
 
 /**
  * Escape < and > in untrusted text to prevent XML delimiter injection.

@@ -11,7 +11,7 @@
 import type { Database } from "bun:sqlite";
 import type { EidolonError, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
-import type { Logger } from "../../logging/logger.js";
+import type { Logger } from "../../logging/logger.ts";
 
 // ---------------------------------------------------------------------------
 // Types

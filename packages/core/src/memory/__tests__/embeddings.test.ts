@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import type { Logger } from "../../logging/logger.js";
-import { EmbeddingModel } from "../embeddings.js";
+import type { Logger } from "../../logging/logger.ts";
+import { EmbeddingModel } from "../embeddings.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers

@@ -5,7 +5,7 @@
  * The schedule is specified as an "HH:MM" time string in the configured timezone.
  */
 
-import type { Logger } from "../../logging/logger.js";
+import type { Logger } from "../../logging/logger.ts";
 
 // ---------------------------------------------------------------------------
 // Types

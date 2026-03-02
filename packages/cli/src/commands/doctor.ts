@@ -7,7 +7,7 @@ import { existsSync, mkdirSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { getConfigPath, getDataDir, getLogDir, loadConfig } from "@eidolon/core";
 import type { Command } from "commander";
-import { formatCheck } from "../utils/formatter.js";
+import { formatCheck } from "../utils/formatter.ts";
 
 interface CheckResult {
   readonly status: "pass" | "fail" | "warn";

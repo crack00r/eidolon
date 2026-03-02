@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { escapeTelegramMarkdown, formatForTelegram, splitMessage } from "../telegram/formatter.js";
+import { escapeTelegramMarkdown, formatForTelegram, splitMessage } from "../telegram/formatter.ts";
 
 describe("escapeTelegramMarkdown", () => {
   test("escapes special characters", () => {

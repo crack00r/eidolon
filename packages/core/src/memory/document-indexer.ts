@@ -13,8 +13,8 @@ import { existsSync, lstatSync, readdirSync, readFileSync, realpathSync, statSyn
 import { extname, join, resolve } from "node:path";
 import type { EidolonError, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
-import type { Logger } from "../logging/logger.js";
-import type { MemoryStore } from "./store.js";
+import type { Logger } from "../logging/logger.ts";
+import type { MemoryStore } from "./store.ts";
 
 // ---------------------------------------------------------------------------
 // Types

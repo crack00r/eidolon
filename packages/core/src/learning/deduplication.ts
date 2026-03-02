@@ -6,8 +6,8 @@
  */
 
 import type { EidolonError, Result } from "@eidolon/protocol";
-import type { Logger } from "../logging/logger.js";
-import type { DiscoveryEngine } from "./discovery.js";
+import type { Logger } from "../logging/logger.ts";
+import type { DiscoveryEngine } from "./discovery.ts";
 
 /** UTM and common tracking parameters to strip. */
 const TRACKING_PARAMS = new Set([

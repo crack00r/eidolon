@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { isErr, isOk } from "@eidolon/protocol";
-import { FakeClaudeProcess } from "../fake-claude-process.js";
-import { collectAsync } from "../test-helpers.js";
+import { FakeClaudeProcess } from "../fake-claude-process.ts";
+import { collectAsync } from "../test-helpers.ts";
 
 describe("FakeClaudeProcess", () => {
   test("withResponse returns text events for matching prompts", async () => {

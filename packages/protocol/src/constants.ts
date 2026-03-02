@@ -3,7 +3,7 @@
  * Constants that depend on types from types/ will be added after those files exist.
  */
 
-import type { SessionType } from "./types/sessions.js";
+import type { SessionType } from "./types/sessions.ts";
 
 export const VERSION = "0.0.0";
 

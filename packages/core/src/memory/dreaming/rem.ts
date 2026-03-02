@@ -11,12 +11,12 @@
 
 import type { EidolonError, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
-import type { Logger } from "../../logging/logger.js";
-import type { GraphMemory } from "../graph.js";
-import type { ComplExEmbeddings, Triple } from "../knowledge-graph/complex.js";
-import type { KGRelationStore } from "../knowledge-graph/relations.js";
-import type { MemorySearch } from "../search.js";
-import type { MemoryStore } from "../store.js";
+import type { Logger } from "../../logging/logger.ts";
+import type { GraphMemory } from "../graph.ts";
+import type { ComplExEmbeddings, Triple } from "../knowledge-graph/complex.ts";
+import type { KGRelationStore } from "../knowledge-graph/relations.ts";
+import type { MemorySearch } from "../search.ts";
+import type { MemoryStore } from "../store.ts";
 
 // ---------------------------------------------------------------------------
 // Types

@@ -8,7 +8,7 @@ mock.module("@eidolon/core", () => ({
   getDataDir: () => "/tmp/eidolon-test/data",
 }));
 
-import { formatCheck, formatTable } from "../utils/formatter.js";
+import { formatCheck, formatTable } from "../utils/formatter.ts";
 
 // ---------------------------------------------------------------------------
 // formatCheck

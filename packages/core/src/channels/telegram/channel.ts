@@ -17,9 +17,9 @@ import type {
 } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 import { Bot, GrammyError, HttpError } from "grammy";
-import type { Logger } from "../../logging/logger.js";
-import { formatForTelegram, splitMessage } from "./formatter.js";
-import { downloadTelegramFile, toAttachment } from "./media.js";
+import type { Logger } from "../../logging/logger.ts";
+import { formatForTelegram, splitMessage } from "./formatter.ts";
+import { downloadTelegramFile, toAttachment } from "./media.ts";
 
 // ---------------------------------------------------------------------------
 // Retry configuration for transient API failures

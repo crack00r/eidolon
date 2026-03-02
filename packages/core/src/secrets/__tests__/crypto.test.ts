@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { randomBytes } from "node:crypto";
-import { decrypt, encrypt } from "../crypto.js";
+import { decrypt, encrypt } from "../crypto.ts";
 
 const TEST_KEY = randomBytes(32);
 

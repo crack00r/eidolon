@@ -8,9 +8,9 @@
 import type { ClaudeSessionOptions, EidolonError, IClaudeProcess, Result, StreamEvent } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 import type { Subprocess } from "bun";
-import type { Logger } from "../logging/logger.js";
-import { buildClaudeArgs } from "./args.js";
-import { parseStreamLine } from "./parser.js";
+import type { Logger } from "../logging/logger.ts";
+import { buildClaudeArgs } from "./args.ts";
+import { parseStreamLine } from "./parser.ts";
 
 /**
  * Manages Claude Code CLI subprocesses.

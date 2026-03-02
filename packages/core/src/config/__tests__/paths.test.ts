@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { getCacheDir, getConfigDir, getConfigPath, getDataDir, getLogDir, getPidFilePath } from "../paths.js";
+import { getCacheDir, getConfigDir, getConfigPath, getDataDir, getLogDir, getPidFilePath } from "../paths.ts";
 
 describe("paths", () => {
   const savedEnv: Record<string, string | undefined> = {};

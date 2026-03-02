@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { randomBytes } from "node:crypto";
-import { SecretStore } from "../store.js";
+import { SecretStore } from "../store.ts";
 
 const TEST_KEY = randomBytes(32);
 

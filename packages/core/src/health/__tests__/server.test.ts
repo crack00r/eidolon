@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import type { HealthCheck } from "@eidolon/protocol";
-import type { Logger } from "../../logging/logger.js";
-import { HealthChecker } from "../checker.js";
-import { createHealthServer, type HealthServer } from "../server.js";
+import type { Logger } from "../../logging/logger.ts";
+import { HealthChecker } from "../checker.ts";
+import { createHealthServer, type HealthServer } from "../server.ts";
 
 function createSilentLogger(): Logger {
   const noop = (): void => {};

@@ -1,10 +1,10 @@
 import { Database } from "bun:sqlite";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { runMigrations } from "../../../database/migrations.js";
-import { MEMORY_MIGRATIONS } from "../../../database/schemas/memory.js";
-import type { Logger } from "../../../logging/logger.js";
-import type { Triple } from "../complex.js";
-import { ComplExEmbeddings } from "../complex.js";
+import { runMigrations } from "../../../database/migrations.ts";
+import { MEMORY_MIGRATIONS } from "../../../database/schemas/memory.ts";
+import type { Logger } from "../../../logging/logger.ts";
+import type { Triple } from "../complex.ts";
+import { ComplExEmbeddings } from "../complex.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers

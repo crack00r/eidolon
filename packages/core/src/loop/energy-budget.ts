@@ -5,7 +5,7 @@
  * The user category always overrides budget limits to ensure responsiveness.
  */
 
-import type { Logger } from "../logging/logger.js";
+import type { Logger } from "../logging/logger.ts";
 
 export interface EnergyBudgetConfig {
   readonly maxTokensPerHour: number;

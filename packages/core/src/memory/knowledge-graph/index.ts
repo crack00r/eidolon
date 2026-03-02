@@ -1,6 +1,6 @@
-export type { CommunityDetectorOptions } from "./communities.js";
-export { CommunityDetector } from "./communities.js";
-export type { CreateEntityInput, EntityType, UpdateEntityInput } from "./entities.js";
-export { KGEntityStore } from "./entities.js";
-export type { CreateRelationInput, RelationPredicate, TripleResult } from "./relations.js";
-export { KGRelationStore } from "./relations.js";
+export type { CommunityDetectorOptions } from "./communities.ts";
+export { CommunityDetector } from "./communities.ts";
+export type { CreateEntityInput, EntityType, UpdateEntityInput } from "./entities.ts";
+export { KGEntityStore } from "./entities.ts";
+export type { CreateRelationInput, RelationPredicate, TripleResult } from "./relations.ts";
+export { KGRelationStore } from "./relations.ts";

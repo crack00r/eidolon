@@ -3,11 +3,11 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } fr
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { runMigrations } from "../../database/migrations.js";
-import { MEMORY_MIGRATIONS } from "../../database/schemas/memory.js";
-import type { Logger } from "../../logging/logger.js";
-import { DocumentIndexer } from "../document-indexer.js";
-import { MemoryStore } from "../store.js";
+import { runMigrations } from "../../database/migrations.ts";
+import { MEMORY_MIGRATIONS } from "../../database/schemas/memory.ts";
+import type { Logger } from "../../logging/logger.ts";
+import { DocumentIndexer } from "../document-indexer.ts";
+import { MemoryStore } from "../store.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers

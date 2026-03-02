@@ -3,7 +3,7 @@
  * All inter-component communication flows through typed events.
  */
 
-import type { SessionType } from "./sessions.js";
+import type { SessionType } from "./sessions.ts";
 
 export type EventPriority = "critical" | "high" | "normal" | "low";
 

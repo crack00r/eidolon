@@ -1,9 +1,9 @@
 import { Database } from "bun:sqlite";
 import { afterEach, describe, expect, test } from "bun:test";
-import { runMigrations } from "../../database/migrations.js";
-import { OPERATIONAL_MIGRATIONS } from "../../database/schemas/operational.js";
-import type { Logger } from "../../logging/logger.js";
-import { EventBus } from "../event-bus.js";
+import { runMigrations } from "../../database/migrations.ts";
+import { OPERATIONAL_MIGRATIONS } from "../../database/schemas/operational.ts";
+import type { Logger } from "../../logging/logger.ts";
+import { EventBus } from "../event-bus.ts";
 
 function createSilentLogger(): Logger {
   const noop = (): void => {};

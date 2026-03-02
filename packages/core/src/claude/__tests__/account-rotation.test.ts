@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { ClaudeAccount } from "@eidolon/protocol";
-import type { Logger } from "../../logging/logger.js";
-import { AccountRotation } from "../account-rotation.js";
+import type { Logger } from "../../logging/logger.ts";
+import { AccountRotation } from "../account-rotation.ts";
 
 function createSilentLogger(): Logger {
   const noop = (): void => {};

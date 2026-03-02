@@ -2,9 +2,9 @@
  * Channel interface for multi-platform communication (Telegram, Gateway, etc.).
  */
 
-import type { EidolonError } from "../errors.js";
-import type { Result } from "../result.js";
-import type { InboundMessage, OutboundMessage } from "./messages.js";
+import type { EidolonError } from "../errors.ts";
+import type { Result } from "../result.ts";
+import type { InboundMessage, OutboundMessage } from "./messages.ts";
 
 export interface ChannelCapabilities {
   readonly text: boolean;

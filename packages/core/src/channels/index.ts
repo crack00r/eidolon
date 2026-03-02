@@ -1,2 +1,2 @@
-export { MessageRouter } from "./router.js";
-export * from "./telegram/index.js";
+export { MessageRouter } from "./router.ts";
+export * from "./telegram/index.ts";

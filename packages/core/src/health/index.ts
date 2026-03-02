@@ -1,4 +1,4 @@
-export { HealthChecker } from "./checker.js";
-export { CircuitBreaker } from "./circuit-breaker.js";
-export type { HealthServer, HealthServerOptions } from "./server.js";
-export { createHealthServer } from "./server.js";
+export { HealthChecker } from "./checker.ts";
+export { CircuitBreaker } from "./circuit-breaker.ts";
+export type { HealthServer, HealthServerOptions } from "./server.ts";
+export { createHealthServer } from "./server.ts";
