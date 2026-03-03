@@ -47,7 +47,10 @@ export type EventType =
   | "calendar:event_upcoming"
   | "calendar:event_created"
   | "calendar:conflict_detected"
-  | "calendar:sync_completed";
+  | "calendar:sync_completed"
+  | "ha:state_changed"
+  | "ha:anomaly_detected"
+  | "ha:scene_executed";
 
 export interface BusEvent<T = unknown> {
   readonly id: string;

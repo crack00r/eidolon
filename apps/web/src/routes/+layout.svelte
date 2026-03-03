@@ -3,6 +3,7 @@ import "../app.css";
 import type { Snippet } from "svelte";
 import { page } from "$app/stores";
 import { connectionState } from "$lib/stores/connection";
+import { pendingApprovalCount } from "$lib/stores/approvals";
 
 interface Props {
   children: Snippet;
@@ -15,6 +16,9 @@ const navItems = [
   { href: "/chat", label: "Chat", icon: "\u{1F4AC}" },
   { href: "/memory", label: "Memory", icon: "\u{1F9E0}" },
   { href: "/learning", label: "Learning", icon: "\u{1F4D6}" },
+  { href: "/approvals", label: "Approvals", icon: "\u{2714}" },
+  { href: "/automations", label: "Automations", icon: "\u{26A1}" },
+  { href: "/health", label: "Health", icon: "\u{2764}" },
   { href: "/settings", label: "Settings", icon: "\u{2699}" },
 ] as const;
 
@@ -60,6 +64,9 @@ function isActive(pathname: string, href: string): boolean {
         >
           <span class="nav-icon">{item.icon}</span>
           <span class="nav-label">{item.label}</span>
+          {#if item.href === "/approvals" && $pendingApprovalCount > 0}
+            <span class="nav-badge">{$pendingApprovalCount}</span>
+          {/if}
         </a>
       {/each}
     </nav>
@@ -168,6 +175,16 @@ function isActive(pathname: string, href: string): boolean {
 
   .nav-label {
     font-size: 14px;
+  }
+
+  .nav-badge {
+    font-size: 10px;
+    padding: 1px 6px;
+    border-radius: 10px;
+    background: var(--accent);
+    color: white;
+    font-weight: 700;
+    margin-left: auto;
   }
 
   .sidebar-footer {

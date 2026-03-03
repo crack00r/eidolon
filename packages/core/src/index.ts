@@ -13,6 +13,7 @@ export * from "./digest/index.ts";
 export * from "./discovery/index.ts";
 export * from "./feedback/index.ts";
 export * from "./gateway/index.ts";
+export * from "./home-automation/index.ts";
 export * from "./gpu/index.ts";
 export * from "./health/index.ts";
 export * from "./learning/index.ts";

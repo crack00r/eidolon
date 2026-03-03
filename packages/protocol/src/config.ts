@@ -340,6 +340,59 @@ export const GpuConfigSchema = z.object({
 });
 
 // ---------------------------------------------------------------------------
+// Home Automation
+// ---------------------------------------------------------------------------
+
+export const HADomainPolicySchema = z.object({
+  domain: z.string(),
+  level: z.enum(["safe", "needs_approval", "dangerous"]),
+  exceptions: z.record(z.string(), z.enum(["safe", "needs_approval", "dangerous"])).optional(),
+});
+
+export const HAAnomalyRuleSchema = z.object({
+  entityPattern: z.string(),
+  condition: z.string(),
+  message: z.string(),
+});
+
+export const HASceneActionConfigSchema = z.object({
+  entityId: z.string(),
+  service: z.string(),
+  data: z.record(z.string(), z.unknown()).optional(),
+});
+
+export const HASceneConfigSchema = z.object({
+  name: z.string(),
+  actions: z.array(HASceneActionConfigSchema),
+});
+
+export const HomeAutomationConfigSchema = z.object({
+  enabled: z.boolean().default(false),
+  haUrl: z.string().optional(),
+  haToken: SecretRefSchema.or(z.string()).optional(),
+  syncIntervalMinutes: z.number().int().positive().default(5),
+  domainPolicies: z
+    .array(HADomainPolicySchema)
+    .default([
+      { domain: "light", level: "safe" as const },
+      { domain: "switch", level: "safe" as const },
+      { domain: "sensor", level: "safe" as const },
+      { domain: "climate", level: "needs_approval" as const },
+      { domain: "lock", level: "needs_approval" as const },
+      { domain: "alarm_control_panel", level: "dangerous" as const },
+      { domain: "cover", level: "safe" as const },
+      { domain: "media_player", level: "safe" as const },
+    ]),
+  anomalyDetection: z
+    .object({
+      enabled: z.boolean().default(true),
+      rules: z.array(HAAnomalyRuleSchema).default([]),
+    })
+    .default({}),
+  scenes: z.array(HASceneConfigSchema).default([]),
+});
+
+// ---------------------------------------------------------------------------
 // Security
 // ---------------------------------------------------------------------------
 
@@ -477,6 +530,7 @@ export const EidolonConfigSchema = z.object({
   privacy: PrivacyConfigSchema.default({}),
   digest: DigestConfigSchema.default({}),
   calendar: CalendarConfigSchema.default({}),
+  homeAutomation: HomeAutomationConfigSchema.default({}),
   database: DatabaseConfigSchema,
   logging: LoggingConfigSchema,
   daemon: DaemonConfigSchema,
@@ -503,5 +557,6 @@ export type PrivacyConfig = z.infer<typeof PrivacyConfigSchema>;
 export type DigestConfig = z.infer<typeof DigestConfigSchema>;
 export type DaemonConfig = z.infer<typeof DaemonConfigSchema>;
 export type CalendarConfigInferred = z.infer<typeof CalendarConfigSchema>;
+export type HomeAutomationConfig = z.infer<typeof HomeAutomationConfigSchema>;
 export type ClaudeAccount = z.infer<typeof ClaudeAccountSchema>;
 export type WebhookEndpointConfig = z.infer<typeof WebhookEndpointSchema>;

@@ -331,4 +331,35 @@ export const OPERATIONAL_MIGRATIONS: ReadonlyArray<Migration> = [
       DROP TABLE IF EXISTS calendar_events;
     `,
   },
+  {
+    version: 11,
+    name: "add_home_automation_tables",
+    database: "operational",
+    up: `
+      CREATE TABLE IF NOT EXISTS ha_entities (
+        entity_id TEXT PRIMARY KEY,
+        domain TEXT NOT NULL,
+        friendly_name TEXT NOT NULL,
+        state TEXT NOT NULL,
+        attributes TEXT NOT NULL DEFAULT '{}',
+        last_changed INTEGER NOT NULL,
+        synced_at INTEGER NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS ha_scenes (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL UNIQUE,
+        actions TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        last_executed_at INTEGER
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_ha_entities_domain ON ha_entities(domain);
+    `,
+    down: `
+      DROP INDEX IF EXISTS idx_ha_entities_domain;
+      DROP TABLE IF EXISTS ha_scenes;
+      DROP TABLE IF EXISTS ha_entities;
+    `,
+  },
 ];

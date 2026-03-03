@@ -24,10 +24,17 @@ import type { MemoryStore } from "./store.ts";
 // Options & context
 // ---------------------------------------------------------------------------
 
+/**
+ * A context provider returns a markdown section to append to MEMORY.md.
+ * Used to inject HA state, calendar schedule, etc.
+ */
+export type ContextProvider = () => Result<string, EidolonError>;
+
 export interface MemoryInjectorOptions {
   readonly maxMemories?: number;
   readonly maxKgTriples?: number;
   readonly includeKnowledgeGraph?: boolean;
+  readonly contextProviders?: readonly ContextProvider[];
 }
 
 export interface InjectionContext {
@@ -93,6 +100,7 @@ export class MemoryInjector {
   private readonly maxMemories: number;
   private readonly maxKgTriples: number;
   private readonly includeKnowledgeGraph: boolean;
+  private readonly contextProviders: readonly ContextProvider[];
 
   constructor(
     store: MemoryStore,
@@ -109,6 +117,7 @@ export class MemoryInjector {
     this.maxMemories = options?.maxMemories ?? DEFAULT_MAX_MEMORIES;
     this.maxKgTriples = options?.maxKgTriples ?? DEFAULT_MAX_KG_TRIPLES;
     this.includeKnowledgeGraph = options?.includeKnowledgeGraph ?? DEFAULT_INCLUDE_KG;
+    this.contextProviders = options?.contextProviders ?? [];
   }
 
   /** Generate MEMORY.md content for a session. */
@@ -256,6 +265,15 @@ export class MemoryInjector {
         const predicate = sanitizeForMarkdown(triple.predicate);
         const object = sanitizeForMarkdown(triple.object);
         sections.push(`- ${subject} ${predicate} ${object} (confidence: ${triple.confidence})`);
+      }
+    }
+
+    // Append context providers (HA state, calendar schedule, etc.)
+    for (const provider of this.contextProviders) {
+      const result = provider();
+      if (result.ok && result.value.length > 0) {
+        sections.push("");
+        sections.push(result.value);
       }
     }
 

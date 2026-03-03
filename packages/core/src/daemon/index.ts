@@ -59,6 +59,7 @@ import { MetricsRegistry } from "../metrics/prometheus.ts";
 import { TokenTracker } from "../metrics/token-tracker.ts";
 import { type MetricsWiringHandle, wireMetrics } from "../metrics/wiring.ts";
 import { CalendarManager } from "../calendar/manager.ts";
+import { HAManager } from "../home-automation/manager.ts";
 import { AutomationEngine } from "../scheduler/automation.ts";
 import { TaskScheduler } from "../scheduler/scheduler.ts";
 import { getMasterKey } from "../secrets/master-key.ts";
@@ -108,6 +109,7 @@ interface InitializedModules {
   gpuManager?: GPUManager;
   gpuWorkerPool?: GPUWorkerPool;
   calendarManager?: CalendarManager;
+  haManager?: HAManager;
   mcpHealthMonitor?: MCPHealthMonitor;
   metricsRegistry?: MetricsRegistry;
   metricsWiring?: MetricsWiringHandle;
@@ -1126,6 +1128,88 @@ export class EidolonDaemon {
         },
       });
 
+      // 19a-ha. HAManager (needs DB, Logger, EventBus, Config, optionally EmbeddingModel)
+      initOrder.push({
+        name: "HAManager",
+        fn: async () => {
+          const db = this.modules.dbManager?.operational;
+          const logger = this.modules.logger;
+          const eventBus = this.modules.eventBus;
+          const config = this.modules.config;
+          if (!db || !logger || !eventBus || !config) return;
+          if (!config.homeAutomation?.enabled) {
+            logger.info("daemon", "Home automation integration disabled");
+            return;
+          }
+
+          const haManager = new HAManager({
+            db,
+            logger,
+            eventBus,
+            config: config.homeAutomation,
+            embeddingModel: this.modules.embeddingModel,
+          });
+
+          const initResult = await haManager.initialize();
+          if (!initResult.ok) {
+            logger.warn("daemon", `HAManager init failed: ${initResult.error.message}`);
+            return;
+          }
+
+          this.modules.haManager = haManager;
+          logger.info("daemon", "HAManager initialized");
+        },
+      });
+
+      // 19a-ha-gw. Wire HA gateway RPC handlers (needs Gateway, HAManager)
+      initOrder.push({
+        name: "GatewayHAWiring",
+        fn: () => {
+          const gatewayServer = this.modules.gatewayServer;
+          const haManager = this.modules.haManager;
+          const logger = this.modules.logger;
+          if (!gatewayServer || !haManager) {
+            logger?.debug("daemon", "HA gateway wiring skipped: missing gateway or haManager");
+            return;
+          }
+
+          gatewayServer.registerHandler("ha.entities", async (params) => {
+            const domain = typeof params.domain === "string" ? params.domain : undefined;
+            const result = haManager.listEntities(domain);
+            if (!result.ok) throw new Error(result.error.message);
+            return { entities: result.value };
+          });
+
+          gatewayServer.registerHandler("ha.scenes", async () => {
+            const result = haManager.sceneEngine.listScenes();
+            if (!result.ok) throw new Error(result.error.message);
+            return { scenes: result.value };
+          });
+
+          gatewayServer.registerHandler("ha.execute", async (params) => {
+            const entityId = typeof params.entityId === "string" ? params.entityId : "";
+            const domain = typeof params.domain === "string" ? params.domain : "";
+            const service = typeof params.service === "string" ? params.service : "";
+            const data = typeof params.data === "object" && params.data !== null
+              ? params.data as Record<string, unknown>
+              : undefined;
+            const result = await haManager.executeService(entityId, domain, service, data);
+            if (!result.ok) throw new Error(result.error.message);
+            return result.value;
+          });
+
+          gatewayServer.registerHandler("ha.state", async (params) => {
+            const entityId = typeof params.entityId === "string" ? params.entityId : "";
+            const result = haManager.getEntity(entityId);
+            if (!result.ok) throw new Error(result.error.message);
+            if (!result.value) throw new Error(`Entity not found: ${entityId}`);
+            return { entity: result.value };
+          });
+
+          logger?.info("daemon", "HA RPC handlers registered on gateway");
+        },
+      });
+
       // 19b. Wire gateway auth events to AuditLogger (needs EventBus, AuditLogger)
       initOrder.push({
         name: "GatewayAuditWiring",
@@ -1434,6 +1518,16 @@ export class EidolonDaemon {
         logger?.info("daemon", "CalendarManager disposed");
       } catch (err: unknown) {
         logger?.error("daemon", "Error disposing CalendarManager", err);
+      }
+    }
+
+    // 19a-ha -> HAManager (stop sync interval)
+    if (this.modules.haManager) {
+      try {
+        await this.modules.haManager.dispose();
+        logger?.info("daemon", "HAManager disposed");
+      } catch (err: unknown) {
+        logger?.error("daemon", "Error disposing HAManager", err);
       }
     }
 

@@ -38,6 +38,8 @@ export type PushEventType =
   | "push.clientConnected"
   | "push.clientDisconnected"
   | "push.executeCommand"
+  | "push.approvalRequested"
+  | "push.approvalResolved"
   | "system.statusUpdate";
 
 type PushEventHandler = (params: Record<string, unknown>) => void;

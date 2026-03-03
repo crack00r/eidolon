@@ -18,6 +18,9 @@ import {
   type DashboardEvent,
 } from "$lib/stores/dashboard";
 import { connectionState, isConnected } from "$lib/stores/connection";
+import { pendingApprovalCount } from "$lib/stores/approvals";
+import { automationScenes } from "$lib/stores/automations";
+import { overallStatus } from "$lib/stores/health";
 
 // ---- State color mapping ----
 
@@ -243,6 +246,46 @@ onDestroy(() => {
         {/if}
       </div>
     </div>
+  </section>
+
+  <!-- Summary Cards Row -->
+  <section class="cards summary-cards">
+    <!-- Pending Approvals -->
+    <a href="/approvals" class="card card-link">
+      <div class="card-header">
+        <span class="card-icon">[A]</span>
+        <span class="card-title">Approvals</span>
+      </div>
+      <div class="card-body">
+        <span class="card-stat" style="color: {$pendingApprovalCount > 0 ? 'var(--warning)' : 'var(--text-primary)'}">
+          {$pendingApprovalCount}
+          <span class="card-stat-sub">pending</span>
+        </span>
+      </div>
+    </a>
+
+    <!-- Automations -->
+    <a href="/automations" class="card card-link">
+      <div class="card-header">
+        <span class="card-icon">[S]</span>
+        <span class="card-title">Automations</span>
+      </div>
+      <div class="card-body">
+        <span class="card-stat large">{$automationScenes.length}</span>
+      </div>
+    </a>
+
+    <!-- System Health -->
+    <a href="/health" class="card card-link">
+      <div class="card-header">
+        <span class="card-icon">[H]</span>
+        <span class="card-title">Health</span>
+      </div>
+      <div class="card-body">
+        <span class="health-dot" style="background: {$overallStatus === 'healthy' ? 'var(--success)' : $overallStatus === 'degraded' ? 'var(--warning)' : 'var(--error)'}"></span>
+        <span class="card-stat-sub health-label">{$overallStatus}</span>
+      </div>
+    </a>
   </section>
 
   <!-- Activity Feed + System Info -->
@@ -503,6 +546,38 @@ onDestroy(() => {
     padding: 2px 6px;
     border-radius: 3px;
     font-variant-numeric: tabular-nums;
+  }
+
+  /* Summary cards */
+  .summary-cards {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  @media (max-width: 700px) {
+    .summary-cards {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .card-link {
+    text-decoration: none;
+    cursor: pointer;
+  }
+
+  .card-link:hover {
+    border-color: var(--accent);
+  }
+
+  .health-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    display: inline-block;
+  }
+
+  .health-label {
+    text-transform: capitalize;
+    margin-left: 6px;
   }
 
   /* ---- Bottom Row ---- */

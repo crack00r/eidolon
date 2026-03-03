@@ -4,6 +4,7 @@
 
 export * from "./calendar.ts";
 export * from "./channels.ts";
+export * from "./home-automation.ts";
 export * from "./claude.ts";
 export * from "./database.ts";
 export * from "./events.ts";

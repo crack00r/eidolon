@@ -11,7 +11,7 @@ export type { ConsentCheckFn, ConversationTurn, ExtractedMemory, ExtractorOption
 export { MemoryExtractor } from "./extractor.ts";
 export type { CreateEdgeInput, EdgeRelation, GraphWalkResult } from "./graph.ts";
 export { GraphMemory } from "./graph.ts";
-export type { InjectionContext, MemoryInjectorOptions } from "./injector.ts";
+export type { ContextProvider, InjectionContext, MemoryInjectorOptions } from "./injector.ts";
 export { MemoryInjector } from "./injector.ts";
 export * from "./knowledge-graph/index.ts";
 export type { ObsidianIndexerOptions, ObsidianIndexResult } from "./obsidian.ts";

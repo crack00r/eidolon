@@ -47,7 +47,9 @@ export const MCP_TEMPLATES: Record<string, McpTemplate> = {
   "home-assistant": {
     id: "home-assistant",
     name: "Home Assistant",
-    description: "Control Home Assistant devices (lights, switches, sensors, climate)",
+    description:
+      "Control Home Assistant devices (lights, switches, sensors, climate, locks, alarms). " +
+      "Integrates with Eidolon's entity resolver, security policies, scene engine, and anomaly detection.",
     command: "npx",
     args: ["-y", "mcp-server-home-assistant"],
     env: {
@@ -56,7 +58,7 @@ export const MCP_TEMPLATES: Record<string, McpTemplate> = {
     },
     requiredSecrets: ["HA_TOKEN"],
     documentationUrl: "https://github.com/home-assistant/mcp-server-home-assistant",
-    tags: ["home-automation", "iot", "smart-home"],
+    tags: ["home-automation", "iot", "smart-home", "scenes", "security-policies"],
   },
   github: {
     id: "github",

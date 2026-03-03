@@ -60,7 +60,12 @@ export type GatewayMethod =
   | "calendar.getUpcoming"
   // GPU pool methods
   | "gpu.workers"
-  | "gpu.pool_status";
+  | "gpu.pool_status"
+  // Home Automation methods
+  | "ha.entities"
+  | "ha.scenes"
+  | "ha.execute"
+  | "ha.state";
 
 // ---------------------------------------------------------------------------
 // Push notification types (server → client, no response expected)

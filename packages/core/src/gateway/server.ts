@@ -115,6 +115,20 @@ const ResearchListParamsSchema = z.object({
   since: z.number().int().min(0).optional(),
 });
 
+const ApprovalListParamsSchema = z.object({
+  status: z.enum(["all", "pending", "approved", "denied"]).optional(),
+});
+
+const ApprovalRespondParamsSchema = z.object({
+  approvalId: z.string().min(1).max(256),
+  action: z.enum(["approve", "deny"]),
+  reason: z.string().max(1024).optional(),
+});
+
+const SystemHealthParamsSchema = z.object({
+  includeMetrics: z.boolean().optional(),
+});
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -615,6 +629,157 @@ export class GatewayServer {
       }
       const statuses = this.rateLimitTracker.getAllAccountStatuses();
       return { accounts: statuses };
+    });
+
+    // -----------------------------------------------------------------------
+    // Approval handlers
+    // -----------------------------------------------------------------------
+
+    // approval.list: list pending and historical approval requests
+    this.registerHandler("approval.list", async (params) => {
+      const parsed = ApprovalListParamsSchema.safeParse(params);
+      if (!parsed.success) {
+        throw new RpcValidationError(
+          `Invalid approval.list params: ${parsed.error.issues.map((issue: z.ZodIssue) => issue.message).join(", ")}`,
+        );
+      }
+      // Approval retrieval is delegated to external handler registration.
+      // Override via server.registerHandler("approval.list", ...) with a
+      // handler that queries the approval store.
+      return {
+        items: [],
+        status: parsed.data.status ?? "all",
+        note: "Override this handler with actual approval list retrieval",
+      };
+    });
+
+    // approval.respond: approve or deny a pending approval
+    this.registerHandler("approval.respond", async (params, clientId) => {
+      const parsed = ApprovalRespondParamsSchema.safeParse(params);
+      if (!parsed.success) {
+        throw new RpcValidationError(
+          `Invalid approval.respond params: ${parsed.error.issues.map((issue: z.ZodIssue) => issue.message).join(", ")}`,
+        );
+      }
+      const { approvalId, action, reason } = parsed.data;
+
+      this.logger.info(
+        "approval.respond",
+        `Client ${clientId} ${action}d approval ${approvalId}${reason ? `: ${reason}` : ""}`,
+      );
+      this.eventBus.publish(
+        "user:approval",
+        { approvalId, action, reason: reason ?? null, respondedBy: clientId },
+        { source: "gateway", priority: "high" },
+      );
+
+      const pushType = action === "approve" ? "push.approvalResolved" : "push.approvalResolved";
+      this.pushToSubscribers(pushType, {
+        approvalId,
+        action,
+        respondedBy: clientId,
+        timestamp: Date.now(),
+      });
+
+      return { processed: true, approvalId, action };
+    });
+
+    // -----------------------------------------------------------------------
+    // Automation handlers
+    // -----------------------------------------------------------------------
+
+    // automation.list: list configured automation scenes
+    this.registerHandler("automation.list", async (params) => {
+      const parsed = AutomationListParamsSchema.safeParse(params);
+      if (!parsed.success) {
+        throw new RpcValidationError(
+          `Invalid automation.list params: ${parsed.error.issues.map((issue: z.ZodIssue) => issue.message).join(", ")}`,
+        );
+      }
+      // Automation retrieval is delegated to external handler registration.
+      return {
+        scenes: [],
+        enabledOnly: parsed.data.enabledOnly ?? false,
+        note: "Override this handler with actual automation list retrieval",
+      };
+    });
+
+    // automation.create: create a new automation scene
+    this.registerHandler("automation.create", async (params, clientId) => {
+      const parsed = AutomationCreateParamsSchema.safeParse(params);
+      if (!parsed.success) {
+        throw new RpcValidationError(
+          `Invalid automation.create params: ${parsed.error.issues.map((issue: z.ZodIssue) => issue.message).join(", ")}`,
+        );
+      }
+      const { input, deliverTo } = parsed.data;
+
+      this.logger.info("automation.create", `Client ${clientId} creating automation: "${input.slice(0, 80)}"`);
+      const automationId = randomUUID();
+      this.eventBus.publish(
+        "system:config_changed",
+        {
+          action: "create_automation",
+          automationId,
+          input,
+          deliverTo: deliverTo ?? null,
+          requestedBy: clientId,
+        },
+        { source: "gateway", priority: "normal" },
+      );
+      return { created: true, automationId };
+    });
+
+    // automation.delete: delete an automation scene
+    this.registerHandler("automation.delete", async (params, clientId) => {
+      const parsed = AutomationDeleteParamsSchema.safeParse(params);
+      if (!parsed.success) {
+        throw new RpcValidationError(
+          `Invalid automation.delete params: ${parsed.error.issues.map((issue: z.ZodIssue) => issue.message).join(", ")}`,
+        );
+      }
+      const { automationId } = parsed.data;
+
+      this.logger.info("automation.delete", `Client ${clientId} deleting automation ${automationId}`);
+      this.eventBus.publish(
+        "system:config_changed",
+        { action: "delete_automation", automationId, requestedBy: clientId },
+        { source: "gateway", priority: "normal" },
+      );
+      return { deleted: true, automationId };
+    });
+
+    // -----------------------------------------------------------------------
+    // System health handler
+    // -----------------------------------------------------------------------
+
+    // system.health: return detailed health status including circuit breakers,
+    // GPU workers, token usage, event queue depth, memory stats
+    this.registerHandler("system.health", async (params) => {
+      const parsed = SystemHealthParamsSchema.safeParse(params);
+      if (!parsed.success) {
+        throw new RpcValidationError(
+          `Invalid system.health params: ${parsed.error.issues.map((issue: z.ZodIssue) => issue.message).join(", ")}`,
+        );
+      }
+      const uptimeMs = this.server ? Date.now() - this.startTime : 0;
+      // Health aggregation is delegated to external handler registration.
+      // Override via server.registerHandler("system.health", ...) with a
+      // handler that aggregates health data from all subsystems.
+      return {
+        status: "healthy",
+        timestamp: Date.now(),
+        uptimeMs,
+        checks: [],
+        circuitBreakers: [],
+        gpuWorkers: [],
+        tokenUsage: { current: 0, limit: 0, series: [] },
+        eventQueueDepth: 0,
+        memoryStats: { totalMemories: 0, recentExtractions: 0 },
+        errorRate: 0,
+        includeMetrics: parsed.data.includeMetrics ?? false,
+        note: "Override this handler with actual health aggregation",
+      };
     });
   }
 
