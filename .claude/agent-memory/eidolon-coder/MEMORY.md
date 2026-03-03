@@ -12,4 +12,22 @@
 - 3-database split: memory.db, operational.db, audit.db
 
 ## Conventions Learned
-(Agent will add entries here as it discovers patterns)
+- Daemon module init uses ordered `initOrder` array of `{ name, fn }` steps in `EidolonDaemon.start()`
+- Teardown in `teardownModules()` runs in reverse order (manual, not auto-reversed)
+- `InitializedModules` interface tracks all initialized modules for teardown
+- EventBus `subscribeAll()` returns an unsubscribe function; use for wildcard subscriptions
+- EventBus `subscribe(type, handler)` also returns an unsubscribe function
+- GatewayServer accepts optional `metricsRegistry` in its constructor deps
+- `MetricsRegistry` is in `packages/core/src/metrics/prometheus.ts`
+- For new wiring/integration code, create a separate module (e.g., `wiring.ts`) to keep files under 300 lines
+- Test helpers: `createTestDb()` with in-memory SQLite + events table schema for EventBus tests
+- Logger in tests: use `createLogger()` with level "error" to suppress noise
+
+## Structured Output Integration
+- `StructuredOutputParser<T>` in `packages/core/src/claude/structured-output.ts` validates Claude responses against Zod schemas
+- Factory pattern for injected dependencies: create `createStructured*Fn` factories that return `LlmExtractFn` / `RelevanceScorerFn`
+- `packages/core/src/memory/structured-extract.ts` - factory for LLM extraction via StructuredOutputParser
+- `packages/core/src/learning/structured-relevance.ts` - factory for relevance scoring via StructuredOutputParser
+- `ExtractionResponseSchema` and `RelevanceResponseSchema` define the Zod schemas for LLM output
+- FakeClaudeProcess regex matchers with `^` anchors distinguish retry prompts from initial prompts
+- When testing retries, place retry rule (matching `^Your previous response`) BEFORE the initial rule in addRule order
