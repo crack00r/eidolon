@@ -1,14 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { z } from "zod";
 import type { ClaudeSessionOptions } from "@eidolon/protocol";
 import { FakeClaudeProcess } from "@eidolon/test-utils";
+import { z } from "zod";
 import type { Logger } from "../../logging/logger.ts";
 import { MemoryExtractor } from "../extractor.ts";
 import type { ExtractionResponse } from "../structured-extract.ts";
-import {
-  createStructuredLlmExtractFn,
-  ExtractionResponseSchema,
-} from "../structured-extract.ts";
+import { createStructuredLlmExtractFn, ExtractionResponseSchema } from "../structured-extract.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -225,9 +222,7 @@ describe("MemoryExtractor + structured extract integration", () => {
 
   test("works as llmExtractFn in hybrid strategy", async () => {
     const response: ExtractionResponse = {
-      memories: [
-        { type: "fact", content: "User's GPU is RTX 5080", confidence: 0.9, tags: ["hardware"] },
-      ],
+      memories: [{ type: "fact", content: "User's GPU is RTX 5080", confidence: 0.9, tags: ["hardware"] }],
     };
     const fake = fakeWithExtractionResponse(response);
 

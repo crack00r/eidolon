@@ -366,7 +366,8 @@ function bar() {
     });
 
     test("splits oversized pages at paragraph boundaries", () => {
-      const longPage = "Paragraph one of this long page.\n\nParagraph two of this long page.\n\nParagraph three of this long page.";
+      const longPage =
+        "Paragraph one of this long page.\n\nParagraph two of this long page.\n\nParagraph three of this long page.";
       const content = `${longPage}\fShort page.`;
       const chunks = DocumentIndexer.chunkPdfText(content, "doc.pdf", 60);
       // The long page should be split into multiple chunks

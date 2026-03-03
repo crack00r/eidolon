@@ -170,11 +170,7 @@ export class ResearchEngine {
   private readonly config: ResearchEngineConfig;
   private readonly logger: Logger;
 
-  constructor(
-    claude: IClaudeProcess,
-    config: ResearchEngineConfig,
-    logger: Logger,
-  ) {
+  constructor(claude: IClaudeProcess, config: ResearchEngineConfig, logger: Logger) {
     this.claude = claude;
     this.config = config;
     this.logger = logger.child("research");
@@ -206,12 +202,8 @@ export class ResearchEngine {
 
     // Validate and filter sources
     const validSources = filterValidSources(request.sources);
-    const sources: readonly ResearchSource[] =
-      validSources.length > 0 ? validSources : ["web", "academic", "github"];
-    const maxSources = Math.max(
-      1,
-      Math.min(request.maxSources || DEFAULT_MAX_SOURCES, this.config.maxSources),
-    );
+    const sources: readonly ResearchSource[] = validSources.length > 0 ? validSources : ["web", "academic", "github"];
+    const maxSources = Math.max(1, Math.min(request.maxSources || DEFAULT_MAX_SOURCES, this.config.maxSources));
 
     this.logger.info("research", `Starting research: "${request.query}"`, {
       researchId,
@@ -238,9 +230,7 @@ export class ResearchEngine {
         this.logger.error("research", `Research session error: ${errorMessage}`, undefined, {
           researchId,
         });
-        return Err(
-          createError(ErrorCode.DISCOVERY_FAILED, `Research session failed: ${errorMessage}`),
-        );
+        return Err(createError(ErrorCode.DISCOVERY_FAILED, `Research session failed: ${errorMessage}`));
       }
 
       if (!text || text.trim().length === 0) {
@@ -429,10 +419,7 @@ export class ResearchEngine {
    * Looks for "### Finding:" or "## Finding:" section headers and extracts
    * the title, body, confidence, and associated citations.
    */
-  private parseFindings(
-    text: string,
-    allCitations: readonly Citation[],
-  ): readonly ResearchFinding[] {
+  private parseFindings(text: string, allCitations: readonly Citation[]): readonly ResearchFinding[] {
     const findings: ResearchFinding[] = [];
 
     // Match heading patterns like "### Finding: Title" or "## Finding: Title"
@@ -458,17 +445,14 @@ export class ResearchEngine {
 
       const title = (match[1] ?? "Untitled Finding").trim();
       const startIndex = (match.index ?? 0) + match[0].length;
-      const endIndex =
-        i + 1 < matches.length ? (matches[i + 1]?.index ?? text.length) : text.length;
+      const endIndex = i + 1 < matches.length ? (matches[i + 1]?.index ?? text.length) : text.length;
       const body = text.slice(startIndex, endIndex).trim();
 
       // Extract confidence from "**Confidence:** high/medium/low"
       const confidence = this.parseConfidence(body);
 
       // Find citations that appear in this finding's body
-      const findingCitations = allCitations.filter(
-        (c) => body.includes(c.url) || body.includes(c.title),
-      );
+      const findingCitations = allCitations.filter((c) => body.includes(c.url) || body.includes(c.title));
 
       findings.push({
         title,

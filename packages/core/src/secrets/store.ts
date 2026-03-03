@@ -299,11 +299,7 @@ export class SecretStore {
     // Secret values may not match the expected schema (e.g., empty string for a required field).
     const parseResult = EidolonConfigSchema.safeParse(resolved.value);
     if (!parseResult.success) {
-      this.logger?.error(
-        "resolveSecretRefs",
-        "Config validation failed after secret resolution",
-        parseResult.error,
-      );
+      this.logger?.error("resolveSecretRefs", "Config validation failed after secret resolution", parseResult.error);
       return Err(
         createError(
           ErrorCode.CONFIG_INVALID,

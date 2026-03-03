@@ -157,9 +157,7 @@ export class DiscordChannel implements Channel {
       this.logger.info("discord", "Bot connected");
       return Ok(undefined);
     } catch (cause) {
-      return Err(
-        createError(ErrorCode.CHANNEL_AUTH_FAILED, "Failed to connect Discord bot", cause),
-      );
+      return Err(createError(ErrorCode.CHANNEL_AUTH_FAILED, "Failed to connect Discord bot", cause));
     }
   }
 
@@ -177,18 +175,13 @@ export class DiscordChannel implements Channel {
 
   async send(message: OutboundMessage): Promise<Result<void, EidolonError>> {
     if (!this.connected) {
-      return Err(
-        createError(ErrorCode.CHANNEL_SEND_FAILED, "Discord bot is not connected"),
-      );
+      return Err(createError(ErrorCode.CHANNEL_SEND_FAILED, "Discord bot is not connected"));
     }
 
     const channelId = message.channelId;
 
     try {
-      const formatted =
-        message.format === "markdown"
-          ? formatForDiscord(message.text)
-          : message.text;
+      const formatted = message.format === "markdown" ? formatForDiscord(message.text) : message.text;
 
       const chunks = splitDiscordMessage(formatted);
 
@@ -199,9 +192,7 @@ export class DiscordChannel implements Channel {
       return Ok(undefined);
     } catch (cause) {
       this.logger.error("discord", "Failed to send message", cause, { channelId });
-      return Err(
-        createError(ErrorCode.CHANNEL_SEND_FAILED, "Failed to send Discord message", cause),
-      );
+      return Err(createError(ErrorCode.CHANNEL_SEND_FAILED, "Failed to send Discord message", cause));
     }
   }
 
@@ -300,9 +291,7 @@ export class DiscordChannel implements Channel {
   }
 
   /** Convert Discord attachments to protocol MessageAttachment format. */
-  private convertAttachments(
-    attachments: readonly DiscordAttachment[],
-  ): MessageAttachment[] {
+  private convertAttachments(attachments: readonly DiscordAttachment[]): MessageAttachment[] {
     return attachments.map((a) => {
       const type = this.inferAttachmentType(a.contentType, a.filename);
       return {
@@ -316,10 +305,7 @@ export class DiscordChannel implements Channel {
   }
 
   /** Infer the MessageAttachment type from MIME type or filename. */
-  private inferAttachmentType(
-    contentType: string | null,
-    filename: string,
-  ): MessageAttachment["type"] {
+  private inferAttachmentType(contentType: string | null, filename: string): MessageAttachment["type"] {
     if (contentType) {
       if (contentType.startsWith("image/")) return "image";
       if (contentType.startsWith("audio/")) return "audio";

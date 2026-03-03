@@ -8,7 +8,7 @@ import type { Logger } from "../../logging/logger.ts";
 import { MemoryConsolidator } from "../consolidation.ts";
 import type { EmbeddingModel, EmbeddingPrefix } from "../embeddings.ts";
 import type { ExtractedMemory } from "../extractor.ts";
-import { MemoryStore, type CreateMemoryInput } from "../store.ts";
+import { type CreateMemoryInput, MemoryStore } from "../store.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -249,7 +249,7 @@ describe("MemoryConsolidator", () => {
       config: {
         enabled: true,
         duplicateThreshold: 0.99,
-        updateThreshold: 0.80,
+        updateThreshold: 0.8,
         maxCandidates: 10,
       },
     });
@@ -275,7 +275,7 @@ describe("MemoryConsolidator", () => {
         enabled: true,
         // Set thresholds so 1.0 similarity falls in the update range (not NOOP)
         duplicateThreshold: 1.1, // impossible to reach, forces into update/delete path
-        updateThreshold: 0.80,
+        updateThreshold: 0.8,
         maxCandidates: 10,
       },
       contradictionDetectorFn: async () => true, // Always detect contradiction
@@ -283,12 +283,7 @@ describe("MemoryConsolidator", () => {
 
     const fixedVec = new Float32Array(384);
     fixedVec[0] = 1.0;
-    storeMemoryWithEmbedding(
-      db,
-      store,
-      makeInput({ content: "Manuel prefers Python" }),
-      fixedVec,
-    );
+    storeMemoryWithEmbedding(db, store, makeInput({ content: "Manuel prefers Python" }), fixedVec);
 
     const result = await consolidator.classify(
       makeExtracted({ content: "Manuel doesn't prefer Python, he prefers TypeScript" }),
@@ -350,7 +345,7 @@ describe("MemoryConsolidator", () => {
       config: {
         enabled: true,
         duplicateThreshold: 1.1,
-        updateThreshold: 0.80,
+        updateThreshold: 0.8,
         maxCandidates: 10,
       },
       contradictionDetectorFn: async () => true,
@@ -359,16 +354,9 @@ describe("MemoryConsolidator", () => {
     // Store initial memory
     const fixedVec = new Float32Array(384);
     fixedVec[0] = 1.0;
-    const oldId = storeMemoryWithEmbedding(
-      db,
-      store,
-      makeInput({ content: "Manuel uses Python" }),
-      fixedVec,
-    );
+    const oldId = storeMemoryWithEmbedding(db, store, makeInput({ content: "Manuel uses Python" }), fixedVec);
 
-    const result = await consolidator.consolidate([
-      makeExtracted({ content: "Manuel doesn't use Python anymore" }),
-    ]);
+    const result = await consolidator.consolidate([makeExtracted({ content: "Manuel doesn't use Python anymore" })]);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
@@ -392,41 +380,20 @@ describe("MemoryConsolidator", () => {
 
   test("heuristicContradiction detects negation patterns", () => {
     expect(
-      MemoryConsolidator.heuristicContradiction(
-        "Manuel prefers TypeScript",
-        "Manuel doesn't prefer TypeScript",
-      ),
+      MemoryConsolidator.heuristicContradiction("Manuel prefers TypeScript", "Manuel doesn't prefer TypeScript"),
     ).toBe(true);
 
-    expect(
-      MemoryConsolidator.heuristicContradiction(
-        "Manuel uses Vim",
-        "Manuel does not use Vim",
-      ),
-    ).toBe(true);
+    expect(MemoryConsolidator.heuristicContradiction("Manuel uses Vim", "Manuel does not use Vim")).toBe(true);
 
-    expect(
-      MemoryConsolidator.heuristicContradiction(
-        "Manuel likes Python",
-        "Manuel doesn't like Python",
-      ),
-    ).toBe(true);
+    expect(MemoryConsolidator.heuristicContradiction("Manuel likes Python", "Manuel doesn't like Python")).toBe(true);
   });
 
   test("heuristicContradiction returns false for non-contradictory content", () => {
-    expect(
-      MemoryConsolidator.heuristicContradiction(
-        "Manuel prefers TypeScript",
-        "Manuel also likes JavaScript",
-      ),
-    ).toBe(false);
+    expect(MemoryConsolidator.heuristicContradiction("Manuel prefers TypeScript", "Manuel also likes JavaScript")).toBe(
+      false,
+    );
 
-    expect(
-      MemoryConsolidator.heuristicContradiction(
-        "The weather is sunny",
-        "Bun is a fast runtime",
-      ),
-    ).toBe(false);
+    expect(MemoryConsolidator.heuristicContradiction("The weather is sunny", "Bun is a fast runtime")).toBe(false);
   });
 
   test("heuristicContradiction detects correction patterns with word overlap", () => {

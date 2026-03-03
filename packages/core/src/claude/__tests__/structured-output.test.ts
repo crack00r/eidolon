@@ -1,14 +1,14 @@
 import { describe, expect, test } from "bun:test";
-import { z } from "zod";
-import { FakeClaudeProcess } from "@eidolon/test-utils";
 import type { ClaudeSessionOptions } from "@eidolon/protocol";
+import { FakeClaudeProcess } from "@eidolon/test-utils";
+import { z } from "zod";
 import { createLogger } from "../../logging/logger.ts";
 import {
-  StructuredOutputParser,
+  collectTextFromStream,
   extractJson,
   generateSchemaInstruction,
+  StructuredOutputParser,
   zodToJsonDescription,
-  collectTextFromStream,
 } from "../structured-output.ts";
 
 // ---------------------------------------------------------------------------
@@ -57,7 +57,7 @@ describe("zodToJsonDescription", () => {
     const desc = zodToJsonDescription(schema);
     const properties = desc.properties as Record<string, Record<string, unknown>>;
     expect(properties.nickname).toEqual({ type: "string", optional: true });
-    expect((desc.required as string[])).toEqual(["name"]);
+    expect(desc.required as string[]).toEqual(["name"]);
   });
 
   test("handles arrays", () => {
@@ -140,7 +140,7 @@ describe("extractJson", () => {
   });
 
   test("extracts pure JSON array", () => {
-    const input = '[1, 2, 3]';
+    const input = "[1, 2, 3]";
     expect(extractJson(input)).toBe(input);
   });
 
@@ -183,7 +183,7 @@ describe("extractJson", () => {
   });
 
   test("extracts array from text", () => {
-    const input = 'The items are: [1, 2, 3] done.';
+    const input = "The items are: [1, 2, 3] done.";
     expect(extractJson(input)).toBe("[1, 2, 3]");
   });
 
@@ -335,7 +335,7 @@ describe("StructuredOutputParser.parse", () => {
 
   test("retries on validation failure and succeeds", async () => {
     const fake = new FakeClaudeProcess();
-    let callCount = 0;
+    const callCount = 0;
 
     // Use a regex-based rule that checks call count via the prompt content.
     // First call has the original prompt, retry has "Your previous response" at the start.
@@ -437,16 +437,20 @@ describe("StructuredOutputParser.parse", () => {
 
 describe("StructuredOutputParser with complex schema", () => {
   const memoryExtractionSchema = z.object({
-    facts: z.array(z.object({
-      content: z.string(),
-      type: z.enum(["fact", "preference", "decision"]),
-      confidence: z.number().min(0).max(1),
-      tags: z.array(z.string()),
-    })),
-    metadata: z.object({
-      turnCount: z.number(),
-      language: z.string(),
-    }).optional(),
+    facts: z.array(
+      z.object({
+        content: z.string(),
+        type: z.enum(["fact", "preference", "decision"]),
+        confidence: z.number().min(0).max(1),
+        tags: z.array(z.string()),
+      }),
+    ),
+    metadata: z
+      .object({
+        turnCount: z.number(),
+        language: z.string(),
+      })
+      .optional(),
   });
 
   test("parses complex nested response", async () => {
@@ -472,9 +476,7 @@ describe("StructuredOutputParser with complex schema", () => {
 
   test("validates enum values strictly", async () => {
     const invalidResponse = JSON.stringify({
-      facts: [
-        { content: "test", type: "invalid_type", confidence: 0.5, tags: [] },
-      ],
+      facts: [{ content: "test", type: "invalid_type", confidence: 0.5, tags: [] }],
     });
 
     const fake = FakeClaudeProcess.withResponse(/./, invalidResponse);

@@ -42,7 +42,10 @@ const SECRET_PREFIX = "$secret:";
  * Returns a new servers record with secrets replaced by their decrypted values.
  */
 function resolveEnvSecrets(
-  servers: Record<string, { readonly command: string; readonly args?: readonly string[]; readonly env?: Record<string, string> }>,
+  servers: Record<
+    string,
+    { readonly command: string; readonly args?: readonly string[]; readonly env?: Record<string, string> }
+  >,
   resolver: SecretResolver,
 ): Result<McpConfigFile["mcpServers"], EidolonError> {
   const resolved: Record<string, { command: string; args?: readonly string[]; env?: Record<string, string> }> = {};

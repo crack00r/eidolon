@@ -133,8 +133,7 @@ export class FeedbackStore {
 
     const id = randomUUID();
     const now = Date.now();
-    const comment =
-      input.comment !== undefined ? input.comment.slice(0, MAX_COMMENT_LENGTH) : null;
+    const comment = input.comment !== undefined ? input.comment.slice(0, MAX_COMMENT_LENGTH) : null;
 
     try {
       this.db

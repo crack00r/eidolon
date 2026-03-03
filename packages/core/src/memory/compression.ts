@@ -20,7 +20,7 @@ import type {
 } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 import type { Logger } from "../logging/logger.ts";
-import type { MemoryStore, CreateMemoryInput } from "./store.ts";
+import type { CreateMemoryInput, MemoryStore } from "./store.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -62,11 +62,7 @@ export class MemoryCompressor {
   private readonly config: CompressionConfig;
   private readonly summarizeFn?: SummarizeFn;
 
-  constructor(
-    store: MemoryStore,
-    logger: Logger,
-    options?: Partial<CompressorOptions>,
-  ) {
+  constructor(store: MemoryStore, logger: Logger, options?: Partial<CompressorOptions>) {
     this.store = store;
     this.logger = logger.child("compressor");
     this.config = options?.config ?? DEFAULT_CONFIG;

@@ -428,14 +428,16 @@ export const DigestConfigSchema = z.object({
     .default("07:00"),
   timezone: z.string().default("Europe/Berlin"),
   channel: z.enum(["telegram", "desktop", "all"]).default("telegram"),
-  sections: z.object({
-    conversations: z.boolean().default(true),
-    learning: z.boolean().default(true),
-    memory: z.boolean().default(true),
-    schedule: z.boolean().default(true),
-    metrics: z.boolean().default(true),
-    actionItems: z.boolean().default(true),
-  }).default({}),
+  sections: z
+    .object({
+      conversations: z.boolean().default(true),
+      learning: z.boolean().default(true),
+      memory: z.boolean().default(true),
+      schedule: z.boolean().default(true),
+      metrics: z.boolean().default(true),
+      actionItems: z.boolean().default(true),
+    })
+    .default({}),
 });
 
 // ---------------------------------------------------------------------------

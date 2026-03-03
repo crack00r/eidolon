@@ -599,9 +599,7 @@ describe("MemoryExtractor.extractAndConsolidate", () => {
       consolidator: createFakeConsolidator(),
     });
 
-    const result = await extractor.extractAndConsolidate(
-      makeTurn({ userMessage: "ok", assistantResponse: "👍" }),
-    );
+    const result = await extractor.extractAndConsolidate(makeTurn({ userMessage: "ok", assistantResponse: "👍" }));
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;

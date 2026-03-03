@@ -18,18 +18,15 @@
  *  10. Summary and next steps
  */
 
+import { chmodSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { createInterface } from "node:readline";
-import { existsSync, mkdirSync, writeFileSync, chmodSync } from "node:fs";
-import {
-  getConfigDir,
-  getConfigPath,
-  getDataDir,
-  loadConfig,
-  zeroBuffer,
-} from "@eidolon/core";
+import { getConfigDir, getConfigPath, getDataDir, loadConfig, zeroBuffer } from "@eidolon/core";
 import { SECRETS_DB_FILENAME, VERSION } from "@eidolon/protocol";
 import type { Command } from "commander";
 import { formatCheck } from "../utils/formatter.ts";
+import { deriveMasterKeyBuffer } from "./onboard-kdf.ts";
+import { installPlatformService } from "./onboard-service.ts";
+import type { AskFn, GpuSetupResult, TelegramSetupResult } from "./onboard-steps.ts";
 import {
   checkPrerequisites,
   initializeDatabases,
@@ -41,9 +38,6 @@ import {
   setupMasterKey,
   setupTelegram,
 } from "./onboard-steps.ts";
-import type { AskFn, GpuSetupResult, TelegramSetupResult } from "./onboard-steps.ts";
-import { deriveMasterKeyBuffer } from "./onboard-kdf.ts";
-import { installPlatformService } from "./onboard-service.ts";
 
 // ---------------------------------------------------------------------------
 // ASCII banner
@@ -144,9 +138,7 @@ async function onboardServer(ask: AskFn): Promise<ServerSetupResult> {
   const { generateAuthToken } = await import("@eidolon/core");
   const gatewayToken = tokenChoice || generateAuthToken();
   if (!tokenChoice) {
-    const masked = gatewayToken.length > 8
-      ? `${gatewayToken.slice(0, 4)}..${gatewayToken.slice(-4)}`
-      : "****";
+    const masked = gatewayToken.length > 8 ? `${gatewayToken.slice(0, 4)}..${gatewayToken.slice(-4)}` : "****";
     console.log(`  Generated token: ${masked}`);
   }
   if (masterKey) {
@@ -253,13 +245,15 @@ function writeServerConfig(r: ServerSetupResult): void {
   }
   if (r.gpu.enabled && r.gpu.host) {
     config.gpu = {
-      workers: [{
-        name: "primary",
-        host: r.gpu.host,
-        port: r.gpu.port,
-        token: { $secret: "gpu-worker-token" },
-        capabilities: ["tts", "stt"],
-      }],
+      workers: [
+        {
+          name: "primary",
+          host: r.gpu.host,
+          port: r.gpu.port,
+          token: { $secret: "gpu-worker-token" },
+          capabilities: ["tts", "stt"],
+        },
+      ],
     };
   }
 
@@ -467,9 +461,13 @@ export function registerOnboardCommand(program: Command): void {
           if (result.tailscaleIp) console.log(`  Tailscale:    ${result.tailscaleIp}`);
           console.log(`  Telegram:     ${result.telegram.enabled ? "configured" : "skipped"}`);
           if (result.telegram.enabled) {
-            console.log(`  Telegram IDs: ${result.telegram.allowedUserIds.length > 0 ? result.telegram.allowedUserIds.join(", ") : "(none)"}`);
+            console.log(
+              `  Telegram IDs: ${result.telegram.allowedUserIds.length > 0 ? result.telegram.allowedUserIds.join(", ") : "(none)"}`,
+            );
           }
-          console.log(`  GPU Worker:   ${result.gpu.enabled ? `${result.gpu.host}:${result.gpu.port} (${result.gpu.reachable ? "reachable" : "not reachable"})` : "skipped"}`);
+          console.log(
+            `  GPU Worker:   ${result.gpu.enabled ? `${result.gpu.host}:${result.gpu.port} (${result.gpu.reachable ? "reachable" : "not reachable"})` : "skipped"}`,
+          );
           console.log(`  Databases:    ${result.dbInitialized ? "initialized" : "FAILED"}`);
           console.log(`  Health:       ${result.healthOk ? "all checks passed" : "some checks failed"}`);
           console.log(`  Config:       ${getConfigPath()}`);

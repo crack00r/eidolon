@@ -144,10 +144,14 @@ export class RateLimitTracker {
   /** Set a cooldown period for an account. */
   recordCooldown(accountName: string, cooldownUntilMs: number): void {
     this.cooldowns.set(accountName, cooldownUntilMs);
-    this.logger.info("record-cooldown", `Account ${accountName} in cooldown until ${new Date(cooldownUntilMs).toISOString()}`, {
-      accountName,
-      cooldownUntilMs,
-    });
+    this.logger.info(
+      "record-cooldown",
+      `Account ${accountName} in cooldown until ${new Date(cooldownUntilMs).toISOString()}`,
+      {
+        accountName,
+        cooldownUntilMs,
+      },
+    );
   }
 
   /** Clear the cooldown for an account. */

@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { FakeClaudeProcess } from "@eidolon/test-utils";
 import type { Logger } from "../../logging/logger.ts";
-import { ResearchEngine } from "../engine.ts";
 import type { ResearchEngineConfig, ResearchRequest, ResearchSource } from "../engine.ts";
+import { ResearchEngine } from "../engine.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -125,14 +125,10 @@ describe("ResearchEngine", () => {
       expect(result.ok).toBe(true);
       if (!result.ok) return;
 
-      const sqliteVecFinding = result.value.findings.find(
-        (f) => f.title === "sqlite-vec for Vector Search",
-      );
+      const sqliteVecFinding = result.value.findings.find((f) => f.title === "sqlite-vec for Vector Search");
       expect(sqliteVecFinding?.confidence).toBe(0.9); // high
 
-      const fts5Finding = result.value.findings.find(
-        (f) => f.title === "FTS5 for BM25 Search",
-      );
+      const fts5Finding = result.value.findings.find((f) => f.title === "FTS5 for BM25 Search");
       expect(fts5Finding?.confidence).toBe(0.7); // medium
     });
 
@@ -187,9 +183,7 @@ describe("ResearchEngine", () => {
       const fake = FakeClaudeProcess.withResponse(/./, SAMPLE_RESPONSE_WITH_FINDINGS);
       const engine = new ResearchEngine(fake, createConfig(), logger);
 
-      const result = await engine.research(
-        createRequest({ sources: ["invalid" as ResearchSource] }),
-      );
+      const result = await engine.research(createRequest({ sources: ["invalid" as ResearchSource] }));
       expect(result.ok).toBe(true);
       // The prompt should have been built with default sources
       const lastPrompt = fake.getLastPrompt();
@@ -233,7 +227,8 @@ describe("ResearchEngine", () => {
       const fake = new FakeClaudeProcess();
       const engine = new ResearchEngine(fake, createConfig(), logger);
 
-      const text = "References:\n[1]: https://example.com/article - Some article\n[2]: https://github.com/test/repo - Repo";
+      const text =
+        "References:\n[1]: https://example.com/article - Some article\n[2]: https://github.com/test/repo - Repo";
       const citations = engine.parseCitations(text);
 
       expect(citations.length).toBe(2);

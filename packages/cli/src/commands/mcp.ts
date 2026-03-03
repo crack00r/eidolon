@@ -10,12 +10,12 @@
 
 import { readFileSync, writeFileSync } from "node:fs";
 import {
+  getConfigPath,
   getMcpTemplate,
   listMcpTemplates,
   searchMcpTemplates,
   templateToConfigEntry,
 } from "@eidolon/core";
-import { getConfigPath } from "@eidolon/core";
 import type { Command } from "commander";
 import { formatTable } from "../utils/formatter.ts";
 
@@ -92,7 +92,9 @@ export function registerMcpCommand(program: Command): void {
 
       if (template.requiredSecrets.length > 0) {
         console.log(`Required secrets: ${template.requiredSecrets.join(", ")}`);
-        console.log(`  Set them with: ${template.requiredSecrets.map((s) => `eidolon secrets set ${s} --value <value>`).join("\n                  ")}`);
+        console.log(
+          `  Set them with: ${template.requiredSecrets.map((s) => `eidolon secrets set ${s} --value <value>`).join("\n                  ")}`,
+        );
       } else {
         console.log("Required secrets: (none)");
       }
@@ -149,7 +151,9 @@ export function registerMcpCommand(program: Command): void {
 
       // Check if already exists
       if (serverName in mcpServers) {
-        console.error(`Error: MCP server "${serverName}" already exists in config. Use a different --name or remove the existing entry first.`);
+        console.error(
+          `Error: MCP server "${serverName}" already exists in config. Use a different --name or remove the existing entry first.`,
+        );
         process.exitCode = 1;
         return;
       }

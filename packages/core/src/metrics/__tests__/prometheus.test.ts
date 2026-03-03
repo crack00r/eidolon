@@ -42,7 +42,7 @@ describe("MetricsRegistry", () => {
     const registry = new MetricsRegistry();
 
     registry.incCostUsd(0.05);
-    registry.incCostUsd(0.10);
+    registry.incCostUsd(0.1);
 
     const cost = registry.costUsd.values.get("");
     expect(cost).toBeCloseTo(0.15, 10);
@@ -129,7 +129,7 @@ describe("formatPrometheus", () => {
     expect(output).toContain("# TYPE eidolon_event_queue_depth gauge");
     expect(output).toContain("# HELP eidolon_loop_cycle_duration_ms");
     expect(output).toContain("# TYPE eidolon_loop_cycle_duration_ms histogram");
-    expect(output).toContain("eidolon_loop_cycle_duration_ms_bucket{le=\"+Inf\"} 0");
+    expect(output).toContain('eidolon_loop_cycle_duration_ms_bucket{le="+Inf"} 0');
     expect(output).toContain("eidolon_loop_cycle_duration_ms_sum 0");
     expect(output).toContain("eidolon_loop_cycle_duration_ms_count 0");
   });

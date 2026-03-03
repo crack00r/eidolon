@@ -426,9 +426,7 @@ describe("ApprovalManager", () => {
 
     test("emits approval:escalated event", () => {
       const { manager, eventBus, db } = makeManager({
-        escalation: [
-          { timeoutMs: 1, action: "escalate", escalateTo: "desktop", maxEscalations: 3 },
-        ],
+        escalation: [{ timeoutMs: 1, action: "escalate", escalateTo: "desktop", maxEscalations: 3 }],
       });
 
       const events: Array<{ type: string }> = [];
@@ -454,9 +452,7 @@ describe("ApprovalManager", () => {
     test("applies default action when max escalations reached", () => {
       const { manager, db } = makeManager({
         defaultAction: "deny",
-        escalation: [
-          { timeoutMs: 1, action: "escalate", escalateTo: "desktop", maxEscalations: 1 },
-        ],
+        escalation: [{ timeoutMs: 1, action: "escalate", escalateTo: "desktop", maxEscalations: 1 }],
       });
 
       const req = manager.requestApproval({
@@ -481,10 +477,7 @@ describe("ApprovalManager", () => {
       expect(escalatedReq.escalationLevel).toBe(1);
 
       // Force timeout on escalated request -> should hit max escalations
-      db.query("UPDATE approval_requests SET timeout_at = ? WHERE id = ?").run(
-        Date.now() - 1000,
-        escalatedReq.id,
-      );
+      db.query("UPDATE approval_requests SET timeout_at = ? WHERE id = ?").run(Date.now() - 1000, escalatedReq.id);
 
       // Level 1 with maxEscalations=1 means nextLevel (2) > maxEscalations (1),
       // so it should apply the default action (deny)

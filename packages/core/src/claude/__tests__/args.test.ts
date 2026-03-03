@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { z } from "zod";
 import type { ClaudeSessionOptions } from "@eidolon/protocol";
+import { z } from "zod";
 import { buildClaudeArgs } from "../args.ts";
 
 function makeOptions(overrides: Partial<ClaudeSessionOptions> = {}): ClaudeSessionOptions {
@@ -109,10 +109,13 @@ describe("buildClaudeArgs", () => {
 
   test("appends schema instruction to existing system prompt", () => {
     const schema = z.object({ value: z.string() });
-    const args = buildClaudeArgs("prompt", makeOptions({
-      systemPrompt: "Be concise.",
-      outputSchema: schema,
-    }));
+    const args = buildClaudeArgs(
+      "prompt",
+      makeOptions({
+        systemPrompt: "Be concise.",
+        outputSchema: schema,
+      }),
+    );
     const systemPromptIdx = args.indexOf("--system-prompt");
     const systemPrompt = args[systemPromptIdx + 1];
     expect(systemPrompt).toContain("Be concise.");

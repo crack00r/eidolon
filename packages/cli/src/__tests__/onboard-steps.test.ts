@@ -5,7 +5,7 @@
  * Individual step functions are tested in isolation.
  */
 
-import { describe, expect, test, mock, beforeEach, afterEach } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import type { AskFn } from "../commands/onboard-steps.ts";
 
 // Mock console.log to capture output
@@ -85,7 +85,7 @@ describe("setupIdentity", () => {
 describe("setupMasterKey", () => {
   test("generates key when user accepts default", async () => {
     const { setupMasterKey } = await import("../commands/onboard-steps.ts");
-    const ask = createMockAsk([""]);  // Accept default (Y)
+    const ask = createMockAsk([""]); // Accept default (Y)
     const key = await setupMasterKey(ask);
     expect(key).toBeDefined();
     expect(typeof key).toBe("string");
@@ -124,7 +124,7 @@ describe("setupMasterKey", () => {
 describe("setupClaudeAccount", () => {
   test("defaults to OAuth when user accepts default", async () => {
     const { setupClaudeAccount } = await import("../commands/onboard-steps.ts");
-    const ask = createMockAsk([""]);  // Accept default [1]
+    const ask = createMockAsk([""]); // Accept default [1]
     const result = await setupClaudeAccount(ask);
     expect(result.type).toBe("oauth");
     expect(result.apiKey).toBeUndefined();
@@ -227,7 +227,8 @@ describe("initializeDatabases", () => {
   test("initializes all 3 databases via mock", () => {
     // This test uses the mocked DatabaseManager from preload.ts
     // which returns { ok: true } from initialize()
-    const { initializeDatabases } = require("../commands/onboard-steps.ts") as typeof import("../commands/onboard-steps.ts");
+    const { initializeDatabases } =
+      require("../commands/onboard-steps.ts") as typeof import("../commands/onboard-steps.ts");
     const result = initializeDatabases();
     // With the mocked DatabaseManager, this should succeed
     expect(typeof result).toBe("boolean");
@@ -264,7 +265,8 @@ describe("runHealthChecks", () => {
 
 describe("deriveMasterKeyBuffer", () => {
   test("decodes hex key directly", () => {
-    const { deriveMasterKeyBuffer } = require("../commands/onboard-kdf.ts") as typeof import("../commands/onboard-kdf.ts");
+    const { deriveMasterKeyBuffer } =
+      require("../commands/onboard-kdf.ts") as typeof import("../commands/onboard-kdf.ts");
     const hexKey = "a".repeat(64);
     const buf = deriveMasterKeyBuffer(hexKey);
     expect(buf).toBeInstanceOf(Buffer);
@@ -276,14 +278,16 @@ describe("deriveMasterKeyBuffer", () => {
   });
 
   test("derives passphrase via scrypt", () => {
-    const { deriveMasterKeyBuffer } = require("../commands/onboard-kdf.ts") as typeof import("../commands/onboard-kdf.ts");
+    const { deriveMasterKeyBuffer } =
+      require("../commands/onboard-kdf.ts") as typeof import("../commands/onboard-kdf.ts");
     const buf = deriveMasterKeyBuffer("my-test-passphrase");
     expect(buf).toBeInstanceOf(Buffer);
     expect(buf.length).toBe(32);
   });
 
   test("produces different keys for different passphrases", () => {
-    const { deriveMasterKeyBuffer } = require("../commands/onboard-kdf.ts") as typeof import("../commands/onboard-kdf.ts");
+    const { deriveMasterKeyBuffer } =
+      require("../commands/onboard-kdf.ts") as typeof import("../commands/onboard-kdf.ts");
     const buf1 = deriveMasterKeyBuffer("passphrase-one");
     const buf2 = deriveMasterKeyBuffer("passphrase-two");
     expect(buf1).not.toEqual(buf2);

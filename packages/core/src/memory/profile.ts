@@ -329,13 +329,28 @@ export class UserProfileGenerator {
   ): string {
     const parts: string[] = [];
     if (interests.length > 0) {
-      parts.push(`interested in ${interests.slice(0, 3).map((i) => i.topic).join(", ")}`);
+      parts.push(
+        `interested in ${interests
+          .slice(0, 3)
+          .map((i) => i.topic)
+          .join(", ")}`,
+      );
     }
     if (preferences.length > 0) {
-      parts.push(`prefers ${preferences.slice(0, 3).map((p) => p.key.replace(/\n/g, " ").trim()).join("; ")}`);
+      parts.push(
+        `prefers ${preferences
+          .slice(0, 3)
+          .map((p) => p.key.replace(/\n/g, " ").trim())
+          .join("; ")}`,
+      );
     }
     if (recentTopics.length > 0) {
-      parts.push(`recent focus: ${recentTopics.slice(0, 3).map((t) => t.topic).join(", ")}`);
+      parts.push(
+        `recent focus: ${recentTopics
+          .slice(0, 3)
+          .map((t) => t.topic)
+          .join(", ")}`,
+      );
     }
     if (parts.length === 0) {
       return `${this.ownerName}'s profile is still being built from conversations.`;

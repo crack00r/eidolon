@@ -11,9 +11,9 @@
  * Returns Result<T, EidolonError> where T is the inferred Zod type.
  */
 
-import type { z } from "zod";
-import type { EidolonError, IClaudeProcess, ClaudeSessionOptions, StreamEvent, Result } from "@eidolon/protocol";
+import type { ClaudeSessionOptions, EidolonError, IClaudeProcess, Result, StreamEvent } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
+import type { z } from "zod";
 import type { Logger } from "../logging/logger.ts";
 
 /** Configuration for the structured output parser. */
@@ -267,12 +267,7 @@ export class StructuredOutputParser<T extends z.ZodType> {
   private readonly logger: Logger;
   private readonly maxRetries: number;
 
-  constructor(
-    schema: T,
-    claude: IClaudeProcess,
-    logger: Logger,
-    config?: StructuredOutputConfig,
-  ) {
+  constructor(schema: T, claude: IClaudeProcess, logger: Logger, config?: StructuredOutputConfig) {
     this.schema = schema;
     this.claude = claude;
     this.logger = logger.child("structured-output");
@@ -287,10 +282,7 @@ export class StructuredOutputParser<T extends z.ZodType> {
    *
    * Returns Result<z.infer<T>, EidolonError>.
    */
-  async parse(
-    prompt: string,
-    options: ClaudeSessionOptions,
-  ): Promise<Result<z.infer<T>, EidolonError>> {
+  async parse(prompt: string, options: ClaudeSessionOptions): Promise<Result<z.infer<T>, EidolonError>> {
     const schemaInstruction = generateSchemaInstruction(this.schema);
     const augmentedSystemPrompt = options.systemPrompt
       ? `${options.systemPrompt}\n\n${schemaInstruction}`
@@ -343,12 +335,7 @@ export class StructuredOutputParser<T extends z.ZodType> {
   parseResponse(response: string): Result<z.infer<T>, EidolonError> {
     const jsonStr = extractJson(response);
     if (jsonStr === null) {
-      return Err(
-        createError(
-          ErrorCode.STRUCTURED_OUTPUT_PARSE_FAILED,
-          "No valid JSON found in response",
-        ),
-      );
+      return Err(createError(ErrorCode.STRUCTURED_OUTPUT_PARSE_FAILED, "No valid JSON found in response"));
     }
 
     let parsed: unknown;
@@ -369,33 +356,20 @@ export class StructuredOutputParser<T extends z.ZodType> {
       const errorMessage = validation.error.issues
         .map((issue) => `${issue.path.join(".")}: ${issue.message}`)
         .join("; ");
-      return Err(
-        createError(
-          ErrorCode.STRUCTURED_OUTPUT_PARSE_FAILED,
-          `Schema validation failed: ${errorMessage}`,
-        ),
-      );
+      return Err(createError(ErrorCode.STRUCTURED_OUTPUT_PARSE_FAILED, `Schema validation failed: ${errorMessage}`));
     }
 
     return Ok(validation.data as z.infer<T>);
   }
 
   /** Single attempt: run Claude and parse the response. */
-  private async attemptParse(
-    prompt: string,
-    options: ClaudeSessionOptions,
-  ): Promise<Result<z.infer<T>, EidolonError>> {
+  private async attemptParse(prompt: string, options: ClaudeSessionOptions): Promise<Result<z.infer<T>, EidolonError>> {
     try {
       const stream = this.claude.run(prompt, options);
       const responseText = await collectTextFromStream(stream);
 
       if (!responseText.trim()) {
-        return Err(
-          createError(
-            ErrorCode.STRUCTURED_OUTPUT_PARSE_FAILED,
-            "Claude returned an empty response",
-          ),
-        );
+        return Err(createError(ErrorCode.STRUCTURED_OUTPUT_PARSE_FAILED, "Claude returned an empty response"));
       }
 
       return this.parseResponse(responseText);

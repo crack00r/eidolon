@@ -107,9 +107,7 @@ export class ClaudeCodeManager implements IClaudeProcess {
     this.activeSessions.set(sessionId, proc);
 
     // Drain stderr unconditionally in the background to prevent pipe deadlocks
-    const stderrPromise: Promise<string> = proc.stderr
-      ? new Response(proc.stderr).text()
-      : Promise.resolve("");
+    const stderrPromise: Promise<string> = proc.stderr ? new Response(proc.stderr).text() : Promise.resolve("");
 
     // Set up timeout if configured
     const timeoutId =

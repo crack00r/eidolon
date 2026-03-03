@@ -76,7 +76,9 @@ export function formatProfileMarkdown(profile: UserProfile): string {
   if (profile.relationships.length > 0) {
     lines.push("### Relationships");
     for (const rel of profile.relationships) {
-      lines.push(`- ${sanitize(rel.entity)} (${rel.entityType}) -- ${rel.relation} (confidence: ${rel.confidence.toFixed(2)})`);
+      lines.push(
+        `- ${sanitize(rel.entity)} (${rel.entityType}) -- ${rel.relation} (confidence: ${rel.confidence.toFixed(2)})`,
+      );
     }
     lines.push("");
   }

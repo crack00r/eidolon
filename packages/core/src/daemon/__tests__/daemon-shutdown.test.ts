@@ -7,14 +7,22 @@
 
 import { Database } from "bun:sqlite";
 import { afterEach, describe, expect, test } from "bun:test";
-import type { BusEvent, Channel, ChannelCapabilities, EidolonError, InboundMessage, OutboundMessage, Result } from "@eidolon/protocol";
+import type {
+  BusEvent,
+  Channel,
+  ChannelCapabilities,
+  EidolonError,
+  InboundMessage,
+  OutboundMessage,
+  Result,
+} from "@eidolon/protocol";
 import { Ok } from "@eidolon/protocol";
+import { MessageRouter } from "../../channels/router.ts";
 import { runMigrations } from "../../database/migrations.ts";
 import { OPERATIONAL_MIGRATIONS } from "../../database/schemas/operational.ts";
 import type { Logger } from "../../logging/logger.ts";
 import { EventBus } from "../../loop/event-bus.ts";
 import { SessionSupervisor } from "../../loop/session-supervisor.ts";
-import { MessageRouter } from "../../channels/router.ts";
 import { MetricsRegistry } from "../../metrics/prometheus.ts";
 
 // ---------------------------------------------------------------------------
@@ -365,10 +373,14 @@ describe("Graceful shutdown: system:shutdown event persistence", () => {
     // Simulate steps 1 and 5: dispose subscribers first, then publish shutdown
     bus.dispose();
 
-    const result = bus.publish("system:shutdown", { reason: "graceful" }, {
-      priority: "critical",
-      source: "daemon",
-    });
+    const result = bus.publish(
+      "system:shutdown",
+      { reason: "graceful" },
+      {
+        priority: "critical",
+        source: "daemon",
+      },
+    );
     expect(result.ok).toBe(true);
 
     // The event should be in SQLite despite no subscribers

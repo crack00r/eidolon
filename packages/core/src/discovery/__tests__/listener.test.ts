@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import type { DiscoveryBeacon } from "@eidolon/protocol";
 import type { Logger } from "../../logging/logger.ts";
 import { DiscoveryBroadcaster, type SignedBeacon } from "../broadcaster.ts";
-import { DiscoveryListener, type DiscoveredServer } from "../listener.ts";
+import { type DiscoveredServer, DiscoveryListener } from "../listener.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers

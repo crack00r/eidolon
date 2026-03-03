@@ -12,8 +12,8 @@
 
 import type { Bot } from "grammy";
 import { InlineKeyboard } from "grammy";
-import type { Logger } from "../../logging/logger.ts";
 import type { FeedbackStore } from "../../feedback/store.ts";
+import type { Logger } from "../../logging/logger.ts";
 import type { EventBus } from "../../loop/event-bus.ts";
 
 // ---------------------------------------------------------------------------
@@ -108,9 +108,7 @@ export function registerFeedbackCallbackHandler(deps: {
 
     const result = feedbackStore.submit({
       sessionId: parsed.sessionId,
-      messageId: ctx.callbackQuery.message?.message_id
-        ? String(ctx.callbackQuery.message.message_id)
-        : undefined,
+      messageId: ctx.callbackQuery.message?.message_id ? String(ctx.callbackQuery.message.message_id) : undefined,
       rating: parsed.rating,
       channel: "telegram",
     });

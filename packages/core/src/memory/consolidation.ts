@@ -22,11 +22,11 @@ import type {
   MemoryConsolidationAction,
   Result,
 } from "@eidolon/protocol";
-import { Err, Ok, createError, ErrorCode } from "@eidolon/protocol";
+import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 import type { Logger } from "../logging/logger.ts";
 import type { EmbeddingModel } from "./embeddings.ts";
 import type { ExtractedMemory } from "./extractor.ts";
-import type { MemoryStore, CreateMemoryInput, UpdateMemoryInput } from "./store.ts";
+import type { CreateMemoryInput, MemoryStore, UpdateMemoryInput } from "./store.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -45,10 +45,7 @@ export interface ConsolidationConfig {
 }
 
 /** Optional LLM-based contradiction detector for ambiguous cases. */
-export type ContradictionDetectorFn = (
-  existing: string,
-  incoming: string,
-) => Promise<boolean>;
+export type ContradictionDetectorFn = (existing: string, incoming: string) => Promise<boolean>;
 
 export interface ConsolidatorOptions {
   readonly config: ConsolidationConfig;
@@ -95,9 +92,7 @@ export class MemoryConsolidator {
    * Classify a single extracted memory against existing memories.
    * Returns a ConsolidationDecision indicating the action to take.
    */
-  async classify(
-    extracted: ExtractedMemory,
-  ): Promise<Result<ConsolidationDecision, EidolonError>> {
+  async classify(extracted: ExtractedMemory): Promise<Result<ConsolidationDecision, EidolonError>> {
     if (!this.config.enabled) {
       return Ok({
         action: "ADD" as MemoryConsolidationAction,
@@ -136,11 +131,7 @@ export class MemoryConsolidator {
     const embedding = embedResult.value;
 
     // Find similar memories from the store
-    const similarResult = this.store.findSimilar(
-      embedding,
-      this.config.maxCandidates,
-      this.config.updateThreshold,
-    );
+    const similarResult = this.store.findSimilar(embedding, this.config.maxCandidates, this.config.updateThreshold);
 
     if (!similarResult.ok) {
       this.logger.warn("classify", "findSimilar failed, falling back to ADD");
@@ -177,11 +168,9 @@ export class MemoryConsolidator {
 
     // NOOP: near-duplicate (similarity > duplicateThreshold)
     if (top.similarity >= this.config.duplicateThreshold) {
-      this.logger.debug(
-        "classify",
-        `NOOP: duplicate detected (sim=${top.similarity.toFixed(3)})`,
-        { existingId: top.memory.id },
-      );
+      this.logger.debug("classify", `NOOP: duplicate detected (sim=${top.similarity.toFixed(3)})`, {
+        existingId: top.memory.id,
+      });
       return Ok({
         action: "NOOP" as MemoryConsolidationAction,
         memoryId: top.memory.id,
@@ -191,18 +180,13 @@ export class MemoryConsolidator {
 
     // UPDATE or contradiction: similarity > updateThreshold but < duplicateThreshold
     // Check for contradiction
-    const isContradiction = await this.detectContradiction(
-      top.memory.content,
-      extracted.content,
-    );
+    const isContradiction = await this.detectContradiction(top.memory.content, extracted.content);
 
     if (isContradiction) {
       // DELETE old + ADD new (contradiction resolution)
-      this.logger.debug(
-        "classify",
-        `DELETE+ADD: contradiction detected (sim=${top.similarity.toFixed(3)})`,
-        { existingId: top.memory.id },
-      );
+      this.logger.debug("classify", `DELETE+ADD: contradiction detected (sim=${top.similarity.toFixed(3)})`, {
+        existingId: top.memory.id,
+      });
       return Ok({
         action: "DELETE" as MemoryConsolidationAction,
         memoryId: top.memory.id,
@@ -216,11 +200,9 @@ export class MemoryConsolidator {
     const mergedContent = this.mergeContent(top.memory.content, extracted.content);
     const mergedConfidence = Math.max(top.memory.confidence, extracted.confidence);
 
-    this.logger.debug(
-      "classify",
-      `UPDATE: merging with existing (sim=${top.similarity.toFixed(3)})`,
-      { existingId: top.memory.id },
-    );
+    this.logger.debug("classify", `UPDATE: merging with existing (sim=${top.similarity.toFixed(3)})`, {
+      existingId: top.memory.id,
+    });
 
     return Ok({
       action: "UPDATE" as MemoryConsolidationAction,
@@ -361,9 +343,7 @@ export class MemoryConsolidator {
       }
 
       default: {
-        return Err(
-          createError(ErrorCode.DB_QUERY_FAILED, `Unknown consolidation action: ${decision.action}`),
-        );
+        return Err(createError(ErrorCode.DB_QUERY_FAILED, `Unknown consolidation action: ${decision.action}`));
       }
     }
   }
@@ -373,10 +353,7 @@ export class MemoryConsolidator {
    * Uses injected LLM function if available, otherwise falls back to
    * simple heuristic negation detection.
    */
-  private async detectContradiction(
-    existing: string,
-    incoming: string,
-  ): Promise<boolean> {
+  private async detectContradiction(existing: string, incoming: string): Promise<boolean> {
     // Try LLM-based detection if available
     if (this.contradictionDetectorFn) {
       try {

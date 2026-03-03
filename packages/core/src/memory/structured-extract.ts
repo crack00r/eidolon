@@ -6,10 +6,10 @@
  * MemoryExtractor via the existing `llmExtractFn` injection point.
  */
 
-import { z } from "zod";
 import type { ClaudeSessionOptions, IClaudeProcess } from "@eidolon/protocol";
-import type { Logger } from "../logging/logger.ts";
+import { z } from "zod";
 import { StructuredOutputParser } from "../claude/structured-output.ts";
+import type { Logger } from "../logging/logger.ts";
 import type { ConversationTurn, ExtractedMemory, LlmExtractFn } from "./extractor.ts";
 
 // ---------------------------------------------------------------------------
@@ -17,15 +17,7 @@ import type { ConversationTurn, ExtractedMemory, LlmExtractFn } from "./extracto
 // ---------------------------------------------------------------------------
 
 /** Valid memory types that the LLM can output. */
-const MEMORY_TYPE_ENUM = z.enum([
-  "fact",
-  "preference",
-  "decision",
-  "episode",
-  "skill",
-  "relationship",
-  "schema",
-]);
+const MEMORY_TYPE_ENUM = z.enum(["fact", "preference", "decision", "episode", "skill", "relationship", "schema"]);
 
 /** Schema for a single extracted memory from the LLM. */
 const ExtractedMemorySchema = z.object({
@@ -115,12 +107,9 @@ export function createStructuredLlmExtractFn(
   logger: Logger,
   options: StructuredExtractOptions,
 ): LlmExtractFn {
-  const parser = new StructuredOutputParser(
-    ExtractionResponseSchema,
-    claude,
-    logger,
-    { maxRetries: options.maxRetries ?? 2 },
-  );
+  const parser = new StructuredOutputParser(ExtractionResponseSchema, claude, logger, {
+    maxRetries: options.maxRetries ?? 2,
+  });
 
   const baseSystemPrompt = options.systemPrompt ?? "You are a memory extraction assistant.";
 
@@ -143,13 +132,15 @@ export function createStructuredLlmExtractFn(
     }
 
     // Convert validated response to ExtractedMemory[] format
-    return result.value.memories.map((mem): ExtractedMemory => ({
-      type: mem.type,
-      content: mem.content,
-      confidence: mem.confidence,
-      tags: mem.tags,
-      source: "llm",
-      sensitive: false, // PII screening is done by MemoryExtractor after extraction
-    }));
+    return result.value.memories.map(
+      (mem): ExtractedMemory => ({
+        type: mem.type,
+        content: mem.content,
+        confidence: mem.confidence,
+        tags: mem.tags,
+        source: "llm",
+        sensitive: false, // PII screening is done by MemoryExtractor after extraction
+      }),
+    );
   };
 }

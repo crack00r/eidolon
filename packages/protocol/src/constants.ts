@@ -40,7 +40,7 @@ export const RETRY_DEFAULTS = {
 export const SESSION_TOOL_WHITELIST: Record<SessionType, readonly string[]> = {
   main: ["Read", "Write", "Edit", "Glob", "Grep", "Bash", "WebFetch"],
   task: ["Read", "Write", "Edit", "Glob", "Grep", "Bash"],
-  learning: ["Read", "Glob", "Grep"],  // restricted: no write, no shell
+  learning: ["Read", "Glob", "Grep"], // restricted: no write, no shell
   dream: ["Read", "Glob", "Grep"],
   voice: ["Read", "Glob", "Grep", "Bash", "WebFetch"],
   review: ["Read", "Glob", "Grep"],

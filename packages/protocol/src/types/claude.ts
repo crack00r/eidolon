@@ -2,9 +2,9 @@
  * IClaudeProcess interface and related types for Claude Code CLI integration.
  */
 
+import type { z } from "zod";
 import type { EidolonError } from "../errors.ts";
 import type { Result } from "../result.ts";
-import type { z } from "zod";
 
 export interface StreamEvent {
   readonly type: "text" | "tool_use" | "tool_result" | "error" | "done" | "system";

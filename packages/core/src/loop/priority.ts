@@ -63,10 +63,7 @@ const EVENT_SCORING: ReadonlyMap<string, ScoringRule> = new Map([
   ["memory:dream_complete", { score: 25, reason: "Dream consolidation completed", action: "rest", model: "fast" }],
   ["gateway:client_connected", { score: 35, reason: "Gateway client connected", action: "alert", model: "fast" }],
   ["gateway:client_disconnected", { score: 30, reason: "Gateway client disconnected", action: "alert", model: "fast" }],
-  [
-    "webhook:received",
-    { score: 50, reason: "External webhook event received", action: "execute_task", model: "fast" },
-  ],
+  ["webhook:received", { score: 50, reason: "External webhook event received", action: "execute_task", model: "fast" }],
 ]);
 
 const DEFAULT_RULE: ScoringRule = {

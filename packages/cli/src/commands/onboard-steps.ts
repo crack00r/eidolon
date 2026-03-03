@@ -9,15 +9,15 @@ import { existsSync, mkdirSync, statfsSync, unlinkSync, writeFileSync } from "no
 import { userInfo } from "node:os";
 import { join } from "node:path";
 import {
-  DatabaseManager,
-  SecretStore,
   createLogger,
+  DatabaseManager,
   generateMasterKey,
   getConfigDir,
   getConfigPath,
   getDataDir,
   getLogDir,
   loadConfig,
+  SecretStore,
   zeroBuffer,
 } from "@eidolon/core";
 import { SECRETS_DB_FILENAME } from "@eidolon/protocol";
@@ -319,7 +319,9 @@ export async function runHealthChecks(masterKeySet: boolean): Promise<boolean> {
   try {
     const result = Bun.spawnSync(["claude", "--version"], { stdout: "pipe", stderr: "pipe" });
     const cliOk = result.exitCode === 0;
-    console.log(formatCheck(cliOk ? "pass" : "fail", `Claude Code CLI ${result.stdout.toString().trim() || "(missing)"}`));
+    console.log(
+      formatCheck(cliOk ? "pass" : "fail", `Claude Code CLI ${result.stdout.toString().trim() || "(missing)"}`),
+    );
     if (!cliOk) allOk = false;
   } catch {
     console.log(formatCheck("fail", "Claude Code CLI not installed"));

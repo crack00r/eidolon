@@ -391,9 +391,7 @@ export class KGEntityStore {
 
     try {
       // Load all entities of the same type (entity count per type is typically small)
-      const rows = this.db
-        .query("SELECT * FROM kg_entities WHERE type = ?")
-        .all(type) as EntityRow[];
+      const rows = this.db.query("SELECT * FROM kg_entities WHERE type = ?").all(type) as EntityRow[];
 
       const matches: Array<{ entity: KGEntity; similarity: number }> = [];
 
@@ -438,10 +436,14 @@ export class KGEntityStore {
     if (similarResult.value.length > 0) {
       const best = similarResult.value[0];
       if (best) {
-        this.logger.debug("findOrCreateWithResolution", `Resolved "${input.name}" to existing entity "${best.entity.name}"`, {
-          similarity: best.similarity,
-          type: input.type,
-        });
+        this.logger.debug(
+          "findOrCreateWithResolution",
+          `Resolved "${input.name}" to existing entity "${best.entity.name}"`,
+          {
+            similarity: best.similarity,
+            type: input.type,
+          },
+        );
         return Ok({ entity: best.entity, created: false });
       }
     }

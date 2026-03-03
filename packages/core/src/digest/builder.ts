@@ -237,9 +237,9 @@ export class DigestBuilder {
       .query("SELECT COUNT(*) as count FROM memories WHERE created_at >= ?")
       .get(since) as { count: number } | null;
 
-    const totalCountRow = this.memoryDb
-      .query("SELECT COUNT(*) as count FROM memories")
-      .get() as { count: number } | null;
+    const totalCountRow = this.memoryDb.query("SELECT COUNT(*) as count FROM memories").get() as {
+      count: number;
+    } | null;
 
     const newCount = newCountRow?.count ?? 0;
     const totalCount = totalCountRow?.count ?? 0;

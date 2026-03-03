@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import {
-  MCP_TEMPLATES,
-  McpTemplateSchema,
   getMcpTemplate,
   listMcpTemplates,
+  MCP_TEMPLATES,
+  McpTemplateSchema,
   searchMcpTemplates,
   templateToConfigEntry,
 } from "../templates.ts";

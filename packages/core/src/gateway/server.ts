@@ -43,13 +43,15 @@ import { extractWebhookResult, handleWebhookRequest, type WebhookDeps } from "./
 // Zod schemas for RPC method parameters
 // ---------------------------------------------------------------------------
 
-const ErrorReportEntrySchema = z.object({
-  module: z.string().max(256).optional(),
-  message: z.string().max(4096).optional(),
-  level: z.string().max(64).optional(),
-  timestamp: z.union([z.string().max(64), z.number()]).optional(),
-  data: z.record(z.unknown()).optional(),
-}).passthrough();
+const ErrorReportEntrySchema = z
+  .object({
+    module: z.string().max(256).optional(),
+    message: z.string().max(4096).optional(),
+    level: z.string().max(64).optional(),
+    timestamp: z.union([z.string().max(64), z.number()]).optional(),
+    data: z.record(z.unknown()).optional(),
+  })
+  .passthrough();
 
 const ErrorReportParamsSchema = z.object({
   errors: z.array(ErrorReportEntrySchema).max(100),
@@ -112,7 +114,6 @@ const ResearchListParamsSchema = z.object({
   limit: z.number().int().min(1).max(100).optional(),
   since: z.number().int().min(0).optional(),
 });
-
 
 // ---------------------------------------------------------------------------
 // Types
@@ -568,7 +569,11 @@ export class GatewayServer {
         );
       }
       // Status retrieval is delegated to external handler registration.
-      return { researchId: parsed.data.researchId, status: "unknown", note: "Override this handler with actual research status retrieval" };
+      return {
+        researchId: parsed.data.researchId,
+        status: "unknown",
+        note: "Override this handler with actual research status retrieval",
+      };
     });
 
     // research.list: list recent research results
@@ -580,7 +585,11 @@ export class GatewayServer {
         );
       }
       // List retrieval is delegated to external handler registration.
-      return { results: [], limit: parsed.data.limit ?? 20, note: "Override this handler with actual research list retrieval" };
+      return {
+        results: [],
+        limit: parsed.data.limit ?? 20,
+        note: "Override this handler with actual research list retrieval",
+      };
     });
 
     // -----------------------------------------------------------------------

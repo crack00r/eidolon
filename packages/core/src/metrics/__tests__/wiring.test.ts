@@ -4,8 +4,8 @@ import { createLogger } from "../../logging/logger.ts";
 import { EventBus } from "../../loop/event-bus.ts";
 import { SessionSupervisor } from "../../loop/session-supervisor.ts";
 import { MetricsRegistry } from "../prometheus.ts";
-import { recordTokenMetrics, wireMetrics } from "../wiring.ts";
 import type { MetricsWiringHandle } from "../wiring.ts";
+import { recordTokenMetrics, wireMetrics } from "../wiring.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers

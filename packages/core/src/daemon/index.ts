@@ -10,12 +10,12 @@ import { existsSync, lstatSync, mkdirSync, readFileSync, renameSync, unlinkSync,
 import { dirname, join } from "node:path";
 import type { EidolonConfig } from "@eidolon/protocol";
 import { SECRETS_DB_FILENAME, VERSION } from "@eidolon/protocol";
+import { AuditLogger } from "../audit/logger.ts";
 import { BackupManager } from "../backup/manager.ts";
+import type { DiscordChannel, DiscordConfig, IDiscordClient } from "../channels/discord/channel.ts";
 import { MessageRouter } from "../channels/router.ts";
-import { DiscordChannel } from "../channels/discord/channel.ts";
-import type { DiscordConfig, IDiscordClient } from "../channels/discord/channel.ts";
-import { TelegramChannel } from "../channels/telegram/channel.ts";
 import type { TelegramConfig } from "../channels/telegram/channel.ts";
+import { TelegramChannel } from "../channels/telegram/channel.ts";
 import { ClaudeCodeManager } from "../claude/manager.ts";
 import { loadConfig } from "../config/loader.ts";
 import { getConfigPath, getDataDir, getPidFilePath } from "../config/paths.ts";
@@ -37,27 +37,26 @@ import { createHealthServer } from "../health/server.ts";
 import type { Logger } from "../logging/logger.ts";
 import { createLogger } from "../logging/logger.ts";
 import { LogRotator } from "../logging/rotation.ts";
-import { CognitiveLoop } from "../loop/cognitive-loop.ts";
 import type { EventHandler, EventHandlerResult } from "../loop/cognitive-loop.ts";
+import { CognitiveLoop } from "../loop/cognitive-loop.ts";
 import { EnergyBudget } from "../loop/energy-budget.ts";
 import { EventBus } from "../loop/event-bus.ts";
 import { PriorityEvaluator } from "../loop/priority.ts";
 import { RestCalculator } from "../loop/rest.ts";
 import { SessionSupervisor } from "../loop/session-supervisor.ts";
 import { CognitiveStateMachine } from "../loop/state-machine.ts";
+import { MCPHealthMonitor } from "../mcp/health.ts";
 import { MemoryCompressor } from "../memory/compression.ts";
 import { MemoryConsolidator } from "../memory/consolidation.ts";
 import { EmbeddingModel } from "../memory/embeddings.ts";
 import { MemoryExtractor } from "../memory/extractor.ts";
 import { MemorySearch } from "../memory/search.ts";
 import { MemoryStore } from "../memory/store.ts";
-import { TokenTracker } from "../metrics/token-tracker.ts";
 import { MetricsRegistry } from "../metrics/prometheus.ts";
-import { wireMetrics, type MetricsWiringHandle } from "../metrics/wiring.ts";
-import { MCPHealthMonitor } from "../mcp/health.ts";
+import { TokenTracker } from "../metrics/token-tracker.ts";
+import { type MetricsWiringHandle, wireMetrics } from "../metrics/wiring.ts";
 import { AutomationEngine } from "../scheduler/automation.ts";
 import { TaskScheduler } from "../scheduler/scheduler.ts";
-import { AuditLogger } from "../audit/logger.ts";
 import { getMasterKey } from "../secrets/master-key.ts";
 import { SecretStore } from "../secrets/store.ts";
 
@@ -290,7 +289,10 @@ export class EidolonDaemon {
           }
 
           // Convert config mcpServers to McpServerConfig format
-          const serverConfigs: Record<string, { command: string; args?: readonly string[]; env?: Readonly<Record<string, string>> }> = {};
+          const serverConfigs: Record<
+            string,
+            { command: string; args?: readonly string[]; env?: Readonly<Record<string, string>> }
+          > = {};
           for (const [name, server] of Object.entries(mcpServers)) {
             serverConfigs[name] = {
               command: server.command,
@@ -616,29 +618,37 @@ export class EidolonDaemon {
               for (const task of dueResult.value) {
                 if (task.action === "automation") {
                   const payload = task.payload as Record<string, unknown>;
-                  const publishResult = this.modules.eventBus.publish("scheduler:automation_due", {
-                    automationId: task.id,
-                    name: task.name,
-                    prompt: String(payload.prompt ?? ""),
-                    deliverTo: String(payload.deliverTo ?? "telegram"),
-                  }, {
-                    priority: "normal",
-                    source: "scheduler",
-                  });
+                  const publishResult = this.modules.eventBus.publish(
+                    "scheduler:automation_due",
+                    {
+                      automationId: task.id,
+                      name: task.name,
+                      prompt: String(payload.prompt ?? ""),
+                      deliverTo: String(payload.deliverTo ?? "telegram"),
+                    },
+                    {
+                      priority: "normal",
+                      source: "scheduler",
+                    },
+                  );
                   if (publishResult.ok) {
                     logger.debug("daemon", `Scheduler emitted automation_due: ${task.name}`, { taskId: task.id });
                     this.modules.taskScheduler.markExecuted(task.id);
                   }
                 } else {
-                  const publishResult = this.modules.eventBus.publish("scheduler:task_due", {
-                    taskId: task.id,
-                    taskName: task.name,
-                    action: task.action,
-                    payload: task.payload,
-                  }, {
-                    priority: "normal",
-                    source: "scheduler",
-                  });
+                  const publishResult = this.modules.eventBus.publish(
+                    "scheduler:task_due",
+                    {
+                      taskId: task.id,
+                      taskName: task.name,
+                      action: task.action,
+                      payload: task.payload,
+                    },
+                    {
+                      priority: "normal",
+                      source: "scheduler",
+                    },
+                  );
                   if (publishResult.ok) {
                     logger.debug("daemon", `Scheduler emitted task_due for: ${task.name}`, { taskId: task.id });
                     this.modules.taskScheduler.markExecuted(task.id);
@@ -656,17 +666,24 @@ export class EidolonDaemon {
             strategy: extractionStrategy,
             consolidator: this.modules.memoryConsolidator,
           });
-          logger.info("daemon", `MemoryExtractor initialized (strategy: ${extractionStrategy}, consolidator: ${this.modules.memoryConsolidator ? "yes" : "no"})`);
+          logger.info(
+            "daemon",
+            `MemoryExtractor initialized (strategy: ${extractionStrategy}, consolidator: ${this.modules.memoryConsolidator ? "yes" : "no"})`,
+          );
 
           // 16g. CognitiveLoop -- build the event handler
           const handler: EventHandler = async (event, priority): Promise<EventHandlerResult> => {
-            logger.info("loop-handler", `Handling event: ${event.type} (score: ${priority.score}, action: ${priority.suggestedAction})`, {
-              eventId: event.id,
-              eventType: event.type,
-              priority: event.priority,
-              suggestedAction: priority.suggestedAction,
-              suggestedModel: priority.suggestedModel,
-            });
+            logger.info(
+              "loop-handler",
+              `Handling event: ${event.type} (score: ${priority.score}, action: ${priority.suggestedAction})`,
+              {
+                eventId: event.id,
+                eventType: event.type,
+                priority: event.priority,
+                suggestedAction: priority.suggestedAction,
+                suggestedModel: priority.suggestedModel,
+              },
+            );
 
             switch (event.type) {
               case "user:message": {
@@ -704,9 +721,8 @@ export class EidolonDaemon {
                 }
                 const digest = digestResult.value;
                 const digestChannel = this.modules.config?.digest.channel ?? "telegram";
-                const targetChannels = digestChannel === "all"
-                  ? this.modules.messageRouter.getChannels().map((c) => c.id)
-                  : [digestChannel];
+                const targetChannels =
+                  digestChannel === "all" ? this.modules.messageRouter.getChannels().map((c) => c.id) : [digestChannel];
                 for (const chId of targetChannels) {
                   const sendResult = await this.modules.messageRouter.sendNotification(
                     {
@@ -722,12 +738,16 @@ export class EidolonDaemon {
                   }
                 }
                 // Emit digest:delivered event
-                this.modules.eventBus?.publish("digest:delivered", {
-                  title: digest.title,
-                  generatedAt: digest.generatedAt,
-                  sectionCount: digest.sections.length,
-                  channels: targetChannels,
-                }, { priority: "low", source: "digest" });
+                this.modules.eventBus?.publish(
+                  "digest:delivered",
+                  {
+                    title: digest.title,
+                    generatedAt: digest.generatedAt,
+                    sectionCount: digest.sections.length,
+                    channels: targetChannels,
+                  },
+                  { priority: "low", source: "digest" },
+                );
                 logger.info("loop-handler", `Digest delivered: ${digest.title} (${digest.sections.length} sections)`);
                 return { success: true, tokensUsed: 0 };
               }
@@ -778,9 +798,7 @@ export class EidolonDaemon {
           try {
             const dndSchedule = config?.channels.telegram?.dndSchedule;
             this.modules.messageRouter = new MessageRouter(eventBus, logger, {
-              dndSchedule: dndSchedule
-                ? { start: dndSchedule.start, end: dndSchedule.end }
-                : undefined,
+              dndSchedule: dndSchedule ? { start: dndSchedule.start, end: dndSchedule.end } : undefined,
             });
 
             // Wire up Telegram channel if configured and enabled
@@ -895,9 +913,7 @@ export class EidolonDaemon {
           // Register a recurring scheduled task for daily digest delivery
           if (taskScheduler) {
             const listResult = taskScheduler.list();
-            const alreadyExists =
-              listResult.ok &&
-              listResult.value.some((t) => t.action === "digest:generate");
+            const alreadyExists = listResult.ok && listResult.value.some((t) => t.action === "digest:generate");
             if (!alreadyExists) {
               const createResult = taskScheduler.create({
                 name: "Daily Digest",
@@ -1190,9 +1206,7 @@ export class EidolonDaemon {
           }
         }
         if (this.modules.sessionSupervisor) {
-          this.modules.metricsRegistry.setActiveSessions(
-            this.modules.sessionSupervisor.getActive().length,
-          );
+          this.modules.metricsRegistry.setActiveSessions(this.modules.sessionSupervisor.getActive().length);
         }
         logger?.info("daemon", "Step 4: Final metrics snapshot captured");
       } catch (err: unknown) {
@@ -1207,10 +1221,14 @@ export class EidolonDaemon {
     //    persisted to SQLite so it can be replayed on restart if needed.
     if (this.modules.eventBus) {
       try {
-        this.modules.eventBus.publish("system:shutdown", { reason: "graceful" }, {
-          priority: "critical",
-          source: "daemon",
-        });
+        this.modules.eventBus.publish(
+          "system:shutdown",
+          { reason: "graceful" },
+          {
+            priority: "critical",
+            source: "daemon",
+          },
+        );
         logger?.debug("daemon", "Step 5: system:shutdown event persisted");
       } catch {
         // Best-effort: if EventBus DB is already closing, this is fine

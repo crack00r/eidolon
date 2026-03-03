@@ -530,9 +530,9 @@ export class MemoryStore {
       const MIN_SIMILARITY = minSimilarity ?? 0;
       const EXPECTED_DIMENSIONS = 384;
 
-      const rows = this.db
-        .query("SELECT * FROM memories WHERE embedding IS NOT NULL LIMIT 10000")
-        .all() as Array<MemoryRow & { embedding: Uint8Array }>;
+      const rows = this.db.query("SELECT * FROM memories WHERE embedding IS NOT NULL LIMIT 10000").all() as Array<
+        MemoryRow & { embedding: Uint8Array }
+      >;
 
       const scored: Array<{ memory: Memory; similarity: number }> = [];
 

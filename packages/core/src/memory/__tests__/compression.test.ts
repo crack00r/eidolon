@@ -4,7 +4,7 @@ import { runMigrations } from "../../database/migrations.ts";
 import { MEMORY_MIGRATIONS } from "../../database/schemas/memory.ts";
 import type { Logger } from "../../logging/logger.ts";
 import { MemoryCompressor } from "../compression.ts";
-import { MemoryStore, type CreateMemoryInput } from "../store.ts";
+import { type CreateMemoryInput, MemoryStore } from "../store.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers

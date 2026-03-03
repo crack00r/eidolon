@@ -71,13 +71,9 @@ function validPayload(): Record<string, unknown> {
  */
 async function computeHmac(body: string, secret: string): Promise<string> {
   const encoder = new TextEncoder();
-  const key = await crypto.subtle.importKey(
-    "raw",
-    encoder.encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"],
-  );
+  const key = await crypto.subtle.importKey("raw", encoder.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, [
+    "sign",
+  ]);
   const sig = await crypto.subtle.sign("HMAC", key, encoder.encode(body));
   const hex = Array.from(new Uint8Array(sig))
     .map((b) => b.toString(16).padStart(2, "0"))
@@ -323,9 +319,7 @@ describe("webhook handler", () => {
     expect(body).toHaveProperty("id");
     expect(typeof body.id).toBe("string");
     // Verify it looks like a UUID
-    expect((body.id as string)).toMatch(
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
-    );
+    expect(body.id as string).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
   });
 
   test("extractWebhookResult returns payload for successful response", async () => {
@@ -455,7 +449,11 @@ describe("verifyHmacSignature", () => {
 
   test("returns false for invalid signature", async () => {
     const body = '{"source":"test","event":"ping","data":{}}';
-    const result = await verifyHmacSignature(body, "sha256=0000000000000000000000000000000000000000000000000000000000000000", "secret");
+    const result = await verifyHmacSignature(
+      body,
+      "sha256=0000000000000000000000000000000000000000000000000000000000000000",
+      "secret",
+    );
     expect(result).toBe(false);
   });
 

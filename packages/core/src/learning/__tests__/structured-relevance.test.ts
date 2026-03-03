@@ -4,10 +4,7 @@ import { FakeClaudeProcess } from "@eidolon/test-utils";
 import type { Logger } from "../../logging/logger.ts";
 import { RelevanceFilter } from "../relevance.ts";
 import type { RelevanceResponse } from "../structured-relevance.ts";
-import {
-  createStructuredRelevanceScorerFn,
-  RelevanceResponseSchema,
-} from "../structured-relevance.ts";
+import { createStructuredRelevanceScorerFn, RelevanceResponseSchema } from "../structured-relevance.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -139,11 +136,10 @@ describe("createStructuredRelevanceScorerFn", () => {
       sessionOptions: makeSessionOptions(),
     });
 
-    const result = await scorerFn(
-      "Best Cookie Recipes",
-      "How to bake the perfect chocolate chip cookie...",
-      ["TypeScript", "AI"],
-    );
+    const result = await scorerFn("Best Cookie Recipes", "How to bake the perfect chocolate chip cookie...", [
+      "TypeScript",
+      "AI",
+    ]);
 
     expect(result.score).toBe(0.1);
     expect(result.matchedInterests).toHaveLength(0);
@@ -157,9 +153,7 @@ describe("createStructuredRelevanceScorerFn", () => {
       maxRetries: 0,
     });
 
-    await expect(
-      scorerFn("Test", "Content", ["interest"]),
-    ).rejects.toThrow("Structured relevance scoring failed");
+    await expect(scorerFn("Test", "Content", ["interest"])).rejects.toThrow("Structured relevance scoring failed");
   });
 
   test("sends title and content in prompt", async () => {
@@ -174,11 +168,10 @@ describe("createStructuredRelevanceScorerFn", () => {
       sessionOptions: makeSessionOptions(),
     });
 
-    await scorerFn(
-      "sqlite-vec 0.2.0 Released",
-      "New version of sqlite-vec with 3x faster search",
-      ["SQLite", "vector search"],
-    );
+    await scorerFn("sqlite-vec 0.2.0 Released", "New version of sqlite-vec with 3x faster search", [
+      "SQLite",
+      "vector search",
+    ]);
 
     const lastPrompt = fake.getLastPrompt();
     expect(lastPrompt).toContain("sqlite-vec 0.2.0 Released");
@@ -199,11 +192,7 @@ describe("createStructuredRelevanceScorerFn", () => {
       sessionOptions: makeSessionOptions(),
     });
 
-    await scorerFn(
-      "Bun 1.2 Released",
-      "Major update to the Bun JavaScript runtime",
-      ["Bun", "TypeScript", "SQLite"],
-    );
+    await scorerFn("Bun 1.2 Released", "Major update to the Bun JavaScript runtime", ["Bun", "TypeScript", "SQLite"]);
 
     const lastPrompt = fake.getLastPrompt();
     expect(lastPrompt).toContain("- Bun");
@@ -268,10 +257,7 @@ describe("RelevanceFilter + structured relevance integration", () => {
       sessionOptions: makeSessionOptions(),
     });
 
-    const filter = new RelevanceFilter(
-      { minScore: 0.6, userInterests: ["AI", "TypeScript"] },
-      logger,
-    );
+    const filter = new RelevanceFilter({ minScore: 0.6, userInterests: ["AI", "TypeScript"] }, logger);
 
     // Use a borderline keyword score so the filter triggers LLM scoring
     const result = await filter.score(
@@ -297,16 +283,9 @@ describe("RelevanceFilter + structured relevance integration", () => {
       sessionOptions: makeSessionOptions(),
     });
 
-    const filter = new RelevanceFilter(
-      { minScore: 0.6, userInterests: ["SQLite", "performance"] },
-      logger,
-    );
+    const filter = new RelevanceFilter({ minScore: 0.6, userInterests: ["SQLite", "performance"] }, logger);
 
-    const result = await filter.scoreLlm(
-      "sqlite-vec 0.2.0 Released",
-      "3x faster vector search in SQLite",
-      scorerFn,
-    );
+    const result = await filter.scoreLlm("sqlite-vec 0.2.0 Released", "3x faster vector search in SQLite", scorerFn);
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -324,10 +303,7 @@ describe("RelevanceFilter + structured relevance integration", () => {
       maxRetries: 0,
     });
 
-    const filter = new RelevanceFilter(
-      { minScore: 0.6, userInterests: ["test"] },
-      logger,
-    );
+    const filter = new RelevanceFilter({ minScore: 0.6, userInterests: ["test"] }, logger);
 
     const result = await filter.scoreLlm("Test", "Content", scorerFn);
 

@@ -246,49 +246,33 @@ describe("DiscordChannel", () => {
     });
 
     test("enforces DM-only mode by ignoring guild messages", async () => {
-      const channel = new DiscordChannel(
-        createTestConfig({ dmOnly: true }),
-        client,
-        logger,
-      );
+      const channel = new DiscordChannel(createTestConfig({ dmOnly: true }), client, logger);
       const received: InboundMessage[] = [];
       channel.onMessage(async (msg) => {
         received.push(msg);
       });
       await channel.connect();
 
-      await client.simulateMessage(
-        createInboundMessage({ guildId: "guild-123" }),
-      );
+      await client.simulateMessage(createInboundMessage({ guildId: "guild-123" }));
 
       expect(received).toHaveLength(0);
     });
 
     test("allows guild messages when dmOnly is false", async () => {
-      const channel = new DiscordChannel(
-        createTestConfig({ dmOnly: false }),
-        client,
-        logger,
-      );
+      const channel = new DiscordChannel(createTestConfig({ dmOnly: false }), client, logger);
       const received: InboundMessage[] = [];
       channel.onMessage(async (msg) => {
         received.push(msg);
       });
       await channel.connect();
 
-      await client.simulateMessage(
-        createInboundMessage({ guildId: "guild-123" }),
-      );
+      await client.simulateMessage(createInboundMessage({ guildId: "guild-123" }));
 
       expect(received).toHaveLength(1);
     });
 
     test("restricts to configured guildId when set", async () => {
-      const channel = new DiscordChannel(
-        createTestConfig({ dmOnly: false, guildId: "guild-abc" }),
-        client,
-        logger,
-      );
+      const channel = new DiscordChannel(createTestConfig({ dmOnly: false, guildId: "guild-abc" }), client, logger);
       const received: InboundMessage[] = [];
       channel.onMessage(async (msg) => {
         received.push(msg);
@@ -296,15 +280,11 @@ describe("DiscordChannel", () => {
       await channel.connect();
 
       // Wrong guild
-      await client.simulateMessage(
-        createInboundMessage({ guildId: "guild-xyz" }),
-      );
+      await client.simulateMessage(createInboundMessage({ guildId: "guild-xyz" }));
       expect(received).toHaveLength(0);
 
       // Correct guild
-      await client.simulateMessage(
-        createInboundMessage({ guildId: "guild-abc" }),
-      );
+      await client.simulateMessage(createInboundMessage({ guildId: "guild-abc" }));
       expect(received).toHaveLength(1);
     });
 
@@ -381,9 +361,7 @@ describe("DiscordChannel", () => {
 
       // Send 31 messages rapidly
       for (let i = 0; i < 31; i++) {
-        await client.simulateMessage(
-          createInboundMessage({ id: `msg-${i}` }),
-        );
+        await client.simulateMessage(createInboundMessage({ id: `msg-${i}` }));
       }
 
       // First 30 should be received, 31st dropped

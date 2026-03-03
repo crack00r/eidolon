@@ -164,7 +164,10 @@ export class EventBus {
     if (priority !== "critical" && priority !== "high") {
       const countResult = this.pendingCount();
       if (countResult.ok && countResult.value >= this.maxPendingEvents) {
-        this.logger.warn("event-bus", `Backpressure: dropping ${priority} event ${type} (queue depth: ${countResult.value}, max: ${this.maxPendingEvents})`);
+        this.logger.warn(
+          "event-bus",
+          `Backpressure: dropping ${priority} event ${type} (queue depth: ${countResult.value}, max: ${this.maxPendingEvents})`,
+        );
         return Err(
           createError(
             ErrorCode.EVENT_BUS_ERROR,
@@ -437,9 +440,7 @@ export class EventBus {
         if (rows.length > 0) {
           const ids = rows.map((r) => r.id);
           for (const id of ids) {
-            this.db
-              .query("UPDATE events SET claimed_at = ? WHERE id = ? AND claimed_at IS NULL")
-              .run(claimToken, id);
+            this.db.query("UPDATE events SET claimed_at = ? WHERE id = ? AND claimed_at IS NULL").run(claimToken, id);
           }
         }
       });

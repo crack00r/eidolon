@@ -10,8 +10,8 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { z } from "zod";
 import type { BrainConfig } from "@eidolon/protocol";
+import { z } from "zod";
 import type { Logger } from "../logging/logger.ts";
 
 // ---------------------------------------------------------------------------
@@ -110,12 +110,7 @@ function jsonResponse(body: unknown, status: number): Response {
   });
 }
 
-function openAIError(
-  message: string,
-  type: string,
-  code: string | null,
-  status: number,
-): Response {
+function openAIError(message: string, type: string, code: string | null, status: number): Response {
   const body: OpenAIErrorBody = { error: { message, type, code } };
   return jsonResponse(body, status);
 }
@@ -132,12 +127,7 @@ function checkAuth(req: Request, expectedToken: string | undefined): Response | 
   if (!expectedToken) return null;
   const provided = extractBearerToken(req);
   if (!provided || provided !== expectedToken) {
-    return openAIError(
-      "Invalid or missing authentication token",
-      "authentication_error",
-      "invalid_api_key",
-      401,
-    );
+    return openAIError("Invalid or missing authentication token", "authentication_error", "invalid_api_key", 401);
   }
   return null;
 }
@@ -148,9 +138,7 @@ function checkAuth(req: Request, expectedToken: string | undefined): Response | 
 
 function buildModelList(brainConfig?: BrainConfig): OpenAIModelsResponse {
   const now = Math.floor(Date.now() / 1000);
-  const models: OpenAIModel[] = [
-    { id: "eidolon-default", object: "model", created: now, owned_by: "eidolon" },
-  ];
+  const models: OpenAIModel[] = [{ id: "eidolon-default", object: "model", created: now, owned_by: "eidolon" }];
 
   if (brainConfig) {
     const seen = new Set<string>();
@@ -186,9 +174,7 @@ function buildCompletionResponse(request: ChatCompletionRequest): OpenAIChatComp
     object: "chat.completion",
     created: Math.floor(Date.now() / 1000),
     model: request.model,
-    choices: [
-      { index: 0, message: { role: "assistant", content: responseText }, finish_reason: "stop" },
-    ],
+    choices: [{ index: 0, message: { role: "assistant", content: responseText }, finish_reason: "stop" }],
     usage: {
       prompt_tokens: promptTokens,
       completion_tokens: completionTokens,
@@ -268,10 +254,7 @@ function buildStreamingResponse(request: ChatCompletionRequest): Response {
  * Returns `null` if the request path does not match any `/v1/` route,
  * allowing the caller to fall through to other handlers (health, metrics, WS).
  */
-export async function handleOpenAIRequest(
-  req: Request,
-  deps: OpenAICompatDeps,
-): Promise<Response | null> {
+export async function handleOpenAIRequest(req: Request, deps: OpenAICompatDeps): Promise<Response | null> {
   const url = new URL(req.url);
   const path = url.pathname;
 
@@ -298,12 +281,7 @@ export async function handleOpenAIRequest(
   }
 
   // Unknown /v1/ endpoint
-  return openAIError(
-    `Unknown endpoint: ${req.method} ${path}`,
-    "invalid_request_error",
-    "not_found",
-    404,
-  );
+  return openAIError(`Unknown endpoint: ${req.method} ${path}`, "invalid_request_error", "not_found", 404);
 }
 
 // ---------------------------------------------------------------------------
@@ -325,7 +303,10 @@ async function handleChatCompletions(req: Request, log: Logger): Promise<Respons
   }
 
   const request = parsed.data;
-  log.info("chat", `Chat completion: model=${request.model} messages=${request.messages.length} stream=${String(request.stream)}`);
+  log.info(
+    "chat",
+    `Chat completion: model=${request.model} messages=${request.messages.length} stream=${String(request.stream)}`,
+  );
 
   if (request.stream) {
     return buildStreamingResponse(request);

@@ -179,10 +179,14 @@ export class ApprovalManager {
       { priority: "high", source: "approval-manager" },
     );
 
-    this.logger.info("request", `Approval requested: ${params.action} (level=${params.level}, timeout=${timeoutMs}ms)`, {
-      id,
-      channel: params.channel,
-    });
+    this.logger.info(
+      "request",
+      `Approval requested: ${params.action} (level=${params.level}, timeout=${timeoutMs}ms)`,
+      {
+        id,
+        channel: params.channel,
+      },
+    );
 
     return Ok(request);
   }
@@ -328,7 +332,10 @@ export class ApprovalManager {
         );
       }
 
-      this.logger.warn("escalate", `Approval ${request.id} reached max escalations (${maxEscalations}), auto-${finalStatus}`);
+      this.logger.warn(
+        "escalate",
+        `Approval ${request.id} reached max escalations (${maxEscalations}), auto-${finalStatus}`,
+      );
       return Ok({
         ...request,
         status: finalStatus,
@@ -345,14 +352,10 @@ export class ApprovalManager {
 
     try {
       this.db
-        .query(
-          "UPDATE approval_requests SET status = 'escalated', responded_by = ?, responded_at = ? WHERE id = ?",
-        )
+        .query("UPDATE approval_requests SET status = 'escalated', responded_by = ?, responded_at = ? WHERE id = ?")
         .run("auto:escalated", now, request.id);
     } catch (cause) {
-      return Err(
-        createError(ErrorCode.DB_QUERY_FAILED, `Failed to mark request ${request.id} as escalated`, cause),
-      );
+      return Err(createError(ErrorCode.DB_QUERY_FAILED, `Failed to mark request ${request.id} as escalated`, cause));
     }
 
     // Create a new request at the next escalation level
@@ -369,7 +372,17 @@ export class ApprovalManager {
           `INSERT INTO approval_requests (id, action, level, description, requested_at, timeout_at, channel, status, escalation_level, metadata)
            VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)`,
         )
-        .run(newId, request.action, request.level, request.description, now, newTimeoutAt, newChannel, nextLevel, metadataJson);
+        .run(
+          newId,
+          request.action,
+          request.level,
+          request.description,
+          now,
+          newTimeoutAt,
+          newChannel,
+          nextLevel,
+          metadataJson,
+        );
     } catch (cause) {
       return Err(createError(ErrorCode.DB_QUERY_FAILED, `Failed to create escalated request for ${request.id}`, cause));
     }
@@ -437,9 +450,9 @@ export class ApprovalManager {
   /** Count pending approval requests. */
   pendingCount(): Result<number, EidolonError> {
     try {
-      const row = this.db
-        .query("SELECT COUNT(*) as count FROM approval_requests WHERE status = 'pending'")
-        .get() as { count: number };
+      const row = this.db.query("SELECT COUNT(*) as count FROM approval_requests WHERE status = 'pending'").get() as {
+        count: number;
+      };
       return Ok(row.count);
     } catch (cause) {
       return Err(createError(ErrorCode.DB_QUERY_FAILED, "Failed to count pending approvals", cause));

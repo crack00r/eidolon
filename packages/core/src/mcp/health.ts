@@ -56,11 +56,7 @@ export class MCPHealthMonitor {
   private readonly statuses: Map<string, McpServerHealthStatus> = new Map();
   private periodicTimer: ReturnType<typeof setInterval> | null = null;
 
-  constructor(
-    servers: Record<string, McpServerConfig>,
-    logger: Logger,
-    options?: MCPHealthMonitorOptions,
-  ) {
+  constructor(servers: Record<string, McpServerConfig>, logger: Logger, options?: MCPHealthMonitorOptions) {
     this.servers = new Map(Object.entries(servers));
     this.logger = logger.child("mcp-health");
     this.checkIntervalMs = options?.checkIntervalMs ?? DEFAULT_CHECK_INTERVAL_MS;

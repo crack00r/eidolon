@@ -6,10 +6,10 @@
  * RelevanceFilter via the existing `RelevanceScorerFn` injection point.
  */
 
-import { z } from "zod";
 import type { ClaudeSessionOptions, IClaudeProcess } from "@eidolon/protocol";
-import type { Logger } from "../logging/logger.ts";
+import { z } from "zod";
 import { StructuredOutputParser } from "../claude/structured-output.ts";
+import type { Logger } from "../logging/logger.ts";
 import type { RelevanceResult, RelevanceScorerFn } from "./relevance.ts";
 
 // ---------------------------------------------------------------------------
@@ -35,14 +35,9 @@ export type RelevanceResponse = z.infer<typeof RelevanceResponseSchema>;
  * The system prompt with schema instructions is added by the StructuredOutputParser;
  * this function only builds the user-facing prompt that describes the task.
  */
-function buildRelevancePrompt(
-  title: string,
-  content: string,
-  interests: readonly string[],
-): string {
-  const interestList = interests.length > 0
-    ? interests.map((i) => `  - ${i}`).join("\n")
-    : "  (no specific interests configured)";
+function buildRelevancePrompt(title: string, content: string, interests: readonly string[]): string {
+  const interestList =
+    interests.length > 0 ? interests.map((i) => `  - ${i}`).join("\n") : "  (no specific interests configured)";
 
   return [
     "Evaluate the relevance of this content against the user's interests.",
@@ -111,21 +106,13 @@ export function createStructuredRelevanceScorerFn(
   logger: Logger,
   options: StructuredRelevanceOptions,
 ): RelevanceScorerFn {
-  const parser = new StructuredOutputParser(
-    RelevanceResponseSchema,
-    claude,
-    logger,
-    { maxRetries: options.maxRetries ?? 2 },
-  );
+  const parser = new StructuredOutputParser(RelevanceResponseSchema, claude, logger, {
+    maxRetries: options.maxRetries ?? 2,
+  });
 
-  const baseSystemPrompt = options.systemPrompt
-    ?? "You are a content relevance evaluator for a personal AI assistant.";
+  const baseSystemPrompt = options.systemPrompt ?? "You are a content relevance evaluator for a personal AI assistant.";
 
-  return async (
-    title: string,
-    content: string,
-    interests: readonly string[],
-  ): Promise<RelevanceResult> => {
+  return async (title: string, content: string, interests: readonly string[]): Promise<RelevanceResult> => {
     const prompt = buildRelevancePrompt(title, content, interests);
 
     const sessionOptions: ClaudeSessionOptions = {

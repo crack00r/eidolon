@@ -419,10 +419,7 @@ describe("MessageRouter DND integration", () => {
     const channel = createMockChannel("test");
     router.registerChannel(channel);
 
-    const result = await router.sendNotification(
-      { id: "n-1", channelId: "test", text: "Low priority" },
-      "low",
-    );
+    const result = await router.sendNotification({ id: "n-1", channelId: "test", text: "Low priority" }, "low");
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.value).toBe(false);
     expect(channel.sentMessages).toHaveLength(0);
@@ -438,10 +435,7 @@ describe("MessageRouter DND integration", () => {
     const channel = createMockChannel("test");
     router.registerChannel(channel);
 
-    const result = await router.sendNotification(
-      { id: "n-2", channelId: "test", text: "Security alert" },
-      "critical",
-    );
+    const result = await router.sendNotification({ id: "n-2", channelId: "test", text: "Security alert" }, "critical");
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.value).toBe(true);
     expect(channel.sentMessages).toHaveLength(1);

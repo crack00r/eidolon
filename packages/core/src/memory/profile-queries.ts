@@ -127,10 +127,7 @@ export function queryDevices(db: Database): ReadonlyArray<string> {
 }
 
 /** Extract relationships from the knowledge graph involving the owner. */
-export function queryRelationships(
-  db: Database,
-  ownerName: string,
-): ReadonlyArray<ProfileRelationship> {
+export function queryRelationships(db: Database, ownerName: string): ReadonlyArray<ProfileRelationship> {
   try {
     const rows = db
       .query(

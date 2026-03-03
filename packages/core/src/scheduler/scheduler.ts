@@ -303,10 +303,7 @@ export class TaskScheduler {
    * @param defaultChannel - Default delivery channel (e.g., "telegram")
    * @returns The created automation task, or an error if parsing fails
    */
-  createFromNaturalLanguage(
-    input: string,
-    defaultChannel?: string,
-  ): Result<ScheduledTask, EidolonError> {
+  createFromNaturalLanguage(input: string, defaultChannel?: string): Result<ScheduledTask, EidolonError> {
     // Lazy import to avoid circular dependency at module load time
     const { extractScheduleAndAction, deriveName } = require("./automation.ts") as {
       extractScheduleAndAction: (input: string) => { cron: string; actionText: string } | null;

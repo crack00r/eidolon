@@ -42,11 +42,7 @@ function createTestMemoryDb(): Database {
   return db;
 }
 
-function insertMemory(
-  db: Database,
-  sessionId: string,
-  confidence: number,
-): string {
+function insertMemory(db: Database, sessionId: string, confidence: number): string {
   const id = randomUUID();
   const now = Date.now();
   db.query(

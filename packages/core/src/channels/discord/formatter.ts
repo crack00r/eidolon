@@ -32,7 +32,11 @@ export function formatForDiscord(markdown: string): string {
  * Discord bots can send rich embeds, but for text-only fallback this
  * creates a visually distinct block using markdown.
  */
-export function formatAsEmbed(title: string, description: string, fields?: ReadonlyArray<{ readonly name: string; readonly value: string }>): string {
+export function formatAsEmbed(
+  title: string,
+  description: string,
+  fields?: ReadonlyArray<{ readonly name: string; readonly value: string }>,
+): string {
   const parts: string[] = [];
 
   parts.push(`**${title}**`);

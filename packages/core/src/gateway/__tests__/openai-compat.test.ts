@@ -269,9 +269,7 @@ describe("handleOpenAIRequest", () => {
       expect(typeof usage.prompt_tokens).toBe("number");
       expect(typeof usage.completion_tokens).toBe("number");
       expect(typeof usage.total_tokens).toBe("number");
-      expect(usage.total_tokens).toBe(
-        (usage.prompt_tokens as number) + (usage.completion_tokens as number),
-      );
+      expect(usage.total_tokens).toBe((usage.prompt_tokens as number) + (usage.completion_tokens as number));
     });
 
     test("includes the user message content in the stub response", async () => {
@@ -284,7 +282,7 @@ describe("handleOpenAIRequest", () => {
       const body = (await parseJsonBody(resp!)) as Record<string, unknown>;
       const choices = body.choices as Array<Record<string, unknown>>;
       const message = choices[0]!.message as Record<string, unknown>;
-      expect((message.content as string)).toContain("12 chars");
+      expect(message.content as string).toContain("12 chars");
     });
 
     test("reflects the requested model in the response", async () => {
@@ -327,7 +325,7 @@ describe("handleOpenAIRequest", () => {
       const body = (await parseJsonBody(resp!)) as Record<string, unknown>;
       const error = body.error as Record<string, unknown>;
       expect(error.code).toBe("invalid_params");
-      expect((error.message as string)).toContain("model");
+      expect(error.message as string).toContain("model");
     });
 
     test("returns validation error for empty messages array", async () => {

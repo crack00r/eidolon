@@ -35,11 +35,7 @@ const CONFIG_SECTIONS = new Set([
  * file permission checks and locked-field protections in the config watcher.
  * Paths are matched as prefixes against the lowercased env var path segments.
  */
-const LOCKED_ENV_PATHS: ReadonlySet<string> = new Set([
-  "security",
-  "database",
-  "daemon",
-]);
+const LOCKED_ENV_PATHS: ReadonlySet<string> = new Set(["security", "database", "daemon"]);
 
 /**
  * SEC-C2: Specific sub-paths within otherwise-allowed sections that must not

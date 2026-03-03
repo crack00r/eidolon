@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import type { HealthCheck } from "@eidolon/protocol";
 import type { Logger } from "../../logging/logger.ts";
-import { MCPHealthMonitor } from "../health.ts";
 import type { McpServerConfig } from "../health.ts";
+import { MCPHealthMonitor } from "../health.ts";
 
 function createSilentLogger(): Logger {
   const noop = (): void => {};

@@ -16,7 +16,7 @@ import type { AutomationTask, EidolonError, ParsedAutomation, Result } from "@ei
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 import { z } from "zod";
 import type { Logger } from "../logging/logger.ts";
-import { TaskScheduler } from "./scheduler.ts";
+import type { TaskScheduler } from "./scheduler.ts";
 
 // ---------------------------------------------------------------------------
 // Zod schemas for DB rows
@@ -142,7 +142,8 @@ function parseDay(raw: string): number | null {
 const SCHEDULE_PATTERNS: SchedulePattern[] = [
   // "every <day> at <time>"
   {
-    pattern: /every\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tue|wed|thu|fri|sat|sun)s?\s+at\s+(\S+)/i,
+    pattern:
+      /every\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tue|wed|thu|fri|sat|sun)s?\s+at\s+(\S+)/i,
     extract: (m) => {
       const day = parseDay(m[1] as string);
       const time = parseTime(m[2] as string);
