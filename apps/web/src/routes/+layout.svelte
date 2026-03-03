@@ -16,6 +16,7 @@ const navItems = [
   { href: "/chat", label: "Chat", icon: "\u{1F4AC}" },
   { href: "/memory", label: "Memory", icon: "\u{1F9E0}" },
   { href: "/learning", label: "Learning", icon: "\u{1F4D6}" },
+  { href: "/calendar", label: "Calendar", icon: "\u{1F4C5}" },
   { href: "/approvals", label: "Approvals", icon: "\u{2714}" },
   { href: "/automations", label: "Automations", icon: "\u{26A1}" },
   { href: "/health", label: "Health", icon: "\u{2764}" },

@@ -44,6 +44,17 @@ interface CalendarEventRow {
 }
 
 // ---------------------------------------------------------------------------
+// Conflict descriptor returned by findConflicts()
+// ---------------------------------------------------------------------------
+
+export interface ConflictInfo {
+  readonly eventIds: readonly string[];
+  readonly titles: readonly string[];
+  readonly overlapStart: number;
+  readonly overlapEnd: number;
+}
+
+// ---------------------------------------------------------------------------
 // CalendarManager
 // ---------------------------------------------------------------------------
 
@@ -377,6 +388,44 @@ export class CalendarManager {
         }
       }
     }
+  }
+
+  /**
+   * Find all scheduling conflicts (overlapping non-all-day events) within a
+   * time range.  Returns an array of conflict descriptors.
+   */
+  findConflicts(
+    start: number,
+    end: number,
+  ): Result<ConflictInfo[], EidolonError> {
+    const eventsResult = this.listEvents(start, end);
+    if (!eventsResult.ok) return eventsResult;
+
+    const events = eventsResult.value.filter((e) => !e.allDay);
+    const conflicts: ConflictInfo[] = [];
+    const seen = new Set<string>();
+
+    for (let i = 0; i < events.length; i++) {
+      for (let j = i + 1; j < events.length; j++) {
+        const a = events[i]!;
+        const b = events[j]!;
+        // Two events overlap when a.start < b.end AND b.start < a.end
+        if (a.startTime < b.endTime && b.startTime < a.endTime) {
+          const key = [a.id, b.id].sort().join(":");
+          if (seen.has(key)) continue;
+          seen.add(key);
+
+          conflicts.push({
+            eventIds: [a.id, b.id],
+            titles: [a.title, b.title],
+            overlapStart: Math.max(a.startTime, b.startTime),
+            overlapEnd: Math.min(a.endTime, b.endTime),
+          });
+        }
+      }
+    }
+
+    return Ok(conflicts);
   }
 
   /** Detect overlapping events and publish conflict events. */

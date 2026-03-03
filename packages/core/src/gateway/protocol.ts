@@ -52,6 +52,35 @@ const VALID_METHODS: ReadonlySet<string> = new Set<GatewayMethod>([
   "research.start",
   "research.status",
   "research.list",
+  // Feedback methods
+  "feedback.submit",
+  "feedback.list",
+  // Automation methods
+  "automation.create",
+  "automation.list",
+  "automation.delete",
+  // Approval methods
+  "approval.list",
+  "approval.respond",
+  // Profile methods
+  "profile.get",
+  // Metrics methods
+  "metrics.rateLimits",
+  // Calendar methods
+  "calendar.listEvents",
+  "calendar.createEvent",
+  "calendar.deleteEvent",
+  "calendar.sync",
+  "calendar.getUpcoming",
+  "calendar.conflicts",
+  // GPU pool methods
+  "gpu.workers",
+  "gpu.pool_status",
+  // Home Automation methods
+  "ha.entities",
+  "ha.scenes",
+  "ha.execute",
+  "ha.state",
 ]);
 
 // ---------------------------------------------------------------------------

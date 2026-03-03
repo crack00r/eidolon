@@ -36,6 +36,7 @@ import {
   JSON_RPC_METHOD_NOT_FOUND,
   parseJsonRpcRequest,
 } from "./protocol.ts";
+import type { CalendarManager } from "../calendar/index.ts";
 import { AuthRateLimiter } from "./rate-limiter.ts";
 import { extractWebhookResult, handleWebhookRequest, type WebhookDeps } from "./webhook.ts";
 
@@ -127,6 +128,31 @@ const ApprovalRespondParamsSchema = z.object({
 
 const SystemHealthParamsSchema = z.object({
   includeMetrics: z.boolean().optional(),
+});
+
+// Calendar RPC param schemas
+const CalendarListEventsParamsSchema = z.object({
+  start: z.number().int().nonnegative(),
+  end: z.number().int().nonnegative(),
+});
+
+const CalendarGetUpcomingParamsSchema = z.object({
+  hours: z.number().positive().optional(),
+});
+
+const CalendarCreateEventParamsSchema = z.object({
+  title: z.string().min(1).max(512),
+  startTime: z.number().int().nonnegative(),
+  endTime: z.number().int().nonnegative(),
+  description: z.string().max(4096).optional(),
+  location: z.string().max(512).optional(),
+  allDay: z.boolean().optional(),
+  calendarId: z.string().min(1).max(256).optional(),
+});
+
+const CalendarConflictsParamsSchema = z.object({
+  start: z.number().int().nonnegative().optional(),
+  end: z.number().int().nonnegative().optional(),
 });
 
 // ---------------------------------------------------------------------------
@@ -282,6 +308,7 @@ export class GatewayServer {
   private readonly rateLimiter: AuthRateLimiter;
   private readonly metricsRegistry: MetricsRegistry | undefined;
   private readonly rateLimitTracker: RateLimitTracker | undefined;
+  private readonly calendarManager: CalendarManager | undefined;
 
   private readonly clients: Map<string, ClientState> = new Map();
   private readonly handlers: Map<GatewayMethod, MethodHandler> = new Map();
@@ -298,12 +325,14 @@ export class GatewayServer {
     eventBus: EventBus;
     metricsRegistry?: MetricsRegistry;
     rateLimitTracker?: RateLimitTracker;
+    calendarManager?: CalendarManager;
   }) {
     this.config = deps.config;
     this.logger = deps.logger.child("gateway");
     this.eventBus = deps.eventBus;
     this.metricsRegistry = deps.metricsRegistry;
     this.rateLimitTracker = deps.rateLimitTracker;
+    this.calendarManager = deps.calendarManager;
     this.rateLimiter = new AuthRateLimiter(deps.config.rateLimiting, this.logger);
 
     this.registerBuiltinHandlers();
@@ -780,6 +809,96 @@ export class GatewayServer {
         includeMetrics: parsed.data.includeMetrics ?? false,
         note: "Override this handler with actual health aggregation",
       };
+    });
+
+    // -----------------------------------------------------------------------
+    // Calendar handlers (only registered when CalendarManager is provided)
+    // -----------------------------------------------------------------------
+
+    if (this.calendarManager) {
+      this.registerCalendarHandlers(this.calendarManager);
+    }
+  }
+
+  /**
+   * Register calendar-related RPC handlers.
+   * Separated into its own method to keep `registerBuiltinHandlers` manageable.
+   */
+  private registerCalendarHandlers(calendar: CalendarManager): void {
+    // calendar.listEvents: list events within a time range
+    this.registerHandler("calendar.listEvents", async (params) => {
+      const parsed = CalendarListEventsParamsSchema.safeParse(params);
+      if (!parsed.success) {
+        throw new RpcValidationError(
+          `Invalid calendar.listEvents params: ${parsed.error.issues.map((issue: z.ZodIssue) => issue.message).join(", ")}`,
+        );
+      }
+      const { start, end } = parsed.data;
+      const result = calendar.listEvents(start, end);
+      if (!result.ok) {
+        throw new RpcValidationError(result.error.message);
+      }
+      return { events: result.value };
+    });
+
+    // calendar.getUpcoming: get upcoming events within the next N hours
+    this.registerHandler("calendar.getUpcoming", async (params) => {
+      const parsed = CalendarGetUpcomingParamsSchema.safeParse(params);
+      if (!parsed.success) {
+        throw new RpcValidationError(
+          `Invalid calendar.getUpcoming params: ${parsed.error.issues.map((issue: z.ZodIssue) => issue.message).join(", ")}`,
+        );
+      }
+      const hours = parsed.data.hours ?? 24;
+      const result = calendar.getUpcoming(hours);
+      if (!result.ok) {
+        throw new RpcValidationError(result.error.message);
+      }
+      return { events: result.value };
+    });
+
+    // calendar.createEvent: create a manual calendar event
+    this.registerHandler("calendar.createEvent", async (params) => {
+      const parsed = CalendarCreateEventParamsSchema.safeParse(params);
+      if (!parsed.success) {
+        throw new RpcValidationError(
+          `Invalid calendar.createEvent params: ${parsed.error.issues.map((issue: z.ZodIssue) => issue.message).join(", ")}`,
+        );
+      }
+      const { title, startTime, endTime, description, location, allDay, calendarId } = parsed.data;
+      const result = calendar.createEvent({
+        calendarId: calendarId ?? "default",
+        title,
+        startTime,
+        endTime,
+        description,
+        location,
+        allDay: allDay ?? false,
+        reminders: [],
+        source: "manual",
+      });
+      if (!result.ok) {
+        throw new RpcValidationError(result.error.message);
+      }
+      return result.value;
+    });
+
+    // calendar.conflicts: find scheduling conflicts in a time range
+    this.registerHandler("calendar.conflicts", async (params) => {
+      const parsed = CalendarConflictsParamsSchema.safeParse(params);
+      if (!parsed.success) {
+        throw new RpcValidationError(
+          `Invalid calendar.conflicts params: ${parsed.error.issues.map((issue: z.ZodIssue) => issue.message).join(", ")}`,
+        );
+      }
+      const now = Date.now();
+      const start = parsed.data.start ?? now;
+      const end = parsed.data.end ?? now + 7 * 86_400_000; // default: next 7 days
+      const result = calendar.findConflicts(start, end);
+      if (!result.ok) {
+        throw new RpcValidationError(result.error.message);
+      }
+      return { conflicts: result.value };
     });
   }
 

@@ -58,6 +58,7 @@ export type GatewayMethod =
   | "calendar.deleteEvent"
   | "calendar.sync"
   | "calendar.getUpcoming"
+  | "calendar.conflicts"
   // GPU pool methods
   | "gpu.workers"
   | "gpu.pool_status"

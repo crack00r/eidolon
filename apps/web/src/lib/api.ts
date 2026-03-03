@@ -40,6 +40,7 @@ export type PushEventType =
   | "push.executeCommand"
   | "push.approvalRequested"
   | "push.approvalResolved"
+  | "push.calendarSync"
   | "system.statusUpdate";
 
 type PushEventHandler = (params: Record<string, unknown>) => void;
@@ -241,6 +242,43 @@ export class GatewayClient {
   /** Subscribe to real-time status updates from the server. */
   async subscribe(): Promise<{ subscribed: boolean }> {
     return this.call<{ subscribed: boolean }>("system.subscribe");
+  }
+
+  // -------------------------------------------------------------------------
+  // Calendar convenience methods
+  // -------------------------------------------------------------------------
+
+  /** List calendar events within a time range. */
+  async listCalendarEvents(
+    start: number,
+    end: number,
+  ): Promise<{ events: Array<{ id: string; calendarId: string; title: string; description?: string; location?: string; startTime: number; endTime: number; allDay: boolean; source: string }> }> {
+    return this.call("calendar.list", { start, end });
+  }
+
+  /** Get upcoming calendar events within the next N hours (default 24). */
+  async getUpcomingEvents(
+    hours?: number,
+  ): Promise<{ events: Array<{ id: string; calendarId: string; title: string; description?: string; location?: string; startTime: number; endTime: number; allDay: boolean; source: string }> }> {
+    return this.call("calendar.upcoming", hours !== undefined ? { hours } : {});
+  }
+
+  /** Create a new calendar event. */
+  async createCalendarEvent(event: {
+    title: string;
+    startTime: number;
+    endTime: number;
+    description?: string;
+    location?: string;
+    allDay?: boolean;
+    calendarId?: string;
+  }): Promise<{ id: string; calendarId: string; title: string; description?: string; location?: string; startTime: number; endTime: number; allDay: boolean; source: string }> {
+    return this.call("calendar.create", event);
+  }
+
+  /** Get scheduling conflicts among calendar events. */
+  async getCalendarConflicts(): Promise<{ conflicts: Array<Record<string, unknown>> }> {
+    return this.call("calendar.conflicts", {});
   }
 
   // -------------------------------------------------------------------------

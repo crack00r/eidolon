@@ -21,6 +21,12 @@ import { connectionState, isConnected } from "$lib/stores/connection";
 import { pendingApprovalCount } from "$lib/stores/approvals";
 import { automationScenes } from "$lib/stores/automations";
 import { overallStatus } from "$lib/stores/health";
+import {
+  fetchUpcoming,
+  todayEventCount,
+  nextEvent,
+  type CalendarEvent,
+} from "$lib/stores/calendar";
 
 // ---- State color mapping ----
 
@@ -127,10 +133,19 @@ function platformIcon(platform: string): string {
   }
 }
 
+function formatNextEventTime(event: CalendarEvent | null): string {
+  if (!event) return "--";
+  return new Date(event.startTime).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 // ---- Lifecycle ----
 
 onMount(() => {
   startDashboard();
+  fetchUpcoming();
 });
 
 onDestroy(() => {
@@ -272,6 +287,20 @@ onDestroy(() => {
       </div>
       <div class="card-body">
         <span class="card-stat large">{$automationScenes.length}</span>
+      </div>
+    </a>
+
+    <!-- Calendar -->
+    <a href="/calendar" class="card card-link">
+      <div class="card-header">
+        <span class="card-icon">[Cal]</span>
+        <span class="card-title">Calendar</span>
+      </div>
+      <div class="card-body">
+        <span class="card-stat">{$todayEventCount}<span class="card-stat-sub"> today</span></span>
+        {#if $nextEvent}
+          <span class="card-stat-sub">Next: {$nextEvent.title} at {formatNextEventTime($nextEvent)}</span>
+        {/if}
       </div>
     </a>
 
@@ -550,10 +579,16 @@ onDestroy(() => {
 
   /* Summary cards */
   .summary-cards {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(4, 1fr);
   }
 
-  @media (max-width: 700px) {
+  @media (max-width: 900px) {
+    .summary-cards {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+
+  @media (max-width: 500px) {
     .summary-cards {
       grid-template-columns: 1fr;
     }
