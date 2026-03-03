@@ -12,6 +12,8 @@ import type { EidolonConfig } from "@eidolon/protocol";
 import { SECRETS_DB_FILENAME, VERSION } from "@eidolon/protocol";
 import { BackupManager } from "../backup/manager.ts";
 import { MessageRouter } from "../channels/router.ts";
+import { TelegramChannel } from "../channels/telegram/channel.ts";
+import type { TelegramConfig } from "../channels/telegram/channel.ts";
 import { ClaudeCodeManager } from "../claude/manager.ts";
 import { loadConfig } from "../config/loader.ts";
 import { getConfigPath, getDataDir, getPidFilePath } from "../config/paths.ts";
@@ -38,6 +40,8 @@ import { EmbeddingModel } from "../memory/embeddings.ts";
 import { MemorySearch } from "../memory/search.ts";
 import { MemoryStore } from "../memory/store.ts";
 import { TokenTracker } from "../metrics/token-tracker.ts";
+import { MetricsRegistry } from "../metrics/prometheus.ts";
+import { wireMetrics, type MetricsWiringHandle } from "../metrics/wiring.ts";
 import { AuditLogger } from "../audit/logger.ts";
 import { getMasterKey } from "../secrets/master-key.ts";
 import { SecretStore } from "../secrets/store.ts";
@@ -69,7 +73,10 @@ interface InitializedModules {
   eventBus?: EventBus;
   sessionSupervisor?: SessionSupervisor;
   messageRouter?: MessageRouter;
+  telegramChannel?: TelegramChannel;
   gpuManager?: GPUManager;
+  metricsRegistry?: MetricsRegistry;
+  metricsWiring?: MetricsWiringHandle;
   gatewayServer?: GatewayServer;
   tailscaleDetector?: TailscaleDetector;
   discoveryBroadcaster?: DiscoveryBroadcaster;
@@ -251,6 +258,15 @@ export class EidolonDaemon {
         },
       });
 
+      // 7b. MetricsRegistry (no deps)
+      initOrder.push({
+        name: "MetricsRegistry",
+        fn: () => {
+          this.modules.metricsRegistry = new MetricsRegistry();
+          this.modules.logger?.info("daemon", "MetricsRegistry initialized");
+        },
+      });
+
       // 8. BackupManager (needs DatabaseManager, Config, Logger)
       initOrder.push({
         name: "BackupManager",
@@ -424,7 +440,7 @@ export class EidolonDaemon {
       // 17. Channels / MessageRouter (needs EventBus, Logger, Config)
       initOrder.push({
         name: "Channels",
-        fn: () => {
+        fn: async () => {
           const logger = this.modules.logger;
           const config = this.modules.config;
           const eventBus = this.modules.eventBus;
@@ -435,11 +451,58 @@ export class EidolonDaemon {
           }
 
           try {
-            this.modules.messageRouter = new MessageRouter(eventBus, logger);
+            const dndSchedule = config?.channels.telegram?.dndSchedule;
+            this.modules.messageRouter = new MessageRouter(eventBus, logger, {
+              dndSchedule: dndSchedule
+                ? { start: dndSchedule.start, end: dndSchedule.end }
+                : undefined,
+            });
 
-            // Check for Telegram channel configuration
+            // Wire up Telegram channel if configured and enabled
             if (config?.channels.telegram?.enabled) {
-              logger.info("daemon", "Telegram channel configured but adapter not yet implemented");
+              const tgConfig = config.channels.telegram;
+
+              // botToken must be a resolved string after secret resolution (step 4).
+              // If it's still a SecretRef object, the secret was not resolved -- skip.
+              const botToken = tgConfig.botToken;
+              if (typeof botToken !== "string") {
+                logger.warn(
+                  "daemon",
+                  "Telegram channel skipped: botToken is an unresolved secret reference. " +
+                    "Ensure the master key is set and the secret exists.",
+                );
+              } else {
+                const telegramConfig: TelegramConfig = {
+                  botToken,
+                  allowedUserIds: tgConfig.allowedUserIds,
+                  typingIndicator: true,
+                };
+
+                const channel = new TelegramChannel(telegramConfig, logger);
+
+                // Wire inbound messages from Telegram -> MessageRouter -> EventBus
+                channel.onMessage(async (message) => {
+                  const result = this.modules.messageRouter?.routeInbound(message);
+                  if (result && !result.ok) {
+                    logger.error("daemon", "Failed to route Telegram inbound message", undefined, {
+                      messageId: message.id,
+                      error: result.error.message,
+                    });
+                  }
+                });
+
+                // Register channel with the router for outbound routing
+                this.modules.messageRouter.registerChannel(channel);
+
+                // Connect (start long polling)
+                const connectResult = await channel.connect();
+                if (connectResult.ok) {
+                  this.modules.telegramChannel = channel;
+                  logger.info("daemon", "Telegram channel connected");
+                } else {
+                  logger.error("daemon", `Telegram channel failed to connect: ${connectResult.error.message}`);
+                }
+              }
             } else {
               logger.info("daemon", "No channel adapters configured");
             }
@@ -500,6 +563,7 @@ export class EidolonDaemon {
             config: config.gateway,
             logger,
             eventBus,
+            metricsRegistry: this.modules.metricsRegistry,
           });
           await this.modules.gatewayServer.start();
           logger.info("daemon", `GatewayServer started on ${config.gateway.host}:${config.gateway.port}`);
@@ -528,6 +592,24 @@ export class EidolonDaemon {
           });
 
           logger?.info("daemon", "Gateway auth events wired to AuditLogger");
+        },
+      });
+
+      // 19c. Wire Prometheus metrics to EventBus + SessionSupervisor
+      initOrder.push({
+        name: "MetricsWiring",
+        fn: () => {
+          const metricsRegistry = this.modules.metricsRegistry;
+          const eventBus = this.modules.eventBus;
+          const logger = this.modules.logger;
+          if (!metricsRegistry || !eventBus || !logger) return;
+
+          this.modules.metricsWiring = wireMetrics({
+            metricsRegistry,
+            eventBus,
+            logger,
+            sessionSupervisor: this.modules.sessionSupervisor,
+          });
         },
       });
 
@@ -610,22 +692,108 @@ export class EidolonDaemon {
 
     logger?.info("daemon", `Graceful shutdown initiated (timeout: ${gracefulMs}ms)`);
 
-    // 1. Stop accepting new events (EventBus.pause) -- placeholder
-    logger?.info("daemon", "Step 1: Stop accepting new events");
+    // 1. Stop accepting new events -- dispose EventBus subscribers so no new
+    //    handlers fire, while persisted events remain in SQLite for replay
+    //    on next startup.
+    if (this.modules.eventBus) {
+      try {
+        this.modules.eventBus.dispose();
+        logger?.info("daemon", "Step 1: EventBus subscribers disposed (no new events will be processed)");
+      } catch (err: unknown) {
+        logger?.error("daemon", "Step 1: Error disposing EventBus subscribers", err);
+      }
+    } else {
+      logger?.info("daemon", "Step 1: EventBus not initialized, skipping");
+    }
 
-    // 2. Signal sessions to complete current turn -- placeholder
-    logger?.info("daemon", "Step 2: Signal sessions to complete");
+    // 2. Signal sessions to complete -- abort all active Claude Code sessions.
+    //    SessionSupervisor tracks session slots (metadata), while
+    //    ClaudeCodeManager owns the actual subprocesses.
+    if (this.modules.sessionSupervisor) {
+      const activeSessions = this.modules.sessionSupervisor.getActive();
+      if (activeSessions.length > 0) {
+        logger?.info("daemon", `Step 2: Aborting ${activeSessions.length} active session(s)`);
+        for (const slot of activeSessions) {
+          try {
+            if (this.modules.claudeManager) {
+              await this.modules.claudeManager.abort(slot.sessionId);
+            }
+            this.modules.sessionSupervisor.unregister(slot.sessionId);
+            logger?.debug("daemon", `Session aborted: ${slot.sessionId} (${slot.type})`);
+          } catch (err: unknown) {
+            logger?.error("daemon", `Error aborting session ${slot.sessionId}`, err);
+          }
+        }
+      } else {
+        logger?.info("daemon", "Step 2: No active sessions to abort");
+      }
+    } else {
+      logger?.info("daemon", "Step 2: SessionSupervisor not initialized, skipping");
+    }
 
-    // 3-4. Wait for sessions, then force-terminate -- placeholder
-    logger?.info("daemon", "Step 3-4: Waiting for sessions to finish");
+    // 3. Disconnect all registered channels via MessageRouter.
+    //    The Telegram channel has its own explicit teardown in teardownModules(),
+    //    but this covers any other channels that may be registered dynamically.
+    if (this.modules.messageRouter) {
+      const channels = this.modules.messageRouter.getChannels();
+      if (channels.length > 0) {
+        logger?.info("daemon", `Step 3: Disconnecting ${channels.length} channel(s)`);
+        for (const channel of channels) {
+          try {
+            if (channel.isConnected()) {
+              await channel.disconnect();
+              logger?.debug("daemon", `Channel disconnected: ${channel.id}`);
+            }
+          } catch (err: unknown) {
+            logger?.error("daemon", `Error disconnecting channel ${channel.id}`, err);
+          }
+        }
+      } else {
+        logger?.info("daemon", "Step 3: No channels registered");
+      }
+    } else {
+      logger?.info("daemon", "Step 3: MessageRouter not initialized, skipping");
+    }
 
-    // 5. Flush pending metrics -- placeholder
-    logger?.info("daemon", "Step 5: Flush metrics");
+    // 4. Flush pending metrics -- capture a final snapshot of gauge values
+    //    before metrics wiring is disposed in teardownModules().
+    if (this.modules.metricsRegistry) {
+      try {
+        if (this.modules.eventBus) {
+          const pendingResult = this.modules.eventBus.pendingCount();
+          if (pendingResult.ok) {
+            this.modules.metricsRegistry.setEventQueueDepth(pendingResult.value);
+          }
+        }
+        if (this.modules.sessionSupervisor) {
+          this.modules.metricsRegistry.setActiveSessions(
+            this.modules.sessionSupervisor.getActive().length,
+          );
+        }
+        logger?.info("daemon", "Step 4: Final metrics snapshot captured");
+      } catch (err: unknown) {
+        logger?.error("daemon", "Step 4: Error capturing final metrics", err);
+      }
+    } else {
+      logger?.info("daemon", "Step 4: MetricsRegistry not available, skipping");
+    }
 
-    // 6. Close channels -- placeholder
-    logger?.info("daemon", "Step 6: Close channels");
+    // 5. Publish shutdown event for any remaining listeners (best-effort).
+    //    EventBus subscribers were disposed in step 1, but the event is
+    //    persisted to SQLite so it can be replayed on restart if needed.
+    if (this.modules.eventBus) {
+      try {
+        this.modules.eventBus.publish("system:shutdown", { reason: "graceful" }, {
+          priority: "critical",
+          source: "daemon",
+        });
+        logger?.debug("daemon", "Step 5: system:shutdown event persisted");
+      } catch {
+        // Best-effort: if EventBus DB is already closing, this is fine
+      }
+    }
 
-    // 7. Teardown initialized modules in reverse, with timeout enforcement
+    // 6. Teardown initialized modules in reverse, with timeout enforcement
     await Promise.race([
       this.teardownModules(),
       new Promise<void>((_, reject) =>
@@ -639,10 +807,10 @@ export class EidolonDaemon {
       process.exit(1);
     });
 
-    // 8. Remove PID file
+    // 7. Remove PID file
     this.removePidFile();
 
-    // 9. Remove signal handlers to prevent leaks on re-initialization
+    // 8. Remove signal handlers to prevent leaks on re-initialization
     this.removeSignalHandlers();
 
     this._running = false;
@@ -656,7 +824,11 @@ export class EidolonDaemon {
   private async teardownModules(): Promise<void> {
     const logger = this.modules.logger;
 
-    // Discovery broadcaster (stop UDP + mDNS)
+    // Teardown in reverse initialization order.
+    // Each step is wrapped in try/catch so a failure in one does not
+    // prevent the remaining modules from being cleaned up.
+
+    // 21 -> Discovery broadcaster (stop UDP + mDNS)
     if (this.modules.discoveryBroadcaster) {
       try {
         await this.modules.discoveryBroadcaster.stop();
@@ -666,7 +838,7 @@ export class EidolonDaemon {
       }
     }
 
-    // Tailscale detector
+    // 20 -> Tailscale detector
     if (this.modules.tailscaleDetector) {
       try {
         this.modules.tailscaleDetector.stop();
@@ -676,7 +848,17 @@ export class EidolonDaemon {
       }
     }
 
-    // Gateway server
+    // 19c -> Metrics wiring (dispose before gateway so interval timers stop)
+    if (this.modules.metricsWiring) {
+      try {
+        this.modules.metricsWiring.dispose();
+        logger?.info("daemon", "MetricsWiring disposed");
+      } catch (err: unknown) {
+        logger?.error("daemon", "Error disposing MetricsWiring", err);
+      }
+    }
+
+    // 19 -> Gateway server
     if (this.modules.gatewayServer) {
       try {
         await this.modules.gatewayServer.stop();
@@ -686,7 +868,48 @@ export class EidolonDaemon {
       }
     }
 
-    // Health server
+    // 17 -> Telegram channel (disconnect bot polling)
+    if (this.modules.telegramChannel) {
+      try {
+        await this.modules.telegramChannel.disconnect();
+        this.modules.messageRouter?.unregisterChannel("telegram");
+        logger?.info("daemon", "Telegram channel disconnected");
+      } catch (err: unknown) {
+        logger?.error("daemon", "Error disconnecting Telegram channel", err);
+      }
+    }
+
+    // 15 -> SessionSupervisor: unregister any remaining sessions.
+    //    Claude subprocesses were aborted in performShutdown step 2,
+    //    but during startup-failure teardown performShutdown is not called.
+    if (this.modules.sessionSupervisor?.hasActiveSessions()) {
+      const remaining = this.modules.sessionSupervisor.getActive();
+      for (const slot of remaining) {
+        try {
+          if (this.modules.claudeManager) {
+            await this.modules.claudeManager.abort(slot.sessionId);
+          }
+          this.modules.sessionSupervisor.unregister(slot.sessionId);
+        } catch (err: unknown) {
+          logger?.error("daemon", `Error cleaning up session ${slot.sessionId}`, err);
+        }
+      }
+      logger?.info("daemon", `SessionSupervisor: cleaned up ${remaining.length} remaining session(s)`);
+    }
+
+    // 10 -> EventBus: dispose subscribers as safety net.
+    //    During normal shutdown, performShutdown already called dispose().
+    //    During startup-failure teardown, this ensures cleanup.
+    if (this.modules.eventBus) {
+      try {
+        this.modules.eventBus.dispose();
+        logger?.info("daemon", "EventBus disposed");
+      } catch (err: unknown) {
+        logger?.error("daemon", "Error disposing EventBus", err);
+      }
+    }
+
+    // 9 -> Health server
     if (this.modules.healthServer) {
       try {
         await this.modules.healthServer.stop();
@@ -696,7 +919,7 @@ export class EidolonDaemon {
       }
     }
 
-    // SecretStore
+    // 3 -> SecretStore
     if (this.modules.secretStore) {
       try {
         this.modules.secretStore.close();
@@ -706,7 +929,7 @@ export class EidolonDaemon {
       }
     }
 
-    // Databases (WAL checkpoint then close)
+    // 5 -> Databases (WAL checkpoint then close) -- last data-layer teardown
     if (this.modules.dbManager) {
       try {
         this.flushWalCheckpoints();
