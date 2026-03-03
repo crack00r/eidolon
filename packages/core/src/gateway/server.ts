@@ -40,26 +40,23 @@ import { AuthRateLimiter } from "./rate-limiter.ts";
 // Zod schemas for RPC method parameters
 // ---------------------------------------------------------------------------
 
+const ErrorReportEntrySchema = z.object({
+  module: z.string().max(256).optional(),
+  message: z.string().max(4096).optional(),
+  level: z.string().max(64).optional(),
+  timestamp: z.union([z.string().max(64), z.number()]).optional(),
+  data: z.record(z.unknown()).optional(),
+}).passthrough();
+
 const ErrorReportParamsSchema = z.object({
-  errors: z
-    .array(
-      z
-        .object({
-          module: z.string().max(256).optional(),
-          message: z.string().max(4096).optional(),
-          level: z.string().max(64).optional(),
-          timestamp: z.string().max(64).optional(),
-          data: z.record(z.unknown()).optional(),
-        })
-        .passthrough(),
-    )
-    .max(100),
+  errors: z.array(ErrorReportEntrySchema).max(100),
   clientInfo: z
     .object({
       platform: z.string().max(64).optional(),
       version: z.string().max(64).optional(),
     })
-    .passthrough(),
+    .passthrough()
+    .optional(),
 });
 
 const BrainTriggerActionParamsSchema = z.object({
@@ -259,18 +256,20 @@ export class GatewayServer {
   // -------------------------------------------------------------------------
 
   private registerBuiltinHandlers(): void {
-    // error.report: clients report errors back to the server
-    this.registerHandler("error.report", async (params, clientId) => {
+    // error.report / client.reportErrors: clients report errors back to the server
+    const handleErrorReport: MethodHandler = async (params, clientId) => {
       const parsed = ErrorReportParamsSchema.safeParse(params);
       if (!parsed.success) {
         throw new RpcValidationError(
-          `Invalid error.report params: ${parsed.error.issues.map((issue: z.ZodIssue) => issue.message).join(", ")}`,
+          `Invalid error report params: ${parsed.error.issues.map((issue: z.ZodIssue) => issue.message).join(", ")}`,
         );
       }
       const { errors, clientInfo } = parsed.data;
 
-      const platform = clientInfo.platform ?? "unknown";
-      const version = clientInfo.version ?? "unknown";
+      // Use clientInfo if provided, otherwise fall back to the authenticated client's metadata
+      const client = this.clients.get(clientId);
+      const platform = clientInfo?.platform ?? client?.platform ?? "unknown";
+      const version = clientInfo?.version ?? client?.version ?? "unknown";
 
       for (const entry of errors) {
         this.logger.warn(
@@ -292,7 +291,10 @@ export class GatewayServer {
       );
 
       return { received: errors.length };
-    });
+    };
+
+    this.registerHandler("error.report", handleErrorReport);
+    this.registerHandler("client.reportErrors", handleErrorReport);
 
     // system.status: return current system status skeleton
     this.registerHandler("system.status", async () => {

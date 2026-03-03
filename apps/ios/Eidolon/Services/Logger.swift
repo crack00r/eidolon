@@ -65,10 +65,18 @@ enum EidolonLogger {
         logger.info("\(message, privacy: .public)")
     }
 
-    /// Log a warning.
+    /// Log a warning and store it in the ring buffer for reporting.
     static func warning(category: String, message: String) {
         let logger = loggerCache.logger(for: category)
         logger.warning("\(message, privacy: .public)")
+
+        let entry = LogEntry(
+            timestamp: Date(),
+            category: category,
+            level: .warning,
+            message: message
+        )
+        ringBuffer.append(entry)
     }
 
     /// Log an error and store it in the ring buffer for reporting.

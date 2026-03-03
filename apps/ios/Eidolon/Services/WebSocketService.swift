@@ -179,6 +179,7 @@ final class WebSocketService: ObservableObject {
                     )
                     isAuthenticated = true
                     connectionState = .connected
+                    flushErrorBuffer()
                 } catch {
                     isAuthenticated = false
                     connectionState = .error
@@ -191,6 +192,7 @@ final class WebSocketService: ObservableObject {
                 isAuthenticated = false
                 EidolonLogger.warning(category: logCategory, message: "Connecting without authentication token")
                 connectionState = .connected
+                flushErrorBuffer()
             }
         }
     }
@@ -399,6 +401,66 @@ final class WebSocketService: ObservableObject {
     /// Clear recorded connection errors.
     func clearConnectionErrors() {
         errorRingBuffer.removeAll()
+    }
+
+    // MARK: - Phone-Home Error Flush
+
+    /// Send buffered client-side errors to the gateway for diagnostic reporting.
+    /// Called automatically after each successful connection. Clears buffers on success.
+    private func flushErrorBuffer() {
+        // Collect errors from both the Logger ring buffer and connection errors
+        let logErrors = EidolonLogger.getRecentErrors()
+        let connErrors = errorRingBuffer
+
+        guard !logErrors.isEmpty || !connErrors.isEmpty else { return }
+
+        let isoFormatter = ISO8601DateFormatter()
+        isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+
+        // Build the entries array matching the server's ErrorReportEntrySchema
+        var entries: [[String: Any]] = []
+
+        for entry in logErrors {
+            entries.append([
+                "level": entry.level.rawValue,
+                "module": entry.category,
+                "message": entry.message,
+                "timestamp": isoFormatter.string(from: entry.timestamp),
+            ])
+        }
+
+        for entry in connErrors {
+            entries.append([
+                "level": "error",
+                "module": "WebSocket",
+                "message": entry.message,
+                "timestamp": isoFormatter.string(from: entry.timestamp),
+            ])
+        }
+
+        let params: [String: Any] = ["errors": entries]
+
+        Task {
+            do {
+                let _: AnyCodable? = try await rawCall(
+                    method: GatewayMethod.clientReportErrors.rawValue,
+                    params: params
+                )
+                // Success: clear both buffers
+                EidolonLogger.clearRecentErrors()
+                errorRingBuffer.removeAll()
+                EidolonLogger.debug(
+                    category: logCategory,
+                    message: "Flushed \(entries.count) client error(s) to gateway"
+                )
+            } catch {
+                // Best-effort: if RPC fails, keep the buffers for the next attempt
+                EidolonLogger.debug(
+                    category: logCategory,
+                    message: "Failed to flush client errors to gateway: \(error.localizedDescription)"
+                )
+            }
+        }
     }
 }
 

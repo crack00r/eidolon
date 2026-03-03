@@ -1,0 +1,202 @@
+{
+  "description": "Golden dataset for memory extraction evaluation. Mix of German and English conversation turns with annotated expected extractions. Used for Phase 2 exit criterion: >80% precision on golden dataset.",
+  "version": 1,
+  "turns": [
+    {
+      "id": "turn-001",
+      "language": "en",
+      "input": {
+        "user": "Remember that I prefer TypeScript over Python for backend work.",
+        "assistant": "Got it! I'll remember that you prefer TypeScript over Python for backend development."
+      },
+      "expected": {
+        "facts": [],
+        "decisions": [],
+        "preferences": ["prefer TypeScript over Python for backend work"]
+      }
+    },
+    {
+      "id": "turn-002",
+      "language": "de",
+      "input": {
+        "user": "Merke dir, dass mein Server unter 100.64.0.1 erreichbar ist.",
+        "assistant": "Notiert! Dein Server ist unter der IP 100.64.0.1 erreichbar."
+      },
+      "expected": {
+        "facts": ["mein Server unter 100.64.0.1 erreichbar ist"],
+        "decisions": [],
+        "preferences": []
+      }
+    },
+    {
+      "id": "turn-003",
+      "language": "en",
+      "input": {
+        "user": "Let's go with Bun as our runtime instead of Node.js.",
+        "assistant": "Great decision! Bun offers better performance and built-in TypeScript support. I'll use Bun as the runtime going forward."
+      },
+      "expected": {
+        "facts": [],
+        "decisions": ["Bun as our runtime instead of Node.js"],
+        "preferences": []
+      }
+    },
+    {
+      "id": "turn-004",
+      "language": "en",
+      "input": {
+        "user": "Actually, the GPU has 16GB VRAM not 12GB.",
+        "assistant": "Thanks for the correction! The GPU (RTX 5080) has 16GB VRAM. I've updated my understanding."
+      },
+      "expected": {
+        "facts": ["the GPU has 16GB VRAM not 12GB"],
+        "decisions": [],
+        "preferences": []
+      }
+    },
+    {
+      "id": "turn-005",
+      "language": "de",
+      "input": {
+        "user": "Ich bevorzuge dunkles Design in allen Anwendungen.",
+        "assistant": "Verstanden! Du bevorzugst ein dunkles Design. Ich werde das bei zukuenftigen UI-Empfehlungen beruecksichtigen."
+      },
+      "expected": {
+        "facts": [],
+        "decisions": [],
+        "preferences": ["dunkles Design in allen Anwendungen"]
+      }
+    },
+    {
+      "id": "turn-006",
+      "language": "en",
+      "input": {
+        "user": "TODO: set up the GPU worker Docker container on the Windows PC this weekend.",
+        "assistant": "I'll add that to your task list. Setting up the GPU worker Docker container on the Windows PC is planned for this weekend."
+      },
+      "expected": {
+        "facts": ["set up the GPU worker Docker container on the Windows PC this weekend"],
+        "decisions": [],
+        "preferences": []
+      }
+    },
+    {
+      "id": "turn-007",
+      "language": "en",
+      "input": {
+        "user": "We decided on SQLite with WAL mode for all three databases.",
+        "assistant": "Confirmed. SQLite with WAL mode for memory.db, operational.db, and audit.db. This gives us concurrent reads without write contention."
+      },
+      "expected": {
+        "facts": [],
+        "decisions": ["SQLite with WAL mode for all three databases"],
+        "preferences": []
+      }
+    },
+    {
+      "id": "turn-008",
+      "language": "en",
+      "input": {
+        "user": "My name is Manuel and I live in Germany.",
+        "assistant": "Nice to meet you, Manuel! I'll remember that you're based in Germany."
+      },
+      "expected": {
+        "facts": ["Manuel"],
+        "decisions": [],
+        "preferences": []
+      }
+    },
+    {
+      "id": "turn-009",
+      "language": "de",
+      "input": {
+        "user": "Wir nehmen Tauri statt Electron fuer die Desktop-App.",
+        "assistant": "Gute Wahl! Tauri ist deutlich schlanker als Electron und bietet native System-Integration ueber Rust."
+      },
+      "expected": {
+        "facts": [],
+        "decisions": ["Tauri statt Electron fuer die Desktop-App"],
+        "preferences": []
+      }
+    },
+    {
+      "id": "turn-010",
+      "language": "en",
+      "input": {
+        "user": "I like using pnpm workspaces for monorepo management.",
+        "assistant": "pnpm workspaces is a solid choice for monorepo management. It handles dependency deduplication well."
+      },
+      "expected": {
+        "facts": [],
+        "decisions": [],
+        "preferences": ["using pnpm workspaces for monorepo management"]
+      }
+    },
+    {
+      "id": "turn-011",
+      "language": "en",
+      "input": {
+        "user": "ok",
+        "assistant": "Alright!"
+      },
+      "expected": {
+        "facts": [],
+        "decisions": [],
+        "preferences": [],
+        "_note": "Trivial message -- nothing should be extracted."
+      }
+    },
+    {
+      "id": "turn-012",
+      "language": "en",
+      "input": {
+        "user": "Nein, we should use grammy not telegraf for the Telegram bot.",
+        "assistant": "Understood! I'll use grammy instead of telegraf for the Telegram bot integration. grammy has better TypeScript support anyway."
+      },
+      "expected": {
+        "facts": ["we should use grammy not telegraf for the Telegram bot"],
+        "decisions": [],
+        "preferences": []
+      }
+    },
+    {
+      "id": "turn-013",
+      "language": "en",
+      "input": {
+        "user": "Remind me to check Tailscale ACLs before deploying the gateway.",
+        "assistant": "I'll remind you to check Tailscale ACLs before the gateway deployment."
+      },
+      "expected": {
+        "facts": ["to check Tailscale ACLs before deploying the gateway"],
+        "decisions": [],
+        "preferences": []
+      }
+    },
+    {
+      "id": "turn-014",
+      "language": "de",
+      "input": {
+        "user": "Vergiss nicht, dass der Backup-Pfad /mnt/backup/eidolon ist.",
+        "assistant": "Notiert! Der Backup-Pfad ist /mnt/backup/eidolon."
+      },
+      "expected": {
+        "facts": ["dass der Backup-Pfad /mnt/backup/eidolon ist"],
+        "decisions": [],
+        "preferences": []
+      }
+    },
+    {
+      "id": "turn-015",
+      "language": "en",
+      "input": {
+        "user": "I want to use AES-256-GCM with Argon2id for the secret store encryption.",
+        "assistant": "That's a strong combination. AES-256-GCM provides authenticated encryption and Argon2id is the recommended KDF for password hashing."
+      },
+      "expected": {
+        "facts": [],
+        "decisions": [],
+        "preferences": ["to use AES-256-GCM with Argon2id for the secret store encryption"]
+      }
+    }
+  ]
+}

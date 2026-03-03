@@ -1,6 +1,9 @@
 /**
  * Platform-aware path resolution for Eidolon directories.
- * Uses XDG conventions on Linux, ~/Library on macOS.
+ *
+ * - **macOS**: ~/Library/{Application Support,Preferences,Logs,Caches}/eidolon
+ * - **Windows**: %APPDATA%\eidolon (data, config, logs, cache all under one root)
+ * - **Linux / other**: XDG conventions (~/.local/share, ~/.config, ~/.local/state, ~/.cache)
  *
  * All returned paths are canonicalized via `path.resolve()` to prevent
  * directory traversal and ensure consistent absolute paths.
@@ -18,6 +21,14 @@ function canonicalize(p: string): string {
   return resolve(p);
 }
 
+/**
+ * Get the Windows APPDATA directory. Falls back to %USERPROFILE%\AppData\Roaming
+ * if APPDATA is not set (should never happen on a real Windows system).
+ */
+function getWindowsAppData(): string {
+  return process.env.APPDATA ?? join(homedir(), "AppData", "Roaming");
+}
+
 /** Get the default data directory (where DBs and state go) */
 export function getDataDir(): string {
   const envDir = process.env.EIDOLON_DATA_DIR;
@@ -25,6 +36,9 @@ export function getDataDir(): string {
 
   if (process.platform === "darwin") {
     return canonicalize(join(homedir(), "Library", "Application Support", DEFAULT_DATA_DIR_NAME));
+  }
+  if (process.platform === "win32") {
+    return canonicalize(join(getWindowsAppData(), DEFAULT_DATA_DIR_NAME));
   }
   // Linux / other -- XDG
   const xdgData = process.env.XDG_DATA_HOME ?? join(homedir(), ".local", "share");
@@ -39,6 +53,9 @@ export function getConfigDir(): string {
   if (process.platform === "darwin") {
     return canonicalize(join(homedir(), "Library", "Preferences", DEFAULT_DATA_DIR_NAME));
   }
+  if (process.platform === "win32") {
+    return canonicalize(join(getWindowsAppData(), DEFAULT_DATA_DIR_NAME, "config"));
+  }
   const xdgConfig = process.env.XDG_CONFIG_HOME ?? join(homedir(), ".config");
   return canonicalize(join(xdgConfig, DEFAULT_DATA_DIR_NAME));
 }
@@ -51,6 +68,9 @@ export function getLogDir(): string {
   if (process.platform === "darwin") {
     return canonicalize(join(homedir(), "Library", "Logs", DEFAULT_DATA_DIR_NAME));
   }
+  if (process.platform === "win32") {
+    return canonicalize(join(getWindowsAppData(), DEFAULT_DATA_DIR_NAME, "logs"));
+  }
   const xdgState = process.env.XDG_STATE_HOME ?? join(homedir(), ".local", "state");
   return canonicalize(join(xdgState, DEFAULT_DATA_DIR_NAME, "logs"));
 }
@@ -62,6 +82,10 @@ export function getCacheDir(): string {
 
   if (process.platform === "darwin") {
     return canonicalize(join(homedir(), "Library", "Caches", DEFAULT_DATA_DIR_NAME));
+  }
+  if (process.platform === "win32") {
+    const localAppData = process.env.LOCALAPPDATA ?? join(homedir(), "AppData", "Local");
+    return canonicalize(join(localAppData, DEFAULT_DATA_DIR_NAME, "cache"));
   }
   const xdgCache = process.env.XDG_CACHE_HOME ?? join(homedir(), ".cache");
   return canonicalize(join(xdgCache, DEFAULT_DATA_DIR_NAME));

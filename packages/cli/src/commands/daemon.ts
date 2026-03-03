@@ -107,11 +107,17 @@ export function registerDaemonCommand(program: Command): void {
       const pid = status.pid;
       const timeoutMs = Number.parseInt(opts.timeout, 10) || 15_000;
 
-      console.log(`Sending SIGTERM to daemon (PID: ${pid})...`);
+      console.log(`Sending termination signal to daemon (PID: ${pid})...`);
       try {
-        process.kill(pid, "SIGTERM");
+        if (process.platform === "win32") {
+          // On Windows, process.kill(pid, "SIGTERM") does not gracefully signal.
+          // Use taskkill which sends WM_CLOSE, allowing the process to shut down.
+          Bun.spawnSync(["taskkill", "/PID", String(pid)], { stdout: "ignore", stderr: "ignore" });
+        } else {
+          process.kill(pid, "SIGTERM");
+        }
       } catch {
-        console.error(`Failed to send SIGTERM to PID ${pid}. Process may have already exited.`);
+        console.error(`Failed to send termination signal to PID ${pid}. Process may have already exited.`);
         return;
       }
 
@@ -121,9 +127,13 @@ export function registerDaemonCommand(program: Command): void {
       if (exited) {
         console.log("Eidolon daemon stopped.");
       } else {
-        console.log("Daemon did not exit in time. Sending SIGKILL...");
+        console.log("Daemon did not exit in time. Force-killing...");
         try {
-          process.kill(pid, "SIGKILL");
+          if (process.platform === "win32") {
+            Bun.spawnSync(["taskkill", "/F", "/PID", String(pid)], { stdout: "ignore", stderr: "ignore" });
+          } else {
+            process.kill(pid, "SIGKILL");
+          }
         } catch {
           // Already exited between check and kill
         }
@@ -181,6 +191,16 @@ function buildSafeDaemonEnv(): Record<string, string> {
     "LC_ALL",
     "LC_CTYPE",
     "NODE_ENV",
+    // Windows-specific environment variables needed for correct path resolution
+    "APPDATA",
+    "LOCALAPPDATA",
+    "USERPROFILE",
+    "HOMEDRIVE",
+    "HOMEPATH",
+    "SYSTEMROOT",
+    "COMSPEC",
+    "TEMP",
+    "TMP",
   ]);
 
   const safeEnv: Record<string, string> = {};

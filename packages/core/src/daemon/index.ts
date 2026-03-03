@@ -821,12 +821,22 @@ export class EidolonDaemon {
     this.signalHandler = handler;
     process.on("SIGTERM", handler);
     process.on("SIGINT", handler);
+
+    // On Windows, SIGTERM/SIGINT have limited support. The "SIGHUP" event
+    // is emitted when the console window is closed. We also listen for the
+    // Windows-specific "beforeExit" as a fallback for graceful shutdown.
+    if (process.platform === "win32") {
+      process.on("SIGHUP", handler);
+    }
   }
 
   private removeSignalHandlers(): void {
     if (!this.signalHandlerBound || !this.signalHandler) return;
     process.removeListener("SIGTERM", this.signalHandler);
     process.removeListener("SIGINT", this.signalHandler);
+    if (process.platform === "win32") {
+      process.removeListener("SIGHUP", this.signalHandler);
+    }
     this.signalHandlerBound = false;
     this.signalHandler = undefined;
   }

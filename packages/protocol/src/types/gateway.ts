@@ -31,7 +31,9 @@ export type GatewayMethod =
   | "client.list"
   | "client.execute"
   // Command result reporting (target client → server after push.executeCommand)
-  | "command.result";
+  | "command.result"
+  // Client phone-home error reporting (alias for error.report)
+  | "client.reportErrors";
 
 // ---------------------------------------------------------------------------
 // Push notification types (server → client, no response expected)

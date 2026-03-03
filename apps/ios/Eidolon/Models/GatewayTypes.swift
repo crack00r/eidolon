@@ -95,6 +95,7 @@ enum GatewayMethod: String {
     case voiceStart     = "voice.start"
     case voiceStop      = "voice.stop"
     case authAuthenticate = "auth.authenticate"
+    case clientReportErrors = "client.reportErrors"
 }
 
 // MARK: - AnyCodable

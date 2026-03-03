@@ -1,5 +1,29 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Eidolon AI Assistant - macOS LaunchAgent
+
+  INSTALL (as your user, auto-starts on login):
+    cp deploy/com.eidolon.daemon.plist ~/Library/LaunchAgents/
+    launchctl load ~/Library/LaunchAgents/com.eidolon.daemon.plist
+
+  UNINSTALL:
+    launchctl unload ~/Library/LaunchAgents/com.eidolon.daemon.plist
+    rm ~/Library/LaunchAgents/com.eidolon.daemon.plist
+
+  STATUS:
+    launchctl list | grep eidolon
+
+  LOGS:
+    tail -f ~/Library/Logs/eidolon/stdout.log
+    tail -f ~/Library/Logs/eidolon/stderr.log
+
+  NOTES:
+    - This is a LaunchAgent (per-user), not a LaunchDaemon (system-wide).
+    - Adjust ProgramArguments paths if bun is installed elsewhere (e.g., via nvm or Homebrew).
+    - Set EIDOLON_MASTER_KEY in EnvironmentVariables below, or use macOS Keychain integration.
+    - Homebrew bun: /opt/homebrew/bin/bun (Apple Silicon) or /usr/local/bin/bun (Intel).
+-->
 <plist version="1.0">
 <dict>
     <key>Label</key>
@@ -7,7 +31,7 @@
 
     <key>ProgramArguments</key>
     <array>
-        <string>/usr/local/bin/bun</string>
+        <string>/opt/homebrew/bin/bun</string>
         <string>run</string>
         <string>eidolon</string>
         <string>daemon</string>
@@ -15,35 +39,49 @@
         <string>--foreground</string>
     </array>
 
+    <!-- Start automatically when user logs in -->
     <key>RunAtLoad</key>
     <true/>
 
+    <!-- Restart if the process exits with a non-zero code -->
     <key>KeepAlive</key>
     <dict>
         <key>SuccessfulExit</key>
         <false/>
     </dict>
 
+    <!-- Log output to ~/Library/Logs/eidolon/ -->
     <key>StandardOutPath</key>
-    <string>/tmp/eidolon-stdout.log</string>
+    <string>/Users/REPLACE_WITH_USERNAME/Library/Logs/eidolon/stdout.log</string>
 
     <key>StandardErrorPath</key>
-    <string>/tmp/eidolon-stderr.log</string>
+    <string>/Users/REPLACE_WITH_USERNAME/Library/Logs/eidolon/stderr.log</string>
 
+    <!-- Minimum seconds between restarts to prevent restart loops -->
     <key>ThrottleInterval</key>
     <integer>10</integer>
 
-    <!-- Environment variables (user should set EIDOLON_MASTER_KEY here) -->
+    <!-- Environment variables -->
     <key>EnvironmentVariables</key>
     <dict>
         <key>PATH</key>
-        <string>/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin</string>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+        <!-- Uncomment and set your master key for encrypted secrets:
+        <key>EIDOLON_MASTER_KEY</key>
+        <string>your-master-key-here</string>
+        -->
     </dict>
 
+    <!-- Run as a background process -->
     <key>ProcessType</key>
     <string>Background</string>
 
+    <!-- Do not throttle I/O -->
     <key>LowPriorityIO</key>
     <false/>
+
+    <!-- Working directory -->
+    <key>WorkingDirectory</key>
+    <string>/Users/REPLACE_WITH_USERNAME</string>
 </dict>
 </plist>
