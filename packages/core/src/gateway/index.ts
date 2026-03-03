@@ -1,6 +1,7 @@
 // Gateway -- WebSocket server for client communication via JSON-RPC 2.0
 
 export { certExists, generateSelfSignedCert } from "./cert-manager.ts";
+export { handleOpenAIRequest, type OpenAICompatDeps } from "./openai-compat.ts";
 export {
   createJsonRpcError,
   createJsonRpcResponse,
@@ -15,3 +16,10 @@ export {
 } from "./protocol.ts";
 export { AuthRateLimiter, DEFAULT_RATE_LIMIT_CONFIG, type RateLimitConfig } from "./rate-limiter.ts";
 export { constantTimeCompare, GatewayServer, type MethodHandler } from "./server.ts";
+export {
+  extractWebhookResult,
+  handleWebhookRequest,
+  type WebhookDeps,
+  type WebhookPayload,
+  type WebhookResult,
+} from "./webhook.ts";

@@ -10,6 +10,15 @@ export { GraphMemory } from "./graph.ts";
 export type { InjectionContext, MemoryInjectorOptions } from "./injector.ts";
 export { MemoryInjector } from "./injector.ts";
 export * from "./knowledge-graph/index.ts";
+export type {
+  ProfileDecisionPattern,
+  ProfileInterest,
+  ProfilePreference,
+  ProfileRecentTopic,
+  ProfileSkill,
+  UserProfile,
+} from "./profile.ts";
+export { formatProfileMarkdown, UserProfileGenerator } from "./profile.ts";
 export type { MemorySearchOptions } from "./search.ts";
 export { MemorySearch } from "./search.ts";
 export type { CreateMemoryInput, MemoryListOptions, UpdateMemoryInput } from "./store.ts";
