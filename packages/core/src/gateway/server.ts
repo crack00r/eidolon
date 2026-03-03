@@ -108,6 +108,9 @@ interface ClientState {
   version: string;
   /** Timestamp (ms) when the WebSocket connection was established. */
   readonly connectedAt: number;
+  /** SEC-M4: Per-message rate limiting state. */
+  messageCount: number;
+  messageWindowStart: number;
 }
 
 interface WSData {
@@ -174,6 +177,15 @@ function normalizeOrigin(origin: string): string {
 
 /** Timeout in ms for unauthenticated clients before disconnection. */
 const AUTH_TIMEOUT_MS = 10_000;
+
+/**
+ * SEC-M4: Per-message rate limiting for authenticated clients.
+ * Maximum RPC messages per second per client to prevent flooding.
+ */
+const MAX_MESSAGES_PER_SECOND = 50;
+
+/** Sliding window duration in ms for per-message rate limiting. */
+const MESSAGE_RATE_WINDOW_MS = 1_000;
 
 /** WebSocket idle timeout in seconds (Bun uses seconds for this). */
 const WS_IDLE_TIMEOUT_SECONDS = 120;
@@ -399,6 +411,14 @@ export class GatewayServer {
 
     // client.execute: forward a command to a specific target client
     this.registerHandler("client.execute", async (params, fromClientId) => {
+      // SEC-H10: Verify the requesting client is authenticated before allowing
+      // command execution on other clients. This prevents unauthenticated clients
+      // (which should not exist, but defense-in-depth) from issuing commands.
+      const fromClient = this.clients.get(fromClientId);
+      if (!fromClient || !fromClient.authenticated) {
+        throw new RpcValidationError("Unauthorized: client.execute requires an authenticated session");
+      }
+
       const parsed = ClientExecuteParamsSchema.safeParse(params);
       if (!parsed.success) {
         throw new RpcValidationError(
@@ -406,6 +426,11 @@ export class GatewayServer {
         );
       }
       const { targetClientId, command, args } = parsed.data;
+
+      // Prevent a client from executing commands on itself
+      if (targetClientId === fromClientId) {
+        throw new RpcValidationError("Cannot execute commands on self via client.execute");
+      }
 
       const targetClient = this.clients.get(targetClientId);
       if (!targetClient || !targetClient.authenticated) {
@@ -520,6 +545,8 @@ export class GatewayServer {
         }
 
         // Origin validation (case-insensitive, trailing-slash-tolerant)
+        // SEC-M3: When allowedOrigins is empty, all origins are accepted.
+        // This is intentional for development, but should be restricted in production.
         if (self.config.allowedOrigins.length > 0) {
           const origin = normalizeOrigin(req.headers.get("Origin") ?? "");
           const allowed = self.config.allowedOrigins.some((o) => normalizeOrigin(o) === origin);
@@ -559,6 +586,14 @@ export class GatewayServer {
     this.startTime = Date.now();
     const scheme = this.config.tls.enabled ? "wss" : "ws";
     this.logger.info("start", `Gateway server listening on ${scheme}://${host}:${port}`);
+
+    // SEC-M3: Warn when no origin restrictions are configured
+    if (this.config.allowedOrigins.length === 0) {
+      this.logger.warn(
+        "security",
+        "Gateway has no allowedOrigins configured. All origins will be accepted. Set allowedOrigins in production.",
+      );
+    }
 
     // NET-001: Warn when auth tokens will be transmitted in plaintext
     if (!this.config.tls.enabled && this.config.auth.type === "token" && typeof this.config.auth.token === "string") {
@@ -720,6 +755,8 @@ export class GatewayServer {
       platform: "unknown",
       version: "unknown",
       connectedAt: Date.now(),
+      messageCount: 0,
+      messageWindowStart: Date.now(),
     };
     this.clients.set(clientId, state);
 
@@ -764,6 +801,7 @@ export class GatewayServer {
     const text = typeof message === "string" ? message : Buffer.from(message).toString("utf-8");
 
     // If not yet authenticated, expect ClientAuth as first message
+    // (auth messages are not subject to per-message rate limiting)
     if (!client.authenticated) {
       this.handleAuth(ws, client, text);
       return;

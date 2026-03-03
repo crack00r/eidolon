@@ -391,7 +391,7 @@ export class GatewayClient {
   private handleMessage(data: string): void {
     // Guard against oversized messages to prevent memory exhaustion
     if (data.length > MAX_MESSAGE_SIZE) {
-      console.warn("Gateway message too large, dropping:", data.length, "bytes");
+      clientLog("warn", "gateway", "Gateway message too large, dropping", { bytes: data.length });
       return;
     }
 
@@ -399,7 +399,7 @@ export class GatewayClient {
     try {
       message = JSON.parse(data) as JsonRpcResponse;
     } catch {
-      console.error("Failed to parse gateway message");
+      clientLog("error", "gateway", "Failed to parse gateway message");
       return;
     }
 
@@ -408,7 +408,7 @@ export class GatewayClient {
       message.jsonrpc !== "2.0" ||
       (message.result === undefined && message.error === undefined && message.method === undefined)
     ) {
-      console.warn("Invalid JSON-RPC 2.0 message received");
+      clientLog("warn", "gateway", "Invalid JSON-RPC 2.0 message received");
       return;
     }
 
@@ -420,7 +420,7 @@ export class GatewayClient {
       if (message.method === "push.executeCommand") {
         const cmd = typeof params.command === "string" ? params.command : "unknown";
         const from = typeof params.fromClientId === "string" ? params.fromClientId : "unknown";
-        console.info(`[Eidolon] Received remote command "${cmd}" from client ${from}`);
+        clientLog("info", "gateway", `Received remote command "${cmd}" from client ${from}`);
       }
 
       // Dispatch to typed handlers
@@ -430,7 +430,7 @@ export class GatewayClient {
           try {
             handler(params);
           } catch (err) {
-            console.error("Typed push handler error:", err);
+            clientLog("error", "gateway", "Typed push handler error", err);
           }
         }
       }
@@ -440,7 +440,7 @@ export class GatewayClient {
         try {
           handler(message.method, params);
         } catch (err) {
-          console.error("Push handler error:", err);
+          clientLog("error", "gateway", "Push handler error", err);
         }
       }
       return;
@@ -450,7 +450,7 @@ export class GatewayClient {
     if (message.id !== undefined) {
       const pending = this.pendingRequests.get(message.id);
       if (!pending) {
-        console.warn("Received response for unknown request id:", message.id);
+        clientLog("warn", "gateway", "Received response for unknown request id", { id: message.id });
         return;
       }
 
@@ -472,9 +472,42 @@ export class GatewayClient {
       try {
         handler(state);
       } catch (err) {
-        console.error("State change handler error:", err);
+        clientLog("error", "gateway", "State change handler error", err);
       }
     }
+
+    // Phone-home: upload buffered client errors on reconnection
+    if (state === "connected") {
+      this.flushErrorBuffer();
+    }
+  }
+
+  /**
+   * Send buffered client-side errors to the gateway for diagnostic reporting.
+   * Fires after each successful connection and clears the buffer on success.
+   */
+  private flushErrorBuffer(): void {
+    const errors = getRecentErrors();
+    if (errors.length === 0) return;
+
+    // Serialize entries (ReadonlyArray -> plain objects for JSON)
+    const entries = errors.map((e) => ({
+      level: e.level,
+      module: e.module,
+      message: e.message,
+      data: e.data,
+      timestamp: e.timestamp,
+    }));
+
+    this.call("client.reportErrors", { errors: entries }).then(
+      () => {
+        clearErrorBuffer();
+        clientLog("debug", "gateway", `Flushed ${entries.length} client error(s) to gateway`);
+      },
+      () => {
+        // Best-effort: if RPC fails, keep the buffer for the next attempt
+      },
+    );
   }
 
   private scheduleReconnect(): void {

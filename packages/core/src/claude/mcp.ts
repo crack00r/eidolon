@@ -3,9 +3,12 @@
  *
  * Generates the JSON config file that Claude Code CLI accepts via
  * the --mcp-config flag. Reads server definitions from BrainConfig.
+ *
+ * Supports resolving `$secret:KEY_NAME` references in env values
+ * from the encrypted secret store.
  */
 
-import { chmodSync } from "node:fs";
+import { chmodSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 import type { BrainConfig, EidolonError, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
@@ -26,22 +29,87 @@ interface McpConfigFile {
 }
 
 /**
+ * Function type for resolving secrets by key name.
+ * Returns the decrypted value on success, or an error.
+ */
+export type SecretResolver = (key: string) => Result<string, EidolonError>;
+
+/** Prefix that marks an env value as a secret reference (e.g. "$secret:HA_TOKEN"). */
+const SECRET_PREFIX = "$secret:";
+
+/**
+ * Resolve `$secret:KEY_NAME` references in MCP server env values.
+ * Returns a new servers record with secrets replaced by their decrypted values.
+ */
+function resolveEnvSecrets(
+  servers: Record<string, { readonly command: string; readonly args?: readonly string[]; readonly env?: Record<string, string> }>,
+  resolver: SecretResolver,
+): Result<McpConfigFile["mcpServers"], EidolonError> {
+  const resolved: Record<string, { command: string; args?: readonly string[]; env?: Record<string, string> }> = {};
+
+  for (const [name, server] of Object.entries(servers)) {
+    if (!server.env) {
+      resolved[name] = { command: server.command, args: server.args };
+      continue;
+    }
+
+    const resolvedEnv: Record<string, string> = {};
+    for (const [envKey, envValue] of Object.entries(server.env)) {
+      if (envValue.startsWith(SECRET_PREFIX)) {
+        const secretKey = envValue.slice(SECRET_PREFIX.length);
+        const secretResult = resolver(secretKey);
+        if (!secretResult.ok) {
+          return Err(
+            createError(
+              ErrorCode.SECRET_NOT_FOUND,
+              `Failed to resolve secret "${secretKey}" for MCP server "${name}" env var "${envKey}": ${secretResult.error.message}`,
+            ),
+          );
+        }
+        resolvedEnv[envKey] = secretResult.value;
+      } else {
+        resolvedEnv[envKey] = envValue;
+      }
+    }
+
+    resolved[name] = { command: server.command, args: server.args, env: resolvedEnv };
+  }
+
+  return Ok(resolved);
+}
+
+/**
  * Generate an MCP config file for Claude Code CLI.
  * Writes the file to the workspace directory and returns the path.
  * Returns null if no MCP servers are configured.
+ *
+ * If a `secretResolver` is provided, env values prefixed with `$secret:`
+ * are resolved from the encrypted secret store before writing the file.
+ * The file is written with 0o600 permissions.
+ *
+ * Use the returned `cleanup` function to remove the config file after
+ * the session ends (prevents secrets lingering on disk).
  */
 export async function generateMcpConfig(
   workspaceDir: string,
   brainConfig: BrainConfig,
-): Promise<Result<string | null, EidolonError>> {
+  secretResolver?: SecretResolver,
+): Promise<Result<{ path: string; cleanup: () => void } | null, EidolonError>> {
   if (!brainConfig.mcpServers || Object.keys(brainConfig.mcpServers).length === 0) {
     return Ok(null);
   }
 
-  const mcpConfig: McpConfigFile = {
-    mcpServers: brainConfig.mcpServers,
-  };
+  let mcpServers: McpConfigFile["mcpServers"];
 
+  if (secretResolver) {
+    const resolveResult = resolveEnvSecrets(brainConfig.mcpServers, secretResolver);
+    if (!resolveResult.ok) return resolveResult;
+    mcpServers = resolveResult.value;
+  } else {
+    mcpServers = brainConfig.mcpServers;
+  }
+
+  const mcpConfig: McpConfigFile = { mcpServers };
   const configPath = join(workspaceDir, ".mcp-servers.json");
 
   try {
@@ -53,7 +121,16 @@ export async function generateMcpConfig(
     } catch {
       // Non-fatal: may fail on some filesystems (e.g. FAT32 on Windows)
     }
-    return Ok(configPath);
+
+    const cleanup = (): void => {
+      try {
+        unlinkSync(configPath);
+      } catch {
+        // Best-effort: file may have already been removed
+      }
+    };
+
+    return Ok({ path: configPath, cleanup });
   } catch (cause) {
     return Err(createError(ErrorCode.CONFIG_PARSE_ERROR, "Failed to write MCP config", cause));
   }

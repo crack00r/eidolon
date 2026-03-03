@@ -129,7 +129,9 @@ export class EidolonDaemon {
           // Re-create logger with config-based settings, including file rotation
           const logDir = result.value.logging.directory;
           const rotator = logDir
-            ? new LogRotator(join(logDir, "daemon.log"), {
+            ? new LogRotator({
+                directory: logDir,
+                filename: "daemon.log",
                 maxSizeMb: result.value.logging.maxSizeMb,
                 maxFiles: result.value.logging.maxFiles,
               })

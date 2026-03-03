@@ -11,6 +11,8 @@
  * - Client → Client: via client.execute / push.executeCommand relay
  */
 
+import { clientLog, getRecentErrors, clearErrorBuffer } from "./logger";
+
 export interface GatewayConfig {
   host: string;
   port: number;

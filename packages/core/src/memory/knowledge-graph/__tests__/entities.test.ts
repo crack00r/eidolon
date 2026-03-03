@@ -202,6 +202,100 @@ describe("KGEntityStore", () => {
     expect(names).toContain("Tailscale");
   });
 
+  // -- findSimilar ----------------------------------------------------------
+
+  test("findSimilar() returns entities above threshold", () => {
+    store.create({ name: "TypeScript", type: "technology" });
+    store.create({ name: "Typescript Runtime", type: "technology" });
+    store.create({ name: "Bun", type: "technology" });
+
+    // With a low threshold, "TypeScript" and "Typescript Runtime" should match
+    const result = store.findSimilar("TypeScript", "technology", {
+      personThreshold: 0.95,
+      technologyThreshold: 0.3,
+      conceptThreshold: 0.85,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    // Should find "TypeScript" (exact, sim=1.0) and "Typescript Runtime" (partial match)
+    expect(result.value.length).toBeGreaterThanOrEqual(1);
+    expect(result.value[0]?.entity.name).toBe("TypeScript");
+    expect(result.value[0]?.similarity).toBe(1.0);
+  });
+
+  test("findSimilar() uses per-type threshold (person is stricter)", () => {
+    store.create({ name: "Manuel Guttmann", type: "person" });
+    store.create({ name: "Manuel G", type: "person" });
+
+    // Person threshold at 0.95 -- "Manuel G" is not similar enough to "Manuel Guttmann"
+    const strictResult = store.findSimilar("Manuel Guttmann", "person", {
+      personThreshold: 0.95,
+      technologyThreshold: 0.9,
+      conceptThreshold: 0.85,
+    });
+    expect(strictResult.ok).toBe(true);
+    if (!strictResult.ok) return;
+
+    // Only exact match should pass at 0.95
+    const names = strictResult.value.map((m) => m.entity.name);
+    expect(names).toContain("Manuel Guttmann");
+
+    // With a relaxed threshold, both should match
+    const relaxedResult = store.findSimilar("Manuel Guttmann", "person", {
+      personThreshold: 0.3,
+      technologyThreshold: 0.9,
+      conceptThreshold: 0.85,
+    });
+    expect(relaxedResult.ok).toBe(true);
+    if (!relaxedResult.ok) return;
+    expect(relaxedResult.value.length).toBe(2);
+  });
+
+  test("findSimilar() returns empty for no matches", () => {
+    store.create({ name: "TypeScript", type: "technology" });
+
+    const result = store.findSimilar("Python", "technology", {
+      personThreshold: 0.95,
+      technologyThreshold: 0.9,
+      conceptThreshold: 0.85,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value).toHaveLength(0);
+  });
+
+  // -- findOrCreateWithResolution -------------------------------------------
+
+  test("findOrCreateWithResolution() reuses existing similar entity", () => {
+    store.create({ name: "TypeScript", type: "technology" });
+
+    // Exact match should be found with any reasonable threshold
+    const result = store.findOrCreateWithResolution(
+      { name: "TypeScript", type: "technology" },
+      { personThreshold: 0.95, technologyThreshold: 0.9, conceptThreshold: 0.85 },
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.value.created).toBe(false);
+    expect(result.value.entity.name).toBe("TypeScript");
+  });
+
+  test("findOrCreateWithResolution() creates when no similar entity exists", () => {
+    store.create({ name: "TypeScript", type: "technology" });
+
+    const result = store.findOrCreateWithResolution(
+      { name: "Bun", type: "technology" },
+      { personThreshold: 0.95, technologyThreshold: 0.9, conceptThreshold: 0.85 },
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.value.created).toBe(true);
+    expect(result.value.entity.name).toBe("Bun");
+  });
+
   // -- merge ----------------------------------------------------------------
 
   test("merge() moves relations and deletes source", () => {

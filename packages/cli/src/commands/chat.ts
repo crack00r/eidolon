@@ -219,10 +219,12 @@ export function registerChatCommand(program: Command): void {
 
       // Generate MCP config if servers are configured
       const mcpResult = await generateMcpConfig(workspaceDir, config.brain);
-      const mcpConfigPath = mcpResult.ok ? mcpResult.value : null;
+      const mcpConfigResult = mcpResult.ok ? mcpResult.value : null;
+      const mcpConfigPath = mcpConfigResult?.path ?? null;
 
       // Graceful shutdown handler
       const cleanup = (): void => {
+        mcpConfigResult?.cleanup();
         workspacePreparer.cleanup(workspaceSessionId);
         dbManager.close();
       };

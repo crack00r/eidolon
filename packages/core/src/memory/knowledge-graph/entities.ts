@@ -367,6 +367,89 @@ export class KGEntityStore {
     }
   }
 
+  /**
+   * Find entities with names similar to the given name, using per-type
+   * thresholds from the entity resolution config.
+   *
+   * This powers entity deduplication: before creating a new entity, call
+   * this to check if a sufficiently similar one already exists.
+   *
+   * @param name       - The candidate entity name.
+   * @param type       - The entity type (determines which threshold to use).
+   * @param thresholds - Per-type similarity thresholds from config.
+   * @returns Matching entities that exceed the threshold for the given type.
+   */
+  findSimilar(
+    name: string,
+    type: EntityType,
+    thresholds?: EntityResolutionThresholds,
+  ): Result<Array<{ entity: KGEntity; similarity: number }>, EidolonError> {
+    const resolvedThresholds = thresholds ?? DEFAULT_ENTITY_RESOLUTION_THRESHOLDS;
+    const threshold = getThresholdForType(type, resolvedThresholds);
+
+    try {
+      // Load all entities of the same type (entity count per type is typically small)
+      const rows = this.db
+        .query("SELECT * FROM kg_entities WHERE type = ?")
+        .all(type) as EntityRow[];
+
+      const matches: Array<{ entity: KGEntity; similarity: number }> = [];
+
+      for (const row of rows) {
+        const sim = stringSimilarity(name, row.name);
+        if (sim >= threshold) {
+          matches.push({ entity: rowToEntity(row), similarity: sim });
+        }
+      }
+
+      // Sort by similarity descending
+      matches.sort((a, b) => b.similarity - a.similarity);
+
+      this.logger.debug("findSimilar", `Found ${matches.length} similar entities for "${name}"`, {
+        type,
+        threshold,
+        candidateCount: rows.length,
+      });
+
+      return Ok(matches);
+    } catch (cause) {
+      return Err(createError(ErrorCode.DB_QUERY_FAILED, `Failed to find similar entities for "${name}"`, cause));
+    }
+  }
+
+  /**
+   * Find or create with deduplication: looks for existing entities of the
+   * same type whose name exceeds the configured similarity threshold.
+   * If a similar entity is found, returns it; otherwise creates a new one.
+   *
+   * @param input      - The entity to find or create.
+   * @param thresholds - Per-type similarity thresholds from config.
+   */
+  findOrCreateWithResolution(
+    input: CreateEntityInput,
+    thresholds?: EntityResolutionThresholds,
+  ): Result<{ entity: KGEntity; created: boolean }, EidolonError> {
+    // First check for similar entities using configurable thresholds
+    const similarResult = this.findSimilar(input.name, input.type, thresholds);
+    if (!similarResult.ok) return similarResult;
+
+    if (similarResult.value.length > 0) {
+      const best = similarResult.value[0];
+      if (best) {
+        this.logger.debug("findOrCreateWithResolution", `Resolved "${input.name}" to existing entity "${best.entity.name}"`, {
+          similarity: best.similarity,
+          type: input.type,
+        });
+        return Ok({ entity: best.entity, created: false });
+      }
+    }
+
+    // No similar entity found, create a new one
+    const createResult = this.create(input);
+    if (!createResult.ok) return createResult;
+    return Ok({ entity: createResult.value, created: true });
+  }
+
   /** Merge two entities: keep target, move all relations from source to target, delete source. */
   merge(sourceId: string, targetId: string): Result<void, EidolonError> {
     try {
