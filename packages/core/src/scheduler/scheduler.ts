@@ -295,6 +295,49 @@ export class TaskScheduler {
     return now + 3_600_000;
   }
 
+  /**
+   * Create a scheduled task from a natural language description.
+   * Delegates parsing to AutomationEngine and stores as an automation task.
+   *
+   * @param input - Natural language schedule description
+   * @param defaultChannel - Default delivery channel (e.g., "telegram")
+   * @returns The created automation task, or an error if parsing fails
+   */
+  createFromNaturalLanguage(
+    input: string,
+    defaultChannel?: string,
+  ): Result<ScheduledTask, EidolonError> {
+    // Lazy import to avoid circular dependency at module load time
+    const { extractScheduleAndAction, deriveName } = require("./automation.ts") as {
+      extractScheduleAndAction: (input: string) => { cron: string; actionText: string } | null;
+      deriveName: (actionText: string) => string;
+    };
+
+    const result = extractScheduleAndAction(input);
+    if (!result) {
+      return Err(
+        createError(
+          ErrorCode.CONFIG_INVALID,
+          `Could not parse schedule from input: "${input}". ` +
+            'Try formats like "every Monday at 9am, do X" or "daily at 8am, do Y".',
+        ),
+      );
+    }
+
+    const { cron, actionText } = result;
+    return this.create({
+      name: deriveName(actionText),
+      type: "recurring",
+      cron,
+      action: "automation",
+      payload: {
+        prompt: actionText,
+        deliverTo: defaultChannel ?? "telegram",
+        originalInput: input,
+      },
+    });
+  }
+
   /** Compute the initial nextRunAt based on task input. */
   private computeInitialNextRun(input: CreateTaskInput): number | null {
     if (input.type === "once" && input.runAt) {

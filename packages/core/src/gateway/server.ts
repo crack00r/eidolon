@@ -36,6 +36,7 @@ import {
   parseJsonRpcRequest,
 } from "./protocol.ts";
 import { AuthRateLimiter } from "./rate-limiter.ts";
+import { extractWebhookResult, handleWebhookRequest, type WebhookDeps } from "./webhook.ts";
 
 // ---------------------------------------------------------------------------
 // Zod schemas for RPC method parameters
@@ -80,6 +81,19 @@ const CommandResultParamsSchema = z.object({
   success: z.boolean().optional(),
   result: z.unknown().optional(),
   error: z.string().max(4096).optional(),
+});
+
+const AutomationCreateParamsSchema = z.object({
+  input: z.string().min(1).max(2048),
+  deliverTo: z.string().min(1).max(64).optional(),
+});
+
+const AutomationListParamsSchema = z.object({
+  enabledOnly: z.boolean().optional(),
+});
+
+const AutomationDeleteParamsSchema = z.object({
+  automationId: z.string().min(1).max(256),
 });
 
 
@@ -560,6 +574,12 @@ export class GatewayServer {
           return new Response(body, { status: 200, headers });
         }
 
+        // POST /webhooks/:id -- webhook ingestion endpoint
+        if (url.pathname.startsWith("/webhooks/") && req.method === "POST") {
+          const endpointId = url.pathname.slice("/webhooks/".length);
+          return self.handleWebhookRoute(req, endpointId, isTls);
+        }
+
         if (url.pathname !== "/ws") {
           return secureResponse("Not found", 404, isTls);
         }
@@ -666,6 +686,74 @@ export class GatewayServer {
     this.server = undefined;
     this.rateLimiter.dispose();
     this.logger.info("stop", "Gateway server stopped");
+  }
+
+  // -------------------------------------------------------------------------
+  // Webhook routing
+  // -------------------------------------------------------------------------
+
+  /**
+   * Route an incoming webhook HTTP request to the webhook handler, then
+   * publish the validated payload to the EventBus.
+   *
+   * Supports per-endpoint configuration: if an endpoint ID matches a configured
+   * webhook endpoint, uses that endpoint's token and priority. Otherwise falls
+   * back to the gateway-level auth token.
+   */
+  private async handleWebhookRoute(req: Request, endpointId: string, isTls: boolean): Promise<Response> {
+    // Look up per-endpoint configuration
+    const endpoints = this.config.webhooks?.endpoints ?? [];
+    const endpointConfig = endpoints.find((ep) => ep.id === endpointId);
+
+    // If a specific endpoint is configured but disabled, reject early
+    if (endpointConfig && !endpointConfig.enabled) {
+      return secureResponse("Not found", 404, isTls);
+    }
+
+    // Resolve the token for authentication
+    let resolvedToken: string | undefined;
+    if (endpointConfig) {
+      // Per-endpoint token (already resolved from secret refs by the config loader)
+      resolvedToken = typeof endpointConfig.token === "string" ? endpointConfig.token : undefined;
+    } else {
+      // Fall back to gateway auth token
+      resolvedToken = typeof this.config.auth.token === "string" ? this.config.auth.token : undefined;
+    }
+
+    const deps: WebhookDeps = {
+      logger: this.logger,
+      gatewayToken: resolvedToken,
+    };
+
+    const response = await handleWebhookRequest(req, deps);
+
+    // If the handler returned a successful result, publish to EventBus
+    const result = extractWebhookResult(response);
+    if (result) {
+      const priority = endpointConfig?.priority ?? "normal";
+      const eventType = (endpointConfig?.eventType ?? "webhook:received") as "webhook:received";
+
+      this.eventBus.publish(
+        eventType,
+        {
+          webhookId: result.id,
+          endpointId,
+          source: result.payload.source,
+          event: result.payload.event,
+          data: result.payload.data,
+        },
+        { priority, source: `webhook:${endpointId}` },
+      );
+
+      this.logger.info("webhook", `Published ${eventType} from endpoint "${endpointId}"`, {
+        webhookId: result.id,
+        source: result.payload.source,
+        event: result.payload.event,
+        priority,
+      });
+    }
+
+    return response;
   }
 
   // -------------------------------------------------------------------------

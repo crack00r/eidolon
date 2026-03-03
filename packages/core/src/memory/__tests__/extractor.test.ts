@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test";
+import type { ConsolidationDecision, ConsolidationResult, EidolonError, Result } from "@eidolon/protocol";
+import { createError, ErrorCode, Ok } from "@eidolon/protocol";
 import type { Logger } from "../../logging/logger.ts";
+import type { MemoryConsolidator } from "../consolidation.ts";
 import type { ConversationTurn, ExtractedMemory, LlmExtractFn } from "../extractor.ts";
 import { MemoryExtractor } from "../extractor.ts";
 
@@ -549,5 +552,252 @@ describe("MemoryExtractor PII screening", () => {
     expect(results.length).toBeGreaterThanOrEqual(1);
     const pref = results.find((r) => r.type === "preference");
     expect(pref?.sensitive).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// extractAndConsolidate
+// ---------------------------------------------------------------------------
+
+/**
+ * Create a fake MemoryConsolidator for testing extractAndConsolidate().
+ * Only the `consolidate()` method is mocked since that's all extractAndConsolidate() calls.
+ */
+function createFakeConsolidator(options?: {
+  consolidateFn?: (
+    extracted: readonly ExtractedMemory[],
+    sessionId?: string,
+  ) => Promise<Result<ConsolidationResult, EidolonError>>;
+}): MemoryConsolidator {
+  const defaultConsolidateFn = async (
+    extracted: readonly ExtractedMemory[],
+  ): Promise<Result<ConsolidationResult, EidolonError>> => {
+    const decisions: ConsolidationDecision[] = extracted.map((mem) => ({
+      action: "ADD" as const,
+      content: mem.content,
+      confidence: mem.confidence,
+      reason: "fake consolidator -- ADD all",
+    }));
+    return Ok({
+      decisions,
+      added: extracted.length,
+      updated: 0,
+      deleted: 0,
+      noops: 0,
+    });
+  };
+
+  return {
+    consolidate: options?.consolidateFn ?? defaultConsolidateFn,
+  } as unknown as MemoryConsolidator;
+}
+
+describe("MemoryExtractor.extractAndConsolidate", () => {
+  test("returns zero counts for trivial turns", async () => {
+    const extractor = new MemoryExtractor(createSilentLogger(), {
+      strategy: "rule-based",
+      consolidator: createFakeConsolidator(),
+    });
+
+    const result = await extractor.extractAndConsolidate(
+      makeTurn({ userMessage: "ok", assistantResponse: "👍" }),
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.added).toBe(0);
+    expect(result.value.updated).toBe(0);
+    expect(result.value.deleted).toBe(0);
+    expect(result.value.noops).toBe(0);
+    expect(result.value.decisions).toHaveLength(0);
+  });
+
+  test("delegates to consolidator when provided", async () => {
+    let consolidateCalled = false;
+    let receivedExtracted: readonly ExtractedMemory[] = [];
+
+    const fakeConsolidator = createFakeConsolidator({
+      consolidateFn: async (extracted) => {
+        consolidateCalled = true;
+        receivedExtracted = extracted;
+        return Ok({
+          decisions: extracted.map((m) => ({
+            action: "ADD" as const,
+            content: m.content,
+            confidence: m.confidence,
+            reason: "test add",
+          })),
+          added: extracted.length,
+          updated: 0,
+          deleted: 0,
+          noops: 0,
+        });
+      },
+    });
+
+    const extractor = new MemoryExtractor(createSilentLogger(), {
+      strategy: "rule-based",
+      consolidator: fakeConsolidator,
+    });
+
+    const result = await extractor.extractAndConsolidate(
+      makeTurn({
+        userMessage: "Remember that my server uses Ubuntu 22.04",
+        assistantResponse: "Noted, I'll keep that in mind.",
+      }),
+    );
+
+    expect(consolidateCalled).toBe(true);
+    expect(receivedExtracted.length).toBeGreaterThanOrEqual(1);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.added).toBeGreaterThanOrEqual(1);
+  });
+
+  test("passes sessionId to consolidator", async () => {
+    let receivedSessionId: string | undefined;
+
+    const fakeConsolidator = createFakeConsolidator({
+      consolidateFn: async (extracted, sessionId) => {
+        receivedSessionId = sessionId;
+        return Ok({ decisions: [], added: 0, updated: 0, deleted: 0, noops: 0 });
+      },
+    });
+
+    const extractor = new MemoryExtractor(createSilentLogger(), {
+      strategy: "rule-based",
+      consolidator: fakeConsolidator,
+    });
+
+    await extractor.extractAndConsolidate(
+      makeTurn({
+        userMessage: "I prefer TypeScript for backend work",
+        assistantResponse: "Good choice.",
+      }),
+      "session-xyz",
+    );
+
+    expect(receivedSessionId).toBe("session-xyz");
+  });
+
+  test("returns ADD-only decisions when no consolidator is configured", async () => {
+    const extractor = new MemoryExtractor(createSilentLogger(), {
+      strategy: "rule-based",
+      // No consolidator provided
+    });
+
+    const result = await extractor.extractAndConsolidate(
+      makeTurn({
+        userMessage: "Remember that we use Bun as runtime",
+        assistantResponse: "Noted.",
+      }),
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.added).toBeGreaterThanOrEqual(1);
+    expect(result.value.updated).toBe(0);
+    expect(result.value.deleted).toBe(0);
+    expect(result.value.noops).toBe(0);
+    // All decisions should be ADD
+    for (const d of result.value.decisions) {
+      expect(d.action).toBe("ADD");
+    }
+  });
+
+  test("falls back to ADD-only when consolidation fails", async () => {
+    const fakeConsolidator = createFakeConsolidator({
+      consolidateFn: async () => ({
+        ok: false as const,
+        error: createError(ErrorCode.EMBEDDING_FAILED, "Embedding model crashed"),
+      }),
+    });
+
+    const extractor = new MemoryExtractor(createSilentLogger(), {
+      strategy: "rule-based",
+      consolidator: fakeConsolidator,
+    });
+
+    const result = await extractor.extractAndConsolidate(
+      makeTurn({
+        userMessage: "I prefer dark mode for all editors",
+        assistantResponse: "Good preference.",
+      }),
+    );
+
+    // Should still succeed via fallback
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.added).toBeGreaterThanOrEqual(1);
+    expect(result.value.updated).toBe(0);
+    expect(result.value.deleted).toBe(0);
+    for (const d of result.value.decisions) {
+      expect(d.action).toBe("ADD");
+      expect(d.reason).toContain("No consolidator configured");
+    }
+  });
+
+  test("propagates extraction errors", async () => {
+    const failingLlm: LlmExtractFn = async () => {
+      throw new Error("LLM unavailable");
+    };
+
+    const extractor = new MemoryExtractor(createSilentLogger(), {
+      strategy: "llm",
+      llmExtractFn: failingLlm,
+      consolidator: createFakeConsolidator(),
+    });
+
+    const result = await extractor.extractAndConsolidate(
+      makeTurn({
+        userMessage: "Remember this important thing about the server",
+        assistantResponse: "Noted.",
+      }),
+    );
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe("MEMORY_EXTRACTION_FAILED");
+  });
+
+  test("returns consolidation result with UPDATE/DELETE/NOOP when consolidator reports them", async () => {
+    const fakeConsolidator = createFakeConsolidator({
+      consolidateFn: async (extracted) => {
+        return Ok({
+          decisions: [
+            {
+              action: "NOOP" as const,
+              content: extracted[0]?.content ?? "",
+              confidence: 0.9,
+              reason: "Near-duplicate",
+              memoryId: "existing-mem-1",
+            },
+          ],
+          added: 0,
+          updated: 0,
+          deleted: 0,
+          noops: 1,
+        });
+      },
+    });
+
+    const extractor = new MemoryExtractor(createSilentLogger(), {
+      strategy: "rule-based",
+      consolidator: fakeConsolidator,
+    });
+
+    const result = await extractor.extractAndConsolidate(
+      makeTurn({
+        userMessage: "I prefer dark mode for all editors",
+        assistantResponse: "Noted.",
+      }),
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.noops).toBe(1);
+    expect(result.value.added).toBe(0);
+    expect(result.value.decisions).toHaveLength(1);
+    expect(result.value.decisions[0]?.action).toBe("NOOP");
   });
 });

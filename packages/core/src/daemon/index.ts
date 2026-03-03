@@ -18,6 +18,7 @@ import { ClaudeCodeManager } from "../claude/manager.ts";
 import { loadConfig } from "../config/loader.ts";
 import { getConfigPath, getDataDir, getPidFilePath } from "../config/paths.ts";
 import { DatabaseManager } from "../database/manager.ts";
+import { DigestBuilder } from "../digest/builder.ts";
 import { DiscoveryBroadcaster } from "../discovery/broadcaster.ts";
 import { TailscaleDetector } from "../discovery/tailscale.ts";
 import { GatewayServer } from "../gateway/server.ts";
@@ -51,6 +52,8 @@ import { MemoryStore } from "../memory/store.ts";
 import { TokenTracker } from "../metrics/token-tracker.ts";
 import { MetricsRegistry } from "../metrics/prometheus.ts";
 import { wireMetrics, type MetricsWiringHandle } from "../metrics/wiring.ts";
+import { MCPHealthMonitor } from "../mcp/health.ts";
+import { AutomationEngine } from "../scheduler/automation.ts";
 import { TaskScheduler } from "../scheduler/scheduler.ts";
 import { AuditLogger } from "../audit/logger.ts";
 import { getMasterKey } from "../secrets/master-key.ts";
@@ -89,12 +92,15 @@ interface InitializedModules {
   energyBudget?: EnergyBudget;
   restCalculator?: RestCalculator;
   taskScheduler?: TaskScheduler;
+  automationEngine?: AutomationEngine;
   memoryExtractor?: MemoryExtractor;
   cognitiveLoop?: CognitiveLoop;
+  digestBuilder?: DigestBuilder;
   schedulerInterval?: ReturnType<typeof setInterval>;
   messageRouter?: MessageRouter;
   telegramChannel?: TelegramChannel;
   gpuManager?: GPUManager;
+  mcpHealthMonitor?: MCPHealthMonitor;
   metricsRegistry?: MetricsRegistry;
   metricsWiring?: MetricsWiringHandle;
   gatewayServer?: GatewayServer;
@@ -262,6 +268,45 @@ export class EidolonDaemon {
           this.modules.healthChecker.register("claude", createClaudeCheck());
 
           logger.info("daemon", "HealthChecker initialized");
+        },
+      });
+
+      // 6b. MCPHealthMonitor (needs Config, Logger, HealthChecker)
+      initOrder.push({
+        name: "MCPHealthMonitor",
+        fn: () => {
+          const logger = this.modules.logger;
+          const config = this.modules.config;
+          const healthChecker = this.modules.healthChecker;
+          if (!logger || !config) return;
+
+          const mcpServers = config.brain.mcpServers;
+          if (!mcpServers || Object.keys(mcpServers).length === 0) {
+            logger.info("daemon", "MCPHealthMonitor skipped: no MCP servers configured");
+            return;
+          }
+
+          // Convert config mcpServers to McpServerConfig format
+          const serverConfigs: Record<string, { command: string; args?: readonly string[]; env?: Readonly<Record<string, string>> }> = {};
+          for (const [name, server] of Object.entries(mcpServers)) {
+            serverConfigs[name] = {
+              command: server.command,
+              args: server.args,
+              env: server.env,
+            };
+          }
+
+          this.modules.mcpHealthMonitor = new MCPHealthMonitor(serverConfigs, logger);
+
+          // Register the aggregated MCP health check with the HealthChecker
+          if (healthChecker) {
+            healthChecker.register("mcp-servers", this.modules.mcpHealthMonitor.createHealthCheck());
+          }
+
+          // Start periodic health monitoring
+          this.modules.mcpHealthMonitor.startPeriodic();
+
+          logger.info("daemon", `MCPHealthMonitor initialized (${Object.keys(mcpServers).length} server(s))`);
         },
       });
 
@@ -544,13 +589,19 @@ export class EidolonDaemon {
           // 16d. RestCalculator
           this.modules.restCalculator = new RestCalculator(config.loop.rest, logger);
 
-          // 16e. TaskScheduler
+          // 16e. TaskScheduler + AutomationEngine
           if (dbManager) {
             this.modules.taskScheduler = new TaskScheduler(dbManager.operational, logger);
-            logger.info("daemon", "TaskScheduler initialized");
+            this.modules.automationEngine = new AutomationEngine(
+              this.modules.taskScheduler,
+              dbManager.operational,
+              logger,
+            );
+            logger.info("daemon", "TaskScheduler and AutomationEngine initialized");
 
-            // Wire scheduler to emit scheduler:task_due events via EventBus
-            // Check for due tasks every 30 seconds
+            // Wire scheduler to emit task events via EventBus.
+            // Automation tasks (action === "automation") emit scheduler:automation_due
+            // with prompt/deliverTo payload. Regular tasks emit scheduler:task_due.
             const SCHEDULER_POLL_INTERVAL_MS = 30_000;
             this.modules.schedulerInterval = setInterval(() => {
               if (!this.modules.taskScheduler || !this.modules.eventBus) return;
@@ -560,19 +611,35 @@ export class EidolonDaemon {
                 return;
               }
               for (const task of dueResult.value) {
-                const publishResult = this.modules.eventBus.publish("scheduler:task_due", {
-                  taskId: task.id,
-                  taskName: task.name,
-                  action: task.action,
-                  payload: task.payload,
-                }, {
-                  priority: "normal",
-                  source: "scheduler",
-                });
-                if (publishResult.ok) {
-                  logger.debug("daemon", `Scheduler emitted task_due for: ${task.name}`, { taskId: task.id });
-                  // Mark as executed so the next run is computed
-                  this.modules.taskScheduler.markExecuted(task.id);
+                if (task.action === "automation") {
+                  const payload = task.payload as Record<string, unknown>;
+                  const publishResult = this.modules.eventBus.publish("scheduler:automation_due", {
+                    automationId: task.id,
+                    name: task.name,
+                    prompt: String(payload.prompt ?? ""),
+                    deliverTo: String(payload.deliverTo ?? "telegram"),
+                  }, {
+                    priority: "normal",
+                    source: "scheduler",
+                  });
+                  if (publishResult.ok) {
+                    logger.debug("daemon", `Scheduler emitted automation_due: ${task.name}`, { taskId: task.id });
+                    this.modules.taskScheduler.markExecuted(task.id);
+                  }
+                } else {
+                  const publishResult = this.modules.eventBus.publish("scheduler:task_due", {
+                    taskId: task.id,
+                    taskName: task.name,
+                    action: task.action,
+                    payload: task.payload,
+                  }, {
+                    priority: "normal",
+                    source: "scheduler",
+                  });
+                  if (publishResult.ok) {
+                    logger.debug("daemon", `Scheduler emitted task_due for: ${task.name}`, { taskId: task.id });
+                    this.modules.taskScheduler.markExecuted(task.id);
+                  }
                 }
               }
             }, SCHEDULER_POLL_INTERVAL_MS);
@@ -580,12 +647,13 @@ export class EidolonDaemon {
             logger.warn("daemon", "TaskScheduler skipped: database not available");
           }
 
-          // 16f. MemoryExtractor
+          // 16f. MemoryExtractor (optionally wired to MemoryConsolidator)
           const extractionStrategy = config.memory.extraction.strategy;
           this.modules.memoryExtractor = new MemoryExtractor(logger, {
             strategy: extractionStrategy,
+            consolidator: this.modules.memoryConsolidator,
           });
-          logger.info("daemon", `MemoryExtractor initialized (strategy: ${extractionStrategy})`);
+          logger.info("daemon", `MemoryExtractor initialized (strategy: ${extractionStrategy}, consolidator: ${this.modules.memoryConsolidator ? "yes" : "no"})`);
 
           // 16g. CognitiveLoop -- build the event handler
           const handler: EventHandler = async (event, priority): Promise<EventHandlerResult> => {
@@ -618,6 +686,46 @@ export class EidolonDaemon {
                   taskId: String(taskPayload.taskId ?? ""),
                   action: String(taskPayload.action ?? ""),
                 });
+                return { success: true, tokensUsed: 0 };
+              }
+              case "digest:generate": {
+                logger.info("loop-handler", "Digest generation triggered", { eventId: event.id });
+                if (!this.modules.digestBuilder || !this.modules.messageRouter) {
+                  logger.warn("loop-handler", "Digest skipped: builder or router not available");
+                  return { success: true, tokensUsed: 0 };
+                }
+                const digestResult = this.modules.digestBuilder.build();
+                if (!digestResult.ok) {
+                  logger.error("loop-handler", `Digest build failed: ${digestResult.error.message}`);
+                  return { success: false, tokensUsed: 0, error: digestResult.error.message };
+                }
+                const digest = digestResult.value;
+                const digestChannel = this.modules.config?.digest.channel ?? "telegram";
+                const targetChannels = digestChannel === "all"
+                  ? this.modules.messageRouter.getChannels().map((c) => c.id)
+                  : [digestChannel];
+                for (const chId of targetChannels) {
+                  const sendResult = await this.modules.messageRouter.sendNotification(
+                    {
+                      id: `digest-${digest.generatedAt}`,
+                      channelId: chId,
+                      text: digest.markdown,
+                      format: "markdown",
+                    },
+                    "normal",
+                  );
+                  if (!sendResult.ok) {
+                    logger.error("loop-handler", `Digest delivery failed to ${chId}: ${sendResult.error.message}`);
+                  }
+                }
+                // Emit digest:delivered event
+                this.modules.eventBus?.publish("digest:delivered", {
+                  title: digest.title,
+                  generatedAt: digest.generatedAt,
+                  sectionCount: digest.sections.length,
+                  channels: targetChannels,
+                }, { priority: "low", source: "digest" });
+                logger.info("loop-handler", `Digest delivered: ${digest.title} (${digest.sections.length} sections)`);
                 return { success: true, tokensUsed: 0 };
               }
               case "system:shutdown": {
@@ -725,6 +833,59 @@ export class EidolonDaemon {
           } catch (err: unknown) {
             const message = err instanceof Error ? err.message : String(err);
             logger.warn("daemon", `MessageRouter skipped: ${message}`);
+          }
+        },
+      });
+
+      // 17b. DigestBuilder (needs Config, Logger, DatabaseManager, TaskScheduler)
+      initOrder.push({
+        name: "DigestBuilder",
+        fn: () => {
+          const logger = this.modules.logger;
+          const config = this.modules.config;
+          const dbManager = this.modules.dbManager;
+          const taskScheduler = this.modules.taskScheduler;
+
+          if (!config || !logger || !dbManager) {
+            logger?.warn("daemon", "DigestBuilder skipped: missing dependencies");
+            return;
+          }
+
+          if (!config.digest.enabled) {
+            logger.info("daemon", "DigestBuilder skipped: digest not enabled in config");
+            return;
+          }
+
+          this.modules.digestBuilder = new DigestBuilder({
+            operationalDb: dbManager.operational,
+            memoryDb: dbManager.memory,
+            logger,
+            config: config.digest,
+          });
+          logger.info("daemon", "DigestBuilder initialized");
+
+          // Register a recurring scheduled task for daily digest delivery
+          if (taskScheduler) {
+            const listResult = taskScheduler.list();
+            const alreadyExists =
+              listResult.ok &&
+              listResult.value.some((t) => t.action === "digest:generate");
+            if (!alreadyExists) {
+              const createResult = taskScheduler.create({
+                name: "Daily Digest",
+                type: "recurring",
+                cron: config.digest.time,
+                action: "digest:generate",
+                payload: {},
+              });
+              if (createResult.ok) {
+                logger.info("daemon", `Digest scheduled daily at ${config.digest.time} (${config.digest.timezone})`);
+              } else {
+                logger.error("daemon", `Failed to schedule digest: ${createResult.error.message}`);
+              }
+            } else {
+              logger.debug("daemon", "Digest scheduled task already exists");
+            }
           }
         },
       });
@@ -1172,6 +1333,16 @@ export class EidolonDaemon {
         logger?.info("daemon", "Health server stopped");
       } catch (err: unknown) {
         logger?.error("daemon", "Error stopping health server", err);
+      }
+    }
+
+    // 6b -> MCPHealthMonitor
+    if (this.modules.mcpHealthMonitor) {
+      try {
+        this.modules.mcpHealthMonitor.dispose();
+        logger?.info("daemon", "MCPHealthMonitor disposed");
+      } catch (err: unknown) {
+        logger?.error("daemon", "Error disposing MCPHealthMonitor", err);
       }
     }
 

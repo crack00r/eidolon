@@ -51,3 +51,37 @@ export interface SecretMetadata {
   readonly accessedAt: number;
   readonly description?: string;
 }
+
+// ---------------------------------------------------------------------------
+// Approval system types
+// ---------------------------------------------------------------------------
+
+export type ApprovalStatus = "pending" | "approved" | "denied" | "timeout" | "escalated";
+
+export type TimeoutAction = "deny" | "approve" | "escalate";
+
+export interface EscalationPolicy {
+  /** Time in ms before this escalation level triggers. */
+  readonly timeoutMs: number;
+  /** What happens when this level times out. */
+  readonly action: TimeoutAction;
+  /** Channel ID to escalate to (required when action is "escalate"). */
+  readonly escalateTo?: string;
+  /** Maximum number of escalation steps (default 3). */
+  readonly maxEscalations?: number;
+}
+
+export interface ApprovalRequest {
+  readonly id: string;
+  readonly action: string;
+  readonly level: ActionLevel;
+  readonly description: string;
+  readonly requestedAt: number;
+  readonly timeoutAt: number;
+  readonly channel: string;
+  readonly status: ApprovalStatus;
+  readonly respondedBy?: string;
+  readonly respondedAt?: number;
+  readonly escalationLevel: number;
+  readonly metadata?: Record<string, unknown>;
+}

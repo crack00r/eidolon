@@ -36,7 +36,14 @@ export type GatewayMethod =
   | "client.reportErrors"
   // Feedback methods
   | "feedback.submit"
-  | "feedback.list";
+  | "feedback.list"
+  // Automation methods (Khoj-style scheduled automations)
+  | "automation.create"
+  | "automation.list"
+  | "automation.delete"
+  // Approval methods
+  | "approval.list"
+  | "approval.respond";
 
 // ---------------------------------------------------------------------------
 // Push notification types (server → client, no response expected)
@@ -53,6 +60,8 @@ export type GatewayPushType =
   | "push.clientConnected"
   | "push.clientDisconnected"
   | "push.executeCommand"
+  | "push.approvalRequested"
+  | "push.approvalResolved"
   | "system.statusUpdate";
 
 // ---------------------------------------------------------------------------
@@ -212,6 +221,63 @@ export interface FeedbackEntry {
   readonly channel: string;
   readonly comment: string | undefined;
   readonly createdAt: number;
+}
+
+// ---------------------------------------------------------------------------
+// Automation RPC types (Khoj-style scheduled automations)
+// ---------------------------------------------------------------------------
+
+export interface AutomationCreateParams {
+  /** Natural language description of the automation schedule and task. */
+  readonly input: string;
+  /** Optional channel override for result delivery. */
+  readonly deliverTo?: string;
+}
+
+export interface AutomationListParams {
+  /** If true, only return enabled automations. */
+  readonly enabledOnly?: boolean;
+}
+
+export interface AutomationDeleteParams {
+  /** ID of the automation to delete. */
+  readonly automationId: string;
+}
+
+// ---------------------------------------------------------------------------
+// Approval types
+// ---------------------------------------------------------------------------
+
+export interface ApprovalListParams {
+  /** Filter by status. If omitted, returns "pending" requests. */
+  readonly status?: string;
+  readonly limit?: number;
+}
+
+export interface ApprovalRespondParams {
+  /** The approval request ID. */
+  readonly requestId: string;
+  /** Whether to approve or deny. */
+  readonly approved: boolean;
+}
+
+export interface PushApprovalRequestedPayload {
+  readonly requestId: string;
+  readonly action: string;
+  readonly level: string;
+  readonly description: string;
+  readonly channel: string;
+  readonly timeoutAt: number;
+  readonly escalationLevel: number;
+  readonly timestamp: number;
+}
+
+export interface PushApprovalResolvedPayload {
+  readonly requestId: string;
+  readonly action: string;
+  readonly status: string;
+  readonly respondedBy?: string;
+  readonly timestamp: number;
 }
 
 // ---------------------------------------------------------------------------

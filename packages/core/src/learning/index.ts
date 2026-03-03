@@ -17,5 +17,7 @@ export type { JournalEntry, JournalEntryType } from "./journal.ts";
 export { LearningJournal } from "./journal.ts";
 export type { RelevanceConfig, RelevanceResult, RelevanceScorerFn } from "./relevance.ts";
 export { RelevanceFilter } from "./relevance.ts";
+export type { RelevanceResponse, StructuredRelevanceOptions } from "./structured-relevance.ts";
+export { createStructuredRelevanceScorerFn, RelevanceResponseSchema } from "./structured-relevance.ts";
 export type { SafetyLevel, SafetyResult } from "./safety.ts";
 export { SafetyClassifier } from "./safety.ts";

@@ -50,9 +50,16 @@ const VALID_EVENT_TYPES = new Set<string>([
   "channel:disconnected",
   "channel:error",
   "scheduler:task_due",
+  "scheduler:automation_due",
   "gateway:client_connected",
   "gateway:client_disconnected",
   "gateway:client_error_report",
+  "digest:generate",
+  "digest:delivered",
+  "approval:requested",
+  "approval:timeout",
+  "approval:escalated",
+  "webhook:received",
 ]);
 const VALID_PRIORITIES = new Set<string>(["critical", "high", "normal", "low"]);
 

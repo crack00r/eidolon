@@ -31,9 +31,16 @@ export type EventType =
   | "channel:disconnected"
   | "channel:error"
   | "scheduler:task_due"
+  | "scheduler:automation_due"
   | "gateway:client_connected"
   | "gateway:client_disconnected"
-  | "gateway:client_error_report";
+  | "gateway:client_error_report"
+  | "digest:generate"
+  | "digest:delivered"
+  | "approval:requested"
+  | "approval:timeout"
+  | "approval:escalated"
+  | "webhook:received";
 
 export interface BusEvent<T = unknown> {
   readonly id: string;
@@ -80,4 +87,43 @@ export interface FeedbackReceivedPayload {
   readonly messageId: string | undefined;
   readonly rating: number;
   readonly channel: string;
+}
+
+export interface ApprovalRequestedPayload {
+  readonly requestId: string;
+  readonly action: string;
+  readonly level: string;
+  readonly description: string;
+  readonly channel: string;
+  readonly timeoutAt: number;
+}
+
+export interface ApprovalTimeoutPayload {
+  readonly requestId: string;
+  readonly action: string;
+  readonly timeoutAction: string;
+  readonly escalationLevel: number;
+}
+
+export interface ApprovalEscalatedPayload {
+  readonly requestId: string;
+  readonly action: string;
+  readonly fromChannel: string;
+  readonly toChannel: string;
+  readonly escalationLevel: number;
+}
+
+export interface AutomationDuePayload {
+  readonly automationId: string;
+  readonly name: string;
+  readonly prompt: string;
+  readonly deliverTo: string;
+}
+
+export interface WebhookReceivedPayload {
+  readonly webhookId: string;
+  readonly endpointId: string;
+  readonly source: string;
+  readonly event: string;
+  readonly data: Record<string, unknown>;
 }

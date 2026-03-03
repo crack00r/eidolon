@@ -57,6 +57,8 @@ export const BrainConfigSchema = z.object({
       }),
     )
     .optional(),
+  /** IDs of MCP templates enabled for this instance (e.g. ["github", "home-assistant"]). */
+  mcpTemplates: z.array(z.string()).default([]),
 });
 
 // ---------------------------------------------------------------------------
@@ -226,6 +228,21 @@ export const ChannelConfigSchema = z.object({
 // Gateway
 // ---------------------------------------------------------------------------
 
+export const WebhookEndpointSchema = z.object({
+  /** URL path segment: /webhooks/{id} */
+  id: z.string().min(1).max(100),
+  /** Human-readable name for this webhook endpoint. */
+  name: z.string().min(1).max(200),
+  /** Auth token for this endpoint (Bearer or query param). */
+  token: SecretRefSchema.or(z.string()),
+  /** Event type to publish on the EventBus. */
+  eventType: z.string().default("webhook:received"),
+  /** Priority of the published event. */
+  priority: z.enum(["critical", "high", "normal", "low"]).default("normal"),
+  /** Whether this endpoint is active. */
+  enabled: z.boolean().default(true),
+});
+
 export const GatewayConfigSchema = z.object({
   host: z.string().default("127.0.0.1"),
   port: z.number().int().positive().default(8419),
@@ -258,6 +275,12 @@ export const GatewayConfigSchema = z.object({
     .refine((auth) => auth.type !== "token" || auth.token !== undefined, {
       message: "Token value is required when auth type is 'token'",
     }),
+  webhooks: z
+    .object({
+      /** Configured webhook endpoints. */
+      endpoints: z.array(WebhookEndpointSchema).default([]),
+    })
+    .default({}),
 });
 
 // ---------------------------------------------------------------------------
@@ -305,6 +328,18 @@ export const SecurityConfigSchema = z.object({
   approval: z.object({
     timeout: z.number().int().positive().default(300_000),
     defaultAction: z.enum(["deny", "allow"]).default("deny"),
+    escalation: z
+      .array(
+        z.object({
+          timeoutMs: z.number().int().positive(),
+          action: z.enum(["deny", "approve", "escalate"]),
+          escalateTo: z.string().optional(),
+          maxEscalations: z.number().int().positive().default(3),
+        }),
+      )
+      .default([]),
+    /** How often to check for timed-out approval requests (ms). */
+    checkIntervalMs: z.number().int().positive().default(10_000),
   }),
   sandbox: z.object({
     enabled: z.boolean().default(false),
@@ -356,6 +391,37 @@ export const PrivacyConfigSchema = z.object({
 });
 
 // ---------------------------------------------------------------------------
+// Digest (Daily Briefing)
+// ---------------------------------------------------------------------------
+
+export const DigestConfigSchema = z.object({
+  enabled: z.boolean().default(false),
+  time: z
+    .string()
+    .regex(/^\d{2}:\d{2}$/, "Must be in HH:MM format")
+    .refine(
+      (v) => {
+        const parts = v.split(":").map(Number);
+        const h = parts[0] ?? -1;
+        const m = parts[1] ?? -1;
+        return h >= 0 && h <= 23 && m >= 0 && m <= 59;
+      },
+      { message: "Invalid time: hours must be 00-23, minutes must be 00-59" },
+    )
+    .default("07:00"),
+  timezone: z.string().default("Europe/Berlin"),
+  channel: z.enum(["telegram", "desktop", "all"]).default("telegram"),
+  sections: z.object({
+    conversations: z.boolean().default(true),
+    learning: z.boolean().default(true),
+    memory: z.boolean().default(true),
+    schedule: z.boolean().default(true),
+    metrics: z.boolean().default(true),
+    actionItems: z.boolean().default(true),
+  }).default({}),
+});
+
+// ---------------------------------------------------------------------------
 // Daemon
 // ---------------------------------------------------------------------------
 
@@ -382,6 +448,7 @@ export const EidolonConfigSchema = z.object({
   gpu: GpuConfigSchema,
   security: SecurityConfigSchema,
   privacy: PrivacyConfigSchema.default({}),
+  digest: DigestConfigSchema.default({}),
   database: DatabaseConfigSchema,
   logging: LoggingConfigSchema,
   daemon: DaemonConfigSchema,
@@ -403,5 +470,7 @@ export type SecurityConfig = z.infer<typeof SecurityConfigSchema>;
 export type DatabaseConfig = z.infer<typeof DatabaseConfigSchema>;
 export type LoggingConfig = z.infer<typeof LoggingConfigSchema>;
 export type PrivacyConfig = z.infer<typeof PrivacyConfigSchema>;
+export type DigestConfig = z.infer<typeof DigestConfigSchema>;
 export type DaemonConfig = z.infer<typeof DaemonConfigSchema>;
 export type ClaudeAccount = z.infer<typeof ClaudeAccountSchema>;
+export type WebhookEndpointConfig = z.infer<typeof WebhookEndpointSchema>;

@@ -38,6 +38,7 @@ function makeBrainConfig(overrides?: Partial<BrainConfig["model"]>): BrainConfig
       ...overrides,
     },
     session: { maxTurns: 50, compactAfter: 40, timeoutMs: 300_000 },
+    mcpTemplates: [],
   };
 }
 

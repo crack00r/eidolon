@@ -268,4 +268,33 @@ export const OPERATIONAL_MIGRATIONS: ReadonlyArray<Migration> = [
       DROP TABLE IF EXISTS feedback;
     `,
   },
+  {
+    version: 9,
+    name: "add_approval_requests",
+    database: "operational",
+    up: `
+      CREATE TABLE approval_requests (
+        id TEXT PRIMARY KEY,
+        action TEXT NOT NULL,
+        level TEXT NOT NULL CHECK(level IN ('safe','needs_approval','dangerous')),
+        description TEXT NOT NULL,
+        requested_at INTEGER NOT NULL,
+        timeout_at INTEGER NOT NULL,
+        channel TEXT NOT NULL,
+        status TEXT NOT NULL CHECK(status IN ('pending','approved','denied','timeout','escalated')),
+        responded_by TEXT,
+        responded_at INTEGER,
+        escalation_level INTEGER NOT NULL DEFAULT 0,
+        metadata TEXT DEFAULT '{}'
+      );
+
+      CREATE INDEX idx_approval_requests_status ON approval_requests(status);
+      CREATE INDEX idx_approval_requests_timeout ON approval_requests(timeout_at) WHERE status = 'pending';
+    `,
+    down: `
+      DROP INDEX IF EXISTS idx_approval_requests_timeout;
+      DROP INDEX IF EXISTS idx_approval_requests_status;
+      DROP TABLE IF EXISTS approval_requests;
+    `,
+  },
 ];

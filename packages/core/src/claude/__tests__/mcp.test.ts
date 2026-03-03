@@ -13,6 +13,7 @@ function makeBrainConfig(overrides: Partial<BrainConfig> = {}): BrainConfig {
     accounts: [{ type: "oauth", name: "test", credential: "tok", priority: 50, enabled: true }],
     model: { default: "sonnet", complex: "opus", fast: "haiku" },
     session: { maxTurns: 50, compactAfter: 40, timeoutMs: 300_000 },
+    mcpTemplates: [],
     ...overrides,
   };
 }

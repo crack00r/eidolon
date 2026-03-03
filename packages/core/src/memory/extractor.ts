@@ -10,9 +10,10 @@
  * PRIV-006: PII screening marks sensitive memories for special handling.
  */
 
-import type { EidolonError, MemoryType, Result } from "@eidolon/protocol";
+import type { ConsolidationResult, EidolonError, MemoryType, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 import type { Logger } from "../logging/logger.ts";
+import type { MemoryConsolidator } from "./consolidation.ts";
 import type { CreateMemoryInput } from "./store.ts";
 
 // ---------------------------------------------------------------------------
@@ -52,6 +53,12 @@ export interface ExtractorOptions {
   readonly deduplicateThreshold?: number;
   /** Function to check GDPR consent status. If not provided, extraction always proceeds. */
   readonly consentCheckFn?: ConsentCheckFn;
+  /**
+   * Optional consolidator for ADD/UPDATE/DELETE/NOOP classification.
+   * When provided, extractAndConsolidate() uses it to deduplicate against
+   * existing memories before writing to the store.
+   */
+  readonly consolidator?: MemoryConsolidator;
 }
 
 // ---------------------------------------------------------------------------
@@ -260,6 +267,7 @@ export class MemoryExtractor {
   private readonly llmExtractFn?: LlmExtractFn;
   private readonly minContentLength: number;
   private readonly consentCheckFn?: ConsentCheckFn;
+  private readonly consolidator?: MemoryConsolidator;
 
   constructor(logger: Logger, options?: ExtractorOptions) {
     this.logger = logger.child("memory-extractor");
@@ -267,6 +275,7 @@ export class MemoryExtractor {
     this.llmExtractFn = options?.llmExtractFn;
     this.minContentLength = options?.minContentLength ?? DEFAULT_MIN_CONTENT_LENGTH;
     this.consentCheckFn = options?.consentCheckFn;
+    this.consolidator = options?.consolidator;
   }
 
   /**
@@ -408,6 +417,73 @@ export class MemoryExtractor {
       metadata: sessionId ? { sessionId } : undefined,
       sensitive: mem.sensitive,
     }));
+  }
+
+  /**
+   * Extract memories from a conversation turn and run consolidation
+   * (ADD/UPDATE/DELETE/NOOP) against the existing store before writing.
+   *
+   * This is the recommended high-level method when a consolidator is configured.
+   * If no consolidator was injected, this falls back to plain extraction
+   * (equivalent to calling extract() + toCreateInputs() manually).
+   *
+   * Returns the consolidation result with action counts, or Ok with zero
+   * counts if consolidation is not configured.
+   */
+  async extractAndConsolidate(
+    turn: ConversationTurn,
+    sessionId?: string,
+  ): Promise<Result<ConsolidationResult, EidolonError>> {
+    // 1. Extract memories from the conversation turn
+    const extractResult = await this.extract(turn);
+    if (!extractResult.ok) {
+      return Err(extractResult.error);
+    }
+
+    const extracted = extractResult.value;
+    if (extracted.length === 0) {
+      return Ok({ decisions: [], added: 0, updated: 0, deleted: 0, noops: 0 });
+    }
+
+    // 2. If consolidator is available, use it for smart deduplication
+    if (this.consolidator) {
+      this.logger.debug("extractAndConsolidate", `Running consolidation on ${extracted.length} extracted memories`);
+      const consolidateResult = await this.consolidator.consolidate(extracted, sessionId);
+      if (!consolidateResult.ok) {
+        this.logger.warn(
+          "extractAndConsolidate",
+          `Consolidation failed: ${consolidateResult.error.message}. Falling back to direct store writes.`,
+        );
+        // Fall through to direct store writes below
+      } else {
+        this.logger.info("extractAndConsolidate", "Consolidation complete", {
+          added: consolidateResult.value.added,
+          updated: consolidateResult.value.updated,
+          deleted: consolidateResult.value.deleted,
+          noops: consolidateResult.value.noops,
+        });
+        return consolidateResult;
+      }
+    }
+
+    // 3. Fallback: no consolidator or consolidation failed -- return ADD-only result
+    //    The caller is responsible for writing to the store using toCreateInputs().
+    this.logger.debug(
+      "extractAndConsolidate",
+      `No consolidator available. Returning ${extracted.length} memories as ADD decisions.`,
+    );
+    return Ok({
+      decisions: extracted.map((mem) => ({
+        action: "ADD" as const,
+        content: mem.content,
+        confidence: mem.confidence,
+        reason: "No consolidator configured -- direct ADD",
+      })),
+      added: extracted.length,
+      updated: 0,
+      deleted: 0,
+      noops: 0,
+    });
   }
 
   /**

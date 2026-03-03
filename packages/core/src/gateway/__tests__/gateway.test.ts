@@ -55,6 +55,7 @@ function makeConfig(overrides?: Partial<GatewayConfig>): GatewayConfig {
       maxBlockMs: 3_600_000,
     },
     auth: { type: "none" },
+    webhooks: { endpoints: [] },
     ...overrides,
   };
 }
