@@ -68,10 +68,12 @@ struct MemoryView: View {
         HStack(spacing: 10) {
             Image(systemName: "magnifyingglass")
                 .foregroundColor(.secondary)
+                .accessibilityHidden(true)
 
             TextField("Search memories...", text: $viewModel.searchQuery)
                 .textFieldStyle(.plain)
                 .autocorrectionDisabled()
+                .accessibilityIdentifier("memorySearchField")
                 .onChange(of: viewModel.searchQuery) {
                     if viewModel.searchQuery.count > 500 {
                         viewModel.searchQuery = String(viewModel.searchQuery.prefix(500))
@@ -86,11 +88,13 @@ struct MemoryView: View {
                     Image(systemName: "xmark.circle.fill")
                         .foregroundColor(.secondary)
                 }
+                .accessibilityLabel("Clear search")
             }
 
             if viewModel.isSearching {
                 ProgressView()
                     .scaleEffect(0.8)
+                    .accessibilityLabel("Searching")
             }
         }
         .padding(.horizontal, 14)
@@ -154,6 +158,7 @@ struct MemoryView: View {
             Image(systemName: "tray")
                 .font(.system(size: 48))
                 .foregroundColor(.secondary)
+                .accessibilityHidden(true)
             Text("No results found")
                 .font(.headline)
                 .foregroundColor(.secondary)
@@ -162,6 +167,7 @@ struct MemoryView: View {
                 .foregroundColor(.secondary.opacity(0.7))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityElement(children: .combine)
     }
 
     private var promptView: some View {
@@ -169,6 +175,7 @@ struct MemoryView: View {
             Image(systemName: "brain")
                 .font(.system(size: 48))
                 .foregroundColor(.secondary)
+                .accessibilityHidden(true)
             Text("Search Memories")
                 .font(.headline)
                 .foregroundColor(.secondary)
@@ -177,6 +184,7 @@ struct MemoryView: View {
                 .foregroundColor(.secondary.opacity(0.7))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityElement(children: .combine)
     }
 
     private func errorView(message: String) -> some View {
@@ -184,6 +192,7 @@ struct MemoryView: View {
             Image(systemName: "exclamationmark.triangle")
                 .font(.system(size: 48))
                 .foregroundColor(EidolonColors.warning)
+                .accessibilityHidden(true)
             Text(message)
                 .font(.subheadline)
                 .foregroundColor(.secondary)
@@ -191,6 +200,8 @@ struct MemoryView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding()
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Error: \(message)")
     }
 }
 
@@ -254,6 +265,8 @@ struct MemoryDetailView: View {
                 Button(action: onEdit) {
                     Label("Edit", systemImage: "pencil")
                 }
+                .accessibilityHint("Edit this memory's content and importance")
+                .accessibilityIdentifier("editMemoryButton")
 
                 Spacer()
 
@@ -266,6 +279,9 @@ struct MemoryDetailView: View {
                     }
                 }
                 .disabled(isDeleting)
+                .accessibilityLabel(isDeleting ? "Deleting" : "Delete")
+                .accessibilityHint("Permanently delete this memory")
+                .accessibilityIdentifier("deleteMemoryButton")
             }
         }
     }
@@ -314,6 +330,9 @@ struct MemoryEditSheet: View {
                 Section("Importance (\(Int(editImportance * 100))%)") {
                     Slider(value: $editImportance, in: 0...1, step: 0.01)
                         .tint(EidolonColors.accent)
+                        .accessibilityLabel("Importance")
+                        .accessibilityValue("\(Int(editImportance * 100)) percent")
+                        .accessibilityIdentifier("importanceSlider")
                 }
 
                 Section("Info") {
@@ -366,6 +385,7 @@ struct MemoryItemRow: View {
                 .font(.system(size: 20))
                 .foregroundColor(EidolonColors.accent)
                 .frame(width: 32, height: 32)
+                .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
@@ -403,6 +423,9 @@ struct MemoryItemRow: View {
             }
         }
         .padding(.vertical, 4)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(item.type) memory: \(item.content). Importance: \(String(format: "%.0f", item.importance * 100)) percent")
+        .accessibilityIdentifier("memoryRow_\(item.id)")
     }
 }
 
@@ -420,6 +443,7 @@ struct ImportanceBadge: View {
             .padding(.vertical, 2)
             .background(badgeColor.opacity(0.15))
             .cornerRadius(4)
+            .accessibilityLabel("Importance: \(String(format: "%.0f", importance * 100)) percent")
     }
 
     private var badgeColor: Color {

@@ -46,6 +46,7 @@ struct ConnectionStatusBadge: View {
             Circle()
                 .fill(indicatorColor)
                 .frame(width: 8, height: 8)
+                .accessibilityHidden(true)
             Text(state.label)
                 .font(.caption2)
                 .foregroundColor(.secondary)
@@ -54,6 +55,10 @@ struct ConnectionStatusBadge: View {
         .padding(.vertical, 4)
         .background(Color.secondary.opacity(0.15))
         .cornerRadius(12)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Connection status")
+        .accessibilityValue(state.label)
+        .accessibilityIdentifier("connectionStatusBadge")
     }
 
     private var indicatorColor: Color {

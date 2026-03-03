@@ -242,10 +242,11 @@ function stateColor(state: string): string {
     <section class="settings-section">
       <h3 class="section-title">Gateway Connection</h3>
 
-      <div class="connection-info">
+      <div class="connection-info" role="status" aria-live="polite">
         <span
           class="status-dot"
           style="background-color: {stateColor($connectionState)}"
+          aria-hidden="true"
         ></span>
         <span class="status-text">
           Status: <strong>{$connectionState}</strong>
@@ -315,7 +316,7 @@ function stateColor(state: string): string {
           </button>
         {/if}
 
-        <button class="btn btn-save" onclick={handleSave} disabled={$isConnected}>
+        <button class="btn btn-save" onclick={handleSave} disabled={$isConnected} aria-live="polite">
           {saved ? "Saved" : "Save"}
         </button>
 
@@ -343,7 +344,7 @@ function stateColor(state: string): string {
       </div>
 
       {#if discoveryStatus === "error" && discoveryError}
-        <div class="discovery-error">
+        <div class="discovery-error" role="alert">
           {discoveryError}
         </div>
       {/if}
@@ -361,6 +362,7 @@ function stateColor(state: string): string {
               class="server-card"
               onclick={() => handleSelectServer(server)}
               disabled={$isConnected}
+              aria-label="Select server {server.hostname} at {server.host}:{server.port}"
             >
               <div class="server-hostname">{server.hostname}</div>
               <div class="server-details">
@@ -382,7 +384,7 @@ function stateColor(state: string): string {
     <section class="settings-section">
       <h3 class="section-title">Pairing URL</h3>
 
-      <p class="section-desc">
+      <p class="section-desc" id="pairing-desc">
         Paste a pairing URL to auto-fill connection settings.
       </p>
 
@@ -394,12 +396,13 @@ function stateColor(state: string): string {
           bind:value={pairingUrl}
           oninput={handlePairingUrlInput}
           placeholder="eidolon://host:port?token=xxx&tls=true"
+          aria-describedby="pairing-desc"
           disabled={$isConnected}
         />
       </div>
 
       {#if pairingError}
-        <div class="discovery-error">
+        <div class="discovery-error" role="alert">
           {pairingError}
         </div>
       {/if}
@@ -453,17 +456,17 @@ function stateColor(state: string): string {
       </div>
 
       {#if updateStatus === "error" && updateError}
-        <div class="update-error">
+        <div class="update-error" role="alert">
           {updateError}
         </div>
       {/if}
 
       {#if updateStatus === "downloading"}
         <div class="update-progress">
-          <div class="progress-bar">
+          <div class="progress-bar" role="progressbar" aria-label="Download progress" aria-valuenow={downloadProgress} aria-valuemin={0} aria-valuemax={100}>
             <div class="progress-fill" style="width: {downloadProgress}%"></div>
           </div>
-          <span class="progress-text">Downloading... {downloadProgress}%</span>
+          <span class="progress-text" aria-live="polite">Downloading... {downloadProgress}%</span>
         </div>
       {/if}
 

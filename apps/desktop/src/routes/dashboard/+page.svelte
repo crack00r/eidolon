@@ -160,39 +160,37 @@ onDestroy(() => {
 </script>
 
 <div class="dashboard">
-  <!-- Header Section -->
   <header class="dashboard-header">
-    <div class="brain-state">
+    <div class="brain-state" role="status" aria-live="polite" aria-label="Cognitive state: {$cognitiveState}">
       <span
         class="brain-dot {brainStateCssClass($cognitiveState)}"
         style="background-color: {brainStateColor($cognitiveState)}"
+        aria-hidden="true"
       ></span>
       <span class="brain-label">{$cognitiveState.charAt(0).toUpperCase() + $cognitiveState.slice(1)}</span>
     </div>
     <div class="header-meta">
       <span class="uptime-label">Uptime</span>
-      <span class="uptime-value">{displayUptime}</span>
+      <span class="uptime-value" aria-live="off">{displayUptime}</span>
     </div>
     {#if !$isConnected}
-      <div class="disconnected-banner">
+      <div class="disconnected-banner" role="alert">
         Not connected ({$connectionState})
       </div>
     {/if}
     {#if $dashboardError}
-      <div class="error-banner">{$dashboardError}</div>
+      <div class="error-banner" role="alert">{$dashboardError}</div>
     {/if}
   </header>
 
-  <!-- Status Cards -->
-  <section class="cards">
-    <!-- Energy -->
-    <div class="card">
+  <section class="cards" aria-label="System status">
+    <div class="card" aria-label="Energy: {$energyLevel.current} of {$energyLevel.max}">
       <div class="card-header">
-        <span class="card-icon">[E]</span>
+        <span class="card-icon" aria-hidden="true">[E]</span>
         <span class="card-title">Energy</span>
       </div>
       <div class="card-body">
-        <div class="energy-bar-track">
+        <div class="energy-bar-track" role="progressbar" aria-label="Energy level" aria-valuenow={$energyLevel.current} aria-valuemin={0} aria-valuemax={$energyLevel.max}>
           <div
             class="energy-bar-fill"
             style="width: {$energyLevel.max > 0 ? ($energyLevel.current / $energyLevel.max) * 100 : 0}%; background-color: {energyColor($energyLevel.current, $energyLevel.max)}"
@@ -202,10 +200,9 @@ onDestroy(() => {
       </div>
     </div>
 
-    <!-- Active Tasks -->
-    <div class="card">
+    <div class="card" aria-label="Active tasks: {$activeTasks}">
       <div class="card-header">
-        <span class="card-icon">[T]</span>
+        <span class="card-icon" aria-hidden="true">[T]</span>
         <span class="card-title">Active Tasks</span>
       </div>
       <div class="card-body">
@@ -213,10 +210,9 @@ onDestroy(() => {
       </div>
     </div>
 
-    <!-- Memories -->
-    <div class="card">
+    <div class="card" aria-label="Memories: {$memoryCount.toLocaleString()}">
       <div class="card-header">
-        <span class="card-icon">[M]</span>
+        <span class="card-icon" aria-hidden="true">[M]</span>
         <span class="card-title">Memories</span>
       </div>
       <div class="card-body">
@@ -224,10 +220,9 @@ onDestroy(() => {
       </div>
     </div>
 
-    <!-- Connected Clients -->
-    <div class="card">
+    <div class="card" aria-label="Connected clients: {$connectedClients.length}">
       <div class="card-header">
-        <span class="card-icon">[C]</span>
+        <span class="card-icon" aria-hidden="true">[C]</span>
         <span class="card-title">Clients</span>
       </div>
       <div class="card-body">
@@ -235,7 +230,7 @@ onDestroy(() => {
         {#if $connectedClients.length > 0}
           <div class="client-list">
             {#each $connectedClients as client (client.id)}
-              <span class="client-badge" title="{client.platform} ({client.id})">
+              <span class="client-badge" title="{client.platform} ({client.id})" aria-label="{client.platform} client">
                 {platformIcon(client.platform)}
               </span>
             {/each}
@@ -245,18 +240,16 @@ onDestroy(() => {
     </div>
   </section>
 
-  <!-- Activity Feed + System Info -->
   <section class="bottom-row">
-    <!-- Activity Feed -->
     <div class="activity-feed">
       <h2 class="section-title">Activity Feed</h2>
-      <div class="feed-list">
+      <div class="feed-list" role="log" aria-label="Recent activity" aria-live="polite">
         {#if $recentEvents.length === 0}
           <div class="feed-empty">No recent events</div>
         {:else}
           {#each $recentEvents as event (event.id)}
             <div class="feed-item {eventTypeClass(event.type)}">
-              <span class="feed-icon">{eventTypeIcon(event.type)}</span>
+              <span class="feed-icon" aria-hidden="true">{eventTypeIcon(event.type)}</span>
               <span class="feed-time">{formatTimestamp(event.timestamp)}</span>
               <span class="feed-desc">{event.description}</span>
             </div>
@@ -265,7 +258,6 @@ onDestroy(() => {
       </div>
     </div>
 
-    <!-- System Info -->
     <div class="system-info">
       <h2 class="section-title">System Info</h2>
       <div class="info-rows">

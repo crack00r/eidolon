@@ -31,3 +31,12 @@
 - `ExtractionResponseSchema` and `RelevanceResponseSchema` define the Zod schemas for LLM output
 - FakeClaudeProcess regex matchers with `^` anchors distinguish retry prompts from initial prompts
 - When testing retries, place retry rule (matching `^Your previous response`) BEFORE the initial rule in addRule order
+
+## Desktop App (Tauri)
+- Tauri CLI available via `cargo tauri` (cargo-tauri crate)
+- Updater signing keys: `cargo tauri signer generate -w ~/.tauri/eidolon.key --ci -p ""`
+- Public key goes in `apps/desktop/src-tauri/tauri.conf.json` under `plugins.updater.pubkey`
+- Private key stored at `~/.tauri/eidolon.key` (NEVER in repo)
+- CI uses `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` secrets
+- Desktop typecheck: `pnpm --filter @eidolon/desktop typecheck` (uses svelte-check)
+- Pre-existing svelte-check errors in `src/routes/memory/+page.svelte` (unused vars) - not blocking

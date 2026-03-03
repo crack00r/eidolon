@@ -130,6 +130,36 @@ mock.module("@eidolon/core", () => ({
   HousekeepingPhase: class {},
   RemPhase: class {},
   NremPhase: class {},
+  // learning
+  DiscoveryEngine: class {
+    getStats() {
+      return { ok: true, value: { total: 0, byStatus: {} } };
+    }
+    countToday() {
+      return { ok: true, value: 0 };
+    }
+    listByStatus() {
+      return { ok: true, value: [] };
+    }
+    get() {
+      return { ok: true, value: null };
+    }
+    updateStatus() {
+      return { ok: true };
+    }
+  },
+  LearningJournal: class {
+    get count() {
+      return 0;
+    }
+    getRecent() {
+      return [];
+    }
+    getByType() {
+      return [];
+    }
+    dispose() {}
+  },
   // discovery
   DISCOVERY_PORT: 41920,
   DiscoveryBroadcaster: class {
@@ -505,12 +535,58 @@ describe("privacy command", () => {
 // stub commands
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// learning subcommands
+// ---------------------------------------------------------------------------
+
+describe("learning command", () => {
+  const program = createProgram();
+  const learning = requireCommand(program, "learning");
+
+  test("has status, discoveries, approve, reject, journal, and sources subcommands", () => {
+    const subNames = learning.commands.map((c) => c.name());
+    expect(subNames).toContain("status");
+    expect(subNames).toContain("discoveries");
+    expect(subNames).toContain("approve");
+    expect(subNames).toContain("reject");
+    expect(subNames).toContain("journal");
+    expect(subNames).toContain("sources");
+    expect(subNames).toHaveLength(6);
+  });
+
+  test("discoveries has --since, --status, and --limit options", () => {
+    const discoveries = requireSubcommand(learning, "discoveries");
+    const opts = discoveries.options.map((o) => o.long);
+    expect(opts).toContain("--since");
+    expect(opts).toContain("--status");
+    expect(opts).toContain("--limit");
+  });
+
+  test("journal has --date, --type, and --limit options", () => {
+    const journal = requireSubcommand(learning, "journal");
+    const opts = journal.options.map((o) => o.long);
+    expect(opts).toContain("--date");
+    expect(opts).toContain("--type");
+    expect(opts).toContain("--limit");
+  });
+
+  test("status has no extra options", () => {
+    const status = requireSubcommand(learning, "status");
+    expect(status.options).toHaveLength(0);
+  });
+
+  test("sources has no extra options", () => {
+    const sources = requireSubcommand(learning, "sources");
+    expect(sources.options).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// remaining stub commands
+// ---------------------------------------------------------------------------
+
 describe("stub commands", () => {
   const program = createProgram();
-
-  test("learning command exists", () => {
-    expect(findCommand(program, "learning")).toBeDefined();
-  });
 
   test("channel command exists", () => {
     expect(findCommand(program, "channel")).toBeDefined();
@@ -766,5 +842,78 @@ describe("argument parsing", () => {
 
     await program.parseAsync(["memory", "dream", "--phase", "rem"], { from: "user" });
     expect(capturedOpts?.phase).toBe("rem");
+  });
+
+  test("learning approve parses id argument", async () => {
+    const program = new Command();
+    program.exitOverride();
+    let capturedId: string | undefined;
+
+    const learning = program.command("learning");
+    learning.command("approve <id>").action((id: string) => {
+      capturedId = id;
+    });
+
+    await program.parseAsync(["learning", "approve", "abc12345"], { from: "user" });
+    expect(capturedId).toBe("abc12345");
+  });
+
+  test("learning reject parses id argument", async () => {
+    const program = new Command();
+    program.exitOverride();
+    let capturedId: string | undefined;
+
+    const learning = program.command("learning");
+    learning.command("reject <id>").action((id: string) => {
+      capturedId = id;
+    });
+
+    await program.parseAsync(["learning", "reject", "def67890"], { from: "user" });
+    expect(capturedId).toBe("def67890");
+  });
+
+  test("learning discoveries --since and --status parse correctly", async () => {
+    const program = new Command();
+    program.exitOverride();
+    let capturedOpts: Record<string, unknown> | undefined;
+
+    const learning = program.command("learning");
+    learning
+      .command("discoveries")
+      .option("--since <duration>", "Filter by age")
+      .option("--status <status>", "Filter by status")
+      .option("--limit <n>", "Max results", "50")
+      .action((opts: Record<string, unknown>) => {
+        capturedOpts = opts;
+      });
+
+    await program.parseAsync(["learning", "discoveries", "--since", "7d", "--status", "new", "--limit", "10"], {
+      from: "user",
+    });
+    expect(capturedOpts?.since).toBe("7d");
+    expect(capturedOpts?.status).toBe("new");
+    expect(capturedOpts?.limit).toBe("10");
+  });
+
+  test("learning journal --date and --type parse correctly", async () => {
+    const program = new Command();
+    program.exitOverride();
+    let capturedOpts: Record<string, unknown> | undefined;
+
+    const learning = program.command("learning");
+    learning
+      .command("journal")
+      .option("--date <date>", "Filter by date")
+      .option("--type <type>", "Filter by type")
+      .option("--limit <n>", "Max entries", "20")
+      .action((opts: Record<string, unknown>) => {
+        capturedOpts = opts;
+      });
+
+    await program.parseAsync(["learning", "journal", "--date", "2026-03-01", "--type", "discovery"], {
+      from: "user",
+    });
+    expect(capturedOpts?.date).toBe("2026-03-01");
+    expect(capturedOpts?.type).toBe("discovery");
   });
 });

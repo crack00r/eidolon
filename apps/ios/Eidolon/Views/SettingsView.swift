@@ -76,6 +76,7 @@ struct SettingsView: View {
                 .tint(EidolonColors.accent)
                 .disabled(webSocketService.connectionState == .connected
                           || webSocketService.connectionState == .connecting)
+                .accessibilityIdentifier("connectButton")
 
                 Button {
                     viewModel.disconnect()
@@ -85,6 +86,7 @@ struct SettingsView: View {
                 }
                 .buttonStyle(.bordered)
                 .disabled(webSocketService.connectionState == .disconnected)
+                .accessibilityIdentifier("disconnectButton")
             }
         }
     }
@@ -129,9 +131,11 @@ struct SettingsView: View {
                             .scaleEffect(0.8)
                     } else {
                         Image(systemName: "antenna.radiowaves.left.and.right")
+                            .accessibilityHidden(true)
                     }
                 }
             }
+            .accessibilityHint("Scans the local network for Eidolon gateway endpoints")
 
             if !networkManager.discoveredEndpoints.isEmpty {
                 ForEach(networkManager.discoveredEndpoints) { endpoint in
@@ -143,6 +147,7 @@ struct SettingsView: View {
                         HStack {
                             Image(systemName: "checkmark.circle")
                                 .foregroundColor(EidolonColors.success)
+                                .accessibilityHidden(true)
                             VStack(alignment: .leading) {
                                 Text(endpoint.name)
                                     .font(.subheadline)
@@ -152,6 +157,8 @@ struct SettingsView: View {
                             }
                         }
                     }
+                    .accessibilityLabel("Use \(endpoint.name) via \(endpoint.method.rawValue)")
+                    .accessibilityHint("Sets the connection host to this discovered endpoint")
                 }
             }
         }
@@ -201,14 +208,18 @@ struct SettingsView: View {
                             .scaleEffect(0.8)
                     } else {
                         Image(systemName: "bolt.circle")
+                            .accessibilityHidden(true)
                     }
                 }
             }
+            .accessibilityHint("Tests connectivity to the Eidolon gateway")
+            .accessibilityIdentifier("testConnectionButton")
 
             if let result = viewModel.testResult {
                 Text(result)
                     .font(.caption)
                     .foregroundColor(result.hasPrefix("Connected") ? EidolonColors.success : EidolonColors.error)
+                    .accessibilityIdentifier("testConnectionResult")
             }
         }
     }

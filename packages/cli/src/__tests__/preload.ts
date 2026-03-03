@@ -196,4 +196,35 @@ mock.module("@eidolon/core", () => ({
   HousekeepingPhase: class {},
   RemPhase: class {},
   NremPhase: class {},
+
+  // ── Learning ──────────────────────────────────────────────────────────────
+  DiscoveryEngine: class {
+    getStats() {
+      return { ok: true, value: { total: 0, byStatus: {} } };
+    }
+    countToday() {
+      return { ok: true, value: 0 };
+    }
+    listByStatus() {
+      return { ok: true, value: [] };
+    }
+    get() {
+      return { ok: true, value: null };
+    }
+    updateStatus() {
+      return { ok: true };
+    }
+  },
+  LearningJournal: class {
+    get count() {
+      return 0;
+    }
+    getRecent() {
+      return [];
+    }
+    getByType() {
+      return [];
+    }
+    dispose() {}
+  },
 }));

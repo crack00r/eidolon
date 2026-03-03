@@ -34,26 +34,30 @@ function stateColor(state: string): string {
 </script>
 
 <div class="layout">
+  <a class="skip-link" href="#main-content">Skip to main content</a>
+
   <aside class="sidebar">
     <div class="sidebar-header">
       <h1 class="logo">Eidolon</h1>
-      <div class="connection-status">
+      <div class="connection-status" role="status" aria-live="polite">
         <span
           class="status-dot"
           style="background-color: {stateColor($connectionState)}"
+          aria-hidden="true"
         ></span>
         <span class="status-text">{$connectionState}</span>
       </div>
     </div>
 
-    <nav class="nav">
+    <nav class="nav" aria-label="Main navigation">
       {#each navItems as item}
         <button
           class="nav-item"
           class:active={currentRoute === item.route}
+          aria-current={currentRoute === item.route ? "page" : undefined}
           onclick={() => onNavigate(item.route)}
         >
-          <span class="nav-icon">{item.icon}</span>
+          <span class="nav-icon" aria-hidden="true">{item.icon}</span>
           <span class="nav-label">{item.label}</span>
         </button>
       {/each}
@@ -64,7 +68,7 @@ function stateColor(state: string): string {
     </div>
   </aside>
 
-  <main class="content">
+  <main class="content" id="main-content">
     {@render children()}
   </main>
 </div>
@@ -173,5 +177,22 @@ function stateColor(state: string): string {
     overflow: hidden;
     display: flex;
     flex-direction: column;
+  }
+
+  .skip-link {
+    position: absolute;
+    left: -9999px;
+    top: 0;
+    z-index: 9999;
+    padding: 8px 16px;
+    background: var(--accent);
+    color: white;
+    font-weight: 600;
+    text-decoration: none;
+    border-radius: 0 0 var(--radius) 0;
+  }
+
+  .skip-link:focus {
+    left: 0;
   }
 </style>

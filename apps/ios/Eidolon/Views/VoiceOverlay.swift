@@ -82,6 +82,7 @@ struct VoiceOverlay: View {
                     .font(.system(size: 56))
                     .foregroundColor(EidolonColors.accent)
             )
+            .accessibilityHidden(true)
     }
 
     private var listeningVisual: some View {
@@ -107,6 +108,7 @@ struct VoiceOverlay: View {
                 .offset(y: -90)
                 .opacity(pulsingOpacity)
         }
+        .accessibilityHidden(true)
     }
 
     private var processingVisual: some View {
@@ -119,6 +121,7 @@ struct VoiceOverlay: View {
                 .scaleEffect(2.0)
                 .tint(EidolonColors.accent)
         }
+        .accessibilityHidden(true)
     }
 
     private var speakingVisual: some View {
@@ -137,6 +140,7 @@ struct VoiceOverlay: View {
                 .foregroundColor(EidolonColors.accent)
                 .offset(y: 50)
         }
+        .accessibilityHidden(true)
     }
 
     /// Pulsing opacity for the recording indicator dot.
@@ -152,6 +156,8 @@ struct VoiceOverlay: View {
             .font(.title3)
             .fontWeight(.medium)
             .foregroundColor(.primary)
+            .accessibilityAddTraits(.updatesFrequently)
+            .accessibilityIdentifier("voiceStateLabel")
     }
 
     private var stateLabelText: String {
@@ -190,6 +196,9 @@ struct VoiceOverlay: View {
                     .cornerRadius(12)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Last transcript: \(transcript)")
+            .accessibilityIdentifier("voiceTranscript")
         }
 
         if let error = voiceManager.errorMessage {
@@ -197,6 +206,7 @@ struct VoiceOverlay: View {
                 .font(.caption)
                 .foregroundColor(EidolonColors.error)
                 .multilineTextAlignment(.center)
+                .accessibilityLabel("Voice error: \(error)")
         }
     }
 
@@ -322,6 +332,7 @@ struct VoiceStateBadge: View {
             Circle()
                 .fill(badgeColor)
                 .frame(width: 8, height: 8)
+                .accessibilityHidden(true)
             Text(state.rawValue.capitalized)
                 .font(.caption2)
                 .fontWeight(.medium)
@@ -331,6 +342,9 @@ struct VoiceStateBadge: View {
         .padding(.vertical, 5)
         .background(Color.secondary.opacity(0.15))
         .cornerRadius(12)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Voice state")
+        .accessibilityValue(state.rawValue.capitalized)
     }
 
     private var badgeColor: Color {
@@ -361,6 +375,7 @@ struct WaveformView: View {
                     .animation(.easeInOut(duration: 0.1), value: level)
             }
         }
+        .accessibilityHidden(true)
     }
 
     private func barHeight(for index: Int) -> CGFloat {

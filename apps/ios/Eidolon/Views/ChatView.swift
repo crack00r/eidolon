@@ -32,6 +32,7 @@ struct ChatView: View {
                             viewModel.clearMessages()
                         }
                         .foregroundColor(EidolonColors.accent)
+                        .accessibilityHint("Clears all messages from the conversation")
                     }
                 }
             }
@@ -142,6 +143,8 @@ struct ChatView: View {
                     .foregroundColor(sendButtonColor)
             }
             .disabled(!canSend)
+            .accessibilityLabel(viewModel.isStreaming ? "Stop response" : "Send message")
+            .accessibilityIdentifier("sendButton")
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
@@ -168,6 +171,8 @@ struct ChatView: View {
         }
         .disabled(webSocketService.connectionState != .connected)
         .accessibilityLabel("Voice input")
+        .accessibilityHint("Opens voice conversation overlay")
+        .accessibilityIdentifier("inlineVoiceButton")
     }
 
     private var canSend: Bool {
@@ -206,6 +211,17 @@ struct MessageBubble: View {
 
             if message.role != .user { Spacer(minLength: 60) }
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(messageSenderLabel + ": " + (message.isStreaming ? "Streaming response" : message.content))
+        .accessibilityIdentifier("messageBubble_\(message.id)")
+    }
+
+    private var messageSenderLabel: String {
+        switch message.role {
+        case .user:      return "You"
+        case .assistant: return "Eidolon"
+        case .system:    return "System"
+        }
     }
 
     private var bubbleColor: Color {
@@ -229,6 +245,7 @@ struct MessageBubble: View {
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
+            .accessibilityHidden(true)
         }
     }
 

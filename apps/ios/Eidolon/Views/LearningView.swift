@@ -75,6 +75,7 @@ struct LearningView: View {
             Image(systemName: "lightbulb")
                 .font(.system(size: 48))
                 .foregroundColor(.secondary)
+                .accessibilityHidden(true)
             Text("No Pending Discoveries")
                 .font(.headline)
                 .foregroundColor(.secondary)
@@ -85,6 +86,7 @@ struct LearningView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.horizontal, 32)
+        .accessibilityElement(children: .combine)
     }
 
     private func errorView(message: String) -> some View {
@@ -92,6 +94,7 @@ struct LearningView: View {
             Image(systemName: "exclamationmark.triangle")
                 .font(.system(size: 48))
                 .foregroundColor(EidolonColors.warning)
+                .accessibilityHidden(true)
             Text(message)
                 .font(.subheadline)
                 .foregroundColor(.secondary)
@@ -99,6 +102,8 @@ struct LearningView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding()
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Error: \(message)")
     }
 }
 
@@ -117,6 +122,7 @@ struct LearningItemRow: View {
                 Image(systemName: item.sourceIcon)
                     .font(.caption)
                     .foregroundColor(.secondary)
+                    .accessibilityHidden(true)
                 Text(item.source.capitalized)
                     .font(.caption)
                     .foregroundColor(.secondary)
@@ -144,6 +150,7 @@ struct LearningItemRow: View {
                 Label(String(format: "%.0f%%", item.relevanceScore * 100), systemImage: "target")
                     .font(.caption2)
                     .foregroundColor(.secondary)
+                    .accessibilityLabel("Relevance: \(String(format: "%.0f", item.relevanceScore * 100)) percent")
 
                 Spacer()
 
@@ -168,6 +175,9 @@ struct LearningItemRow: View {
                     .cornerRadius(8)
                 }
                 .disabled(isActing)
+                .accessibilityLabel("Approve")
+                .accessibilityHint("Approve this discovery for implementation")
+                .accessibilityIdentifier("approveButton_\(item.id)")
 
                 Button(action: onReject) {
                     HStack(spacing: 4) {
@@ -183,6 +193,9 @@ struct LearningItemRow: View {
                     .cornerRadius(8)
                 }
                 .disabled(isActing)
+                .accessibilityLabel("Reject")
+                .accessibilityHint("Dismiss this discovery")
+                .accessibilityIdentifier("rejectButton_\(item.id)")
 
                 Spacer()
             }
@@ -199,5 +212,6 @@ struct LearningItemRow: View {
             .padding(.vertical, 3)
             .background(item.safetyColor.opacity(0.15))
             .cornerRadius(6)
+            .accessibilityLabel("Safety: \(item.safety.rawValue)")
     }
 }

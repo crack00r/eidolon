@@ -51,6 +51,7 @@ struct DashboardView: View {
                     Image(systemName: status.stateIcon)
                         .font(.system(size: 36))
                         .foregroundColor(status.stateColor)
+                        .accessibilityHidden(true)
 
                     Text(status.cognitiveState.capitalized)
                         .font(.title3)
@@ -63,6 +64,9 @@ struct DashboardView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 8)
             }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Cognitive state: \(status.cognitiveState)")
+            .accessibilityIdentifier("cognitiveStateCard")
 
             // Stats grid
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
@@ -101,6 +105,7 @@ struct DashboardView: View {
                     HStack {
                         Image(systemName: "bolt.fill")
                             .foregroundColor(energyColor(status.energyPercent))
+                            .accessibilityHidden(true)
                         Text("Energy Budget")
                             .font(.subheadline)
                             .fontWeight(.semibold)
@@ -123,6 +128,7 @@ struct DashboardView: View {
                         }
                     }
                     .frame(height: 8)
+                    .accessibilityHidden(true)
 
                     HStack {
                         Text(String(format: "%.0f / %.0f tokens", status.energyUsed, status.energyBudget))
@@ -132,6 +138,10 @@ struct DashboardView: View {
                     }
                 }
             }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Energy budget")
+            .accessibilityValue("\(Int(status.energyPercent * 100)) percent, \(String(format: "%.0f of %.0f tokens used", status.energyUsed, status.energyBudget))")
+            .accessibilityIdentifier("energyBudgetCard")
 
             // Server info
             if let version = status.serverVersion {
@@ -139,6 +149,7 @@ struct DashboardView: View {
                     HStack {
                         Image(systemName: "server.rack")
                             .foregroundColor(.secondary)
+                            .accessibilityHidden(true)
                         Text("Server Version")
                             .font(.subheadline)
                             .foregroundColor(.secondary)
@@ -148,6 +159,8 @@ struct DashboardView: View {
                             .fontWeight(.medium)
                     }
                 }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Server version: \(version)")
             }
         }
         .padding(16)
@@ -167,6 +180,7 @@ struct DashboardView: View {
             Image(systemName: icon)
                 .font(.system(size: 24))
                 .foregroundColor(color)
+                .accessibilityHidden(true)
 
             Text(value)
                 .font(.title2)
@@ -181,6 +195,8 @@ struct DashboardView: View {
         .padding(.vertical, 16)
         .background(EidolonColors.secondary)
         .cornerRadius(12)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(label): \(value)")
     }
 
     private func energyColor(_ percent: Double) -> Color {
@@ -211,6 +227,7 @@ struct DashboardView: View {
             Image(systemName: "wifi.slash")
                 .font(.system(size: 48))
                 .foregroundColor(.secondary)
+                .accessibilityHidden(true)
             Text("Not Connected")
                 .font(.headline)
                 .foregroundColor(.secondary)
@@ -220,6 +237,7 @@ struct DashboardView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 100)
+        .accessibilityElement(children: .combine)
     }
 
     private func errorView(message: String) -> some View {
@@ -227,6 +245,7 @@ struct DashboardView: View {
             Image(systemName: "exclamationmark.triangle")
                 .font(.system(size: 48))
                 .foregroundColor(EidolonColors.warning)
+                .accessibilityHidden(true)
             Text(message)
                 .font(.subheadline)
                 .foregroundColor(.secondary)
@@ -235,5 +254,7 @@ struct DashboardView: View {
         .frame(maxWidth: .infinity)
         .padding(.top, 100)
         .padding(.horizontal)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Error: \(message)")
     }
 }

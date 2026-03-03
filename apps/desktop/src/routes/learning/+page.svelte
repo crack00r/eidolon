@@ -81,16 +81,17 @@ async function handleRefresh(): Promise<void> {
       class="refresh-btn"
       onclick={handleRefresh}
       disabled={!$isConnected || $isLoadingLearning}
+      aria-busy={$isLoadingLearning}
     >
       {$isLoadingLearning ? "Loading..." : "Refresh"}
     </button>
   </header>
 
   {#if $learningError}
-    <div class="error-banner">{$learningError}</div>
+    <div class="error-banner" role="alert">{$learningError}</div>
   {/if}
 
-  <div class="items-list">
+  <div class="items-list" aria-label="Learning discoveries">
     {#if !$isConnected}
       <div class="empty-state">
         <p>Connect to the gateway to view learning discoveries.</p>
@@ -102,10 +103,11 @@ async function handleRefresh(): Promise<void> {
       </div>
     {:else}
       {#each $learningItems as item (item.id)}
-        <div
+        <article
           class="learning-item"
           class:approved={item.status === "approved"}
           class:rejected={item.status === "rejected"}
+          aria-label="{item.title} - {safetyLabel(item.safety)}"
         >
           <div class="item-top">
             <div class="item-title-row">
@@ -134,10 +136,10 @@ async function handleRefresh(): Promise<void> {
 
           <div class="item-actions">
             {#if item.status === "pending"}
-              <button class="approve-btn" onclick={() => handleApprove(item.id)}>
+              <button class="approve-btn" onclick={() => handleApprove(item.id)} aria-label="Approve {item.title}">
                 Approve
               </button>
-              <button class="reject-btn" onclick={() => handleReject(item.id)}>
+              <button class="reject-btn" onclick={() => handleReject(item.id)} aria-label="Reject {item.title}">
                 Reject
               </button>
             {:else}
@@ -146,7 +148,7 @@ async function handleRefresh(): Promise<void> {
               </span>
             {/if}
           </div>
-        </div>
+        </article>
       {/each}
     {/if}
   </div>

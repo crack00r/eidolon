@@ -64,7 +64,7 @@ $effect(() => {
     </button>
   </header>
 
-  <div class="messages" bind:this={messagesContainer}>
+  <div class="messages" bind:this={messagesContainer} role="log" aria-label="Chat messages" aria-live="polite">
     {#if $messages.length === 0}
       <div class="empty-state">
         <p class="empty-title">No messages yet</p>
@@ -72,7 +72,7 @@ $effect(() => {
       </div>
     {:else}
       {#each $messages as msg (msg.id)}
-        <div class="message" class:user={msg.role === "user"} class:assistant={msg.role === "assistant"} class:system={msg.role === "system"}>
+        <div class="message" class:user={msg.role === "user"} class:assistant={msg.role === "assistant"} class:system={msg.role === "system"} aria-label="{msg.role} message at {formatTime(msg.timestamp)}">
           <div class="message-header">
             <span class="message-role">{msg.role}</span>
             <span class="message-time">{formatTime(msg.timestamp)}</span>
@@ -81,22 +81,22 @@ $effect(() => {
                so there is no XSS risk here. Do NOT change this to {@html msg.content} without
                first adding DOMPurify sanitization. If markdown rendering is added later, pipe
                the output through DOMPurify.sanitize() before using {@html}. -->
-          <div class="message-content">
+          <div class="message-content" aria-busy={msg.streaming ? "true" : undefined}>
             {#if msg.streaming}
-              <span>{msg.content}</span><span class="cursor">|</span>
+              <span>{msg.content}</span><span class="cursor" aria-hidden="true">|</span>
             {:else}
               {msg.content}
             {/if}
           </div>
           {#if msg.role === "assistant" && !msg.streaming}
-            <div class="message-feedback">
+            <div class="message-feedback" role="group" aria-label="Rate this response">
               {#if msg.rating}
                 <span class="feedback-done">{msg.rating >= 4 ? "Rated positively" : "Rated negatively"}</span>
               {:else}
-                <button class="feedback-btn" class:active={msg.rating === 5} onclick={() => handleRate(msg.id, 5)} title="Good response">
+                <button class="feedback-btn" class:active={msg.rating === 5} onclick={() => handleRate(msg.id, 5)} aria-label="Good response">
                   +
                 </button>
-                <button class="feedback-btn" class:active={msg.rating === 1} onclick={() => handleRate(msg.id, 1)} title="Poor response">
+                <button class="feedback-btn" class:active={msg.rating === 1} onclick={() => handleRate(msg.id, 1)} aria-label="Poor response">
                   -
                 </button>
               {/if}
@@ -107,10 +107,11 @@ $effect(() => {
     {/if}
   </div>
 
-  <div class="input-area">
+  <div class="input-area" role="form" aria-label="Send a message">
     <textarea
       class="message-input"
       placeholder={$isConnected ? "Type a message..." : "Connect to gateway first"}
+      aria-label="Message input"
       bind:value={inputValue}
       onkeydown={handleKeydown}
       disabled={!$isConnected || $isStreaming}
@@ -120,6 +121,7 @@ $effect(() => {
       class="send-btn"
       onclick={handleSend}
       disabled={!inputValue.trim() || !$isConnected || $isStreaming}
+      aria-label={$isStreaming ? "Sending message" : "Send message"}
     >
       {$isStreaming ? "..." : "Send"}
     </button>
