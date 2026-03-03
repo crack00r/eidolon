@@ -14,6 +14,8 @@ export interface ChatMessage {
   content: string;
   timestamp: number;
   streaming?: boolean;
+  /** User's rating for this message (1-5), if any. */
+  rating?: number;
 }
 
 const messagesStore = writable<ChatMessage[]>([]);
@@ -89,6 +91,33 @@ export function appendStreamChunk(messageId: string, chunk: string): void {
   messagesStore.update((msgs) =>
     msgs.map((msg) => (msg.id === messageId ? { ...msg, content: msg.content + chunk } : msg)),
   );
+}
+
+/**
+ * Submit a rating for an assistant message via the gateway.
+ * Updates the local message state to reflect the rating.
+ */
+export async function rateMessage(messageId: string, rating: number): Promise<void> {
+  const client = getClient();
+  if (!client || client.state !== "connected") {
+    throw new Error("Not connected to gateway");
+  }
+
+  try {
+    await client.call("feedback.submit", {
+      sessionId: messageId,
+      messageId,
+      rating,
+      channel: "desktop",
+    });
+
+    messagesStore.update((msgs) =>
+      msgs.map((msg) => (msg.id === messageId ? { ...msg, rating } : msg)),
+    );
+  } catch (err) {
+    clientLog("error", "chat", "rateMessage failed", err);
+    throw err;
+  }
 }
 
 export function clearMessages(): void {

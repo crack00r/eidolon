@@ -121,6 +121,22 @@ export const MemoryConfigSchema = z.object({
     strategy: z.enum(["llm", "rule-based", "hybrid"]).default("hybrid"),
     minConfidence: z.number().min(0).max(1).default(0.7),
   }),
+  consolidation: z
+    .object({
+      /** Whether consolidation is enabled. When false, all extractions are ADD. */
+      enabled: z.boolean().default(true),
+      /** Cosine similarity threshold above which a memory is considered a duplicate (NOOP). */
+      duplicateThreshold: z.number().min(0).max(1).default(0.95),
+      /** Cosine similarity threshold above which a memory is considered an update candidate. */
+      updateThreshold: z.number().min(0).max(1).default(0.85),
+      /** Maximum number of existing memories to compare against for each extraction. */
+      maxCandidates: z.number().int().positive().default(10),
+      /** Compression strategy for memory clusters. */
+      compressionStrategy: z.enum(["none", "progressive", "hierarchical"]).default("none"),
+      /** For progressive compression: compress when a topic cluster exceeds this count. */
+      compressionThreshold: z.number().int().positive().default(10),
+    })
+    .default({}),
   dreaming: z.object({
     enabled: z.boolean().default(true),
     schedule: z.string().default("02:00"),

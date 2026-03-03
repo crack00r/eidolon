@@ -11,6 +11,7 @@ export type EventType =
   | "user:message"
   | "user:voice"
   | "user:approval"
+  | "user:feedback"
   | "system:startup"
   | "system:shutdown"
   | "system:health_check"
@@ -71,4 +72,12 @@ export interface SessionEventPayload {
   readonly sessionId: string;
   readonly sessionType: SessionType;
   readonly reason?: string;
+}
+
+export interface FeedbackReceivedPayload {
+  readonly feedbackId: string;
+  readonly sessionId: string;
+  readonly messageId: string | undefined;
+  readonly rating: number;
+  readonly channel: string;
 }

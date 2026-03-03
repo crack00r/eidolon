@@ -6,10 +6,14 @@
  */
 
 import type { ClaudeSessionOptions } from "@eidolon/protocol";
+import { generateSchemaInstruction } from "./structured-output.ts";
 
 /**
  * Build the full CLI argument list for a Claude Code invocation.
  * The returned array does NOT include the leading `claude` binary name.
+ *
+ * When `options.outputSchema` is provided, a schema instruction is automatically
+ * appended to the system prompt so Claude produces valid JSON output.
  */
 export function buildClaudeArgs(prompt: string, options: ClaudeSessionOptions): readonly string[] {
   const args: string[] = ["--print", "--output-format", "stream-json"];
@@ -34,8 +38,15 @@ export function buildClaudeArgs(prompt: string, options: ClaudeSessionOptions): 
     args.push("--max-turns", String(options.maxTurns));
   }
 
-  if (options.systemPrompt) {
-    args.push("--system-prompt", options.systemPrompt);
+  // Build system prompt: combine user-provided prompt with schema instruction if present
+  let systemPrompt = options.systemPrompt ?? "";
+  if (options.outputSchema) {
+    const schemaInstruction = generateSchemaInstruction(options.outputSchema);
+    systemPrompt = systemPrompt ? `${systemPrompt}\n\n${schemaInstruction}` : schemaInstruction;
+  }
+
+  if (systemPrompt) {
+    args.push("--system-prompt", systemPrompt);
   }
 
   // Prompt is always the last positional argument

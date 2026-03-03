@@ -30,6 +30,7 @@ const VALID_EVENT_TYPES = new Set<string>([
   "user:message",
   "user:voice",
   "user:approval",
+  "user:feedback",
   "system:startup",
   "system:shutdown",
   "system:health_check",

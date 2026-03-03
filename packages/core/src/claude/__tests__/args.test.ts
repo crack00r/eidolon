@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { z } from "zod";
 import type { ClaudeSessionOptions } from "@eidolon/protocol";
 import { buildClaudeArgs } from "../args.ts";
 
@@ -93,6 +94,33 @@ describe("buildClaudeArgs", () => {
     expect(args).not.toContain("--allowedTools");
     expect(args).not.toContain("--mcp-config");
     expect(args).not.toContain("--max-turns");
+    expect(args).not.toContain("--system-prompt");
+  });
+
+  test("adds schema instruction to system prompt when outputSchema is provided", () => {
+    const schema = z.object({ name: z.string(), score: z.number() });
+    const args = buildClaudeArgs("prompt", makeOptions({ outputSchema: schema }));
+    expect(args).toContain("--system-prompt");
+    const systemPromptIdx = args.indexOf("--system-prompt");
+    const systemPrompt = args[systemPromptIdx + 1];
+    expect(systemPrompt).toContain("You MUST respond with ONLY valid JSON");
+    expect(systemPrompt).toContain('"type": "object"');
+  });
+
+  test("appends schema instruction to existing system prompt", () => {
+    const schema = z.object({ value: z.string() });
+    const args = buildClaudeArgs("prompt", makeOptions({
+      systemPrompt: "Be concise.",
+      outputSchema: schema,
+    }));
+    const systemPromptIdx = args.indexOf("--system-prompt");
+    const systemPrompt = args[systemPromptIdx + 1];
+    expect(systemPrompt).toContain("Be concise.");
+    expect(systemPrompt).toContain("You MUST respond with ONLY valid JSON");
+  });
+
+  test("does not add schema instruction when outputSchema is absent", () => {
+    const args = buildClaudeArgs("prompt", makeOptions());
     expect(args).not.toContain("--system-prompt");
   });
 });

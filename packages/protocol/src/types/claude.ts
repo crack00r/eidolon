@@ -4,6 +4,7 @@
 
 import type { EidolonError } from "../errors.ts";
 import type { Result } from "../result.ts";
+import type { z } from "zod";
 
 export interface StreamEvent {
   readonly type: "text" | "tool_use" | "tool_result" | "error" | "done" | "system";
@@ -25,6 +26,8 @@ export interface ClaudeSessionOptions {
   readonly systemPrompt?: string;
   readonly timeoutMs?: number;
   readonly env?: Record<string, string>;
+  /** Zod schema for structured JSON output. When provided, the response is parsed and validated. */
+  readonly outputSchema?: z.ZodType;
 }
 
 export interface IClaudeProcess {

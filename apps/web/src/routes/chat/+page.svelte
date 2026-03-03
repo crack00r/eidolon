@@ -1,6 +1,6 @@
 <script lang="ts">
 import { clientLog } from "$lib/logger";
-import { clearMessages, isStreaming, messages, sendMessage } from "$lib/stores/chat";
+import { clearMessages, isStreaming, messages, rateMessage, sendMessage } from "$lib/stores/chat";
 import { isConnected } from "$lib/stores/connection";
 
 let inputValue = $state("");
@@ -11,6 +11,14 @@ function scrollToBottom(): void {
     requestAnimationFrame(() => {
       messagesContainer!.scrollTop = messagesContainer!.scrollHeight;
     });
+  }
+}
+
+async function handleRate(msgId: string, rating: number): Promise<void> {
+  try {
+    await rateMessage(msgId, rating);
+  } catch (err) {
+    clientLog("error", "chat-page", "handleRate failed", err);
   }
 }
 
@@ -81,6 +89,20 @@ $effect(() => {
               {msg.content}
             {/if}
           </div>
+          {#if msg.role === "assistant" && !msg.streaming}
+            <div class="message-feedback">
+              {#if msg.rating}
+                <span class="feedback-done">{msg.rating >= 4 ? "Rated positively" : "Rated negatively"}</span>
+              {:else}
+                <button class="feedback-btn" class:active={msg.rating === 5} onclick={() => handleRate(msg.id, 5)} title="Good response">
+                  +
+                </button>
+                <button class="feedback-btn" class:active={msg.rating === 1} onclick={() => handleRate(msg.id, 1)} title="Poor response">
+                  -
+                </button>
+              {/if}
+            </div>
+          {/if}
         </div>
       {/each}
     {/if}
@@ -217,6 +239,35 @@ $effect(() => {
     white-space: pre-wrap;
     word-wrap: break-word;
     line-height: 1.5;
+  }
+
+  .message-feedback {
+    display: flex;
+    gap: 4px;
+    margin-top: 6px;
+    align-items: center;
+  }
+
+  .feedback-btn {
+    padding: 2px 10px;
+    border-radius: var(--radius);
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1;
+    cursor: pointer;
+    transition: background-color 0.15s, color 0.15s;
+  }
+
+  .feedback-btn:hover {
+    background: var(--accent);
+    color: white;
+  }
+
+  .feedback-done {
+    font-size: 11px;
+    color: var(--text-secondary);
   }
 
   .cursor {

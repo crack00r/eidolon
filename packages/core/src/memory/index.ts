@@ -1,3 +1,7 @@
+export type { CompressionConfig, CompressorOptions, SummarizeFn } from "./compression.ts";
+export { MemoryCompressor } from "./compression.ts";
+export type { ConsolidationConfig, ConsolidatorOptions, ContradictionDetectorFn } from "./consolidation.ts";
+export { MemoryConsolidator } from "./consolidation.ts";
 export type { DocumentChunk, IndexingOptions } from "./document-indexer.ts";
 export { DocumentIndexer } from "./document-indexer.ts";
 export * from "./dreaming/index.ts";
@@ -5,6 +9,8 @@ export type { EmbeddingModelOptions, EmbeddingPrefix } from "./embeddings.ts";
 export { EmbeddingModel } from "./embeddings.ts";
 export type { ConsentCheckFn, ConversationTurn, ExtractedMemory, ExtractorOptions, LlmExtractFn } from "./extractor.ts";
 export { MemoryExtractor } from "./extractor.ts";
+export type { ExtractionResponse, StructuredExtractOptions } from "./structured-extract.ts";
+export { createStructuredLlmExtractFn, ExtractionResponseSchema } from "./structured-extract.ts";
 export type { CreateEdgeInput, EdgeRelation, GraphWalkResult } from "./graph.ts";
 export { GraphMemory } from "./graph.ts";
 export type { InjectionContext, MemoryInjectorOptions } from "./injector.ts";

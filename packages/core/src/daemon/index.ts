@@ -42,6 +42,8 @@ import { PriorityEvaluator } from "../loop/priority.ts";
 import { RestCalculator } from "../loop/rest.ts";
 import { SessionSupervisor } from "../loop/session-supervisor.ts";
 import { CognitiveStateMachine } from "../loop/state-machine.ts";
+import { MemoryCompressor } from "../memory/compression.ts";
+import { MemoryConsolidator } from "../memory/consolidation.ts";
 import { EmbeddingModel } from "../memory/embeddings.ts";
 import { MemoryExtractor } from "../memory/extractor.ts";
 import { MemorySearch } from "../memory/search.ts";
@@ -77,6 +79,8 @@ interface InitializedModules {
   embeddingModel?: EmbeddingModel;
   memoryStore?: MemoryStore;
   memorySearch?: MemorySearch;
+  memoryConsolidator?: MemoryConsolidator;
+  memoryCompressor?: MemoryCompressor;
   claudeManager?: ClaudeCodeManager;
   eventBus?: EventBus;
   sessionSupervisor?: SessionSupervisor;
@@ -397,6 +401,67 @@ export class EidolonDaemon {
           } catch (err: unknown) {
             const message = err instanceof Error ? err.message : String(err);
             logger.warn("daemon", `MemorySearch skipped: ${message}`);
+          }
+        },
+      });
+
+      // 13b. MemoryConsolidator (needs MemoryStore, EmbeddingModel, Config, Logger)
+      initOrder.push({
+        name: "MemoryConsolidator",
+        fn: () => {
+          const logger = this.modules.logger;
+          const store = this.modules.memoryStore;
+          const embedModel = this.modules.embeddingModel;
+          const config = this.modules.config;
+
+          if (!store || !embedModel || !logger) {
+            logger?.warn("daemon", "MemoryConsolidator skipped: requires MemoryStore and EmbeddingModel");
+            return;
+          }
+
+          try {
+            const consolidationConfig = config?.memory.consolidation;
+            this.modules.memoryConsolidator = new MemoryConsolidator(store, embedModel, logger, {
+              config: {
+                enabled: consolidationConfig?.enabled ?? true,
+                duplicateThreshold: consolidationConfig?.duplicateThreshold ?? 0.95,
+                updateThreshold: consolidationConfig?.updateThreshold ?? 0.85,
+                maxCandidates: consolidationConfig?.maxCandidates ?? 10,
+              },
+            });
+            logger.info("daemon", "MemoryConsolidator initialized");
+          } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : String(err);
+            logger.warn("daemon", `MemoryConsolidator skipped: ${message}`);
+          }
+        },
+      });
+
+      // 13c. MemoryCompressor (needs MemoryStore, Config, Logger)
+      initOrder.push({
+        name: "MemoryCompressor",
+        fn: () => {
+          const logger = this.modules.logger;
+          const store = this.modules.memoryStore;
+          const config = this.modules.config;
+
+          if (!store || !logger) {
+            logger?.warn("daemon", "MemoryCompressor skipped: requires MemoryStore");
+            return;
+          }
+
+          try {
+            const consolidationConfig = config?.memory.consolidation;
+            this.modules.memoryCompressor = new MemoryCompressor(store, logger, {
+              config: {
+                strategy: consolidationConfig?.compressionStrategy ?? "none",
+                threshold: consolidationConfig?.compressionThreshold ?? 10,
+              },
+            });
+            logger.info("daemon", "MemoryCompressor initialized");
+          } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : String(err);
+            logger.warn("daemon", `MemoryCompressor skipped: ${message}`);
           }
         },
       });

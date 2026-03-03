@@ -88,3 +88,49 @@ export interface DreamingResult {
   readonly edgesCreated: number;
   readonly tokensUsed: number;
 }
+
+// ---------------------------------------------------------------------------
+// Memory Consolidation (Mem0-style ADD/UPDATE/DELETE/NOOP)
+// ---------------------------------------------------------------------------
+
+/** Action to take when consolidating a newly extracted memory against the existing store. */
+export type MemoryConsolidationAction = "ADD" | "UPDATE" | "DELETE" | "NOOP";
+
+/** The decision made by the consolidator for a single extracted memory. */
+export interface ConsolidationDecision {
+  readonly action: MemoryConsolidationAction;
+  /** For UPDATE/DELETE: the ID of the existing memory to modify/remove. */
+  readonly memoryId?: string;
+  /** For ADD/UPDATE: the memory content to write. */
+  readonly content?: string;
+  /** For ADD/UPDATE: the confidence score. */
+  readonly confidence?: number;
+  /** Human-readable reason for this decision. */
+  readonly reason: string;
+}
+
+/** Result summary from a consolidation batch. */
+export interface ConsolidationResult {
+  readonly decisions: readonly ConsolidationDecision[];
+  readonly added: number;
+  readonly updated: number;
+  readonly deleted: number;
+  readonly noops: number;
+}
+
+// ---------------------------------------------------------------------------
+// Memory Compression
+// ---------------------------------------------------------------------------
+
+/** Strategy for compressing memory clusters. */
+export type CompressionStrategy = "none" | "progressive" | "hierarchical";
+
+/** Result of a compression operation. */
+export interface CompressionResult {
+  /** Number of source memories that were compressed. */
+  readonly memoriesCompressed: number;
+  /** Number of new summary memories created. */
+  readonly summariesCreated: number;
+  /** IDs of memories that were removed after compression. */
+  readonly removedMemoryIds: readonly string[];
+}

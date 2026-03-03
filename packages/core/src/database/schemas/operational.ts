@@ -244,4 +244,28 @@ export const OPERATIONAL_MIGRATIONS: ReadonlyArray<Migration> = [
       DROP TABLE IF EXISTS learning_journal;
     `,
   },
+  {
+    version: 8,
+    name: "add_feedback_table",
+    database: "operational",
+    up: `
+      CREATE TABLE feedback (
+        id TEXT PRIMARY KEY,
+        session_id TEXT NOT NULL,
+        message_id TEXT,
+        rating INTEGER NOT NULL CHECK(rating >= 1 AND rating <= 5),
+        channel TEXT NOT NULL,
+        comment TEXT,
+        created_at INTEGER NOT NULL
+      );
+
+      CREATE INDEX idx_feedback_session ON feedback(session_id);
+      CREATE INDEX idx_feedback_created ON feedback(created_at);
+    `,
+    down: `
+      DROP INDEX IF EXISTS idx_feedback_created;
+      DROP INDEX IF EXISTS idx_feedback_session;
+      DROP TABLE IF EXISTS feedback;
+    `,
+  },
 ];

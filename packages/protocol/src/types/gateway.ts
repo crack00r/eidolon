@@ -33,7 +33,10 @@ export type GatewayMethod =
   // Command result reporting (target client → server after push.executeCommand)
   | "command.result"
   // Client phone-home error reporting (alias for error.report)
-  | "client.reportErrors";
+  | "client.reportErrors"
+  // Feedback methods
+  | "feedback.submit"
+  | "feedback.list";
 
 // ---------------------------------------------------------------------------
 // Push notification types (server → client, no response expected)
@@ -181,6 +184,34 @@ export interface PushExecuteCommandPayload {
   readonly command: string;
   readonly args?: unknown;
   readonly fromClientId: string;
+}
+
+// ---------------------------------------------------------------------------
+// Feedback types
+// ---------------------------------------------------------------------------
+
+export interface FeedbackSubmitParams {
+  readonly sessionId: string;
+  readonly messageId?: string;
+  readonly rating: number;
+  readonly channel: string;
+  readonly comment?: string;
+}
+
+export interface FeedbackListParams {
+  readonly sessionId?: string;
+  readonly limit?: number;
+  readonly since?: number;
+}
+
+export interface FeedbackEntry {
+  readonly id: string;
+  readonly sessionId: string;
+  readonly messageId: string | undefined;
+  readonly rating: number;
+  readonly channel: string;
+  readonly comment: string | undefined;
+  readonly createdAt: number;
 }
 
 // ---------------------------------------------------------------------------

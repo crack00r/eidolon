@@ -97,6 +97,27 @@ function validateEnum<T extends string>(value: string, valid: Set<string>, fallb
   return valid.has(value) ? (value as T) : fallback;
 }
 
+/** Cosine similarity between two Float32Array vectors. Returns value in [-1, 1]. */
+function cosineSimilarity(a: Float32Array, b: Float32Array): number {
+  if (a.length !== b.length) return 0;
+
+  let dotProduct = 0;
+  let normA = 0;
+  let normB = 0;
+
+  for (let i = 0; i < a.length; i++) {
+    const ai = a[i] as number;
+    const bi = b[i] as number;
+    dotProduct += ai * bi;
+    normA += ai * ai;
+    normB += bi * bi;
+  }
+
+  const denominator = Math.sqrt(normA) * Math.sqrt(normB);
+  if (denominator < 1e-10) return 0;
+  return dotProduct / denominator;
+}
+
 function rowToMemory(row: MemoryRow): Memory {
   let tags: string[];
   try {
@@ -490,6 +511,46 @@ export class MemoryStore {
       return Ok(count);
     } catch (cause) {
       return Err(createError(ErrorCode.DB_QUERY_FAILED, "Failed to prune expired memories", cause));
+    }
+  }
+
+  /**
+   * Find memories whose embeddings are similar to a given embedding.
+   * Returns memories sorted by descending cosine similarity, along with the
+   * similarity score. Only memories with embeddings stored are considered.
+   *
+   * Used by MemoryConsolidator to find duplicates and update candidates.
+   */
+  findSimilar(
+    embedding: Float32Array,
+    limit: number,
+    minSimilarity?: number,
+  ): Result<Array<{ memory: Memory; similarity: number }>, EidolonError> {
+    try {
+      const MIN_SIMILARITY = minSimilarity ?? 0;
+      const EXPECTED_DIMENSIONS = 384;
+
+      const rows = this.db
+        .query("SELECT * FROM memories WHERE embedding IS NOT NULL LIMIT 10000")
+        .all() as Array<MemoryRow & { embedding: Uint8Array }>;
+
+      const scored: Array<{ memory: Memory; similarity: number }> = [];
+
+      for (const row of rows) {
+        const storedEmbedding = new Float32Array(new Uint8Array(row.embedding).buffer);
+        if (storedEmbedding.length !== EXPECTED_DIMENSIONS) continue;
+        if (embedding.length !== EXPECTED_DIMENSIONS) continue;
+
+        const similarity = cosineSimilarity(embedding, storedEmbedding);
+        if (similarity >= MIN_SIMILARITY) {
+          scored.push({ memory: rowToMemory(row), similarity });
+        }
+      }
+
+      scored.sort((a, b) => b.similarity - a.similarity);
+      return Ok(scored.slice(0, limit));
+    } catch (cause) {
+      return Err(createError(ErrorCode.DB_QUERY_FAILED, "Failed to find similar memories", cause));
     }
   }
 

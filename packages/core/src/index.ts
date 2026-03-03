@@ -7,6 +7,7 @@ export * from "./channels/index.ts";
 export * from "./claude/index.ts";
 export * from "./config/index.ts";
 export * from "./daemon/index.ts";
+export * from "./feedback/index.ts";
 export * from "./database/index.ts";
 export * from "./discovery/index.ts";
 export * from "./gateway/index.ts";
