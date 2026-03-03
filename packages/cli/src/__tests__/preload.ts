@@ -85,6 +85,15 @@ mock.module("@eidolon/core", () => ({
     }
   },
 
+  // ── Discovery / Pairing ──────────────────────────────────────────────────
+  DISCOVERY_PORT: 41920,
+  generateAuthToken: () => "test-token-0000000000000000000000000000",
+  DiscoveryBroadcaster: class {},
+  DiscoveryListener: class {},
+  TailscaleDetector: class {},
+  buildPairingUrl: () => "eidolon://localhost:8419?token=test",
+  formatConnectionDetails: () => "",
+
   // ── Chat / Claude ───────────────────────────────────────────────────────
   ClaudeCodeManager: class {
     async isAvailable() {
