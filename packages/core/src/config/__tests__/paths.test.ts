@@ -34,10 +34,17 @@ describe("paths", () => {
     }
   });
 
+  // Note: platform-conditional tests verify the current OS.
+  // Windows (win32) paths use %APPDATA%, macOS uses ~/Library, Linux uses XDG.
+  // The win32 branch is only testable when running on Windows.
+
   test("getDataDir returns platform-appropriate path", () => {
     const result = getDataDir();
     if (process.platform === "darwin") {
       expect(result).toBe(join(homedir(), "Library", "Application Support", "eidolon"));
+    } else if (process.platform === "win32") {
+      // On Windows: %APPDATA%\eidolon
+      expect(result).toContain("eidolon");
     } else {
       expect(result).toBe(join(homedir(), ".local", "share", "eidolon"));
     }
@@ -52,6 +59,8 @@ describe("paths", () => {
     const result = getConfigDir();
     if (process.platform === "darwin") {
       expect(result).toBe(join(homedir(), "Library", "Preferences", "eidolon"));
+    } else if (process.platform === "win32") {
+      expect(result).toContain("eidolon");
     } else {
       expect(result).toBe(join(homedir(), ".config", "eidolon"));
     }
@@ -61,6 +70,9 @@ describe("paths", () => {
     const result = getLogDir();
     if (process.platform === "darwin") {
       expect(result).toBe(join(homedir(), "Library", "Logs", "eidolon"));
+    } else if (process.platform === "win32") {
+      expect(result).toContain("eidolon");
+      expect(result).toContain("logs");
     } else {
       expect(result).toBe(join(homedir(), ".local", "state", "eidolon", "logs"));
     }
@@ -70,9 +82,27 @@ describe("paths", () => {
     const result = getCacheDir();
     if (process.platform === "darwin") {
       expect(result).toBe(join(homedir(), "Library", "Caches", "eidolon"));
+    } else if (process.platform === "win32") {
+      expect(result).toContain("eidolon");
+      expect(result).toContain("cache");
     } else {
       expect(result).toBe(join(homedir(), ".cache", "eidolon"));
     }
+  });
+
+  test("getConfigDir respects EIDOLON_CONFIG_DIR env", () => {
+    process.env.EIDOLON_CONFIG_DIR = "/custom/config";
+    expect(getConfigDir()).toBe("/custom/config");
+  });
+
+  test("getLogDir respects EIDOLON_LOG_DIR env", () => {
+    process.env.EIDOLON_LOG_DIR = "/custom/logs";
+    expect(getLogDir()).toBe("/custom/logs");
+  });
+
+  test("getCacheDir respects EIDOLON_CACHE_DIR env", () => {
+    process.env.EIDOLON_CACHE_DIR = "/custom/cache";
+    expect(getCacheDir()).toBe("/custom/cache");
   });
 
   test("getConfigPath respects EIDOLON_CONFIG env", () => {

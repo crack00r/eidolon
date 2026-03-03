@@ -261,8 +261,18 @@ describe("protocol", () => {
         "learning.reject",
         "system.status",
         "system.health",
+        "system.subscribe",
+        "error.report",
         "voice.start",
         "voice.stop",
+        "brain.pause",
+        "brain.resume",
+        "brain.triggerAction",
+        "brain.getLog",
+        "client.list",
+        "client.execute",
+        "command.result",
+        "client.reportErrors",
       ];
       for (const m of methods) {
         expect(validateMethod(m)).toBe(true);
