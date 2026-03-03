@@ -91,3 +91,15 @@ Still open:
 - 6 skipped tests are all in embeddings.test.ts (behind RUN_SLOW env var, model download)
 - Lint issues are formatting-only in protocol (import ordering, whitespace) -- safe auto-fix
 - Integration Plan Tiers 1-3 (12 sprints, 43 findings) all merged to main before v0.1.6
+
+## Post-v1.0 Plan (v1.1 -- created March 2026)
+- Plan file: docs/POST_V1_PLAN.md
+- Top 4 features: Calendar Integration, Advanced HA, Web Dashboard Enhancement, Multi-GPU Pool
+- Discord channel ALREADY EXISTS (403+109 lines) -- not a v1.1 candidate
+- WhatsApp, OTel, Mobile Widget deferred to v1.2
+- GPUManager is single-worker (230 lines, config.url based) -- needs pool refactor for multi-GPU
+- AutomationEngine (426 lines) supports natural language schedule parsing
+- MCP module has health.ts (160 lines) and templates.ts (221 lines) -- HA builds on these
+- Web app already has 5 routes, 6 stores (~5,090 lines) -- enhancement not greenfield
+- Estimated total: 34 new files (~7,005 lines), 7 test files (~1,370 lines), 28 modifications
+- Recommended 5-week sprint plan: calendar+GPU parallel -> HA+web core -> web calendar+polish
