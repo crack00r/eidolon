@@ -3,6 +3,7 @@
 
 export * from "./audit/index.ts";
 export * from "./backup/index.ts";
+export * from "./calendar/index.ts";
 export * from "./channels/index.ts";
 export * from "./claude/index.ts";
 export * from "./config/index.ts";

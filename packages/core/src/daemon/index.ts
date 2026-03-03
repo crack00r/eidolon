@@ -25,6 +25,9 @@ import { DiscoveryBroadcaster } from "../discovery/broadcaster.ts";
 import { TailscaleDetector } from "../discovery/tailscale.ts";
 import { GatewayServer } from "../gateway/server.ts";
 import { GPUManager } from "../gpu/manager.ts";
+import type { GPUWorkerPoolConfig } from "../gpu/pool.ts";
+import { GPUWorkerPool } from "../gpu/pool.ts";
+import type { GPUWorkerConfig as PoolWorkerConfig } from "../gpu/worker.ts";
 import { HealthChecker } from "../health/checker.ts";
 import {
   createBunCheck,
@@ -55,6 +58,7 @@ import { MemoryStore } from "../memory/store.ts";
 import { MetricsRegistry } from "../metrics/prometheus.ts";
 import { TokenTracker } from "../metrics/token-tracker.ts";
 import { type MetricsWiringHandle, wireMetrics } from "../metrics/wiring.ts";
+import { CalendarManager } from "../calendar/manager.ts";
 import { AutomationEngine } from "../scheduler/automation.ts";
 import { TaskScheduler } from "../scheduler/scheduler.ts";
 import { getMasterKey } from "../secrets/master-key.ts";
@@ -102,6 +106,8 @@ interface InitializedModules {
   telegramChannel?: TelegramChannel;
   discordChannel?: DiscordChannel;
   gpuManager?: GPUManager;
+  gpuWorkerPool?: GPUWorkerPool;
+  calendarManager?: CalendarManager;
   mcpHealthMonitor?: MCPHealthMonitor;
   metricsRegistry?: MetricsRegistry;
   metricsWiring?: MetricsWiringHandle;
@@ -934,7 +940,7 @@ export class EidolonDaemon {
         },
       });
 
-      // 18. GPUManager (needs Config, Logger)
+      // 18. GPUManager + GPUWorkerPool (needs Config, Logger)
       initOrder.push({
         name: "GPUManager",
         fn: () => {
@@ -943,12 +949,13 @@ export class EidolonDaemon {
           if (!logger) return;
 
           const workers = config?.gpu.workers ?? [];
-          if (workers.length === 0) {
+          if (workers.length === 0 || !config) {
             logger.info("daemon", "GPUManager skipped: no GPU workers configured");
             return;
           }
 
           try {
+            // Legacy single-worker GPUManager (backward compat)
             const firstWorker = workers[0];
             if (!firstWorker) return;
             this.modules.gpuManager = new GPUManager(
@@ -958,7 +965,28 @@ export class EidolonDaemon {
               },
               logger,
             );
-            logger.info("daemon", `GPUManager initialized (${workers.length} worker(s) configured)`);
+
+            // Multi-worker pool
+            const poolWorkers: PoolWorkerConfig[] = workers.map((w) => ({
+              name: w.name,
+              url: `http://${w.host}:${w.port}`,
+              apiKey: typeof w.token === "string" ? w.token : undefined,
+              capabilities: w.capabilities as readonly ("tts" | "stt" | "realtime")[],
+              priority: w.priority,
+              maxConcurrent: w.maxConcurrent,
+            }));
+
+            const poolConfig: GPUWorkerPoolConfig = {
+              workers: poolWorkers,
+              healthCheckIntervalMs: config.gpu.pool.healthCheckIntervalMs,
+              loadBalancing: config.gpu.pool.loadBalancing,
+              maxRetries: config.gpu.pool.maxRetriesPerRequest,
+            };
+
+            this.modules.gpuWorkerPool = new GPUWorkerPool(poolConfig, logger);
+            this.modules.gpuWorkerPool.startHealthChecks();
+
+            logger.info("daemon", `GPUManager initialized (${workers.length} worker(s) in pool, strategy: ${config.gpu.pool.loadBalancing})`);
           } catch (err: unknown) {
             const message = err instanceof Error ? err.message : String(err);
             logger.warn("daemon", `GPUManager skipped: ${message}`);
@@ -986,6 +1014,115 @@ export class EidolonDaemon {
           });
           await this.modules.gatewayServer.start();
           logger.info("daemon", `GatewayServer started on ${config.gateway.host}:${config.gateway.port}`);
+        },
+      });
+
+      // 19a. Wire GPU pool RPC handlers to GatewayServer (needs GatewayServer, GPUWorkerPool)
+      initOrder.push({
+        name: "GatewayGpuWiring",
+        fn: () => {
+          const gatewayServer = this.modules.gatewayServer;
+          const gpuPool = this.modules.gpuWorkerPool;
+          const logger = this.modules.logger;
+          if (!gatewayServer || !gpuPool) {
+            logger?.debug("daemon", "GPU pool gateway wiring skipped: missing gateway or pool");
+            return;
+          }
+
+          gatewayServer.registerHandler("gpu.workers", async () => {
+            const status = gpuPool.getPoolStatus();
+            return { workers: status.workers };
+          });
+
+          gatewayServer.registerHandler("gpu.pool_status", async () => {
+            return gpuPool.getPoolStatus();
+          });
+
+          logger?.info("daemon", "GPU pool RPC handlers registered on gateway");
+        },
+      });
+
+      // 19a-cal. CalendarManager (needs DB, Logger, EventBus, Config)
+      initOrder.push({
+        name: "CalendarManager",
+        fn: async () => {
+          const db = this.modules.dbManager?.operational;
+          const logger = this.modules.logger;
+          const eventBus = this.modules.eventBus;
+          const config = this.modules.config;
+          if (!db || !logger || !eventBus || !config) return;
+          if (!config.calendar?.enabled) {
+            logger.info("daemon", "Calendar integration disabled");
+            return;
+          }
+
+          const calendarManager = new CalendarManager({
+            db,
+            logger,
+            eventBus,
+            config: config.calendar,
+          });
+
+          const initResult = await calendarManager.initialize();
+          if (!initResult.ok) {
+            logger.warn("daemon", `CalendarManager init failed: ${initResult.error.message}`);
+            return;
+          }
+
+          this.modules.calendarManager = calendarManager;
+          logger.info("daemon", "CalendarManager initialized");
+        },
+      });
+
+      // 19a-cal-gw. Wire calendar gateway RPC handlers (needs Gateway, CalendarManager)
+      initOrder.push({
+        name: "GatewayCalendarWiring",
+        fn: () => {
+          const gatewayServer = this.modules.gatewayServer;
+          const calendarManager = this.modules.calendarManager;
+          const logger = this.modules.logger;
+          if (!gatewayServer || !calendarManager) {
+            logger?.debug("daemon", "Calendar gateway wiring skipped: missing gateway or calendarManager");
+            return;
+          }
+
+          gatewayServer.registerHandler("calendar.listEvents", async (params) => {
+            const start = typeof params.start === "number" ? params.start : Date.now();
+            const end = typeof params.end === "number" ? params.end : start + 7 * 86_400_000;
+            const result = calendarManager.listEvents(start, end);
+            if (!result.ok) throw new Error(result.error.message);
+            return { events: result.value };
+          });
+
+          gatewayServer.registerHandler("calendar.createEvent", async (params) => {
+            const event = params as Omit<import("@eidolon/protocol").CalendarEvent, "id" | "syncedAt">;
+            const result = calendarManager.createEvent(event);
+            if (!result.ok) throw new Error(result.error.message);
+            return { event: result.value };
+          });
+
+          gatewayServer.registerHandler("calendar.deleteEvent", async (params) => {
+            const eventId = typeof params.eventId === "string" ? params.eventId : "";
+            const result = calendarManager.deleteEvent(eventId);
+            if (!result.ok) throw new Error(result.error.message);
+            return { success: true };
+          });
+
+          gatewayServer.registerHandler("calendar.sync", async (params) => {
+            const providerName = typeof params.providerName === "string" ? params.providerName : undefined;
+            const result = await calendarManager.sync(providerName);
+            if (!result.ok) throw new Error(result.error.message);
+            return result.value;
+          });
+
+          gatewayServer.registerHandler("calendar.getUpcoming", async (params) => {
+            const hours = typeof params.hours === "number" ? params.hours : 24;
+            const result = calendarManager.getUpcoming(hours);
+            if (!result.ok) throw new Error(result.error.message);
+            return { events: result.value };
+          });
+
+          logger?.info("daemon", "Calendar RPC handlers registered on gateway");
         },
       });
 
@@ -1290,6 +1427,16 @@ export class EidolonDaemon {
       }
     }
 
+    // 19a-cal -> CalendarManager (stop sync intervals, disconnect providers)
+    if (this.modules.calendarManager) {
+      try {
+        await this.modules.calendarManager.dispose();
+        logger?.info("daemon", "CalendarManager disposed");
+      } catch (err: unknown) {
+        logger?.error("daemon", "Error disposing CalendarManager", err);
+      }
+    }
+
     // 19c -> Metrics wiring (dispose before gateway so interval timers stop)
     if (this.modules.metricsWiring) {
       try {
@@ -1390,6 +1537,16 @@ export class EidolonDaemon {
         logger?.info("daemon", "Health server stopped");
       } catch (err: unknown) {
         logger?.error("daemon", "Error stopping health server", err);
+      }
+    }
+
+    // 18b -> GPUWorkerPool: stop health checks
+    if (this.modules.gpuWorkerPool) {
+      try {
+        this.modules.gpuWorkerPool.dispose();
+        logger?.info("daemon", "GPUWorkerPool disposed");
+      } catch (err: unknown) {
+        logger?.error("daemon", "Error disposing GPUWorkerPool", err);
       }
     }
 

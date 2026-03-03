@@ -43,7 +43,11 @@ export type EventType =
   | "webhook:received"
   | "research:started"
   | "research:completed"
-  | "research:failed";
+  | "research:failed"
+  | "calendar:event_upcoming"
+  | "calendar:event_created"
+  | "calendar:conflict_detected"
+  | "calendar:sync_completed";
 
 export interface BusEvent<T = unknown> {
   readonly id: string;

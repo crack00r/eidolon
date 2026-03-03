@@ -2,6 +2,7 @@
  * Barrel export for all protocol types.
  */
 
+export * from "./calendar.ts";
 export * from "./channels.ts";
 export * from "./claude.ts";
 export * from "./database.ts";

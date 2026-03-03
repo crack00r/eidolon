@@ -1,7 +1,11 @@
+export type { BalancingStrategyName, LoadBalancerStrategy } from "./balancer.ts";
+export { createBalancer, LatencyWeightedBalancer, LeastConnectionsBalancer, RoundRobinBalancer } from "./balancer.ts";
 export type { TtsFallbackProvider } from "./fallback.ts";
 export { TtsFallbackChain, textOnlyProvider } from "./fallback.ts";
-export type { GpuHealth, GpuWorkerConfig } from "./manager.ts";
+export type { GpuHealth, GpuWorkerConfig as GpuWorkerLegacyConfig } from "./manager.ts";
 export { GPUManager } from "./manager.ts";
+export type { GPUPoolStatus, GPUWorkerPoolConfig } from "./pool.ts";
+export { GPUWorkerPool } from "./pool.ts";
 export type { AudioCallback, ErrorCallback, RealtimeClientConfig, TranscriptionCallback } from "./realtime-client.ts";
 export { RealtimeVoiceClient } from "./realtime-client.ts";
 export type { SttResult } from "./stt-client.ts";
@@ -10,3 +14,5 @@ export type { TtsRequest, TtsResult } from "./tts-client.ts";
 export { TTSClient } from "./tts-client.ts";
 export type { VoiceState } from "./voice-pipeline.ts";
 export { VoicePipeline } from "./voice-pipeline.ts";
+export type { GPUWorkerConfig, GPUWorkerInfo } from "./worker.ts";
+export { GPUWorker } from "./worker.ts";

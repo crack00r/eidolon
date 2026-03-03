@@ -63,6 +63,10 @@ const VALID_EVENT_TYPES = new Set<string>([
   "research:started",
   "research:completed",
   "research:failed",
+  "calendar:event_upcoming",
+  "calendar:event_created",
+  "calendar:conflict_detected",
+  "calendar:sync_completed",
 ]);
 const VALID_PRIORITIES = new Set<string>(["critical", "high", "normal", "low"]);
 

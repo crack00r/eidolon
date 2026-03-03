@@ -297,4 +297,38 @@ export const OPERATIONAL_MIGRATIONS: ReadonlyArray<Migration> = [
       DROP TABLE IF EXISTS approval_requests;
     `,
   },
+  {
+    version: 10,
+    name: "add_calendar_events",
+    database: "operational",
+    up: `
+      CREATE TABLE calendar_events (
+        id TEXT PRIMARY KEY,
+        calendar_id TEXT NOT NULL,
+        provider TEXT NOT NULL CHECK(provider IN ('google', 'caldav', 'manual')),
+        title TEXT NOT NULL,
+        description TEXT,
+        location TEXT,
+        start_time INTEGER NOT NULL,
+        end_time INTEGER NOT NULL,
+        all_day INTEGER NOT NULL DEFAULT 0,
+        recurrence TEXT,
+        reminders TEXT NOT NULL DEFAULT '[]',
+        raw_data TEXT,
+        sync_token TEXT,
+        synced_at INTEGER NOT NULL,
+        created_at INTEGER NOT NULL
+      );
+
+      CREATE INDEX idx_calendar_events_time ON calendar_events(start_time, end_time);
+      CREATE INDEX idx_calendar_events_provider ON calendar_events(provider);
+      CREATE INDEX idx_calendar_events_calendar ON calendar_events(calendar_id);
+    `,
+    down: `
+      DROP INDEX IF EXISTS idx_calendar_events_calendar;
+      DROP INDEX IF EXISTS idx_calendar_events_provider;
+      DROP INDEX IF EXISTS idx_calendar_events_time;
+      DROP TABLE IF EXISTS calendar_events;
+    `,
+  },
 ];

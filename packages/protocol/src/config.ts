@@ -5,6 +5,7 @@
  */
 
 import { z } from "zod";
+import { CalendarConfigSchema } from "./types/calendar.ts";
 
 // ---------------------------------------------------------------------------
 // Secret Reference
@@ -304,18 +305,25 @@ export const GatewayConfigSchema = z.object({
 // GPU Workers
 // ---------------------------------------------------------------------------
 
+export const GpuWorkerSchema = z.object({
+  name: z.string(),
+  host: z.string(),
+  port: z.number().int().positive().default(8420),
+  token: SecretRefSchema.or(z.string()),
+  capabilities: z.array(z.enum(["tts", "stt", "realtime"])).default(["tts", "stt"]),
+  priority: z.number().int().min(1).max(100).default(50),
+  maxConcurrent: z.number().int().positive().optional(),
+});
+
+export const GpuPoolSchema = z.object({
+  loadBalancing: z.enum(["round-robin", "least-connections", "latency-weighted"]).default("least-connections"),
+  healthCheckIntervalMs: z.number().int().positive().default(30_000),
+  maxRetriesPerRequest: z.number().int().min(0).max(5).default(2),
+});
+
 export const GpuConfigSchema = z.object({
-  workers: z
-    .array(
-      z.object({
-        name: z.string(),
-        host: z.string(),
-        port: z.number().int().positive().default(8420),
-        token: SecretRefSchema.or(z.string()),
-        capabilities: z.array(z.enum(["tts", "stt", "realtime"])).default(["tts", "stt"]),
-      }),
-    )
-    .default([]),
+  workers: z.array(GpuWorkerSchema).default([]),
+  pool: GpuPoolSchema.default({}),
   tts: z.object({
     model: z.string().default("Qwen/Qwen3-TTS-1.7B"),
     defaultSpeaker: z.string().default("Chelsie"),
@@ -468,6 +476,7 @@ export const EidolonConfigSchema = z.object({
   security: SecurityConfigSchema,
   privacy: PrivacyConfigSchema.default({}),
   digest: DigestConfigSchema.default({}),
+  calendar: CalendarConfigSchema.default({}),
   database: DatabaseConfigSchema,
   logging: LoggingConfigSchema,
   daemon: DaemonConfigSchema,
@@ -485,11 +494,14 @@ export type LearningConfig = z.infer<typeof LearningConfigSchema>;
 export type ChannelConfig = z.infer<typeof ChannelConfigSchema>;
 export type GatewayConfig = z.infer<typeof GatewayConfigSchema>;
 export type GpuConfig = z.infer<typeof GpuConfigSchema>;
+export type GpuWorkerConfigSchema = z.infer<typeof GpuWorkerSchema>;
+export type GpuPoolConfig = z.infer<typeof GpuPoolSchema>;
 export type SecurityConfig = z.infer<typeof SecurityConfigSchema>;
 export type DatabaseConfig = z.infer<typeof DatabaseConfigSchema>;
 export type LoggingConfig = z.infer<typeof LoggingConfigSchema>;
 export type PrivacyConfig = z.infer<typeof PrivacyConfigSchema>;
 export type DigestConfig = z.infer<typeof DigestConfigSchema>;
 export type DaemonConfig = z.infer<typeof DaemonConfigSchema>;
+export type CalendarConfigInferred = z.infer<typeof CalendarConfigSchema>;
 export type ClaudeAccount = z.infer<typeof ClaudeAccountSchema>;
 export type WebhookEndpointConfig = z.infer<typeof WebhookEndpointSchema>;

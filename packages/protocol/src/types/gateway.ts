@@ -51,7 +51,16 @@ export type GatewayMethod =
   // Profile methods
   | "profile.get"
   // Metrics methods
-  | "metrics.rateLimits";
+  | "metrics.rateLimits"
+  // Calendar methods
+  | "calendar.listEvents"
+  | "calendar.createEvent"
+  | "calendar.deleteEvent"
+  | "calendar.sync"
+  | "calendar.getUpcoming"
+  // GPU pool methods
+  | "gpu.workers"
+  | "gpu.pool_status";
 
 // ---------------------------------------------------------------------------
 // Push notification types (server → client, no response expected)
