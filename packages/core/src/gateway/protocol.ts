@@ -48,6 +48,10 @@ const VALID_METHODS: ReadonlySet<string> = new Set<GatewayMethod>([
   "command.result",
   // Client phone-home error reporting (alias for error.report)
   "client.reportErrors",
+  // Research methods
+  "research.start",
+  "research.status",
+  "research.list",
 ]);
 
 // ---------------------------------------------------------------------------

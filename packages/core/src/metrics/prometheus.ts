@@ -29,6 +29,7 @@ export interface GaugeMetric {
   readonly name: string;
   readonly help: string;
   readonly type: "gauge";
+  readonly labels?: readonly string[];
   values: Map<string, number>;
 }
 
@@ -91,6 +92,39 @@ export class MetricsRegistry {
     values: new Map([["", 0]]),
   };
 
+  // Rate limit gauges (per-account)
+  readonly accountTokensUsed: GaugeMetric = {
+    name: "eidolon_account_tokens_used",
+    help: "Tokens used in the current hour by account",
+    type: "gauge",
+    labels: ["account_name"],
+    values: new Map(),
+  };
+
+  readonly accountTokensRemaining: GaugeMetric = {
+    name: "eidolon_account_tokens_remaining",
+    help: "Tokens remaining in the current hour by account",
+    type: "gauge",
+    labels: ["account_name"],
+    values: new Map(),
+  };
+
+  readonly accountCooldownActive: GaugeMetric = {
+    name: "eidolon_account_cooldown_active",
+    help: "Whether an account is currently in cooldown (1=yes, 0=no)",
+    type: "gauge",
+    labels: ["account_name"],
+    values: new Map(),
+  };
+
+  readonly accountErrorsTotal: CounterMetric = {
+    name: "eidolon_account_errors_total",
+    help: "Total errors encountered by account",
+    type: "counter",
+    labels: ["account_name"],
+    values: new Map(),
+  };
+
   // Histogram
   readonly loopCycleTime: HistogramMetric = {
     name: "eidolon_loop_cycle_duration_ms",
@@ -134,6 +168,27 @@ export class MetricsRegistry {
     this.eventQueueDepth.values.set("", depth);
   }
 
+  /** Set the tokens used gauge for an account. */
+  setAccountTokensUsed(accountName: string, tokens: number): void {
+    this.accountTokensUsed.values.set(accountName, tokens);
+  }
+
+  /** Set the tokens remaining gauge for an account. */
+  setAccountTokensRemaining(accountName: string, tokens: number): void {
+    this.accountTokensRemaining.values.set(accountName, tokens);
+  }
+
+  /** Set the cooldown active gauge for an account (1 if in cooldown, 0 otherwise). */
+  setAccountCooldownActive(accountName: string, active: boolean): void {
+    this.accountCooldownActive.values.set(accountName, active ? 1 : 0);
+  }
+
+  /** Increment the error counter for an account. */
+  incAccountErrors(accountName: string, count = 1): void {
+    const current = this.accountErrorsTotal.values.get(accountName) ?? 0;
+    this.accountErrorsTotal.values.set(accountName, current + count);
+  }
+
   /** Observe a loop cycle duration for the histogram. */
   observeLoopCycleTime(durationMs: number): void {
     this.loopCycleTime.sum += durationMs;
@@ -153,6 +208,10 @@ export class MetricsRegistry {
     this.costUsd.values.set("", 0);
     this.activeSessions.values.set("", 0);
     this.eventQueueDepth.values.set("", 0);
+    this.accountTokensUsed.values.clear();
+    this.accountTokensRemaining.values.clear();
+    this.accountCooldownActive.values.clear();
+    this.accountErrorsTotal.values.clear();
     this.loopCycleTime.sum = 0;
     this.loopCycleTime.count = 0;
     for (const bucket of this.loopCycleTime.buckets) {
@@ -194,7 +253,8 @@ function formatGauge(metric: GaugeMetric): string {
     if (label === "") {
       lines.push(`${metric.name} ${value}`);
     } else {
-      lines.push(`${metric.name}{label="${escapeLabel(label)}"} ${value}`);
+      const labelName = metric.labels?.[0] ?? "label";
+      lines.push(`${metric.name}{${labelName}="${escapeLabel(label)}"} ${value}`);
     }
   }
 
@@ -237,6 +297,10 @@ export function formatPrometheus(registry: MetricsRegistry): string {
     formatCounter(registry.costUsd),
     formatGauge(registry.activeSessions),
     formatGauge(registry.eventQueueDepth),
+    formatGauge(registry.accountTokensUsed),
+    formatGauge(registry.accountTokensRemaining),
+    formatGauge(registry.accountCooldownActive),
+    formatCounter(registry.accountErrorsTotal),
     formatHistogram(registry.loopCycleTime),
   ];
 

@@ -12,6 +12,8 @@ import type { EidolonConfig } from "@eidolon/protocol";
 import { SECRETS_DB_FILENAME, VERSION } from "@eidolon/protocol";
 import { BackupManager } from "../backup/manager.ts";
 import { MessageRouter } from "../channels/router.ts";
+import { DiscordChannel } from "../channels/discord/channel.ts";
+import type { DiscordConfig, IDiscordClient } from "../channels/discord/channel.ts";
 import { TelegramChannel } from "../channels/telegram/channel.ts";
 import type { TelegramConfig } from "../channels/telegram/channel.ts";
 import { ClaudeCodeManager } from "../claude/manager.ts";
@@ -99,6 +101,7 @@ interface InitializedModules {
   schedulerInterval?: ReturnType<typeof setInterval>;
   messageRouter?: MessageRouter;
   telegramChannel?: TelegramChannel;
+  discordChannel?: DiscordChannel;
   gpuManager?: GPUManager;
   mcpHealthMonitor?: MCPHealthMonitor;
   metricsRegistry?: MetricsRegistry;
@@ -825,7 +828,32 @@ export class EidolonDaemon {
                   logger.error("daemon", `Telegram channel failed to connect: ${connectResult.error.message}`);
                 }
               }
-            } else {
+            }
+
+            // Wire up Discord channel if configured and enabled
+            if (config?.channels.discord?.enabled) {
+              const dcConfig = config.channels.discord;
+
+              const botToken = dcConfig.botToken;
+              if (typeof botToken !== "string") {
+                logger.warn(
+                  "daemon",
+                  "Discord channel skipped: botToken is an unresolved secret reference. " +
+                    "Ensure the master key is set and the secret exists.",
+                );
+              } else {
+                // Discord requires a real discord.js client in production.
+                // The daemon expects an IDiscordClient to be provided externally
+                // or uses a default stub that logs a warning.
+                logger.warn(
+                  "daemon",
+                  "Discord channel configured but no IDiscordClient implementation provided. " +
+                    "Discord integration requires discord.js to be installed and a client adapter to be wired.",
+                );
+              }
+            }
+
+            if (!config?.channels.telegram?.enabled && !config?.channels.discord?.enabled) {
               logger.info("daemon", "No channel adapters configured");
             }
 
@@ -1272,6 +1300,17 @@ export class EidolonDaemon {
         logger?.info("daemon", "Telegram channel disconnected");
       } catch (err: unknown) {
         logger?.error("daemon", "Error disconnecting Telegram channel", err);
+      }
+    }
+
+    // 17 -> Discord channel (disconnect bot)
+    if (this.modules.discordChannel) {
+      try {
+        await this.modules.discordChannel.disconnect();
+        this.modules.messageRouter?.unregisterChannel("discord");
+        logger?.info("daemon", "Discord channel disconnected");
+      } catch (err: unknown) {
+        logger?.error("daemon", "Error disconnecting Discord channel", err);
       }
     }
 

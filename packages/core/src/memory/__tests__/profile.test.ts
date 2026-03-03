@@ -87,10 +87,14 @@ describe("UserProfileGenerator", () => {
     const profile = generator.generateProfile();
 
     expect(profile.name).toBe("Manuel");
+    expect(profile.timezone).toBeUndefined();
+    expect(profile.languages).toEqual([]);
+    expect(profile.devices).toEqual([]);
     expect(profile.preferences).toEqual([]);
     expect(profile.interests).toEqual([]);
     expect(profile.recentTopics).toEqual([]);
     expect(profile.skills).toEqual([]);
+    expect(profile.relationships).toEqual([]);
     expect(profile.decisionPatterns).toEqual([]);
     expect(profile.generatedAt).toBeGreaterThan(0);
     expect(profile.summary).toContain("Manuel");
@@ -254,6 +258,84 @@ describe("UserProfileGenerator", () => {
     expect(profile.decisionPatterns[0]?.examples).toBeGreaterThanOrEqual(1);
   });
 
+  // -- Timezone -------------------------------------------------------------
+
+  test("generateProfile() extracts timezone from preference memories", () => {
+    insertMemory(db, {
+      type: "preference",
+      content: "User timezone is Europe/Berlin",
+      confidence: 0.9,
+    });
+
+    const profile = generator.generateProfile();
+    expect(profile.timezone).toBe("Europe/Berlin");
+  });
+
+  test("generateProfile() returns undefined timezone when not found", () => {
+    insertMemory(db, {
+      type: "preference",
+      content: "Prefers dark mode",
+      confidence: 0.9,
+    });
+
+    const profile = generator.generateProfile();
+    expect(profile.timezone).toBeUndefined();
+  });
+
+  // -- Languages ------------------------------------------------------------
+
+  test("generateProfile() extracts languages from memories", () => {
+    insertMemory(db, {
+      type: "preference",
+      content: "User speaks German and English fluently",
+      confidence: 0.9,
+    });
+
+    const profile = generator.generateProfile();
+    expect(profile.languages).toContain("German");
+    expect(profile.languages).toContain("English");
+  });
+
+  // -- Devices --------------------------------------------------------------
+
+  test("generateProfile() extracts devices from KG entities", () => {
+    const now = Date.now();
+    db.query(
+      "INSERT INTO kg_entities (id, name, type, attributes, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+    ).run("dev1", "MacBook Pro", "device", "{}", now, now);
+    db.query(
+      "INSERT INTO kg_entities (id, name, type, attributes, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+    ).run("dev2", "iPhone 15", "device", "{}", now, now);
+
+    const profile = generator.generateProfile();
+    expect(profile.devices).toContain("MacBook Pro");
+    expect(profile.devices).toContain("iPhone 15");
+  });
+
+  // -- Relationships --------------------------------------------------------
+
+  test("generateProfile() extracts relationships from KG", () => {
+    const now = Date.now();
+    // Create entities
+    db.query(
+      "INSERT INTO kg_entities (id, name, type, attributes, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+    ).run("owner", "Manuel", "person", "{}", now, now);
+    db.query(
+      "INSERT INTO kg_entities (id, name, type, attributes, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+    ).run("project", "Eidolon", "project", "{}", now, now);
+    // Create relation
+    db.query(
+      "INSERT INTO kg_relations (id, source_id, target_id, type, confidence, source, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+    ).run("rel1", "owner", "project", "creates", 0.95, "test", now);
+
+    const profile = generator.generateProfile();
+    expect(profile.relationships.length).toBeGreaterThanOrEqual(1);
+    const eidolonRel = profile.relationships.find((r) => r.entity === "Eidolon");
+    expect(eidolonRel).toBeDefined();
+    expect(eidolonRel?.relation).toBe("creates");
+    expect(eidolonRel?.confidence).toBe(0.95);
+  });
+
   // -- Summary --------------------------------------------------------------
 
   test("buildSummary includes top interests and preferences", () => {
@@ -354,10 +436,14 @@ describe("formatProfileMarkdown", () => {
   test("formats a full profile correctly", () => {
     const profile: UserProfile = {
       name: "Test User",
+      timezone: "Europe/Berlin",
+      languages: ["English", "German"],
       preferences: [{ key: "Dark mode", value: "Prefers dark mode", confidence: 0.95 }],
       interests: [{ topic: "typescript", mentionCount: 5 }],
+      devices: ["MacBook Pro"],
       recentTopics: [{ topic: "sqlite", lastMentioned: Date.now() }],
       skills: [{ name: "TypeScript", level: "advanced" }],
+      relationships: [{ entity: "Eidolon", entityType: "project", relation: "works_on", confidence: 0.9 }],
       decisionPatterns: [{ pattern: "Chose TypeScript", examples: 3 }],
       summary: "Test User is interested in typescript.",
       generatedAt: Date.now(),
@@ -367,6 +453,9 @@ describe("formatProfileMarkdown", () => {
 
     expect(md).toContain("## User Profile");
     expect(md).toContain("**Name:** Test User");
+    expect(md).toContain("**Timezone:** Europe/Berlin");
+    expect(md).toContain("**Languages:** English, German");
+    expect(md).toContain("**Devices:** MacBook Pro");
     expect(md).toContain("### Preferences");
     expect(md).toContain("Dark mode (confidence: 0.95)");
     expect(md).toContain("### Interests");
@@ -375,6 +464,8 @@ describe("formatProfileMarkdown", () => {
     expect(md).toContain("sqlite");
     expect(md).toContain("### Skills");
     expect(md).toContain("TypeScript (advanced)");
+    expect(md).toContain("### Relationships");
+    expect(md).toContain("Eidolon (project) -- works_on (confidence: 0.90)");
     expect(md).toContain("### Decision Patterns");
     expect(md).toContain("Chose TypeScript (3 examples)");
     expect(md).toContain("### Summary");
@@ -383,10 +474,14 @@ describe("formatProfileMarkdown", () => {
   test("formats profile with empty sections correctly", () => {
     const profile: UserProfile = {
       name: "Empty User",
+      timezone: undefined,
+      languages: [],
       preferences: [],
       interests: [],
+      devices: [],
       recentTopics: [],
       skills: [],
+      relationships: [],
       decisionPatterns: [],
       summary: "Profile still being built.",
       generatedAt: Date.now(),
@@ -396,8 +491,12 @@ describe("formatProfileMarkdown", () => {
 
     expect(md).toContain("## User Profile");
     expect(md).toContain("**Name:** Empty User");
+    expect(md).not.toContain("**Timezone:**");
+    expect(md).not.toContain("**Languages:**");
+    expect(md).not.toContain("**Devices:**");
     expect(md).not.toContain("### Preferences");
     expect(md).not.toContain("### Interests");
+    expect(md).not.toContain("### Relationships");
     expect(md).toContain("### Summary");
     expect(md).toContain("Profile still being built.");
   });
@@ -405,10 +504,14 @@ describe("formatProfileMarkdown", () => {
   test("formats singular example count correctly", () => {
     const profile: UserProfile = {
       name: "User",
+      timezone: undefined,
+      languages: [],
       preferences: [],
       interests: [],
+      devices: [],
       recentTopics: [],
       skills: [],
+      relationships: [],
       decisionPatterns: [{ pattern: "Single decision", examples: 1 }],
       summary: "Summary.",
       generatedAt: Date.now(),

@@ -40,7 +40,10 @@ export type EventType =
   | "approval:requested"
   | "approval:timeout"
   | "approval:escalated"
-  | "webhook:received";
+  | "webhook:received"
+  | "research:started"
+  | "research:completed"
+  | "research:failed";
 
 export interface BusEvent<T = unknown> {
   readonly id: string;
@@ -126,4 +129,25 @@ export interface WebhookReceivedPayload {
   readonly source: string;
   readonly event: string;
   readonly data: Record<string, unknown>;
+}
+
+export interface ResearchStartedPayload {
+  readonly researchId: string;
+  readonly query: string;
+  readonly sources: readonly string[];
+}
+
+export interface ResearchCompletedPayload {
+  readonly researchId: string;
+  readonly query: string;
+  readonly findingCount: number;
+  readonly citationCount: number;
+  readonly tokensUsed: number;
+  readonly durationMs: number;
+}
+
+export interface ResearchFailedPayload {
+  readonly researchId: string;
+  readonly query: string;
+  readonly error: string;
 }

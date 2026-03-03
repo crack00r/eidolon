@@ -43,7 +43,15 @@ export type GatewayMethod =
   | "automation.delete"
   // Approval methods
   | "approval.list"
-  | "approval.respond";
+  | "approval.respond"
+  // Research methods
+  | "research.start"
+  | "research.status"
+  | "research.list"
+  // Profile methods
+  | "profile.get"
+  // Metrics methods
+  | "metrics.rateLimits";
 
 // ---------------------------------------------------------------------------
 // Push notification types (server → client, no response expected)
@@ -278,6 +286,33 @@ export interface PushApprovalResolvedPayload {
   readonly status: string;
   readonly respondedBy?: string;
   readonly timestamp: number;
+}
+
+// ---------------------------------------------------------------------------
+// Research types
+// ---------------------------------------------------------------------------
+
+export interface ResearchStartParams {
+  /** The research query. */
+  readonly query: string;
+  /** Sources to search (e.g., "web", "academic", "github"). Defaults to all. */
+  readonly sources?: readonly string[];
+  /** Maximum number of sources to consult. */
+  readonly maxSources?: number;
+  /** Optional channel to deliver the result to. */
+  readonly deliverTo?: string;
+}
+
+export interface ResearchStatusParams {
+  /** The research session ID. */
+  readonly researchId: string;
+}
+
+export interface ResearchListParams {
+  /** Maximum number of results to return. */
+  readonly limit?: number;
+  /** Only return results after this timestamp. */
+  readonly since?: number;
 }
 
 // ---------------------------------------------------------------------------

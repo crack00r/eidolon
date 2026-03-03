@@ -25,6 +25,19 @@ function sanitize(text: string): string {
 export function formatProfileMarkdown(profile: UserProfile): string {
   const lines: string[] = ["## User Profile", ""];
   lines.push(`**Name:** ${sanitize(profile.name)}`);
+
+  if (profile.timezone !== undefined) {
+    lines.push(`**Timezone:** ${sanitize(profile.timezone)}`);
+  }
+
+  if (profile.languages.length > 0) {
+    lines.push(`**Languages:** ${profile.languages.join(", ")}`);
+  }
+
+  if (profile.devices.length > 0) {
+    lines.push(`**Devices:** ${profile.devices.join(", ")}`);
+  }
+
   lines.push("");
 
   if (profile.preferences.length > 0) {
@@ -56,6 +69,14 @@ export function formatProfileMarkdown(profile: UserProfile): string {
     lines.push("### Skills");
     for (const skill of profile.skills) {
       lines.push(`- ${sanitize(skill.name)} (${skill.level})`);
+    }
+    lines.push("");
+  }
+
+  if (profile.relationships.length > 0) {
+    lines.push("### Relationships");
+    for (const rel of profile.relationships) {
+      lines.push(`- ${sanitize(rel.entity)} (${rel.entityType}) -- ${rel.relation} (confidence: ${rel.confidence.toFixed(2)})`);
     }
     lines.push("");
   }

@@ -60,6 +60,9 @@ const VALID_EVENT_TYPES = new Set<string>([
   "approval:timeout",
   "approval:escalated",
   "webhook:received",
+  "research:started",
+  "research:completed",
+  "research:failed",
 ]);
 const VALID_PRIORITIES = new Set<string>(["critical", "high", "normal", "low"]);
 

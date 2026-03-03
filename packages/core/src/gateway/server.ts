@@ -26,6 +26,7 @@ import { z } from "zod";
 import type { Logger } from "../logging/logger.ts";
 import type { EventBus } from "../loop/event-bus.ts";
 import { formatPrometheus, type MetricsRegistry, PROMETHEUS_CONTENT_TYPE } from "../metrics/prometheus.ts";
+import type { RateLimitTracker } from "../metrics/rate-limits.ts";
 import {
   createJsonRpcError,
   createJsonRpcResponse,
@@ -94,6 +95,22 @@ const AutomationListParamsSchema = z.object({
 
 const AutomationDeleteParamsSchema = z.object({
   automationId: z.string().min(1).max(256),
+});
+
+const ResearchStartParamsSchema = z.object({
+  query: z.string().min(1).max(4096),
+  sources: z.array(z.string().min(1).max(64)).max(20).optional(),
+  maxSources: z.number().int().min(1).max(100).optional(),
+  deliverTo: z.string().min(1).max(64).optional(),
+});
+
+const ResearchStatusParamsSchema = z.object({
+  researchId: z.string().min(1).max(256),
+});
+
+const ResearchListParamsSchema = z.object({
+  limit: z.number().int().min(1).max(100).optional(),
+  since: z.number().int().min(0).optional(),
 });
 
 
@@ -249,6 +266,7 @@ export class GatewayServer {
   private readonly eventBus: EventBus;
   private readonly rateLimiter: AuthRateLimiter;
   private readonly metricsRegistry: MetricsRegistry | undefined;
+  private readonly rateLimitTracker: RateLimitTracker | undefined;
 
   private readonly clients: Map<string, ClientState> = new Map();
   private readonly handlers: Map<GatewayMethod, MethodHandler> = new Map();
@@ -264,11 +282,13 @@ export class GatewayServer {
     logger: Logger;
     eventBus: EventBus;
     metricsRegistry?: MetricsRegistry;
+    rateLimitTracker?: RateLimitTracker;
   }) {
     this.config = deps.config;
     this.logger = deps.logger.child("gateway");
     this.eventBus = deps.eventBus;
     this.metricsRegistry = deps.metricsRegistry;
+    this.rateLimitTracker = deps.rateLimitTracker;
     this.rateLimiter = new AuthRateLimiter(deps.config.rateLimiting, this.logger);
 
     this.registerBuiltinHandlers();
@@ -513,6 +533,79 @@ export class GatewayServer {
       );
 
       return { received: true, commandId };
+    });
+
+    // -----------------------------------------------------------------------
+    // Research handlers
+    // -----------------------------------------------------------------------
+
+    // research.start: start a deep research session
+    this.registerHandler("research.start", async (params, clientId) => {
+      const parsed = ResearchStartParamsSchema.safeParse(params);
+      if (!parsed.success) {
+        throw new RpcValidationError(
+          `Invalid research.start params: ${parsed.error.issues.map((issue: z.ZodIssue) => issue.message).join(", ")}`,
+        );
+      }
+      const { query, sources, maxSources, deliverTo } = parsed.data;
+
+      this.logger.info("research.start", `Client ${clientId} requested research: "${query}"`);
+      const researchId = randomUUID();
+      this.eventBus.publish(
+        "research:started",
+        { researchId, query, sources: sources ?? [], maxSources: maxSources ?? 10, deliverTo },
+        { source: "gateway", priority: "normal" },
+      );
+      return { researchId, status: "started" };
+    });
+
+    // research.status: check the status of a research session
+    this.registerHandler("research.status", async (params) => {
+      const parsed = ResearchStatusParamsSchema.safeParse(params);
+      if (!parsed.success) {
+        throw new RpcValidationError(
+          `Invalid research.status params: ${parsed.error.issues.map((issue: z.ZodIssue) => issue.message).join(", ")}`,
+        );
+      }
+      // Status retrieval is delegated to external handler registration.
+      return { researchId: parsed.data.researchId, status: "unknown", note: "Override this handler with actual research status retrieval" };
+    });
+
+    // research.list: list recent research results
+    this.registerHandler("research.list", async (params) => {
+      const parsed = ResearchListParamsSchema.safeParse(params);
+      if (!parsed.success) {
+        throw new RpcValidationError(
+          `Invalid research.list params: ${parsed.error.issues.map((issue: z.ZodIssue) => issue.message).join(", ")}`,
+        );
+      }
+      // List retrieval is delegated to external handler registration.
+      return { results: [], limit: parsed.data.limit ?? 20, note: "Override this handler with actual research list retrieval" };
+    });
+
+    // -----------------------------------------------------------------------
+    // Profile handlers
+    // -----------------------------------------------------------------------
+
+    // profile.get: return the user's accumulated profile
+    this.registerHandler("profile.get", async () => {
+      // Profile generation is delegated to external handler registration.
+      // Override via server.registerHandler("profile.get", ...) with a
+      // handler that calls UserProfileGenerator.generateProfile().
+      return { profile: null, note: "Override this handler with actual profile generation" };
+    });
+
+    // -----------------------------------------------------------------------
+    // Metrics handlers
+    // -----------------------------------------------------------------------
+
+    // metrics.rateLimits: return rate limit status for all accounts
+    this.registerHandler("metrics.rateLimits", async () => {
+      if (!this.rateLimitTracker) {
+        return { accounts: [], note: "RateLimitTracker not configured" };
+      }
+      const statuses = this.rateLimitTracker.getAllAccountStatuses();
+      return { accounts: statuses };
     });
   }
 

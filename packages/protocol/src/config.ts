@@ -165,6 +165,14 @@ export const MemoryConfigSchema = z.object({
     technologyThreshold: z.number().min(0).max(1).default(0.9),
     conceptThreshold: z.number().min(0).max(1).default(0.85),
   }),
+  obsidian: z
+    .object({
+      enabled: z.boolean().default(false),
+      vaultPath: z.string().min(1),
+      exclude: z.array(z.string()).default([".obsidian", ".trash"]),
+      maxFileSize: z.number().int().positive().default(1_048_576),
+    })
+    .optional(),
 });
 
 // ---------------------------------------------------------------------------
@@ -220,6 +228,15 @@ export const ChannelConfigSchema = z.object({
           end: z.string().default("07:00"),
         })
         .optional(),
+    })
+    .optional(),
+  discord: z
+    .object({
+      enabled: z.boolean().default(false),
+      botToken: SecretRefSchema.or(z.string()),
+      allowedUserIds: z.array(z.string()),
+      guildId: z.string().optional(),
+      dmOnly: z.boolean().default(true),
     })
     .optional(),
 });

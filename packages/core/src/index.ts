@@ -22,5 +22,6 @@ export * from "./memory/index.ts";
 export * from "./metrics/index.ts";
 export * from "./notifications/index.ts";
 export * from "./privacy/index.ts";
+export * from "./research/index.ts";
 export * from "./scheduler/index.ts";
 export * from "./secrets/index.ts";

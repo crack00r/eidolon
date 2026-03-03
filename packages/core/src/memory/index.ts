@@ -21,10 +21,13 @@ export type {
   ProfileInterest,
   ProfilePreference,
   ProfileRecentTopic,
+  ProfileRelationship,
   ProfileSkill,
   UserProfile,
 } from "./profile.ts";
 export { formatProfileMarkdown, UserProfileGenerator } from "./profile.ts";
+export type { ObsidianIndexerOptions, ObsidianIndexResult } from "./obsidian.ts";
+export { ObsidianIndexer, parseObsidianTags, parseWikilinks } from "./obsidian.ts";
 export type { MemorySearchOptions } from "./search.ts";
 export { MemorySearch } from "./search.ts";
 export type { CreateMemoryInput, MemoryListOptions, UpdateMemoryInput } from "./store.ts";
