@@ -126,10 +126,12 @@ function stripControlChars(text: string): string {
 export class KGEntityStore {
   private readonly db: Database;
   private readonly logger: Logger;
+  private readonly defaultThresholds: EntityResolutionThresholds;
 
-  constructor(db: Database, logger: Logger) {
+  constructor(db: Database, logger: Logger, thresholds?: EntityResolutionThresholds) {
     this.db = db;
     this.logger = logger.child("kg-entity-store");
+    this.defaultThresholds = thresholds ?? DEFAULT_ENTITY_RESOLUTION_THRESHOLDS;
   }
 
   /** Create a new entity. Generates UUID for ID. */
@@ -384,7 +386,7 @@ export class KGEntityStore {
     type: EntityType,
     thresholds?: EntityResolutionThresholds,
   ): Result<Array<{ entity: KGEntity; similarity: number }>, EidolonError> {
-    const resolvedThresholds = thresholds ?? DEFAULT_ENTITY_RESOLUTION_THRESHOLDS;
+    const resolvedThresholds = thresholds ?? this.defaultThresholds;
     const threshold = getThresholdForType(type, resolvedThresholds);
 
     try {

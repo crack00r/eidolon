@@ -12,8 +12,11 @@ final class MemoryViewModel: ObservableObject {
     @Published var searchQuery: String = ""
     @Published private(set) var results: [MemoryItem] = []
     @Published private(set) var isSearching: Bool = false
+    @Published private(set) var isDeleting: Bool = false
+    @Published private(set) var isEditing: Bool = false
     @Published private(set) var errorMessage: String?
     @Published private(set) var totalCount: Int = 0
+    @Published var selectedItem: MemoryItem?
 
     // MARK: Dependencies
 
@@ -98,6 +101,75 @@ final class MemoryViewModel: ObservableObject {
     func refresh() async {
         await search()
     }
+
+    // MARK: - Delete
+
+    /// Delete a memory item by ID.
+    func deleteMemory(id: String) async -> Bool {
+        guard let service = webSocketService,
+              service.connectionState == .connected else {
+            errorMessage = "Not connected to gateway"
+            return false
+        }
+
+        isDeleting = true
+        errorMessage = nil
+
+        do {
+            let _: AnyCodable? = try await service.call(
+                method: GatewayMethod.memoryDelete.rawValue,
+                params: ["id": id]
+            )
+            results.removeAll { $0.id == id }
+            if selectedItem?.id == id {
+                selectedItem = nil
+            }
+            isDeleting = false
+            return true
+        } catch {
+            errorMessage = ChatViewModel.sanitizeError(error)
+            isDeleting = false
+            return false
+        }
+    }
+
+    // MARK: - Edit
+
+    /// Update a memory item's content and/or importance.
+    func editMemory(id: String, content: String?, importance: Double?) async -> Bool {
+        guard let service = webSocketService,
+              service.connectionState == .connected else {
+            errorMessage = "Not connected to gateway"
+            return false
+        }
+
+        isEditing = true
+        errorMessage = nil
+
+        var params: [String: Any] = ["id": id]
+        if let content { params["content"] = content }
+        if let importance { params["importance"] = importance }
+
+        do {
+            let response: MemoryUpdateResponse = try await service.call(
+                method: GatewayMethod.memoryUpdate.rawValue,
+                params: params
+            )
+            // Update in results list
+            if let index = results.firstIndex(where: { $0.id == id }) {
+                results[index] = response.item
+            }
+            if selectedItem?.id == id {
+                selectedItem = response.item
+            }
+            isEditing = false
+            return true
+        } catch {
+            errorMessage = ChatViewModel.sanitizeError(error)
+            isEditing = false
+            return false
+        }
+    }
 }
 
 // MARK: - Response Types
@@ -105,4 +177,8 @@ final class MemoryViewModel: ObservableObject {
 private struct MemorySearchResponse: Decodable {
     let items: [MemoryItem]
     let totalCount: Int
+}
+
+private struct MemoryUpdateResponse: Decodable {
+    let item: MemoryItem
 }

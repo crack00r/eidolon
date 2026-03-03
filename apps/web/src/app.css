@@ -1,17 +1,36 @@
+/**
+ * Eidolon Web -- Global Styles
+ *
+ * Design tokens are imported from the shared token file.
+ * This provides all CSS custom properties including both dark and light themes,
+ * legacy aliases (--bg-primary, --accent, etc.), and utility classes.
+ *
+ * The shared tokens file is the single source of truth for colors, typography,
+ * spacing, border radius, shadows, and animation values.
+ */
+
+@import "../../shared/tokens.css";
+
+/* Additional legacy vars that the existing theme.ts defined but are not
+   in the shared tokens (purple, status-*, shadow-sm/-md/-lg aliases).
+   These will be phased out over time. */
 :root {
-  --bg-primary: #1a1a2e;
-  --bg-secondary: #16213e;
-  --bg-tertiary: #0f3460;
-  --text-primary: #e6e6e6;
-  --text-secondary: #a0a0a0;
-  --accent: #e94560;
-  --accent-hover: #ff6b81;
-  --success: #2ecc71;
-  --warning: #f39c12;
-  --error: #e74c3c;
-  --border: #2a2a4a;
-  --radius: 6px;
-  --sidebar-width: 220px;
+  --purple: #9b59b6;
+  --info: var(--ed-info);
+  --shadow-sm: var(--ed-shadow-sm);
+  --shadow-md: var(--ed-shadow);
+  --shadow-lg: var(--ed-shadow-md);
+  --status-idle: var(--ed-status-idle);
+  --status-perceiving: var(--ed-info);
+  --status-evaluating: var(--ed-warning);
+  --status-acting: var(--ed-success);
+  --status-reflecting: #9b59b6;
+  --status-dreaming: var(--ed-status-dreaming);
+}
+
+[data-theme="light"] {
+  --purple: #8e44ad;
+  --status-reflecting: #8e44ad;
 }
 
 *,
@@ -28,11 +47,9 @@ body {
   overflow: hidden;
   background-color: var(--bg-primary);
   color: var(--text-primary);
-  font-family:
-    "SF Mono", "Fira Code", "JetBrains Mono", ui-monospace, "Cascadia Mono", "Segoe UI Mono", "Liberation Mono", Menlo,
-    Monaco, Consolas, monospace;
-  font-size: 14px;
-  line-height: 1.5;
+  font-family: var(--ed-font-mono);
+  font-size: var(--ed-text-base);
+  line-height: var(--ed-leading-normal);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -58,7 +75,8 @@ button {
 }
 
 input,
-textarea {
+textarea,
+select {
   font-family: inherit;
   font-size: inherit;
   color: var(--text-primary);
@@ -67,11 +85,20 @@ textarea {
   border-radius: var(--radius);
   padding: 8px 12px;
   outline: none;
+  transition: border-color var(--ed-duration-normal) var(--ed-ease);
 }
 
 input:focus,
-textarea:focus {
+textarea:focus,
+select:focus {
   border-color: var(--accent);
+}
+
+input:disabled,
+textarea:disabled,
+select:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 /* Scrollbar styling */

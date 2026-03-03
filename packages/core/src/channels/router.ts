@@ -21,18 +21,56 @@ export interface DndSchedule {
   readonly start: string;
   /** DND end time in "HH:MM" 24h format. */
   readonly end: string;
+  /** Optional IANA timezone (e.g. "Europe/Berlin"). Falls back to local time if omitted. */
+  readonly timezone?: string;
 }
 
 export type NotificationPriority = "critical" | "normal" | "low";
 
 /**
+ * Extract the current hour and minute in a given timezone using Intl.DateTimeFormat.
+ * Returns the time components as minutes-since-midnight for easy comparison.
+ */
+function getMinutesInTimezone(date: Date, timezone: string): number {
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: timezone,
+    hour: "numeric",
+    minute: "numeric",
+    hour12: false,
+  });
+  const parts = formatter.formatToParts(date);
+  let hour = 0;
+  let minute = 0;
+  for (const part of parts) {
+    if (part.type === "hour") hour = Number(part.value);
+    if (part.type === "minute") minute = Number(part.value);
+  }
+  // Intl may format midnight as 24 in some locales
+  if (hour === 24) hour = 0;
+  return hour * 60 + minute;
+}
+
+/**
  * Check whether the current time falls within a DND window.
  * Handles windows that cross midnight (e.g. start=22:00, end=07:00).
+ * When a timezone is specified in the schedule, the comparison uses
+ * that timezone instead of the system's local time.
  * The `nowProvider` parameter is injectable for testing.
  */
 export function isDndActive(schedule: DndSchedule, nowProvider?: () => Date): boolean {
   const now = nowProvider ? nowProvider() : new Date();
-  const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+  let currentMinutes: number;
+  if (schedule.timezone) {
+    try {
+      currentMinutes = getMinutesInTimezone(now, schedule.timezone);
+    } catch {
+      // Invalid timezone: fall back to local time
+      currentMinutes = now.getHours() * 60 + now.getMinutes();
+    }
+  } else {
+    currentMinutes = now.getHours() * 60 + now.getMinutes();
+  }
 
   const [startH, startM] = schedule.start.split(":").map(Number);
   const [endH, endM] = schedule.end.split(":").map(Number);

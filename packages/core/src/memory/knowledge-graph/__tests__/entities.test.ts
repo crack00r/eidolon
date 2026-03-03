@@ -296,6 +296,51 @@ describe("KGEntityStore", () => {
     expect(result.value.entity.name).toBe("Bun");
   });
 
+  // -- constructor-injected thresholds --------------------------------------
+
+  test("findSimilar() uses constructor-injected thresholds when none passed explicitly", () => {
+    // Create a store with a very low technology threshold
+    const customStore = new KGEntityStore(db, createSilentLogger(), {
+      personThreshold: 0.95,
+      technologyThreshold: 0.1, // very low -- should match almost anything
+      conceptThreshold: 0.85,
+    });
+
+    customStore.create({ name: "TypeScript", type: "technology" });
+    customStore.create({ name: "Bun", type: "technology" });
+
+    // Without passing explicit thresholds, the constructor-injected ones should be used
+    const result = customStore.findSimilar("TypeScript", "technology");
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    // With threshold 0.1, even "Bun" should have some non-zero similarity and may or may not match,
+    // but "TypeScript" (exact) should definitely match
+    expect(result.value.length).toBeGreaterThanOrEqual(1);
+    expect(result.value[0]?.entity.name).toBe("TypeScript");
+  });
+
+  test("findOrCreateWithResolution() uses constructor-injected thresholds", () => {
+    const customStore = new KGEntityStore(db, createSilentLogger(), {
+      personThreshold: 0.95,
+      technologyThreshold: 0.9,
+      conceptThreshold: 0.85,
+    });
+
+    customStore.create({ name: "TypeScript", type: "technology" });
+
+    // Without explicit thresholds, should use constructor-injected ones
+    const result = customStore.findOrCreateWithResolution({
+      name: "TypeScript",
+      type: "technology",
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.value.created).toBe(false);
+    expect(result.value.entity.name).toBe("TypeScript");
+  });
+
   // -- merge ----------------------------------------------------------------
 
   test("merge() moves relations and deletes source", () => {

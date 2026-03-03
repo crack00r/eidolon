@@ -1,18 +1,15 @@
-:root {
-  --bg-primary: #1a1a2e;
-  --bg-secondary: #16213e;
-  --bg-tertiary: #0f3460;
-  --text-primary: #e6e6e6;
-  --text-secondary: #a0a0a0;
-  --accent: #e94560;
-  --accent-hover: #ff6b81;
-  --success: #2ecc71;
-  --warning: #f39c12;
-  --error: #e74c3c;
-  --border: #2a2a4a;
-  --radius: 6px;
-  --sidebar-width: 220px;
-}
+/**
+ * Eidolon Desktop -- Global Styles
+ *
+ * Design tokens are imported from the shared token file.
+ * This provides all CSS custom properties including both dark and light themes,
+ * legacy aliases (--bg-primary, --accent, etc.), and utility classes.
+ *
+ * The shared tokens file is the single source of truth for colors, typography,
+ * spacing, border radius, shadows, and animation values.
+ */
+
+@import "../../shared/tokens.css";
 
 *,
 *::before,
@@ -28,11 +25,9 @@ body {
   overflow: hidden;
   background-color: var(--bg-primary);
   color: var(--text-primary);
-  font-family:
-    "SF Mono", "Fira Code", "JetBrains Mono", ui-monospace, "Cascadia Mono", "Segoe UI Mono", "Liberation Mono", Menlo,
-    Monaco, Consolas, monospace;
-  font-size: 14px;
-  line-height: 1.5;
+  font-family: var(--ed-font-mono);
+  font-size: var(--ed-text-base);
+  line-height: var(--ed-leading-normal);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -58,7 +53,8 @@ button {
 }
 
 input,
-textarea {
+textarea,
+select {
   font-family: inherit;
   font-size: inherit;
   color: var(--text-primary);
@@ -67,11 +63,20 @@ textarea {
   border-radius: var(--radius);
   padding: 8px 12px;
   outline: none;
+  transition: border-color var(--ed-duration-normal) var(--ed-ease);
 }
 
 input:focus,
-textarea:focus {
+textarea:focus,
+select:focus {
   border-color: var(--accent);
+}
+
+input:disabled,
+textarea:disabled,
+select:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 /* Scrollbar styling */
@@ -91,4 +96,9 @@ textarea:focus {
 
 ::-webkit-scrollbar-thumb:hover {
   background: var(--accent);
+}
+
+/* Tauri window drag region */
+.tauri-drag-region {
+  -webkit-app-region: drag;
 }

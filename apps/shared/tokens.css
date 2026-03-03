@@ -1,0 +1,405 @@
+/*
+ * Eidolon Design Tokens -- CSS Custom Properties
+ *
+ * Auto-derived from design-tokens.json.
+ * Shared across apps/web and apps/desktop (Svelte frontends).
+ *
+ * Usage: @import this file in your app.css, then reference var(--ed-*).
+ * The "ed" prefix stands for "eidolon design" to avoid collisions.
+ */
+
+/* ================================================================
+   DARK THEME (default)
+   ================================================================ */
+
+:root,
+[data-theme="dark"] {
+  /* -- Background -- */
+  --ed-bg-primary: #1a1a2e;
+  --ed-bg-secondary: #16213e;
+  --ed-bg-tertiary: #0f3460;
+  --ed-bg-elevated: #1e2a4a;
+
+  /* -- Foreground / Text -- */
+  --ed-fg-primary: #e6e6e6;
+  --ed-fg-secondary: #a0a0a0;
+  --ed-fg-tertiary: #6b6b8d;
+  --ed-fg-inverse: #1a1a2e;
+
+  /* -- Accent -- */
+  --ed-accent: #e94560;
+  --ed-accent-hover: #ff6b81;
+  --ed-accent-muted: rgba(233, 69, 96, 0.15);
+
+  /* -- Semantic -- */
+  --ed-success: #2ecc71;
+  --ed-success-muted: rgba(46, 204, 113, 0.15);
+  --ed-warning: #f39c12;
+  --ed-warning-muted: rgba(243, 156, 18, 0.15);
+  --ed-error: #e74c3c;
+  --ed-error-muted: rgba(231, 76, 60, 0.15);
+  --ed-info: #3498db;
+  --ed-info-muted: rgba(52, 152, 219, 0.15);
+
+  /* -- Status -- */
+  --ed-status-online: #2ecc71;
+  --ed-status-offline: #e74c3c;
+  --ed-status-degraded: #f39c12;
+  --ed-status-idle: #a0a0a0;
+  --ed-status-dreaming: #6c5ce7;
+  --ed-status-dreaming-muted: rgba(108, 92, 231, 0.15);
+
+  /* -- Border -- */
+  --ed-border: #2a2a4a;
+  --ed-border-subtle: #222240;
+  --ed-border-focus: #e94560;
+
+  /* -- Typography -- */
+  --ed-font-mono: "SF Mono", "Fira Code", "JetBrains Mono", ui-monospace,
+    "Cascadia Mono", "Segoe UI Mono", "Liberation Mono", Menlo, Monaco,
+    Consolas, monospace;
+  --ed-font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  --ed-font-display: "SF Mono", "Fira Code", ui-monospace, monospace;
+
+  --ed-text-xs: 11px;
+  --ed-text-sm: 12px;
+  --ed-text-base: 14px;
+  --ed-text-md: 16px;
+  --ed-text-lg: 18px;
+  --ed-text-xl: 22px;
+  --ed-text-2xl: 28px;
+  --ed-text-3xl: 36px;
+
+  --ed-weight-normal: 400;
+  --ed-weight-medium: 500;
+  --ed-weight-semibold: 600;
+  --ed-weight-bold: 700;
+
+  --ed-leading-tight: 1.2;
+  --ed-leading-normal: 1.5;
+  --ed-leading-relaxed: 1.6;
+  --ed-leading-loose: 1.8;
+
+  --ed-tracking-tight: -0.02em;
+  --ed-tracking-normal: 0;
+  --ed-tracking-wide: 0.5px;
+  --ed-tracking-wider: 1px;
+
+  /* -- Spacing (4px base) -- */
+  --ed-space-0: 0px;
+  --ed-space-1: 4px;
+  --ed-space-2: 8px;
+  --ed-space-3: 12px;
+  --ed-space-4: 16px;
+  --ed-space-5: 20px;
+  --ed-space-6: 24px;
+  --ed-space-7: 28px;
+  --ed-space-8: 32px;
+  --ed-space-10: 40px;
+  --ed-space-12: 48px;
+  --ed-space-16: 64px;
+
+  /* -- Border Radius -- */
+  --ed-radius-none: 0px;
+  --ed-radius-sm: 3px;
+  --ed-radius: 6px;
+  --ed-radius-md: 8px;
+  --ed-radius-lg: 12px;
+  --ed-radius-xl: 16px;
+  --ed-radius-full: 9999px;
+
+  /* -- Shadow -- */
+  --ed-shadow-none: none;
+  --ed-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.15);
+  --ed-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  --ed-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.25);
+  --ed-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.3);
+  --ed-glow-accent: 0 0 8px 2px rgba(233, 69, 96, 0.4);
+  --ed-glow-success: 0 0 8px 2px rgba(46, 204, 113, 0.4);
+  --ed-glow-warning: 0 0 8px 2px rgba(243, 156, 18, 0.4);
+  --ed-glow-dreaming: 0 0 8px 2px rgba(108, 92, 231, 0.4);
+
+  /* -- Animation -- */
+  --ed-duration-fast: 100ms;
+  --ed-duration-normal: 150ms;
+  --ed-duration-slow: 300ms;
+  --ed-duration-slower: 600ms;
+  --ed-ease: ease;
+  --ed-ease-in: ease-in;
+  --ed-ease-out: ease-out;
+  --ed-ease-in-out: ease-in-out;
+
+  /* -- Layout -- */
+  --ed-sidebar-width: 220px;
+  --ed-sidebar-collapsed: 56px;
+  --ed-content-max-width: 1200px;
+  --ed-content-padding: 20px;
+
+  /* ================================================================
+     LEGACY ALIASES  (backward-compatible with existing components)
+     These map old var(--xxx) names to the new var(--ed-xxx) tokens.
+     We keep them so that existing <style> blocks work unchanged.
+     ================================================================ */
+  --bg-primary: var(--ed-bg-primary);
+  --bg-secondary: var(--ed-bg-secondary);
+  --bg-tertiary: var(--ed-bg-tertiary);
+  --text-primary: var(--ed-fg-primary);
+  --text-secondary: var(--ed-fg-secondary);
+  --accent: var(--ed-accent);
+  --accent-hover: var(--ed-accent-hover);
+  --success: var(--ed-success);
+  --warning: var(--ed-warning);
+  --error: var(--ed-error);
+  --border: var(--ed-border);
+  --radius: var(--ed-radius);
+  --sidebar-width: var(--ed-sidebar-width);
+}
+
+/* ================================================================
+   LIGHT THEME
+   ================================================================ */
+
+[data-theme="light"] {
+  --ed-bg-primary: #f5f5f8;
+  --ed-bg-secondary: #ffffff;
+  --ed-bg-tertiary: #e8e8f0;
+  --ed-bg-elevated: #ffffff;
+
+  --ed-fg-primary: #1a1a2e;
+  --ed-fg-secondary: #5a5a7a;
+  --ed-fg-tertiary: #8888a0;
+  --ed-fg-inverse: #f5f5f8;
+
+  --ed-accent: #d63851;
+  --ed-accent-hover: #e94560;
+  --ed-accent-muted: rgba(214, 56, 81, 0.10);
+
+  --ed-success: #27ae60;
+  --ed-success-muted: rgba(39, 174, 96, 0.10);
+  --ed-warning: #e67e22;
+  --ed-warning-muted: rgba(230, 126, 34, 0.10);
+  --ed-error: #c0392b;
+  --ed-error-muted: rgba(192, 57, 43, 0.10);
+  --ed-info: #2980b9;
+  --ed-info-muted: rgba(41, 128, 185, 0.10);
+
+  --ed-status-online: #27ae60;
+  --ed-status-offline: #c0392b;
+  --ed-status-degraded: #e67e22;
+  --ed-status-idle: #8888a0;
+  --ed-status-dreaming: #5b4cdb;
+  --ed-status-dreaming-muted: rgba(91, 76, 219, 0.10);
+
+  --ed-border: #d8d8e8;
+  --ed-border-subtle: #e8e8f0;
+  --ed-border-focus: #d63851;
+
+  --ed-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
+  --ed-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+  --ed-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.10);
+  --ed-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
+
+  /* Legacy aliases point to the same custom props, so they auto-adapt */
+  --bg-primary: var(--ed-bg-primary);
+  --bg-secondary: var(--ed-bg-secondary);
+  --bg-tertiary: var(--ed-bg-tertiary);
+  --text-primary: var(--ed-fg-primary);
+  --text-secondary: var(--ed-fg-secondary);
+  --accent: var(--ed-accent);
+  --accent-hover: var(--ed-accent-hover);
+  --success: var(--ed-success);
+  --warning: var(--ed-warning);
+  --error: var(--ed-error);
+  --border: var(--ed-border);
+  --radius: var(--ed-radius);
+  --sidebar-width: var(--ed-sidebar-width);
+}
+
+/* ================================================================
+   UTILITY CLASSES (shared across web + desktop)
+   ================================================================ */
+
+/* Status indicator dot */
+.ed-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--ed-radius-full);
+  flex-shrink: 0;
+  transition: background-color var(--ed-duration-slow) var(--ed-ease);
+}
+
+.ed-status-dot--online  { background-color: var(--ed-status-online); }
+.ed-status-dot--offline { background-color: var(--ed-status-offline); }
+.ed-status-dot--degraded { background-color: var(--ed-status-degraded); }
+.ed-status-dot--idle    { background-color: var(--ed-status-idle); }
+.ed-status-dot--dreaming { background-color: var(--ed-status-dreaming); }
+
+/* Card component base */
+.ed-card {
+  background: var(--ed-bg-secondary);
+  border: 1px solid var(--ed-border);
+  border-radius: var(--ed-radius);
+  padding: var(--ed-space-3) var(--ed-space-4);
+  transition: border-color var(--ed-duration-normal) var(--ed-ease);
+}
+
+.ed-card:hover {
+  border-color: var(--ed-accent);
+}
+
+/* Section title */
+.ed-section-title {
+  font-size: var(--ed-text-sm);
+  font-weight: var(--ed-weight-semibold);
+  color: var(--ed-fg-secondary);
+  text-transform: uppercase;
+  letter-spacing: var(--ed-tracking-wide);
+}
+
+/* Button base */
+.ed-btn {
+  padding: var(--ed-space-2) var(--ed-space-4);
+  border-radius: var(--ed-radius);
+  border: none;
+  font-family: inherit;
+  font-size: var(--ed-text-base);
+  font-weight: var(--ed-weight-semibold);
+  cursor: pointer;
+  transition:
+    background-color var(--ed-duration-normal) var(--ed-ease),
+    opacity var(--ed-duration-normal) var(--ed-ease);
+}
+
+.ed-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.ed-btn--primary {
+  background: var(--ed-accent);
+  color: white;
+}
+
+.ed-btn--primary:hover:not(:disabled) {
+  background: var(--ed-accent-hover);
+}
+
+.ed-btn--secondary {
+  background: var(--ed-bg-tertiary);
+  color: var(--ed-fg-secondary);
+}
+
+.ed-btn--secondary:hover:not(:disabled) {
+  color: var(--ed-fg-primary);
+}
+
+.ed-btn--success {
+  background: var(--ed-success);
+  color: white;
+}
+
+.ed-btn--success:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+
+.ed-btn--danger {
+  background: var(--ed-error);
+  color: white;
+}
+
+.ed-btn--danger:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+
+.ed-btn--ghost {
+  background: none;
+  color: var(--ed-fg-secondary);
+}
+
+.ed-btn--ghost:hover:not(:disabled) {
+  color: var(--ed-fg-primary);
+}
+
+/* Badge */
+.ed-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px var(--ed-space-2);
+  border-radius: var(--ed-radius-full);
+  font-size: var(--ed-text-xs);
+  font-weight: var(--ed-weight-semibold);
+}
+
+.ed-badge--accent {
+  background: var(--ed-accent);
+  color: white;
+}
+
+.ed-badge--success {
+  background: var(--ed-success-muted);
+  color: var(--ed-success);
+}
+
+.ed-badge--warning {
+  background: var(--ed-warning-muted);
+  color: var(--ed-warning);
+}
+
+.ed-badge--error {
+  background: var(--ed-error-muted);
+  color: var(--ed-error);
+}
+
+/* Banner / Alert */
+.ed-banner {
+  padding: var(--ed-space-2) var(--ed-space-3);
+  border-radius: var(--ed-radius);
+  font-size: var(--ed-text-base);
+  text-align: center;
+}
+
+.ed-banner--error {
+  background: var(--ed-error-muted);
+  border: 1px solid var(--ed-error);
+  color: var(--ed-error);
+}
+
+.ed-banner--warning {
+  background: var(--ed-warning-muted);
+  border: 1px solid var(--ed-warning);
+  color: var(--ed-warning);
+}
+
+.ed-banner--success {
+  background: var(--ed-success-muted);
+  border: 1px solid var(--ed-success);
+  color: var(--ed-success);
+}
+
+.ed-banner--info {
+  background: var(--ed-info-muted);
+  border: 1px solid var(--ed-info);
+  color: var(--ed-info);
+}
+
+/* Progress / bar track */
+.ed-bar-track {
+  width: 100%;
+  height: 8px;
+  background: var(--ed-bg-primary);
+  border-radius: var(--ed-radius-sm);
+  overflow: hidden;
+}
+
+.ed-bar-fill {
+  height: 100%;
+  border-radius: var(--ed-radius-sm);
+  transition: width var(--ed-duration-slower) var(--ed-ease);
+  min-width: 0;
+}
+
+/* Tabular number display */
+.ed-tabnum {
+  font-variant-numeric: tabular-nums;
+}

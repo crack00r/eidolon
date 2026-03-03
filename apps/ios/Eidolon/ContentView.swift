@@ -7,6 +7,11 @@ struct ContentView: View {
 
     var body: some View {
         TabView {
+            DashboardView()
+                .tabItem {
+                    Label("Dashboard", systemImage: "gauge.with.dots.needle.33percent")
+                }
+
             ChatView()
                 .tabItem {
                     Label("Chat", systemImage: "bubble.left.and.bubble.right")
@@ -17,17 +22,17 @@ struct ContentView: View {
                     Label("Memory", systemImage: "brain")
                 }
 
+            LearningView()
+                .tabItem {
+                    Label("Learning", systemImage: "lightbulb")
+                }
+
             SettingsView()
                 .tabItem {
                     Label("Settings", systemImage: "gearshape")
                 }
         }
         .accentColor(EidolonColors.accent)
-        .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                ConnectionStatusBadge(state: webSocketService.connectionState)
-            }
-        }
     }
 }
 

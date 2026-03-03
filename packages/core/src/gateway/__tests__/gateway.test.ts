@@ -1154,10 +1154,66 @@ describe("GatewayServer", () => {
 
     await server.start();
 
-    const resp = await fetch(`http://127.0.0.1:${config.port}/health`);
+    const resp = await fetch(`http://127.0.0.1:${config.port}/nonexistent`);
     expect(resp.status).toBe(404);
     expect(resp.headers.get("X-Content-Type-Options")).toBe("nosniff");
     expect(resp.headers.get("X-Frame-Options")).toBe("DENY");
     expect(resp.headers.get("Cache-Control")).toBe("no-store");
+  });
+
+  test("GET /health returns 200 with status information", async () => {
+    const config = makeConfig();
+    const eventBus = createEventBus();
+    const server = new GatewayServer({ config, logger, eventBus });
+    activeServers.push(server);
+
+    await server.start();
+
+    const resp = await fetch(`http://127.0.0.1:${config.port}/health`);
+    expect(resp.status).toBe(200);
+    expect(resp.headers.get("Content-Type")).toBe("application/json");
+    expect(resp.headers.get("X-Content-Type-Options")).toBe("nosniff");
+
+    const body = (await resp.json()) as Record<string, unknown>;
+    expect(body.status).toBe("healthy");
+    expect(typeof body.uptime).toBe("number");
+    expect(typeof body.connectedClients).toBe("number");
+    expect(typeof body.timestamp).toBe("number");
+  });
+
+  test("GET /metrics returns 404 when no registry configured", async () => {
+    const config = makeConfig();
+    const eventBus = createEventBus();
+    // No metricsRegistry passed
+    const server = new GatewayServer({ config, logger, eventBus });
+    activeServers.push(server);
+
+    await server.start();
+
+    const resp = await fetch(`http://127.0.0.1:${config.port}/metrics`);
+    expect(resp.status).toBe(404);
+  });
+
+  test("GET /metrics returns Prometheus exposition format when registry configured", async () => {
+    const { MetricsRegistry, PROMETHEUS_CONTENT_TYPE } = await import("../../metrics/prometheus.ts");
+    const config = makeConfig();
+    const eventBus = createEventBus();
+    const metricsRegistry = new MetricsRegistry();
+    metricsRegistry.incEventsProcessed(42);
+    metricsRegistry.setActiveSessions(2);
+
+    const server = new GatewayServer({ config, logger, eventBus, metricsRegistry });
+    activeServers.push(server);
+
+    await server.start();
+
+    const resp = await fetch(`http://127.0.0.1:${config.port}/metrics`);
+    expect(resp.status).toBe(200);
+    expect(resp.headers.get("Content-Type")).toBe(PROMETHEUS_CONTENT_TYPE);
+
+    const text = await resp.text();
+    expect(text).toContain("eidolon_events_processed_total 42");
+    expect(text).toContain("eidolon_active_sessions 2");
+    expect(text).toContain("# TYPE eidolon_loop_cycle_duration_ms histogram");
   });
 });

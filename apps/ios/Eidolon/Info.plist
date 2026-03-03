@@ -49,6 +49,20 @@
     <key>NSLocalNetworkUsageDescription</key>
     <string>Eidolon uses the local network to discover and connect to the Eidolon Core server running on your LAN.</string>
 
+    <!-- Microphone access for voice mode -->
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Eidolon needs microphone access to enable voice conversations with the AI assistant.</string>
+
+    <!-- Speech recognition (reserved for future on-device VAD) -->
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>Eidolon may use speech recognition for voice activity detection.</string>
+
+    <!-- Background audio for voice mode -->
+    <key>UIBackgroundModes</key>
+    <array>
+        <string>audio</string>
+    </array>
+
     <key>NSAppTransportSecurity</key>
     <dict>
         <key>NSExceptionDomains</key>

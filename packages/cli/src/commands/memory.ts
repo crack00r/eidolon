@@ -405,7 +405,7 @@ export function registerMemoryCommand(program: Command): void {
         const stat = statSync(targetPath);
 
         if (stat.isDirectory()) {
-          const result = indexer.indexDirectory(targetPath);
+          const result = await indexer.indexDirectory(targetPath);
           if (!result.ok) {
             console.error(`Error: ${result.error.message}`);
             process.exitCode = 1;

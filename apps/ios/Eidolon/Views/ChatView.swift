@@ -1,23 +1,30 @@
-/// Chat interface — messages list with input field.
+/// Chat interface — messages list with input field and voice mode toggle.
 
 import SwiftUI
 
 struct ChatView: View {
     @EnvironmentObject var webSocketService: WebSocketService
     @StateObject private var viewModel = ChatViewModel()
+    @StateObject private var voiceManager = VoiceManager()
+    @State private var showVoiceOverlay = false
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                messagesList
-                inputBar
+            ZStack {
+                VStack(spacing: 0) {
+                    messagesList
+                    inputBar
+                }
+                .background(EidolonColors.background)
             }
-            .background(EidolonColors.background)
             .navigationTitle("Chat")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    ConnectionStatusBadge(state: webSocketService.connectionState)
+                    HStack(spacing: 12) {
+                        voiceToggleButton
+                        ConnectionStatusBadge(state: webSocketService.connectionState)
+                    }
                 }
                 ToolbarItem(placement: .navigationBarLeading) {
                     if !viewModel.messages.isEmpty {
@@ -30,8 +37,53 @@ struct ChatView: View {
             }
             .onAppear {
                 viewModel.bind(to: webSocketService)
+                voiceManager.bind(to: webSocketService)
+            }
+            .fullScreenCover(isPresented: $showVoiceOverlay) {
+                VoiceOverlay(voiceManager: voiceManager) {
+                    showVoiceOverlay = false
+                }
             }
         }
+    }
+
+    // MARK: - Voice Toggle
+
+    private var voiceToggleButton: some View {
+        Button {
+            Task {
+                if voiceManager.isVoiceModeActive {
+                    voiceManager.deactivateVoiceMode()
+                    showVoiceOverlay = false
+                } else {
+                    await voiceManager.activateVoiceMode()
+                    if voiceManager.isVoiceModeActive {
+                        showVoiceOverlay = true
+                    }
+                }
+            }
+        } label: {
+            Image(systemName: voiceIconName)
+                .font(.system(size: 18))
+                .foregroundColor(voiceIconColor)
+        }
+        .disabled(webSocketService.connectionState != .connected)
+        .accessibilityLabel(voiceManager.isVoiceModeActive ? "Deactivate voice mode" : "Activate voice mode")
+    }
+
+    private var voiceIconName: String {
+        if voiceManager.isVoiceModeActive {
+            return "mic.fill"
+        } else {
+            return "mic"
+        }
+    }
+
+    private var voiceIconColor: Color {
+        if webSocketService.connectionState != .connected {
+            return .gray
+        }
+        return voiceManager.isVoiceModeActive ? EidolonColors.accent : .secondary
     }
 
     // MARK: - Messages List
@@ -77,6 +129,11 @@ struct ChatView: View {
                     }
                 }
 
+            // Inline voice button for quick voice input without full overlay
+            if viewModel.inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                inlineVoiceButton
+            }
+
             Button {
                 viewModel.sendMessage()
             } label: {
@@ -89,6 +146,28 @@ struct ChatView: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
         .background(EidolonColors.background)
+    }
+
+    /// Inline microphone button in the input bar. Opens the voice overlay.
+    private var inlineVoiceButton: some View {
+        Button {
+            Task {
+                if !voiceManager.isVoiceModeActive {
+                    await voiceManager.activateVoiceMode()
+                }
+                if voiceManager.isVoiceModeActive {
+                    showVoiceOverlay = true
+                }
+            }
+        } label: {
+            Image(systemName: "mic.circle.fill")
+                .font(.system(size: 32))
+                .foregroundColor(webSocketService.connectionState == .connected
+                    ? EidolonColors.accent.opacity(0.7)
+                    : .gray)
+        }
+        .disabled(webSocketService.connectionState != .connected)
+        .accessibilityLabel("Voice input")
     }
 
     private var canSend: Bool {
@@ -154,7 +233,7 @@ struct MessageBubble: View {
     }
 
     private func streamingDotOffset(index: Int) -> CGFloat {
-        // Simple bouncing effect placeholder — animated in a real implementation
+        // Simple bouncing effect placeholder -- animated in a real implementation
         return 0
     }
 }

@@ -84,6 +84,7 @@ enum GatewayMethod: String {
     case chatSend       = "chat.send"
     case chatStream     = "chat.stream"
     case memorySearch   = "memory.search"
+    case memoryUpdate   = "memory.update"
     case memoryDelete   = "memory.delete"
     case sessionList    = "session.list"
     case sessionInfo    = "session.info"

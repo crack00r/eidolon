@@ -25,6 +25,7 @@ import type {
 import { z } from "zod";
 import type { Logger } from "../logging/logger.ts";
 import type { EventBus } from "../loop/event-bus.ts";
+import { formatPrometheus, type MetricsRegistry, PROMETHEUS_CONTENT_TYPE } from "../metrics/prometheus.ts";
 import {
   createJsonRpcError,
   createJsonRpcResponse,
@@ -232,6 +233,7 @@ export class GatewayServer {
   private readonly logger: Logger;
   private readonly eventBus: EventBus;
   private readonly rateLimiter: AuthRateLimiter;
+  private readonly metricsRegistry: MetricsRegistry | undefined;
 
   private readonly clients: Map<string, ClientState> = new Map();
   private readonly handlers: Map<GatewayMethod, MethodHandler> = new Map();
@@ -242,10 +244,16 @@ export class GatewayServer {
   private startTime = 0;
   private server: ReturnType<typeof Bun.serve> | undefined;
 
-  constructor(deps: { config: GatewayConfig; logger: Logger; eventBus: EventBus }) {
+  constructor(deps: {
+    config: GatewayConfig;
+    logger: Logger;
+    eventBus: EventBus;
+    metricsRegistry?: MetricsRegistry;
+  }) {
     this.config = deps.config;
     this.logger = deps.logger.child("gateway");
     this.eventBus = deps.eventBus;
+    this.metricsRegistry = deps.metricsRegistry;
     this.rateLimiter = new AuthRateLimiter(deps.config.rateLimiting, this.logger);
 
     this.registerBuiltinHandlers();
@@ -525,6 +533,31 @@ export class GatewayServer {
       fetch(req, server) {
         const url = new URL(req.url);
         const isTls = self.config.tls.enabled;
+
+        // GET /health -- basic health endpoint (unauthenticated)
+        if (url.pathname === "/health" && req.method === "GET") {
+          const uptimeMs = self.startTime > 0 ? Date.now() - self.startTime : 0;
+          const body = JSON.stringify({
+            status: "healthy",
+            uptime: uptimeMs,
+            connectedClients: self.clients.size,
+            timestamp: Date.now(),
+          });
+          const headers: Record<string, string> = { ...SECURITY_HEADERS, "Content-Type": "application/json" };
+          if (isTls) headers["Strict-Transport-Security"] = "max-age=31536000";
+          return new Response(body, { status: 200, headers });
+        }
+
+        // GET /metrics -- Prometheus exposition format (unauthenticated for scraping)
+        if (url.pathname === "/metrics" && req.method === "GET") {
+          if (!self.metricsRegistry) {
+            return secureResponse("Metrics not configured", 404, isTls);
+          }
+          const body = formatPrometheus(self.metricsRegistry);
+          const headers: Record<string, string> = { ...SECURITY_HEADERS, "Content-Type": PROMETHEUS_CONTENT_TYPE };
+          if (isTls) headers["Strict-Transport-Security"] = "max-age=31536000";
+          return new Response(body, { status: 200, headers });
+        }
 
         if (url.pathname !== "/ws") {
           return secureResponse("Not found", 404, isTls);

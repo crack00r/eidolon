@@ -1,10 +1,13 @@
-/// Memory browser — search bar with results list.
+/// Memory browser -- search bar with results list, detail view, edit/delete support.
 
 import SwiftUI
 
 struct MemoryView: View {
     @EnvironmentObject var webSocketService: WebSocketService
     @StateObject private var viewModel = MemoryViewModel()
+    @State private var showDeleteAlert = false
+    @State private var deleteTargetId: String?
+    @State private var showEditSheet = false
 
     var body: some View {
         NavigationStack {
@@ -23,6 +26,39 @@ struct MemoryView: View {
             .onAppear {
                 viewModel.bind(to: webSocketService)
             }
+            .alert("Delete Memory", isPresented: $showDeleteAlert) {
+                Button("Cancel", role: .cancel) {
+                    deleteTargetId = nil
+                }
+                Button("Delete", role: .destructive) {
+                    guard let id = deleteTargetId else { return }
+                    Task { _ = await viewModel.deleteMemory(id: id) }
+                    deleteTargetId = nil
+                }
+            } message: {
+                Text("Are you sure you want to permanently delete this memory? This action cannot be undone.")
+            }
+            .sheet(isPresented: $showEditSheet) {
+                if let item = viewModel.selectedItem {
+                    MemoryEditSheet(
+                        item: item,
+                        isEditing: viewModel.isEditing,
+                        onSave: { content, importance in
+                            Task {
+                                let success = await viewModel.editMemory(
+                                    id: item.id,
+                                    content: content,
+                                    importance: importance
+                                )
+                                if success {
+                                    showEditSheet = false
+                                }
+                            }
+                        },
+                        onCancel: { showEditSheet = false }
+                    )
+                }
+            }
         }
     }
 
@@ -37,7 +73,6 @@ struct MemoryView: View {
                 .textFieldStyle(.plain)
                 .autocorrectionDisabled()
                 .onChange(of: viewModel.searchQuery) {
-                    // Enforce max search query length (500 chars)
                     if viewModel.searchQuery.count > 500 {
                         viewModel.searchQuery = String(viewModel.searchQuery.prefix(500))
                     }
@@ -79,7 +114,28 @@ struct MemoryView: View {
             } else {
                 List {
                     ForEach(viewModel.results) { item in
-                        MemoryItemRow(item: item)
+                        NavigationLink {
+                            MemoryDetailView(
+                                item: item,
+                                onEdit: {
+                                    viewModel.selectedItem = item
+                                    showEditSheet = true
+                                },
+                                onDelete: {
+                                    deleteTargetId = item.id
+                                    showDeleteAlert = true
+                                },
+                                isDeleting: viewModel.isDeleting
+                            )
+                        } label: {
+                            MemoryItemRow(item: item)
+                        }
+                    }
+                    .onDelete { offsets in
+                        guard let index = offsets.first else { return }
+                        let item = viewModel.results[index]
+                        deleteTargetId = item.id
+                        showDeleteAlert = true
                     }
                     .listRowBackground(EidolonColors.secondary)
                 }
@@ -135,6 +191,167 @@ struct MemoryView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding()
+    }
+}
+
+// MARK: - Memory Detail View
+
+struct MemoryDetailView: View {
+    let item: MemoryItem
+    let onEdit: () -> Void
+    let onDelete: () -> Void
+    let isDeleting: Bool
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                // Type and importance header
+                HStack {
+                    Label(item.type.capitalized, systemImage: item.typeIcon)
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(EidolonColors.accent)
+                    Spacer()
+                    ImportanceBadge(importance: item.importance)
+                }
+
+                Divider()
+
+                // Content
+                Text(item.content)
+                    .font(.body)
+                    .foregroundColor(.primary)
+
+                Divider()
+
+                // Metadata
+                VStack(alignment: .leading, spacing: 8) {
+                    metaRow(label: "Created", value: item.createdAt.formatted())
+                    metaRow(label: "ID", value: item.id)
+                }
+
+                if !item.tags.isEmpty {
+                    Divider()
+                    FlowLayout(spacing: 6) {
+                        ForEach(item.tags, id: \.self) { tag in
+                            Text(tag)
+                                .font(.caption)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(Color.secondary.opacity(0.2))
+                                .cornerRadius(6)
+                        }
+                    }
+                }
+            }
+            .padding(16)
+        }
+        .background(EidolonColors.background)
+        .navigationTitle("Memory Detail")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItemGroup(placement: .bottomBar) {
+                Button(action: onEdit) {
+                    Label("Edit", systemImage: "pencil")
+                }
+
+                Spacer()
+
+                Button(role: .destructive, action: onDelete) {
+                    if isDeleting {
+                        ProgressView()
+                            .scaleEffect(0.8)
+                    } else {
+                        Label("Delete", systemImage: "trash")
+                    }
+                }
+                .disabled(isDeleting)
+            }
+        }
+    }
+
+    private func metaRow(label: String, value: String) -> some View {
+        HStack(alignment: .top) {
+            Text(label)
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .frame(width: 60, alignment: .leading)
+            Text(value)
+                .font(.caption)
+                .foregroundColor(.primary)
+        }
+    }
+}
+
+// MARK: - Memory Edit Sheet
+
+struct MemoryEditSheet: View {
+    let item: MemoryItem
+    let isEditing: Bool
+    let onSave: (String, Double) -> Void
+    let onCancel: () -> Void
+
+    @State private var editContent: String
+    @State private var editImportance: Double
+
+    init(item: MemoryItem, isEditing: Bool, onSave: @escaping (String, Double) -> Void, onCancel: @escaping () -> Void) {
+        self.item = item
+        self.isEditing = isEditing
+        self.onSave = onSave
+        self.onCancel = onCancel
+        _editContent = State(initialValue: item.content)
+        _editImportance = State(initialValue: item.importance)
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Content") {
+                    TextEditor(text: $editContent)
+                        .frame(minHeight: 120)
+                }
+
+                Section("Importance (\(Int(editImportance * 100))%)") {
+                    Slider(value: $editImportance, in: 0...1, step: 0.01)
+                        .tint(EidolonColors.accent)
+                }
+
+                Section("Info") {
+                    HStack {
+                        Text("Type")
+                        Spacer()
+                        Text(item.type.capitalized)
+                            .foregroundColor(.secondary)
+                    }
+                    HStack {
+                        Text("Created")
+                        Spacer()
+                        Text(item.createdAt.formatted())
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+            .navigationTitle("Edit Memory")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel", action: onCancel)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button {
+                        onSave(editContent, editImportance)
+                    } label: {
+                        if isEditing {
+                            ProgressView()
+                                .scaleEffect(0.8)
+                        } else {
+                            Text("Save")
+                        }
+                    }
+                    .disabled(isEditing || editContent.isEmpty)
+                }
+            }
+        }
     }
 }
 
@@ -213,5 +430,46 @@ struct ImportanceBadge: View {
         } else {
             return .secondary
         }
+    }
+}
+
+// MARK: - Flow Layout
+
+/// Simple horizontal wrapping layout for tags.
+struct FlowLayout: Layout {
+    var spacing: CGFloat = 6
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let result = layout(proposal: proposal, subviews: subviews)
+        return result.size
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let result = layout(proposal: proposal, subviews: subviews)
+        for (index, position) in result.positions.enumerated() {
+            subviews[index].place(at: CGPoint(x: bounds.minX + position.x, y: bounds.minY + position.y), proposal: .unspecified)
+        }
+    }
+
+    private func layout(proposal: ProposedViewSize, subviews: Subviews) -> (size: CGSize, positions: [CGPoint]) {
+        let maxWidth = proposal.width ?? .infinity
+        var positions: [CGPoint] = []
+        var x: CGFloat = 0
+        var y: CGFloat = 0
+        var rowHeight: CGFloat = 0
+
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if x + size.width > maxWidth && x > 0 {
+                x = 0
+                y += rowHeight + spacing
+                rowHeight = 0
+            }
+            positions.append(CGPoint(x: x, y: y))
+            rowHeight = max(rowHeight, size.height)
+            x += size.width + spacing
+        }
+
+        return (CGSize(width: maxWidth, height: y + rowHeight), positions)
     }
 }

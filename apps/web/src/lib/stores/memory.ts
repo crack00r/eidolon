@@ -67,8 +67,68 @@ export function clearSearch(): void {
   selectedStore.set(null);
 }
 
+const deletingStore = writable(false);
+const editingStore = writable(false);
+
+export async function deleteMemory(id: string): Promise<boolean> {
+  const client = getClient();
+  if (!client || client.state !== "connected") {
+    errorStore.set("Not connected to gateway");
+    return false;
+  }
+
+  deletingStore.set(true);
+  errorStore.set(null);
+
+  try {
+    await client.call("memory.delete", { id });
+    resultsStore.update((items) => items.filter((item) => item.id !== id));
+    selectedStore.update((selected) => (selected?.id === id ? null : selected));
+    return true;
+  } catch (err) {
+    clientLog("error", "memory", "deleteMemory failed", err);
+    const msg = sanitizeErrorForDisplay(err, "Delete failed");
+    errorStore.set(msg);
+    return false;
+  } finally {
+    deletingStore.set(false);
+  }
+}
+
+export async function editMemory(
+  id: string,
+  updates: { content?: string; importance?: number },
+): Promise<boolean> {
+  const client = getClient();
+  if (!client || client.state !== "connected") {
+    errorStore.set("Not connected to gateway");
+    return false;
+  }
+
+  editingStore.set(true);
+  errorStore.set(null);
+
+  try {
+    const response = await client.call<{ item: MemoryItem }>("memory.update", { id, ...updates });
+    resultsStore.update((items) =>
+      items.map((item) => (item.id === id ? response.item : item)),
+    );
+    selectedStore.update((selected) => (selected?.id === id ? response.item : selected));
+    return true;
+  } catch (err) {
+    clientLog("error", "memory", "editMemory failed", err);
+    const msg = sanitizeErrorForDisplay(err, "Update failed");
+    errorStore.set(msg);
+    return false;
+  } finally {
+    editingStore.set(false);
+  }
+}
+
 export const memoryResults = { subscribe: resultsStore.subscribe };
 export const memoryQuery = { subscribe: queryStore.subscribe };
 export const isSearching = { subscribe: searchingStore.subscribe };
 export const memoryError = { subscribe: errorStore.subscribe };
 export const selectedMemory = { subscribe: selectedStore.subscribe };
+export const isDeleting = { subscribe: deletingStore.subscribe };
+export const isEditing = { subscribe: editingStore.subscribe };

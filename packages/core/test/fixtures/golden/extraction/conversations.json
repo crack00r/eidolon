@@ -1,10 +1,11 @@
 {
   "description": "Golden dataset for memory extraction evaluation. Mix of German and English conversation turns with annotated expected extractions. Used for Phase 2 exit criterion: >80% precision on golden dataset.",
-  "version": 1,
+  "version": 2,
   "turns": [
     {
       "id": "turn-001",
       "language": "en",
+      "category": "preference",
       "input": {
         "user": "Remember that I prefer TypeScript over Python for backend work.",
         "assistant": "Got it! I'll remember that you prefer TypeScript over Python for backend development."
@@ -12,51 +13,63 @@
       "expected": {
         "facts": [],
         "decisions": [],
-        "preferences": ["prefer TypeScript over Python for backend work"]
+        "preferences": ["prefer TypeScript over Python for backend work"],
+        "corrections": [],
+        "todos": []
       }
     },
     {
       "id": "turn-002",
       "language": "de",
+      "category": "fact",
       "input": {
         "user": "Merke dir, dass mein Server unter 100.64.0.1 erreichbar ist.",
         "assistant": "Notiert! Dein Server ist unter der IP 100.64.0.1 erreichbar."
       },
       "expected": {
-        "facts": ["mein Server unter 100.64.0.1 erreichbar ist"],
+        "facts": ["Server ist unter 100.64.0.1 erreichbar"],
         "decisions": [],
-        "preferences": []
+        "preferences": [],
+        "corrections": [],
+        "todos": []
       }
     },
     {
       "id": "turn-003",
       "language": "en",
+      "category": "decision",
       "input": {
         "user": "Let's go with Bun as our runtime instead of Node.js.",
         "assistant": "Great decision! Bun offers better performance and built-in TypeScript support. I'll use Bun as the runtime going forward."
       },
       "expected": {
         "facts": [],
-        "decisions": ["Bun as our runtime instead of Node.js"],
-        "preferences": []
+        "decisions": ["Bun as runtime instead of Node.js"],
+        "preferences": [],
+        "corrections": [],
+        "todos": []
       }
     },
     {
       "id": "turn-004",
       "language": "en",
+      "category": "correction",
       "input": {
         "user": "Actually, the GPU has 16GB VRAM not 12GB.",
         "assistant": "Thanks for the correction! The GPU (RTX 5080) has 16GB VRAM. I've updated my understanding."
       },
       "expected": {
-        "facts": ["the GPU has 16GB VRAM not 12GB"],
+        "facts": ["GPU has 16GB VRAM"],
         "decisions": [],
-        "preferences": []
+        "preferences": [],
+        "corrections": ["GPU has 16GB VRAM not 12GB"],
+        "todos": []
       }
     },
     {
       "id": "turn-005",
       "language": "de",
+      "category": "preference",
       "input": {
         "user": "Ich bevorzuge dunkles Design in allen Anwendungen.",
         "assistant": "Verstanden! Du bevorzugst ein dunkles Design. Ich werde das bei zukuenftigen UI-Empfehlungen beruecksichtigen."
@@ -64,25 +77,31 @@
       "expected": {
         "facts": [],
         "decisions": [],
-        "preferences": ["dunkles Design in allen Anwendungen"]
+        "preferences": ["dunkles Design in allen Anwendungen"],
+        "corrections": [],
+        "todos": []
       }
     },
     {
       "id": "turn-006",
       "language": "en",
+      "category": "todo",
       "input": {
         "user": "TODO: set up the GPU worker Docker container on the Windows PC this weekend.",
         "assistant": "I'll add that to your task list. Setting up the GPU worker Docker container on the Windows PC is planned for this weekend."
       },
       "expected": {
-        "facts": ["set up the GPU worker Docker container on the Windows PC this weekend"],
+        "facts": [],
         "decisions": [],
-        "preferences": []
+        "preferences": [],
+        "corrections": [],
+        "todos": ["set up the GPU worker Docker container on the Windows PC this weekend"]
       }
     },
     {
       "id": "turn-007",
       "language": "en",
+      "category": "decision",
       "input": {
         "user": "We decided on SQLite with WAL mode for all three databases.",
         "assistant": "Confirmed. SQLite with WAL mode for memory.db, operational.db, and audit.db. This gives us concurrent reads without write contention."
@@ -90,25 +109,31 @@
       "expected": {
         "facts": [],
         "decisions": ["SQLite with WAL mode for all three databases"],
-        "preferences": []
+        "preferences": [],
+        "corrections": [],
+        "todos": []
       }
     },
     {
       "id": "turn-008",
       "language": "en",
+      "category": "fact",
       "input": {
         "user": "My name is Manuel and I live in Germany.",
         "assistant": "Nice to meet you, Manuel! I'll remember that you're based in Germany."
       },
       "expected": {
-        "facts": ["Manuel"],
+        "facts": ["name is Manuel", "lives in Germany"],
         "decisions": [],
-        "preferences": []
+        "preferences": [],
+        "corrections": [],
+        "todos": []
       }
     },
     {
       "id": "turn-009",
       "language": "de",
+      "category": "decision",
       "input": {
         "user": "Wir nehmen Tauri statt Electron fuer die Desktop-App.",
         "assistant": "Gute Wahl! Tauri ist deutlich schlanker als Electron und bietet native System-Integration ueber Rust."
@@ -116,12 +141,15 @@
       "expected": {
         "facts": [],
         "decisions": ["Tauri statt Electron fuer die Desktop-App"],
-        "preferences": []
+        "preferences": [],
+        "corrections": [],
+        "todos": []
       }
     },
     {
       "id": "turn-010",
       "language": "en",
+      "category": "preference",
       "input": {
         "user": "I like using pnpm workspaces for monorepo management.",
         "assistant": "pnpm workspaces is a solid choice for monorepo management. It handles dependency deduplication well."
@@ -129,12 +157,15 @@
       "expected": {
         "facts": [],
         "decisions": [],
-        "preferences": ["using pnpm workspaces for monorepo management"]
+        "preferences": ["using pnpm workspaces for monorepo management"],
+        "corrections": [],
+        "todos": []
       }
     },
     {
       "id": "turn-011",
       "language": "en",
+      "category": "null-case",
       "input": {
         "user": "ok",
         "assistant": "Alright!"
@@ -143,51 +174,63 @@
         "facts": [],
         "decisions": [],
         "preferences": [],
+        "corrections": [],
+        "todos": [],
         "_note": "Trivial message -- nothing should be extracted."
       }
     },
     {
       "id": "turn-012",
       "language": "en",
+      "category": "correction",
       "input": {
         "user": "Nein, we should use grammy not telegraf for the Telegram bot.",
         "assistant": "Understood! I'll use grammy instead of telegraf for the Telegram bot integration. grammy has better TypeScript support anyway."
       },
       "expected": {
-        "facts": ["we should use grammy not telegraf for the Telegram bot"],
+        "facts": [],
         "decisions": [],
-        "preferences": []
+        "preferences": [],
+        "corrections": ["use grammy not telegraf for the Telegram bot"],
+        "todos": []
       }
     },
     {
       "id": "turn-013",
       "language": "en",
+      "category": "todo",
       "input": {
         "user": "Remind me to check Tailscale ACLs before deploying the gateway.",
         "assistant": "I'll remind you to check Tailscale ACLs before the gateway deployment."
       },
       "expected": {
-        "facts": ["to check Tailscale ACLs before deploying the gateway"],
+        "facts": [],
         "decisions": [],
-        "preferences": []
+        "preferences": [],
+        "corrections": [],
+        "todos": ["check Tailscale ACLs before deploying the gateway"]
       }
     },
     {
       "id": "turn-014",
       "language": "de",
+      "category": "fact",
       "input": {
         "user": "Vergiss nicht, dass der Backup-Pfad /mnt/backup/eidolon ist.",
         "assistant": "Notiert! Der Backup-Pfad ist /mnt/backup/eidolon."
       },
       "expected": {
-        "facts": ["dass der Backup-Pfad /mnt/backup/eidolon ist"],
+        "facts": ["Backup-Pfad ist /mnt/backup/eidolon"],
         "decisions": [],
-        "preferences": []
+        "preferences": [],
+        "corrections": [],
+        "todos": []
       }
     },
     {
       "id": "turn-015",
       "language": "en",
+      "category": "preference",
       "input": {
         "user": "I want to use AES-256-GCM with Argon2id for the secret store encryption.",
         "assistant": "That's a strong combination. AES-256-GCM provides authenticated encryption and Argon2id is the recommended KDF for password hashing."
@@ -195,7 +238,1466 @@
       "expected": {
         "facts": [],
         "decisions": [],
-        "preferences": ["to use AES-256-GCM with Argon2id for the secret store encryption"]
+        "preferences": ["use AES-256-GCM with Argon2id for the secret store encryption"],
+        "corrections": [],
+        "todos": []
+      }
+    },
+    {
+      "id": "turn-016",
+      "language": "en",
+      "category": "multi-fact",
+      "input": {
+        "user": "My Ubuntu server has 32GB RAM, runs on an Intel i7-12700, and is connected via Tailscale at 100.64.0.1.",
+        "assistant": "Got it! Your Ubuntu server specs: 32GB RAM, Intel i7-12700 CPU, Tailscale IP 100.64.0.1."
+      },
+      "expected": {
+        "facts": ["Ubuntu server has 32GB RAM", "server runs on Intel i7-12700", "server connected via Tailscale at 100.64.0.1"],
+        "decisions": [],
+        "preferences": [],
+        "corrections": [],
+        "todos": []
+      }
+    },
+    {
+      "id": "turn-017",
+      "language": "de",
+      "category": "multi-fact",
+      "input": {
+        "user": "Mein Windows PC hat eine RTX 5080 mit 16GB VRAM und laeuft unter Windows 11 Pro.",
+        "assistant": "Notiert! Dein Windows PC: RTX 5080 (16GB VRAM), Windows 11 Pro."
+      },
+      "expected": {
+        "facts": ["Windows PC hat RTX 5080 mit 16GB VRAM", "Windows PC laeuft unter Windows 11 Pro"],
+        "decisions": [],
+        "preferences": [],
+        "corrections": [],
+        "todos": []
+      }
+    },
+    {
+      "id": "turn-018",
+      "language": "en",
+      "category": "null-case",
+      "input": {
+        "user": "Thanks for the help!",
+        "assistant": "You're welcome! Let me know if you need anything else."
+      },
+      "expected": {
+        "facts": [],
+        "decisions": [],
+        "preferences": [],
+        "corrections": [],
+        "todos": [],
+        "_note": "Polite exchange -- nothing to extract."
+      }
+    },
+    {
+      "id": "turn-019",
+      "language": "en",
+      "category": "decision",
+      "input": {
+        "user": "For the event bus, let's persist events to SQLite instead of keeping them in memory.",
+        "assistant": "Good call. Persisting events to SQLite means we survive crashes without losing pending events. I'll update the design accordingly."
+      },
+      "expected": {
+        "facts": [],
+        "decisions": ["persist events to SQLite instead of keeping them in memory"],
+        "preferences": [],
+        "corrections": [],
+        "todos": []
+      }
+    },
+    {
+      "id": "turn-020",
+      "language": "de",
+      "category": "preference",
+      "input": {
+        "user": "Ich arbeite lieber mit Neovim als mit VS Code.",
+        "assistant": "Verstanden! Du bevorzugst Neovim gegenueber VS Code. Ich werde das bei Editor-Empfehlungen beachten."
+      },
+      "expected": {
+        "facts": [],
+        "decisions": [],
+        "preferences": ["lieber Neovim als VS Code"],
+        "corrections": [],
+        "todos": []
+      }
+    },
+    {
+      "id": "turn-021",
+      "language": "en",
+      "category": "todo",
+      "input": {
+        "user": "Reminder: update the Tailscale ACLs to allow port 8420 for the GPU worker.",
+        "assistant": "Added to your reminders. You need to update Tailscale ACLs for port 8420 (GPU worker access)."
+      },
+      "expected": {
+        "facts": [],
+        "decisions": [],
+        "preferences": [],
+        "corrections": [],
+        "todos": ["update Tailscale ACLs to allow port 8420 for the GPU worker"]
+      }
+    },
+    {
+      "id": "turn-022",
+      "language": "en",
+      "category": "correction",
+      "input": {
+        "user": "Wait, I was wrong earlier. The gateway port should be 8419, not 8420.",
+        "assistant": "Corrected! The gateway port is 8419. Port 8420 is reserved for the GPU worker."
+      },
+      "expected": {
+        "facts": ["gateway port is 8419"],
+        "decisions": [],
+        "preferences": [],
+        "corrections": ["gateway port should be 8419, not 8420"],
+        "todos": []
+      }
+    },
+    {
+      "id": "turn-023",
+      "language": "de",
+      "category": "null-case",
+      "input": {
+        "user": "Ja, genau.",
+        "assistant": "Alles klar!"
+      },
+      "expected": {
+        "facts": [],
+        "decisions": [],
+        "preferences": [],
+        "corrections": [],
+        "todos": [],
+        "_note": "Simple confirmation -- nothing to extract."
+      }
+    },
+    {
+      "id": "turn-024",
+      "language": "en",
+      "category": "home-automation",
+      "input": {
+        "user": "The living room lights are controlled by a Philips Hue bridge at 192.168.1.50.",
+        "assistant": "Noted! Your Philips Hue bridge for the living room lights is at 192.168.1.50."
+      },
+      "expected": {
+        "facts": ["living room lights controlled by Philips Hue bridge at 192.168.1.50"],
+        "decisions": [],
+        "preferences": [],
+        "corrections": [],
+        "todos": []
+      }
+    },
+    {
+      "id": "turn-025",
+      "language": "de",
+      "category": "home-automation",
+      "input": {
+        "user": "Mein Home Assistant laeuft auf dem Server unter Port 8123.",
+        "assistant": "Notiert! Home Assistant ist auf deinem Server unter Port 8123 erreichbar."
+      },
+      "expected": {
+        "facts": ["Home Assistant laeuft auf dem Server unter Port 8123"],
+        "decisions": [],
+        "preferences": [],
+        "corrections": [],
+        "todos": []
+      }
+    },
+    {
+      "id": "turn-026",
+      "language": "en",
+      "category": "preference",
+      "input": {
+        "user": "I always want the bedroom lights to dim to 20% after 10pm.",
+        "assistant": "I'll remember that preference. Bedroom lights should dim to 20% after 10pm."
+      },
+      "expected": {
+        "facts": [],
+        "decisions": [],
+        "preferences": ["bedroom lights dim to 20% after 10pm"],
+        "corrections": [],
+        "todos": []
+      }
+    },
+    {
+      "id": "turn-027",
+      "language": "en",
+      "category": "decision",
+      "input": {
+        "user": "We decided to use the Result pattern for all expected errors and only throw for programming bugs.",
+        "assistant": "Agreed. Result<T, E> for recoverable errors, throw for actual bugs. This is consistent with our coding conventions."
+      },
+      "expected": {
+        "facts": [],
+        "decisions": ["Result pattern for all expected errors, throw only for programming bugs"],
+        "preferences": [],
+        "corrections": [],
+        "todos": []
+      }
+    },
+    {
+      "id": "turn-028",
+      "language": "en",
+      "category": "fact",
+      "input": {
+        "user": "The Eidolon project is hosted at github.com/crack00r/eidolon.",
+        "assistant": "Got it. The repo is at github.com/crack00r/eidolon."
+      },
+      "expected": {
+        "facts": ["Eidolon project hosted at github.com/crack00r/eidolon"],
+        "decisions": [],
+        "preferences": [],
+        "corrections": [],
+        "todos": []
+      }
+    },
+    {
+      "id": "turn-029",
+      "language": "de",
+      "category": "todo",
+      "input": {
+        "user": "Erinnere mich daran, morgen die SSL-Zertifikate zu erneuern.",
+        "assistant": "Wird gemacht! Ich erinnere dich morgen an die Erneuerung der SSL-Zertifikate."
+      },
+      "expected": {
+        "facts": [],
+        "decisions": [],
+        "preferences": [],
+        "corrections": [],
+        "todos": ["morgen die SSL-Zertifikate erneuern"]
+      }
+    },
+    {
+      "id": "turn-030",
+      "language": "en",
+      "category": "multi-fact",
+      "input": {
+        "user": "I use a MacBook Pro M3 as my daily driver, and my iPhone 15 Pro for on-the-go access.",
+        "assistant": "Noted! MacBook Pro M3 as your main machine, iPhone 15 Pro for mobile access."
+      },
+      "expected": {
+        "facts": ["uses MacBook Pro M3 as daily driver", "uses iPhone 15 Pro for on-the-go access"],
+        "decisions": [],
+        "preferences": [],
+        "corrections": [],
+        "todos": []
+      }
+    },
+    {
+      "id": "turn-031",
+      "language": "en",
+      "category": "null-case",
+      "input": {
+        "user": "Interesting, I didn't know that.",
+        "assistant": "Yeah, it's a pretty cool feature!"
+      },
+      "expected": {
+        "facts": [],
+        "decisions": [],
+        "preferences": [],
+        "corrections": [],
+        "todos": [],
+        "_note": "Casual acknowledgment -- nothing extractable."
+      }
+    },
+    {
+      "id": "turn-032",
+      "language": "de",
+      "category": "correction",
+      "input": {
+        "user": "Nein, ich meinte nicht VS Code sondern Cursor als meinen Editor.",
+        "assistant": "Entschuldigung fuer das Missverstaendnis! Du benutzt Cursor, nicht VS Code."
+      },
+      "expected": {
+        "facts": ["benutzt Cursor als Editor"],
+        "decisions": [],
+        "preferences": [],
+        "corrections": ["Cursor statt VS Code als Editor"],
+        "todos": []
+      }
+    },
+    {
+      "id": "turn-033",
+      "language": "en",
+      "category": "preference",
+      "input": {
+        "user": "I prefer to keep all documentation in English, even though I'm German.",
+        "assistant": "Makes sense for an open-source project. All docs will be in English."
+      },
+      "expected": {
+        "facts": [],
+        "decisions": [],
+        "preferences": ["documentation in English"],
+        "corrections": [],
+        "todos": []
+      }
+    },
+    {
+      "id": "turn-034",
+      "language": "en",
+      "category": "decision",
+      "input": {
+        "user": "For the embedding model, let's use multilingual-e5-small via Hugging Face Transformers.",
+        "assistant": "Good choice. multilingual-e5-small gives us 384-dim embeddings with solid German support, and it runs locally without API calls."
+      },
+      "expected": {
+        "facts": [],
+        "decisions": ["use multilingual-e5-small via Hugging Face Transformers for embeddings"],
+        "preferences": [],
+        "corrections": [],
+        "todos": []
+      }
+    },
+    {
+      "id": "turn-035",
+      "language": "de",
+      "category": "fact",
+      "input": {
+        "user": "Meine Zeitzone ist Europe/Berlin.",
+        "assistant": "Notiert, deine Zeitzone ist Europe/Berlin. Ich beruecksichtige das bei Zeitangaben."
+      },
+      "expected": {
+        "facts": ["Zeitzone ist Europe/Berlin"],
+        "decisions": [],
+        "preferences": [],
+        "corrections": [],
+        "todos": []
+      }
+    },
+    {
+      "id": "turn-036",
+      "language": "en",
+      "category": "home-automation",
+      "input": {
+        "user": "The smart lock on the front door should always require approval before unlocking.",
+        "assistant": "Absolutely. The front door smart lock will be classified as 'needs_approval' -- I'll never unlock it automatically."
+      },
+      "expected": {
+        "facts": [],
+        "decisions": ["smart lock on front door requires approval before unlocking"],
+        "preferences": [],
+        "corrections": [],
+        "todos": []
+      }
+    },
+    {
+      "id": "turn-037",
+      "language": "en",
+      "category": "edge-case",
+      "input": {
+        "user": "I think maybe we could try using Redis for caching at some point.",
+        "assistant": "That's an option to consider. Redis could help with caching frequently accessed memories. We can evaluate it later."
+      },
+      "expected": {
+        "facts": [],
+        "decisions": [],
+        "preferences": [],
+        "corrections": [],
+        "todos": [],
+        "_note": "Tentative, speculative statement -- 'maybe', 'could try', 'at some point'. Not a firm decision or preference."
+      }
+    },
+    {
+      "id": "turn-038",
+      "language": "en",
+      "category": "decision",
+      "input": {
+        "user": "Let's use Conventional Commits for all commit messages in the project.",
+        "assistant": "Perfect. Conventional Commits will help us generate changelogs automatically with release-please."
+      },
+      "expected": {
+        "facts": [],
+        "decisions": ["use Conventional Commits for all commit messages"],
+        "preferences": [],
+        "corrections": [],
+        "todos": []
+      }
+    },
+    {
+      "id": "turn-039",
+      "language": "de",
+      "category": "preference",
+      "input": {
+        "user": "Ich moechte, dass Eidolon mich auf Deutsch anspricht, aber der Code soll auf Englisch sein.",
+        "assistant": "Verstanden! Ich spreche Deutsch mit dir, aber jeglicher Code und technische Dokumentation bleibt auf Englisch."
+      },
+      "expected": {
+        "facts": [],
+        "decisions": [],
+        "preferences": ["Eidolon spricht Deutsch, Code auf Englisch"],
+        "corrections": [],
+        "todos": []
+      }
+    },
+    {
+      "id": "turn-040",
+      "language": "en",
+      "category": "fact",
+      "input": {
+        "user": "The GPU worker will run as a Docker container using the NVIDIA Container Toolkit.",
+        "assistant": "Makes sense. Docker with NVIDIA Container Toolkit gives us a reproducible GPU environment."
+      },
+      "expected": {
+        "facts": ["GPU worker runs as Docker container using NVIDIA Container Toolkit"],
+        "decisions": [],
+        "preferences": [],
+        "corrections": [],
+        "todos": []
+      }
+    },
+    {
+      "id": "turn-041",
+      "language": "en",
+      "category": "todo",
+      "input": {
+        "user": "TODO: configure the systemd service file for auto-restart on failure.",
+        "assistant": "Added. The systemd service file needs Restart=on-failure configuration."
+      },
+      "expected": {
+        "facts": [],
+        "decisions": [],
+        "preferences": [],
+        "corrections": [],
+        "todos": ["configure the systemd service file for auto-restart on failure"]
+      }
+    },
+    {
+      "id": "turn-042",
+      "language": "de",
+      "category": "null-case",
+      "input": {
+        "user": "Hm, lass mich kurz nachdenken.",
+        "assistant": "Klar, nimm dir Zeit!"
+      },
+      "expected": {
+        "facts": [],
+        "decisions": [],
+        "preferences": [],
+        "corrections": [],
+        "todos": [],
+        "_note": "User is thinking -- no extractable information."
+      }
+    },
+    {
+      "id": "turn-043",
+      "language": "en",
+      "category": "multi-fact",
+      "input": {
+        "user": "I have three Tailscale nodes: the Ubuntu server at 100.64.0.1, the Windows PC at 100.64.0.2, and the MacBook at 100.64.0.3.",
+        "assistant": "Got it! Your Tailscale mesh: Ubuntu server (100.64.0.1), Windows PC (100.64.0.2), MacBook (100.64.0.3)."
+      },
+      "expected": {
+        "facts": ["Ubuntu server Tailscale IP is 100.64.0.1", "Windows PC Tailscale IP is 100.64.0.2", "MacBook Tailscale IP is 100.64.0.3"],
+        "decisions": [],
+        "preferences": [],
+        "corrections": [],
+        "todos": []
+      }
+    },
+    {
+      "id": "turn-044",
+      "language": "en",
+      "category": "decision",
+      "input": {
+        "user": "We're going with Zod for all schema validation instead of io-ts.",
+        "assistant": "Zod is the better fit. It has simpler syntax, great TypeScript inference, and is more widely adopted."
+      },
+      "expected": {
+        "facts": [],
+        "decisions": ["Zod for all schema validation instead of io-ts"],
+        "preferences": [],
+        "corrections": [],
+        "todos": []
+      }
+    },
+    {
+      "id": "turn-045",
+      "language": "en",
+      "category": "correction",
+      "input": {
+        "user": "Actually, the dreaming schedule should be at 02:00, not 03:00.",
+        "assistant": "Corrected! The dreaming schedule is set to 02:00."
+      },
+      "expected": {
+        "facts": ["dreaming schedule is at 02:00"],
+        "decisions": [],
+        "preferences": [],
+        "corrections": ["dreaming schedule should be 02:00, not 03:00"],
+        "todos": []
+      }
+    },
+    {
+      "id": "turn-046",
+      "language": "de",
+      "category": "decision",
+      "input": {
+        "user": "Fuer die Voice-Pipeline nehmen wir Qwen3-TTS anstatt Coqui TTS.",
+        "assistant": "Einverstanden! Qwen3-TTS bietet bessere Qualitaet und Streaming-Unterstuetzung."
+      },
+      "expected": {
+        "facts": [],
+        "decisions": ["Qwen3-TTS anstatt Coqui TTS fuer die Voice-Pipeline"],
+        "preferences": [],
+        "corrections": [],
+        "todos": []
+      }
+    },
+    {
+      "id": "turn-047",
+      "language": "en",
+      "category": "preference",
+      "input": {
+        "user": "I prefer getting notifications only during business hours, 8am to 10pm.",
+        "assistant": "Understood. Notifications will be silenced outside 8:00-22:00."
+      },
+      "expected": {
+        "facts": [],
+        "decisions": [],
+        "preferences": ["notifications only during business hours 8am to 10pm"],
+        "corrections": [],
+        "todos": []
+      }
+    },
+    {
+      "id": "turn-048",
+      "language": "en",
+      "category": "fact",
+      "input": {
+        "user": "The Telegram bot username is @eidolon_ai_bot.",
+        "assistant": "Got it. Your Telegram bot is @eidolon_ai_bot."
+      },
+      "expected": {
+        "facts": ["Telegram bot username is @eidolon_ai_bot"],
+        "decisions": [],
+        "preferences": [],
+        "corrections": [],
+        "todos": []
+      }
+    },
+    {
+      "id": "turn-049",
+      "language": "en",
+      "category": "edge-case",
+      "input": {
+        "user": "I sometimes work late on Fridays, but not always.",
+        "assistant": "I'll keep that in mind. Friday evenings might be work time for you."
+      },
+      "expected": {
+        "facts": [],
+        "decisions": [],
+        "preferences": [],
+        "corrections": [],
+        "todos": [],
+        "_note": "Ambiguous statement -- 'sometimes' and 'not always' make this too uncertain to extract as a preference or fact."
+      }
+    },
+    {
+      "id": "turn-050",
+      "language": "de",
+      "category": "todo",
+      "input": {
+        "user": "Erinnere mich bitte, den GPU-Worker auf CUDA 12.4 zu aktualisieren.",
+        "assistant": "Notiert! Ich erinnere dich daran, den GPU-Worker auf CUDA 12.4 zu aktualisieren."
+      },
+      "expected": {
+        "facts": [],
+        "decisions": [],
+        "preferences": [],
+        "corrections": [],
+        "todos": ["GPU-Worker auf CUDA 12.4 aktualisieren"]
+      }
+    },
+    {
+      "id": "turn-051",
+      "language": "en",
+      "category": "home-automation",
+      "input": {
+        "user": "Remember that the office temperature sensor is entity_id sensor.office_temperature in Home Assistant.",
+        "assistant": "Noted! The office temperature sensor maps to sensor.office_temperature in HA."
+      },
+      "expected": {
+        "facts": ["office temperature sensor is sensor.office_temperature in Home Assistant"],
+        "decisions": [],
+        "preferences": [],
+        "corrections": [],
+        "todos": []
+      }
+    },
+    {
+      "id": "turn-052",
+      "language": "en",
+      "category": "decision",
+      "input": {
+        "user": "For circuit breakers, let's use 5 failures before opening and a 30-second reset timeout.",
+        "assistant": "Sounds good. Circuit breaker config: 5 failure threshold, 30s reset timeout."
+      },
+      "expected": {
+        "facts": [],
+        "decisions": ["circuit breakers: 5 failures before opening, 30-second reset timeout"],
+        "preferences": [],
+        "corrections": [],
+        "todos": []
+      }
+    },
+    {
+      "id": "turn-053",
+      "language": "de",
+      "category": "fact",
+      "input": {
+        "user": "Mein Telegram-Account hat die User-ID 123456789.",
+        "assistant": "Notiert! Deine Telegram User-ID ist 123456789."
+      },
+      "expected": {
+        "facts": ["Telegram User-ID ist 123456789"],
+        "decisions": [],
+        "preferences": [],
+        "corrections": [],
+        "todos": []
+      }
+    },
+    {
+      "id": "turn-054",
+      "language": "en",
+      "category": "preference",
+      "input": {
+        "user": "I'd rather use named exports exclusively and avoid default exports in the codebase.",
+        "assistant": "Agreed. Named exports make refactoring easier and imports more explicit."
+      },
+      "expected": {
+        "facts": [],
+        "decisions": [],
+        "preferences": ["named exports exclusively, no default exports"],
+        "corrections": [],
+        "todos": []
+      }
+    },
+    {
+      "id": "turn-055",
+      "language": "en",
+      "category": "null-case",
+      "input": {
+        "user": "That sounds good.",
+        "assistant": "Great, let's move on then."
+      },
+      "expected": {
+        "facts": [],
+        "decisions": [],
+        "preferences": [],
+        "corrections": [],
+        "todos": [],
+        "_note": "Simple agreement -- no extractable content."
+      }
+    },
+    {
+      "id": "turn-056",
+      "language": "en",
+      "category": "multi-fact",
+      "input": {
+        "user": "The project uses a 3-database split: memory.db for memories and embeddings, operational.db for sessions and events, and audit.db for the audit log.",
+        "assistant": "Clear. Three databases with distinct responsibilities: memory.db, operational.db, audit.db."
+      },
+      "expected": {
+        "facts": ["memory.db stores memories and embeddings", "operational.db stores sessions and events", "audit.db stores audit log"],
+        "decisions": [],
+        "preferences": [],
+        "corrections": [],
+        "todos": []
+      }
+    },
+    {
+      "id": "turn-057",
+      "language": "de",
+      "category": "preference",
+      "input": {
+        "user": "Ich bevorzuge es, wenn du lange Erklaerungen vermeidest und dich kurz fasst.",
+        "assistant": "Verstanden. Ich halte mich kuenftig kuerzer."
+      },
+      "expected": {
+        "facts": [],
+        "decisions": [],
+        "preferences": ["kurze Antworten statt lange Erklaerungen"],
+        "corrections": [],
+        "todos": []
+      }
+    },
+    {
+      "id": "turn-058",
+      "language": "en",
+      "category": "correction",
+      "input": {
+        "user": "No, the max file length should be 300 lines, not 500.",
+        "assistant": "Corrected! Max file length is 300 lines. I'll keep modules under that limit."
+      },
+      "expected": {
+        "facts": ["max file length is 300 lines"],
+        "decisions": [],
+        "preferences": [],
+        "corrections": ["max file length should be 300 lines, not 500"],
+        "todos": []
+      }
+    },
+    {
+      "id": "turn-059",
+      "language": "en",
+      "category": "decision",
+      "input": {
+        "user": "We'll use release-please for automated version bumps and changelog generation.",
+        "assistant": "Perfect. release-please reads Conventional Commits and creates release PRs automatically."
+      },
+      "expected": {
+        "facts": [],
+        "decisions": ["use release-please for automated version bumps and changelog generation"],
+        "preferences": [],
+        "corrections": [],
+        "todos": []
+      }
+    },
+    {
+      "id": "turn-060",
+      "language": "en",
+      "category": "edge-case",
+      "input": {
+        "user": "What do you think about using GraphQL for the gateway?",
+        "assistant": "GraphQL could work, but JSON-RPC is simpler for our use case. What are you leaning towards?"
+      },
+      "expected": {
+        "facts": [],
+        "decisions": [],
+        "preferences": [],
+        "corrections": [],
+        "todos": [],
+        "_note": "Question from user, no decision or preference expressed."
+      }
+    },
+    {
+      "id": "turn-061",
+      "language": "de",
+      "category": "fact",
+      "input": {
+        "user": "Merk dir, dass der Ubuntu-Server 24/7 laeuft und nie ausgeschaltet wird.",
+        "assistant": "Notiert! Der Ubuntu-Server laeuft dauerhaft und ist immer verfuegbar."
+      },
+      "expected": {
+        "facts": ["Ubuntu-Server laeuft 24/7"],
+        "decisions": [],
+        "preferences": [],
+        "corrections": [],
+        "todos": []
+      }
+    },
+    {
+      "id": "turn-062",
+      "language": "en",
+      "category": "preference",
+      "input": {
+        "user": "I like having structured JSON logs rather than plain text log files.",
+        "assistant": "JSON logging it is. Easier to parse and query with tools like jq."
+      },
+      "expected": {
+        "facts": [],
+        "decisions": [],
+        "preferences": ["structured JSON logs rather than plain text"],
+        "corrections": [],
+        "todos": []
+      }
+    },
+    {
+      "id": "turn-063",
+      "language": "en",
+      "category": "home-automation",
+      "input": {
+        "user": "The office desk lamp entity in Home Assistant is light.office_desk. I want it to turn on automatically at sunset.",
+        "assistant": "Got it! light.office_desk turns on at sunset. I'll add that as an automation preference."
+      },
+      "expected": {
+        "facts": ["office desk lamp entity is light.office_desk in Home Assistant"],
+        "decisions": [],
+        "preferences": ["office desk lamp turns on automatically at sunset"],
+        "corrections": [],
+        "todos": []
+      }
+    },
+    {
+      "id": "turn-064",
+      "language": "de",
+      "category": "null-case",
+      "input": {
+        "user": "Danke!",
+        "assistant": "Gerne geschehen!"
+      },
+      "expected": {
+        "facts": [],
+        "decisions": [],
+        "preferences": [],
+        "corrections": [],
+        "todos": [],
+        "_note": "Thank you exchange -- nothing to extract."
+      }
+    },
+    {
+      "id": "turn-065",
+      "language": "en",
+      "category": "decision",
+      "input": {
+        "user": "Let's use Biome instead of ESLint and Prettier for linting and formatting.",
+        "assistant": "Biome is a great all-in-one tool. Faster than ESLint and handles formatting too."
+      },
+      "expected": {
+        "facts": [],
+        "decisions": ["use Biome instead of ESLint and Prettier for linting and formatting"],
+        "preferences": [],
+        "corrections": [],
+        "todos": []
+      }
+    },
+    {
+      "id": "turn-066",
+      "language": "en",
+      "category": "fact",
+      "input": {
+        "user": "My work schedule is typically Monday through Friday, 9am to 6pm.",
+        "assistant": "Noted. Your standard work hours are Mon-Fri, 9:00-18:00."
+      },
+      "expected": {
+        "facts": ["work schedule is Monday through Friday, 9am to 6pm"],
+        "decisions": [],
+        "preferences": [],
+        "corrections": [],
+        "todos": []
+      }
+    },
+    {
+      "id": "turn-067",
+      "language": "en",
+      "category": "todo",
+      "input": {
+        "user": "Remind me to run a database vacuum on all three SQLite files next Monday.",
+        "assistant": "Reminder set for next Monday: run database vacuum on memory.db, operational.db, and audit.db."
+      },
+      "expected": {
+        "facts": [],
+        "decisions": [],
+        "preferences": [],
+        "corrections": [],
+        "todos": ["run database vacuum on all three SQLite files next Monday"]
+      }
+    },
+    {
+      "id": "turn-068",
+      "language": "de",
+      "category": "decision",
+      "input": {
+        "user": "Wir entscheiden uns fuer commander als CLI-Framework anstatt yargs.",
+        "assistant": "Gute Wahl. Commander hat eine sauberere API und bessere TypeScript-Unterstuetzung."
+      },
+      "expected": {
+        "facts": [],
+        "decisions": ["commander als CLI-Framework anstatt yargs"],
+        "preferences": [],
+        "corrections": [],
+        "todos": []
+      }
+    },
+    {
+      "id": "turn-069",
+      "language": "en",
+      "category": "edge-case",
+      "input": {
+        "user": "I kind of like the idea of using Svelte for the desktop frontend, but I'm not fully committed yet.",
+        "assistant": "Svelte is a solid option for Tauri apps. Take your time deciding -- we can also consider React or Vue."
+      },
+      "expected": {
+        "facts": [],
+        "decisions": [],
+        "preferences": [],
+        "corrections": [],
+        "todos": [],
+        "_note": "Uncertain sentiment -- 'kind of like' and 'not fully committed' indicate no firm preference."
+      }
+    },
+    {
+      "id": "turn-070",
+      "language": "en",
+      "category": "multi-fact",
+      "input": {
+        "user": "The energy budget is set to 100k tokens per hour, split as 50% user, 20% tasks, 20% learning, and 10% dreaming.",
+        "assistant": "Got it. Energy budget: 100k tokens/hour. Allocation: 50% user, 20% tasks, 20% learning, 10% dreaming."
+      },
+      "expected": {
+        "facts": ["energy budget is 100k tokens per hour", "budget allocation: 50% user, 20% tasks, 20% learning, 10% dreaming"],
+        "decisions": [],
+        "preferences": [],
+        "corrections": [],
+        "todos": []
+      }
+    },
+    {
+      "id": "turn-071",
+      "language": "de",
+      "category": "correction",
+      "input": {
+        "user": "Eigentlich benutze ich zsh, nicht bash als meine Shell.",
+        "assistant": "Korrigiert! Du verwendest zsh als deine Standard-Shell."
+      },
+      "expected": {
+        "facts": ["benutzt zsh als Shell"],
+        "decisions": [],
+        "preferences": [],
+        "corrections": ["benutzt zsh, nicht bash"],
+        "todos": []
+      }
+    },
+    {
+      "id": "turn-072",
+      "language": "en",
+      "category": "preference",
+      "input": {
+        "user": "I prefer camelCase for variable names and PascalCase for types and classes.",
+        "assistant": "Standard TypeScript convention. camelCase for vars/functions, PascalCase for types/classes."
+      },
+      "expected": {
+        "facts": [],
+        "decisions": [],
+        "preferences": ["camelCase for variable names, PascalCase for types and classes"],
+        "corrections": [],
+        "todos": []
+      }
+    },
+    {
+      "id": "turn-073",
+      "language": "en",
+      "category": "decision",
+      "input": {
+        "user": "For the STT engine, we're going with faster-whisper instead of the standard Whisper.",
+        "assistant": "faster-whisper uses CTranslate2 for 4x speedup at the same quality. Smart choice."
+      },
+      "expected": {
+        "facts": [],
+        "decisions": ["faster-whisper instead of standard Whisper for STT engine"],
+        "preferences": [],
+        "corrections": [],
+        "todos": []
+      }
+    },
+    {
+      "id": "turn-074",
+      "language": "en",
+      "category": "null-case",
+      "input": {
+        "user": "Hello!",
+        "assistant": "Hey there! How can I help you today?"
+      },
+      "expected": {
+        "facts": [],
+        "decisions": [],
+        "preferences": [],
+        "corrections": [],
+        "todos": [],
+        "_note": "Greeting -- nothing to extract."
+      }
+    },
+    {
+      "id": "turn-075",
+      "language": "de",
+      "category": "fact",
+      "input": {
+        "user": "Mein WLAN heisst 'Guttmann-5G' und das Passwort steht im Passwort-Manager.",
+        "assistant": "Notiert. Dein WLAN-Name ist 'Guttmann-5G'. Das Passwort hole ich bei Bedarf aus dem Passwort-Manager."
+      },
+      "expected": {
+        "facts": ["WLAN heisst Guttmann-5G"],
+        "decisions": [],
+        "preferences": [],
+        "corrections": [],
+        "todos": [],
+        "_note": "The WiFi name is a fact. The password reference is not extractable since it just points to a manager."
+      }
+    },
+    {
+      "id": "turn-076",
+      "language": "en",
+      "category": "decision",
+      "input": {
+        "user": "We decided to use JSON-RPC 2.0 over WebSocket for the client gateway protocol.",
+        "assistant": "JSON-RPC 2.0 is clean and well-standardized. Good fit for our WebSocket gateway."
+      },
+      "expected": {
+        "facts": [],
+        "decisions": ["JSON-RPC 2.0 over WebSocket for the client gateway protocol"],
+        "preferences": [],
+        "corrections": [],
+        "todos": []
+      }
+    },
+    {
+      "id": "turn-077",
+      "language": "en",
+      "category": "preference",
+      "input": {
+        "user": "I always want to use const instead of let, and never var.",
+        "assistant": "Strict immutability by default. const everywhere, let only when rebinding is needed, var never."
+      },
+      "expected": {
+        "facts": [],
+        "decisions": [],
+        "preferences": ["use const instead of let, never var"],
+        "corrections": [],
+        "todos": []
+      }
+    },
+    {
+      "id": "turn-078",
+      "language": "de",
+      "category": "todo",
+      "input": {
+        "user": "TODO: den Prometheus-Exporter fuer die Loop-Metriken einrichten.",
+        "assistant": "Wird auf die Liste gesetzt. Prometheus-Exporter fuer Loop-Metriken (Zykluszeit, aktive Sessions, Token-Verbrauch)."
+      },
+      "expected": {
+        "facts": [],
+        "decisions": [],
+        "preferences": [],
+        "corrections": [],
+        "todos": ["Prometheus-Exporter fuer die Loop-Metriken einrichten"]
+      }
+    },
+    {
+      "id": "turn-079",
+      "language": "en",
+      "category": "home-automation",
+      "input": {
+        "user": "The garage door opener in Home Assistant is cover.garage_door. It should always need approval to open or close.",
+        "assistant": "Understood. cover.garage_door is classified as 'needs_approval' for both open and close actions."
+      },
+      "expected": {
+        "facts": ["garage door opener entity is cover.garage_door in Home Assistant"],
+        "decisions": ["garage door always needs approval to open or close"],
+        "preferences": [],
+        "corrections": [],
+        "todos": []
+      }
+    },
+    {
+      "id": "turn-080",
+      "language": "en",
+      "category": "edge-case",
+      "input": {
+        "user": "The server might need more RAM in the future.",
+        "assistant": "We can monitor memory usage and upgrade if needed. 32GB should be sufficient for now."
+      },
+      "expected": {
+        "facts": [],
+        "decisions": [],
+        "preferences": [],
+        "corrections": [],
+        "todos": [],
+        "_note": "Speculative statement about the future -- no concrete fact or decision."
+      }
+    },
+    {
+      "id": "turn-081",
+      "language": "en",
+      "category": "multi-fact",
+      "input": {
+        "user": "Remember these details: the daily backup runs at 3am, it goes to /mnt/backup/eidolon, and we keep 7 days of backups.",
+        "assistant": "Got all three: backup at 3am, destination /mnt/backup/eidolon, 7-day retention."
+      },
+      "expected": {
+        "facts": ["daily backup runs at 3am", "backup destination is /mnt/backup/eidolon", "keep 7 days of backups"],
+        "decisions": [],
+        "preferences": [],
+        "corrections": [],
+        "todos": []
+      }
+    },
+    {
+      "id": "turn-082",
+      "language": "de",
+      "category": "preference",
+      "input": {
+        "user": "Mir ist wichtig, dass keine any-Typen im Code verwendet werden.",
+        "assistant": "Absolut. Wir verwenden unknown mit Type Guards oder Zod .parse() anstatt any."
+      },
+      "expected": {
+        "facts": [],
+        "decisions": [],
+        "preferences": ["keine any-Typen im Code"],
+        "corrections": [],
+        "todos": []
+      }
+    },
+    {
+      "id": "turn-083",
+      "language": "en",
+      "category": "correction",
+      "input": {
+        "user": "Actually, the Qwen3-TTS model name is Qwen3-TTS-1.7B, not Qwen3-TTS-7B.",
+        "assistant": "Corrected! The TTS model is Qwen3-TTS-1.7B (1.7 billion parameters)."
+      },
+      "expected": {
+        "facts": ["Qwen3-TTS model is Qwen3-TTS-1.7B"],
+        "decisions": [],
+        "preferences": [],
+        "corrections": ["Qwen3-TTS model name is Qwen3-TTS-1.7B, not Qwen3-TTS-7B"],
+        "todos": []
+      }
+    },
+    {
+      "id": "turn-084",
+      "language": "en",
+      "category": "fact",
+      "input": {
+        "user": "My GitHub username is crack00r.",
+        "assistant": "Noted! Your GitHub username is crack00r."
+      },
+      "expected": {
+        "facts": ["GitHub username is crack00r"],
+        "decisions": [],
+        "preferences": [],
+        "corrections": [],
+        "todos": []
+      }
+    },
+    {
+      "id": "turn-085",
+      "language": "en",
+      "category": "decision",
+      "input": {
+        "user": "For the knowledge graph embeddings, we'll use ComplEx instead of TransE because it handles symmetric relations.",
+        "assistant": "Good choice. ComplEx uses complex-valued embeddings and handles symmetric, antisymmetric, and 1-to-N relations correctly."
+      },
+      "expected": {
+        "facts": [],
+        "decisions": ["ComplEx instead of TransE for knowledge graph embeddings"],
+        "preferences": [],
+        "corrections": [],
+        "todos": []
+      }
+    },
+    {
+      "id": "turn-086",
+      "language": "de",
+      "category": "null-case",
+      "input": {
+        "user": "Okay, gut.",
+        "assistant": "Super!"
+      },
+      "expected": {
+        "facts": [],
+        "decisions": [],
+        "preferences": [],
+        "corrections": [],
+        "todos": [],
+        "_note": "Acknowledgment -- nothing to extract."
+      }
+    },
+    {
+      "id": "turn-087",
+      "language": "en",
+      "category": "fact",
+      "input": {
+        "user": "The maximum embedding dimension for sqlite-vec is 384 with our multilingual-e5-small model.",
+        "assistant": "Right, 384 dimensions. That's the output size of multilingual-e5-small."
+      },
+      "expected": {
+        "facts": ["maximum embedding dimension is 384 with multilingual-e5-small"],
+        "decisions": [],
+        "preferences": [],
+        "corrections": [],
+        "todos": []
+      }
+    },
+    {
+      "id": "turn-088",
+      "language": "en",
+      "category": "todo",
+      "input": {
+        "user": "Reminder: test the circuit breaker implementation with simulated failures before Phase 3.",
+        "assistant": "Added. Circuit breaker testing with simulated failures is scheduled before Phase 3 begins."
+      },
+      "expected": {
+        "facts": [],
+        "decisions": [],
+        "preferences": [],
+        "corrections": [],
+        "todos": ["test circuit breaker implementation with simulated failures before Phase 3"]
+      }
+    },
+    {
+      "id": "turn-089",
+      "language": "de",
+      "category": "multi-fact",
+      "input": {
+        "user": "Die drei Datenbanken heissen memory.db, operational.db und audit.db. Alle laufen im WAL-Modus.",
+        "assistant": "Notiert! Drei Datenbanken: memory.db, operational.db, audit.db -- alle im WAL-Modus."
+      },
+      "expected": {
+        "facts": ["drei Datenbanken: memory.db, operational.db, audit.db", "alle Datenbanken laufen im WAL-Modus"],
+        "decisions": [],
+        "preferences": [],
+        "corrections": [],
+        "todos": []
+      }
+    },
+    {
+      "id": "turn-090",
+      "language": "en",
+      "category": "preference",
+      "input": {
+        "user": "For keyboard shortcuts, I always use Ctrl+Space for autocomplete.",
+        "assistant": "Noted. Ctrl+Space is your preferred autocomplete shortcut."
+      },
+      "expected": {
+        "facts": [],
+        "decisions": [],
+        "preferences": ["Ctrl+Space for autocomplete"],
+        "corrections": [],
+        "todos": []
+      }
+    },
+    {
+      "id": "turn-091",
+      "language": "en",
+      "category": "home-automation",
+      "input": {
+        "user": "The living room thermostat target should never be set above 22 degrees Celsius.",
+        "assistant": "Safety limit noted. Living room thermostat will be capped at 22C maximum."
+      },
+      "expected": {
+        "facts": [],
+        "decisions": [],
+        "preferences": ["living room thermostat never above 22 degrees Celsius"],
+        "corrections": [],
+        "todos": []
+      }
+    },
+    {
+      "id": "turn-092",
+      "language": "de",
+      "category": "correction",
+      "input": {
+        "user": "Nein, das Logging-Format soll JSON sein, nicht 'pretty'.",
+        "assistant": "Korrigiert! Das Standard-Logging-Format ist JSON."
+      },
+      "expected": {
+        "facts": ["Logging-Format ist JSON"],
+        "decisions": [],
+        "preferences": [],
+        "corrections": ["Logging-Format soll JSON sein, nicht pretty"],
+        "todos": []
+      }
+    },
+    {
+      "id": "turn-093",
+      "language": "en",
+      "category": "decision",
+      "input": {
+        "user": "We'll use Intl.Segmenter for sentence detection in the TTS pipeline instead of regex.",
+        "assistant": "Intl.Segmenter handles multilingual text, abbreviations, and edge cases much better than regex."
+      },
+      "expected": {
+        "facts": [],
+        "decisions": ["use Intl.Segmenter for sentence detection in TTS pipeline instead of regex"],
+        "preferences": [],
+        "corrections": [],
+        "todos": []
+      }
+    },
+    {
+      "id": "turn-094",
+      "language": "en",
+      "category": "edge-case",
+      "input": {
+        "user": "How's the weather today?",
+        "assistant": "I don't have real-time weather data, but I can check if you'd like."
+      },
+      "expected": {
+        "facts": [],
+        "decisions": [],
+        "preferences": [],
+        "corrections": [],
+        "todos": [],
+        "_note": "Off-topic question -- no project-related facts to extract."
+      }
+    },
+    {
+      "id": "turn-095",
+      "language": "en",
+      "category": "fact",
+      "input": {
+        "user": "The RRF constant k is set to 60, which is the standard from the original paper.",
+        "assistant": "Confirmed. k=60 for Reciprocal Rank Fusion is the well-established default."
+      },
+      "expected": {
+        "facts": ["RRF constant k is set to 60"],
+        "decisions": [],
+        "preferences": [],
+        "corrections": [],
+        "todos": []
+      }
+    },
+    {
+      "id": "turn-096",
+      "language": "de",
+      "category": "preference",
+      "input": {
+        "user": "Ich haette gerne, dass der Dreaming-Bericht als Markdown im Journal gespeichert wird.",
+        "assistant": "Wird gemacht. Dreaming-Berichte werden als Markdown-Dateien im Journal-Verzeichnis abgelegt."
+      },
+      "expected": {
+        "facts": [],
+        "decisions": [],
+        "preferences": ["Dreaming-Bericht als Markdown im Journal speichern"],
+        "corrections": [],
+        "todos": []
+      }
+    },
+    {
+      "id": "turn-097",
+      "language": "en",
+      "category": "multi-fact",
+      "input": {
+        "user": "The Cognitive Loop has four phases: Perceive, Evaluate, Act, and Reflect. It runs continuously as a daemon.",
+        "assistant": "Right. PEAR cycle: Perceive -> Evaluate -> Act -> Reflect, running as a continuous daemon loop."
+      },
+      "expected": {
+        "facts": ["Cognitive Loop has four phases: Perceive, Evaluate, Act, Reflect", "Cognitive Loop runs continuously as a daemon"],
+        "decisions": [],
+        "preferences": [],
+        "corrections": [],
+        "todos": []
+      }
+    },
+    {
+      "id": "turn-098",
+      "language": "en",
+      "category": "decision",
+      "input": {
+        "user": "We're going with Opus codec for the real-time voice WebSocket, not raw PCM.",
+        "assistant": "Opus is much more bandwidth-efficient. ~32kbps vs ~768kbps for raw PCM. Built-in packet loss concealment too."
+      },
+      "expected": {
+        "facts": [],
+        "decisions": ["Opus codec for real-time voice WebSocket instead of raw PCM"],
+        "preferences": [],
+        "corrections": [],
+        "todos": []
+      }
+    },
+    {
+      "id": "turn-099",
+      "language": "de",
+      "category": "fact",
+      "input": {
+        "user": "Die maximale Dateilaenge im Projekt ist 300 Zeilen. Danach soll in Module aufgeteilt werden.",
+        "assistant": "Notiert. Maximale Dateilaenge: 300 Zeilen, danach Modularisierung."
+      },
+      "expected": {
+        "facts": ["maximale Dateilaenge ist 300 Zeilen", "danach in Module aufteilen"],
+        "decisions": [],
+        "preferences": [],
+        "corrections": [],
+        "todos": []
+      }
+    },
+    {
+      "id": "turn-100",
+      "language": "en",
+      "category": "todo",
+      "input": {
+        "user": "TODO: write integration tests for the account rotation failover logic.",
+        "assistant": "Added to the task list. Integration tests for account rotation failover."
+      },
+      "expected": {
+        "facts": [],
+        "decisions": [],
+        "preferences": [],
+        "corrections": [],
+        "todos": ["write integration tests for account rotation failover logic"]
+      }
+    },
+    {
+      "id": "turn-101",
+      "language": "en",
+      "category": "null-case",
+      "input": {
+        "user": "lol",
+        "assistant": "Haha!"
+      },
+      "expected": {
+        "facts": [],
+        "decisions": [],
+        "preferences": [],
+        "corrections": [],
+        "todos": [],
+        "_note": "Laughter -- nothing to extract."
+      }
+    },
+    {
+      "id": "turn-102",
+      "language": "en",
+      "category": "fact",
+      "input": {
+        "user": "The short-term memory retention period is 90 days before pruning or consolidation.",
+        "assistant": "90 days for short-term memory TTL. After that, it either gets consolidated into long-term or pruned."
+      },
+      "expected": {
+        "facts": ["short-term memory retention period is 90 days"],
+        "decisions": [],
+        "preferences": [],
+        "corrections": [],
+        "todos": []
+      }
+    },
+    {
+      "id": "turn-103",
+      "language": "de",
+      "category": "decision",
+      "input": {
+        "user": "Wir verwenden grammy fuer den Telegram-Bot mit Long Polling statt Webhooks.",
+        "assistant": "Passt gut. Long Polling ist einfacher fuer einen Home-Server ohne oeffentliche URL."
+      },
+      "expected": {
+        "facts": [],
+        "decisions": ["grammy mit Long Polling statt Webhooks fuer Telegram-Bot"],
+        "preferences": [],
+        "corrections": [],
+        "todos": []
+      }
+    },
+    {
+      "id": "turn-104",
+      "language": "en",
+      "category": "preference",
+      "input": {
+        "user": "I want all error messages to be in English, even in German conversations.",
+        "assistant": "Makes sense for consistency and debugging. Error messages will always be in English."
+      },
+      "expected": {
+        "facts": [],
+        "decisions": [],
+        "preferences": ["error messages always in English"],
+        "corrections": [],
+        "todos": []
+      }
+    },
+    {
+      "id": "turn-105",
+      "language": "en",
+      "category": "edge-case",
+      "input": {
+        "user": "I used to use Vim but I've been meaning to try Neovim properly.",
+        "assistant": "Neovim has great Lua configuration support and better plugin ecosystem. Worth a try!"
+      },
+      "expected": {
+        "facts": [],
+        "decisions": [],
+        "preferences": [],
+        "corrections": [],
+        "todos": [],
+        "_note": "Past usage and vague future intent -- 'been meaning to try' is not an actionable preference."
       }
     }
   ]

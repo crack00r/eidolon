@@ -17,43 +17,44 @@
 - docs/design/SECURITY.md -- secrets, GPU auth, GDPR
 - docs/design/TESTING.md -- test strategy, FakeClaudeProcess
 
-## Codebase Structure (Verified March 2026 Audit v2)
+## Codebase Structure (Verified March 2026 Audit v3)
 - packages/protocol/src/ -- 22 files, ~1,337 lines (config.ts=391, 16 type files)
-- packages/core/src/ -- 90+ source files, ~19,678 lines across 17 modules
-- packages/cli/src/ -- 21 files, ~3,122 lines (12 command files + utils)
+- packages/core/src/ -- 90+ source files, ~19,685 lines across 17 modules
+- packages/cli/src/ -- 21 files, ~3,409 lines (12 command files + utils)
 - packages/test-utils/src/ -- 6 files, ~360 lines
 - services/gpu-worker/src/ -- 8 Python files, ~1,156 lines
-- apps/desktop/ -- Tauri 2.0 + Svelte + Rust, ~4,516 lines (6 routes, 6 stores, Rust backend 252 lines)
-- apps/ios/ -- Swift/SwiftUI, ~2,532 lines (3 views, 3 viewmodels, 5 services)
-- apps/web/ -- SvelteKit dashboard, ~3,981 lines (6 routes, 6 stores, hooks)
+- apps/desktop/ -- Tauri 2.0 + Svelte + Rust, ~4,852 lines (6 routes, 6 stores, Rust backend 252 lines)
+- apps/ios/ -- Swift/SwiftUI, ~2,790 lines (3 views, 3 viewmodels, 6 services incl AudioService)
+- apps/web/ -- SvelteKit dashboard, ~5,090 lines (6 routes, 6 stores, hooks)
 - deploy/ -- systemd, launchd, Windows service files, ~913 lines
-- Total source: ~37,595 lines (2.7x original estimate of ~13,810)
-- Tests: 71 files, ~891 test() + 13 it() definitions, ~17,521 test lines
+- Total source: ~38,442 lines (2.8x original estimate of ~13,810)
+- Tests: 72 files, ~916 test() + 13 it() definitions, ~17,812 test lines
 
-## Completeness Status (Audit v2, March 2026)
-Overall: ~87% complete. 0 CRITICAL, 2 HIGH, 8 MEDIUM, 5 LOW gaps.
+## Completeness Status (Audit v3, March 2026)
+Overall: ~92% complete. 0 CRITICAL, 2 HIGH, 3 MEDIUM, 6 LOW open gaps.
 Full report: docs/COMPLETENESS_AUDIT.md
+
+v3 corrections (false negatives in v2):
+- G-03 RESOLVED: PDF indexing IS implemented (dynamic pdf-parse import, indexPdfFile())
+- G-04 RESOLVED: Entity resolution thresholds ARE configurable (constructor param)
+- G-09/G-13 RESOLVED: iOS voice IS implemented (AudioService.swift, AVAudioSession+AVAudioEngine)
 
 HIGH gaps:
 1. G-02: Golden dataset has 3 entries (need 50+) -- Phase 2 exit criterion
 2. G-12: iOS .xcodeproj missing (source files exist, SETUP.md has manual instructions)
 
 MEDIUM gaps:
-1. G-03: PDF document indexing (not implemented, .md/.txt/code only)
-2. G-04: Entity resolution thresholds hardcoded defaults vs runtime config
-3. G-05: Prometheus /metrics endpoint (no export, token tracker only)
-4. G-06: DND schedule enforcement basic (no timezone tests)
-5. G-07: HA entity resolution is MCP-passthrough only
-6. G-09/G-13: iOS voice mode (no AVAudioSession/microphone)
-7. EventBus backpressure IS implemented (corrected from prior audit)
-8. DND schedule IS implemented (corrected from prior audit)
+1. G-05: Prometheus /metrics endpoint (no export, token tracker only)
+2. G-06: DND schedule enforcement basic (no timezone tests)
+3. G-07: HA entity resolution is MCP-passthrough only
 
 LOW gaps:
 1. G-01: config/validator.ts inlined in loader.ts
 2. G-08: CLI learning command is stub (core module exists)
 3. G-10: Desktop WCAG 2.1 AA not verified (no aria-* attrs)
 4. G-11: Tauri updater pubkey is placeholder
-5. G-14/G-15: iOS VoiceOver + glossary/troubleshooting docs missing
+5. G-14: iOS VoiceOver accessibility missing
+6. G-15: Glossary/troubleshooting docs missing
 
 ## Key File Paths (line counts verified v2)
 - /Users/manuelguttmann/Projekte/eidolon/packages/core/src/claude/manager.ts -- ClaudeCodeManager (232 lines)

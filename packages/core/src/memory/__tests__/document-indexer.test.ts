@@ -322,8 +322,8 @@ function bar() {
   // -- indexDirectory -------------------------------------------------------
 
   describe("indexDirectory", () => {
-    test("processes multiple files recursively", () => {
-      const result = indexer.indexDirectory(tempDir);
+    test("processes multiple files recursively", async () => {
+      const result = await indexer.indexDirectory(tempDir);
       expect(result.ok).toBe(true);
       if (!result.ok) return;
 
@@ -333,9 +333,86 @@ function bar() {
       expect(result.value.chunks).toBeGreaterThan(0);
     });
 
-    test("returns error for non-existent directory", () => {
-      const result = indexer.indexDirectory(join(tempDir, "nonexistent"));
+    test("returns error for non-existent directory", async () => {
+      const result = await indexer.indexDirectory(join(tempDir, "nonexistent"));
       expect(result.ok).toBe(false);
+    });
+  });
+
+  // -- PDF chunking (static, text already extracted) -------------------------
+
+  describe("chunkPdfText", () => {
+    test("chunks by page (form-feed separated)", () => {
+      const content = "Page one content.\fPage two content.\fPage three content.";
+      const chunks = DocumentIndexer.chunkPdfText(content, "doc.pdf");
+      expect(chunks.length).toBe(3);
+      expect(chunks[0]?.heading).toBe("Page 1");
+      expect(chunks[0]?.content).toBe("Page one content.");
+      expect(chunks[0]?.metadata.page).toBe(1);
+      expect(chunks[1]?.heading).toBe("Page 2");
+      expect(chunks[1]?.content).toBe("Page two content.");
+      expect(chunks[2]?.heading).toBe("Page 3");
+      expect(chunks[2]?.content).toBe("Page three content.");
+    });
+
+    test("skips empty pages", () => {
+      const content = "Page one.\f\f\fPage four.";
+      const chunks = DocumentIndexer.chunkPdfText(content, "doc.pdf");
+      expect(chunks.length).toBe(2);
+      expect(chunks[0]?.content).toBe("Page one.");
+      expect(chunks[0]?.metadata.page).toBe(1);
+      expect(chunks[1]?.content).toBe("Page four.");
+      expect(chunks[1]?.metadata.page).toBe(4);
+    });
+
+    test("splits oversized pages at paragraph boundaries", () => {
+      const longPage = "Paragraph one of this long page.\n\nParagraph two of this long page.\n\nParagraph three of this long page.";
+      const content = `${longPage}\fShort page.`;
+      const chunks = DocumentIndexer.chunkPdfText(content, "doc.pdf", 60);
+      // The long page should be split into multiple chunks
+      expect(chunks.length).toBeGreaterThan(2);
+      // All chunks from page 1 should have page metadata = 1
+      const page1Chunks = chunks.filter((c) => c.metadata.page === 1);
+      expect(page1Chunks.length).toBeGreaterThan(1);
+      for (const chunk of page1Chunks) {
+        expect(chunk.heading).toBe("Page 1");
+      }
+    });
+
+    test("handles single page PDF", () => {
+      const content = "Just one page of content.";
+      const chunks = DocumentIndexer.chunkPdfText(content, "doc.pdf");
+      expect(chunks.length).toBe(1);
+      expect(chunks[0]?.heading).toBe("Page 1");
+    });
+
+    test("handles empty content", () => {
+      const chunks = DocumentIndexer.chunkPdfText("", "doc.pdf");
+      expect(chunks.length).toBe(0);
+    });
+  });
+
+  // -- chunkText dispatches .pdf to chunkPdfText -----------------------------
+
+  describe("chunkText with pdf", () => {
+    test("dispatches .pdf to chunkPdfText", () => {
+      const content = "Page A.\fPage B.";
+      const chunks = DocumentIndexer.chunkText(content, "file.pdf");
+      expect(chunks.length).toBe(2);
+      expect(chunks[0]?.heading).toBe("Page 1");
+      expect(chunks[1]?.heading).toBe("Page 2");
+    });
+  });
+
+  // -- indexFile rejects PDF (needs async) ------------------------------------
+
+  describe("indexFile with PDF", () => {
+    test("returns error directing to async method", () => {
+      const result = indexer.indexFile(join(tempDir, "sample.pdf"));
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.message).toContain("indexPdfFile");
+      }
     });
   });
 });
