@@ -34,14 +34,22 @@ import { createHealthServer } from "../health/server.ts";
 import type { Logger } from "../logging/logger.ts";
 import { createLogger } from "../logging/logger.ts";
 import { LogRotator } from "../logging/rotation.ts";
+import { CognitiveLoop } from "../loop/cognitive-loop.ts";
+import type { EventHandler, EventHandlerResult } from "../loop/cognitive-loop.ts";
+import { EnergyBudget } from "../loop/energy-budget.ts";
 import { EventBus } from "../loop/event-bus.ts";
+import { PriorityEvaluator } from "../loop/priority.ts";
+import { RestCalculator } from "../loop/rest.ts";
 import { SessionSupervisor } from "../loop/session-supervisor.ts";
+import { CognitiveStateMachine } from "../loop/state-machine.ts";
 import { EmbeddingModel } from "../memory/embeddings.ts";
+import { MemoryExtractor } from "../memory/extractor.ts";
 import { MemorySearch } from "../memory/search.ts";
 import { MemoryStore } from "../memory/store.ts";
 import { TokenTracker } from "../metrics/token-tracker.ts";
 import { MetricsRegistry } from "../metrics/prometheus.ts";
 import { wireMetrics, type MetricsWiringHandle } from "../metrics/wiring.ts";
+import { TaskScheduler } from "../scheduler/scheduler.ts";
 import { AuditLogger } from "../audit/logger.ts";
 import { getMasterKey } from "../secrets/master-key.ts";
 import { SecretStore } from "../secrets/store.ts";
@@ -72,6 +80,14 @@ interface InitializedModules {
   claudeManager?: ClaudeCodeManager;
   eventBus?: EventBus;
   sessionSupervisor?: SessionSupervisor;
+  cognitiveStateMachine?: CognitiveStateMachine;
+  priorityEvaluator?: PriorityEvaluator;
+  energyBudget?: EnergyBudget;
+  restCalculator?: RestCalculator;
+  taskScheduler?: TaskScheduler;
+  memoryExtractor?: MemoryExtractor;
+  cognitiveLoop?: CognitiveLoop;
+  schedulerInterval?: ReturnType<typeof setInterval>;
   messageRouter?: MessageRouter;
   telegramChannel?: TelegramChannel;
   gpuManager?: GPUManager;
@@ -426,14 +442,147 @@ export class EidolonDaemon {
         },
       });
 
-      // 16. CognitiveLoop (requires EventBus, SessionSupervisor, EnergyBudget, StateMachine, etc.)
+      // 16. CognitiveLoop and PEAR pipeline dependencies
+      //     a. CognitiveStateMachine (needs Logger)
+      //     b. PriorityEvaluator (needs Logger)
+      //     c. EnergyBudget (needs Config.loop.energyBudget, Logger)
+      //     d. RestCalculator (needs Config.loop.rest, Logger)
+      //     e. TaskScheduler (needs operational DB, Logger)
+      //     f. MemoryExtractor (needs Logger, extraction strategy from config)
+      //     g. CognitiveLoop (needs all of the above + EventBus + SessionSupervisor)
       initOrder.push({
         name: "CognitiveLoop",
         fn: () => {
-          this.modules.logger?.info(
-            "daemon",
-            "CognitiveLoop skipped: requires full PEAR pipeline (StateMachine, PriorityEvaluator, EnergyBudget, RestCalculator)",
+          const logger = this.modules.logger;
+          const config = this.modules.config;
+          const eventBus = this.modules.eventBus;
+          const supervisor = this.modules.sessionSupervisor;
+          const dbManager = this.modules.dbManager;
+
+          if (!logger || !config || !eventBus || !supervisor) {
+            logger?.warn(
+              "daemon",
+              "CognitiveLoop skipped: missing required dependencies (Logger, Config, EventBus, or SessionSupervisor)",
+            );
+            return;
+          }
+
+          // 16a. CognitiveStateMachine
+          this.modules.cognitiveStateMachine = new CognitiveStateMachine(logger);
+
+          // 16b. PriorityEvaluator
+          this.modules.priorityEvaluator = new PriorityEvaluator(logger);
+
+          // 16c. EnergyBudget
+          this.modules.energyBudget = new EnergyBudget(config.loop.energyBudget, logger);
+
+          // 16d. RestCalculator
+          this.modules.restCalculator = new RestCalculator(config.loop.rest, logger);
+
+          // 16e. TaskScheduler
+          if (dbManager) {
+            this.modules.taskScheduler = new TaskScheduler(dbManager.operational, logger);
+            logger.info("daemon", "TaskScheduler initialized");
+
+            // Wire scheduler to emit scheduler:task_due events via EventBus
+            // Check for due tasks every 30 seconds
+            const SCHEDULER_POLL_INTERVAL_MS = 30_000;
+            this.modules.schedulerInterval = setInterval(() => {
+              if (!this.modules.taskScheduler || !this.modules.eventBus) return;
+              const dueResult = this.modules.taskScheduler.getDueTasks();
+              if (!dueResult.ok) {
+                logger.error("daemon", `Scheduler poll error: ${dueResult.error.message}`);
+                return;
+              }
+              for (const task of dueResult.value) {
+                const publishResult = this.modules.eventBus.publish("scheduler:task_due", {
+                  taskId: task.id,
+                  taskName: task.name,
+                  action: task.action,
+                  payload: task.payload,
+                }, {
+                  priority: "normal",
+                  source: "scheduler",
+                });
+                if (publishResult.ok) {
+                  logger.debug("daemon", `Scheduler emitted task_due for: ${task.name}`, { taskId: task.id });
+                  // Mark as executed so the next run is computed
+                  this.modules.taskScheduler.markExecuted(task.id);
+                }
+              }
+            }, SCHEDULER_POLL_INTERVAL_MS);
+          } else {
+            logger.warn("daemon", "TaskScheduler skipped: database not available");
+          }
+
+          // 16f. MemoryExtractor
+          const extractionStrategy = config.memory.extraction.strategy;
+          this.modules.memoryExtractor = new MemoryExtractor(logger, {
+            strategy: extractionStrategy,
+          });
+          logger.info("daemon", `MemoryExtractor initialized (strategy: ${extractionStrategy})`);
+
+          // 16g. CognitiveLoop -- build the event handler
+          const handler: EventHandler = async (event, priority): Promise<EventHandlerResult> => {
+            logger.info("loop-handler", `Handling event: ${event.type} (score: ${priority.score}, action: ${priority.suggestedAction})`, {
+              eventId: event.id,
+              eventType: event.type,
+              priority: event.priority,
+              suggestedAction: priority.suggestedAction,
+              suggestedModel: priority.suggestedModel,
+            });
+
+            switch (event.type) {
+              case "user:message": {
+                logger.info("loop-handler", "User message received -- acknowledged (session routing not yet wired)", {
+                  eventId: event.id,
+                });
+                return { success: true, tokensUsed: 0 };
+              }
+              case "user:voice": {
+                logger.info("loop-handler", "Voice input received -- acknowledged", { eventId: event.id });
+                return { success: true, tokensUsed: 0 };
+              }
+              case "user:approval": {
+                logger.info("loop-handler", "User approval received", { eventId: event.id });
+                return { success: true, tokensUsed: 0 };
+              }
+              case "scheduler:task_due": {
+                const taskPayload = event.payload as Record<string, unknown>;
+                logger.info("loop-handler", `Scheduled task due: ${String(taskPayload.taskName ?? "unknown")}`, {
+                  taskId: String(taskPayload.taskId ?? ""),
+                  action: String(taskPayload.action ?? ""),
+                });
+                return { success: true, tokensUsed: 0 };
+              }
+              case "system:shutdown": {
+                logger.info("loop-handler", "System shutdown event received");
+                return { success: true, tokensUsed: 0 };
+              }
+              default: {
+                logger.debug("loop-handler", `Event handled (no-op): ${event.type}`, {
+                  eventId: event.id,
+                  priority: event.priority,
+                });
+                return { success: true, tokensUsed: 0 };
+              }
+            }
+          };
+
+          // Instantiate the CognitiveLoop -- NOT started automatically.
+          // Call cognitiveLoop.start() explicitly when the daemon enters run mode.
+          this.modules.cognitiveLoop = new CognitiveLoop(
+            eventBus,
+            this.modules.cognitiveStateMachine,
+            this.modules.priorityEvaluator,
+            this.modules.energyBudget,
+            this.modules.restCalculator,
+            supervisor,
+            logger,
+            { handler },
           );
+
+          logger.info("daemon", "CognitiveLoop instantiated (not started -- call start() to begin PEAR cycle)");
         },
       });
 
@@ -692,6 +841,27 @@ export class EidolonDaemon {
 
     logger?.info("daemon", `Graceful shutdown initiated (timeout: ${gracefulMs}ms)`);
 
+    // 0a. Stop the CognitiveLoop if running (must happen before EventBus dispose)
+    if (this.modules.cognitiveLoop?.running) {
+      try {
+        this.modules.cognitiveLoop.stop();
+        logger?.info("daemon", "Step 0a: CognitiveLoop stopped");
+      } catch (err: unknown) {
+        logger?.error("daemon", "Step 0a: Error stopping CognitiveLoop", err);
+      }
+    }
+
+    // 0b. Stop the scheduler polling interval
+    if (this.modules.schedulerInterval) {
+      try {
+        clearInterval(this.modules.schedulerInterval);
+        this.modules.schedulerInterval = undefined;
+        logger?.info("daemon", "Step 0b: Scheduler polling interval cleared");
+      } catch (err: unknown) {
+        logger?.error("daemon", "Step 0b: Error clearing scheduler interval", err);
+      }
+    }
+
     // 1. Stop accepting new events -- dispose EventBus subscribers so no new
     //    handlers fire, while persisted events remain in SQLite for replay
     //    on next startup.
@@ -876,6 +1046,27 @@ export class EidolonDaemon {
         logger?.info("daemon", "Telegram channel disconnected");
       } catch (err: unknown) {
         logger?.error("daemon", "Error disconnecting Telegram channel", err);
+      }
+    }
+
+    // 16 -> CognitiveLoop: stop if running (safety net for startup-failure teardown)
+    if (this.modules.cognitiveLoop?.running) {
+      try {
+        this.modules.cognitiveLoop.stop();
+        logger?.info("daemon", "CognitiveLoop stopped (teardown)");
+      } catch (err: unknown) {
+        logger?.error("daemon", "Error stopping CognitiveLoop", err);
+      }
+    }
+
+    // 16 -> Scheduler polling interval (safety net)
+    if (this.modules.schedulerInterval) {
+      try {
+        clearInterval(this.modules.schedulerInterval);
+        this.modules.schedulerInterval = undefined;
+        logger?.info("daemon", "Scheduler interval cleared (teardown)");
+      } catch (err: unknown) {
+        logger?.error("daemon", "Error clearing scheduler interval", err);
       }
     }
 
