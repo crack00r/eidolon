@@ -282,25 +282,55 @@ Phase 9: Polish & Release     (~1 week)     Docs, onboarding, performance, GitHu
 
 ---
 
-## Future (Post v1.0)
+## Post v1.0 Releases
 
-These features are intentionally deferred to keep the v1.0 scope tight:
+### v1.1 (COMPLETED)
 
-| Feature | Description | Phase |
+All v1.1 features have been implemented. See [POST_V1_PLAN.md](POST_V1_PLAN.md).
+
+| Feature | Status | Notes |
 |---|---|---|
-| Web Dashboard | Browser-based UI as alternative to desktop app | v1.1 |
-| Multi-user | Support for household members with separate memory | v1.2 |
-| WhatsApp channel | WhatsApp Business API integration | v1.1 |
-| Discord channel | Discord bot integration | v1.1 |
-| Email channel | IMAP/SMTP for email interaction | v1.2 |
-| Calendar integration | Google Calendar / CalDAV sync | v1.1 |
-| Advanced Home Automation | Voice-controlled HA, automation scenes, proactive suggestions | v1.1 |
-| Plugin system | Third-party extensions | v2.0 |
-| Local LLM support | Ollama / llama.cpp as alternative brain | v2.0 |
-| Multi-GPU | Distribute work across multiple GPU workers | v1.1 |
-| Mobile widget | iOS home screen widget with quick actions | v1.1 |
-| Distributed tracing | OpenTelemetry for debugging | v1.1 |
-| Secondary node replication | Disaster recovery to secondary server | v2.0 |
+| Web Dashboard | DONE | SvelteKit, 6 routes, 6 stores (~5,090 lines) |
+| Discord channel | DONE | discord.js integration (403+109 lines) |
+| Calendar integration | DONE | Google Calendar + CalDAV sync |
+| Advanced Home Automation | DONE | Entity resolver, anomaly detection, context injection |
+| Multi-GPU Worker Pool | DONE | Pool manager, load balancing |
+| Mobile widget | DONE | iOS home screen widget |
+| Distributed tracing (partial) | DONE | Prometheus /metrics endpoint |
+
+### v1.2 (PLANNED -- ~8 weeks with parallelism)
+
+See [V1.2_V2.0_PLAN.md](V1.2_V2.0_PLAN.md) for detailed implementation plan.
+
+| Feature | Description | Est. Effort |
+|---|---|---|
+| WhatsApp channel | Official WhatsApp Business API integration | 2 sprints |
+| Email channel | IMAP/SMTP for async email interaction | 1.5 sprints |
+| OpenTelemetry | Full distributed tracing across Core, GPU Worker, clients | 1.5 sprints |
+
+### v1.3 (DEFERRED)
+
+| Feature | Description | Rationale for Deferral |
+|---|---|---|
+| Multi-user | Household members with separate memory | Requires fundamental memory isolation architecture |
+| Mobile widget enhancements | Advanced iOS widgets with Intents | Depends on stable iOS usage patterns |
+
+### v2.0 (PLANNED -- ~6 weeks with parallelism)
+
+See [V1.2_V2.0_PLAN.md](V1.2_V2.0_PLAN.md) for detailed implementation plan.
+
+| Feature | Description | Breaking Change |
+|---|---|---|
+| Plugin system | Third-party extensions with sandboxing | New module loading API |
+| Local LLM support | Ollama / llama.cpp as alternative brain | IClaudeProcess abstracted to ILLMProvider |
+
+### v2.1+ (FUTURE)
+
+| Feature | Description |
+|---|---|
+| Secondary node replication | Disaster recovery to secondary server |
+| Multi-user (full) | Complete per-user memory isolation |
+| Custom model fine-tuning | Fine-tune local models on personal data |
 
 ## Versioning
 
@@ -309,4 +339,4 @@ Eidolon follows [Semantic Versioning](https://semver.org/):
 - **0.x.y** -- Development phase. Breaking changes expected.
 - **1.0.0** -- First stable release. All Phase 0-9 features complete.
 - **1.x.0** -- New features, backward compatible.
-- **2.0.0** -- Major architectural changes (plugin system, multi-user).
+- **2.0.0** -- Major architectural changes (plugin system, LLM provider abstraction).

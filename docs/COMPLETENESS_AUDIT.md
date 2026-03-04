@@ -1,10 +1,10 @@
 # Eidolon Implementation Completeness Audit
 
-> **Date:** 2026-03-03
+> **Date:** 2026-03-04
 > **Auditor:** eidolon-planner agent
 > **Scope:** All design documents, IMPLEMENTATION_PLAN.md, and ROADMAP.md compared against actual codebase
-> **Verdict: ~97% complete. 0 CRITICAL, 1 HIGH, 1 MEDIUM, 3 LOW open gaps (was 1 HIGH, 2 MEDIUM, 5 LOW in v4; 3 gaps resolved in v5).**
-> **Revision 5** -- marked G-06 (DND timezone tests), G-08 (CLI learning command), and G-14 (iOS VoiceOver) as RESOLVED; added G-12 iOS CI note
+> **Verdict: ~99% complete. 0 CRITICAL, 0 HIGH, 0 MEDIUM, 2 LOW open gaps (was 1 HIGH, 1 MEDIUM, 3 LOW in v5; 3 gaps resolved in v6).**
+> **Revision 6** -- marked G-07 (HA entity resolver), G-11 (Tauri pubkey), G-12 (iOS CI) as RESOLVED; downgraded G-10 to note existing 66 ARIA attributes
 
 ---
 
@@ -53,10 +53,11 @@ VoiceOverlay: 9, LearningView: 7, DashboardView: 5, SettingsView: 4, ContentView
 workflow has been added in v0.1.6 (xcodegen + xcodebuild in GitHub Actions), partially addressing
 G-12.
 
-One HIGH-severity gap remains: the iOS app lacks a `.xcodeproj` file (source files exist,
-SETUP.md provides manual instructions), though an iOS CI workflow was added in v0.1.6. One MEDIUM
-gap is HA entity resolution being MCP-passthrough only. Three LOW gaps are cosmetic or structural
-deviations from the plan that do not affect functionality.
+Two LOW-severity gaps remain: (1) config/validator.ts is inlined in loader.ts (structural
+deviation, no functional impact), and (2) desktop WCAG 2.1 AA has not been formally verified
+(though 66 ARIA attributes exist across 6 Svelte routes). All previously HIGH and MEDIUM gaps
+have been resolved. The v1.1 release addressed the remaining substantive gaps (G-07 HA entity
+resolution, G-11 Tauri pubkey, G-12 iOS CI).
 
 No CRITICAL gaps were found. No empty function bodies, no `throw new Error("not implemented")`
 patterns, no placeholder return values, and only 4 TODO/FIXME comments in the entire codebase
@@ -833,39 +834,27 @@ Modules without dedicated tests: `audit/logger.ts`, `privacy/retention.ts`, `con
 | ~~G-04~~ | ~~MEDIUM~~ | ~~2~~ | ~~Entity resolution thresholds hardcoded~~ | ~~Per-type thresholds not configurable~~ | **RESOLVED v3**: Thresholds ARE configurable via constructor parameter |
 | ~~G-05~~ | ~~MEDIUM~~ | ~~3~~ | ~~No Prometheus /metrics endpoint~~ | ~~No external monitoring integration~~ | **RESOLVED v4**: MetricsRegistry + wiring.ts + GET /metrics + tests |
 | ~~G-06~~ | ~~MEDIUM~~ | ~~4~~ | ~~DND schedule enforcement is basic~~ | ~~Timezone edge cases, no dedicated tests~~ | **RESOLVED v5**: 55+ timezone-aware tests with Intl.DateTimeFormat |
-| G-07 | MEDIUM | 4.5 | HA entity resolution is MCP-passthrough only | No Eidolon-native HA intelligence | Open |
+| ~~G-07~~ | ~~MEDIUM~~ | ~~4.5~~ | ~~HA entity resolution is MCP-passthrough only~~ | ~~No Eidolon-native HA intelligence~~ | **RESOLVED v6**: Full HAEntityResolver (265 lines) with exact/fuzzy/semantic matching in `packages/core/src/home-automation/resolver.ts` |
 | ~~G-08~~ | ~~LOW~~ | ~~5~~ | ~~CLI learning command is a stub~~ | ~~Users cannot interact with learning via CLI~~ | **RESOLVED v5**: 529 lines with status/discoveries/approve/reject/journal/sources |
 | ~~G-09~~ | ~~MEDIUM~~ | ~~6/8~~ | ~~iOS voice mode not implemented~~ | ~~iOS users have no voice capability~~ | **RESOLVED v3**: AudioService.swift has full AVAudioSession/microphone |
-| G-10 | LOW | 7 | Desktop WCAG 2.1 AA not verified | Accessibility may be insufficient | Open |
-| G-11 | LOW | 7 | Tauri updater pubkey is placeholder | Must replace before release | Open |
-| G-12 | HIGH | 8 | No .xcodeproj file for iOS | Cannot build iOS from CI | Open (iOS CI workflow added v0.1.6 with xcodegen) |
+| G-10 | LOW | 7 | Desktop WCAG 2.1 AA not formally verified | 66 ARIA attributes exist but AA compliance unverified | Open (partially addressed: skip-to-content, aria-live, aria-label, aria-current across 6 routes) |
+| ~~G-11~~ | ~~LOW~~ | ~~7~~ | ~~Tauri updater pubkey is placeholder~~ | ~~Must replace before release~~ | **RESOLVED v6**: Pubkey decodes to real minisign key (`A235525764C1D161`), not a placeholder |
+| ~~G-12~~ | ~~HIGH~~ | ~~8~~ | ~~No .xcodeproj file for iOS~~ | ~~Cannot build iOS from CI~~ | **RESOLVED v6**: iOS CI workflow exists (xcodegen + xcodebuild), project.yml complete, .xcodeproj intentionally not committed (standard XcodeGen practice) |
 | ~~G-13~~ | ~~MEDIUM~~ | ~~8~~ | ~~iOS voice mode missing~~ | ~~See G-09~~ | **RESOLVED v3**: Same as G-09 |
 | ~~G-14~~ | ~~LOW~~ | ~~8~~ | ~~No VoiceOver accessibility in iOS~~ | ~~iOS accessibility not implemented~~ | **RESOLVED v5**: 48 accessibility attributes across 7 Swift views |
 | ~~G-15~~ | ~~LOW~~ | ~~9~~ | ~~Glossary and troubleshooting docs missing~~ | ~~Documentation gap~~ | **RESOLVED v4**: GLOSSARY.md and TROUBLESHOOTING.md created |
 
-**Summary: 0 CRITICAL, 1 HIGH, 1 MEDIUM, 3 LOW open gaps (10 gaps resolved total: 4 in v3, 3 in v4, 3 in v5)**
-
-Note: G-12 (iOS .xcodeproj) severity could be reduced to MEDIUM since source files exist, SETUP.md provides manual instructions, and an iOS CI workflow using xcodegen was added in v0.1.6.
+**Summary: 0 CRITICAL, 0 HIGH, 0 MEDIUM, 2 LOW open gaps (13 gaps resolved total: 4 in v3, 3 in v4, 3 in v5, 3 in v6)**
 
 ---
 
 ## Recommendations
 
-### Priority 1: Address the Remaining HIGH Gap
+### Remaining LOW Gaps (Optional)
 
-1. **G-12 (iOS .xcodeproj):** Either commit an Xcode project file, create a Swift Package Manager project, or add a CI script that generates the project from existing source files. The current SETUP.md approach blocks automated iOS builds.
+1. **G-10 (Desktop WCAG 2.1 AA):** 66 ARIA attributes already exist across all 6 Svelte routes including skip-to-content, aria-live, aria-label, and aria-current. A formal WCAG 2.1 AA audit checklist pass would verify color contrast (4.5:1), focus visibility, keyboard navigation order, and error identification. No new code required; mostly a verification task.
 
-### Priority 2: Address MEDIUM Gap
-
-2. **G-07 (HA entity resolution):** Consider whether Eidolon-native HA entity resolution is desired or if MCP-passthrough is sufficient. Document the decision. If native resolution is wanted, add a lightweight entity mapping layer.
-
-### Priority 3: Address LOW Gaps Before Release
-
-3. **G-11 (Tauri pubkey):** Generate an Ed25519 signing key and replace the placeholder in `tauri.conf.json`.
-
-4. **G-10 (Desktop accessibility):** Add ARIA attributes to desktop Svelte components for WCAG 2.1 AA compliance.
-
-5. **G-01 (Config validator):** Structural deviation only. Low priority -- consider extracting `validateAndResolve()` into a standalone `validator.ts` for consistency with the plan.
+2. **G-01 (Config validator):** The `validateAndResolve()` function is inlined in `loader.ts` (87 lines total). This is clean, functional code. Extracting it to a separate `validator.ts` would match the plan but provides no functional benefit. ACCEPTED as-is.
 
 ### Resolved in v3
 
@@ -890,6 +879,13 @@ The following gaps have been addressed since v4:
 
 Additionally, an iOS CI workflow was added in v0.1.6 (xcodegen + xcodebuild in GitHub Actions), partially mitigating G-12.
 
+### Resolved in v6
+
+The following gaps have been addressed since v5 (verified by direct source code inspection on 2026-03-04):
+- **G-07**: Full `HAEntityResolver` class (265 lines) exists in `packages/core/src/home-automation/resolver.ts` implementing exact match, fuzzy match (Levenshtein), and semantic matching (embedding cosine similarity). Supports `resolveMultiple()` with "and"/"und" splitting for German+English. The audit text was written before v1.1 implementation.
+- **G-11**: The Tauri updater pubkey in `apps/desktop/src-tauri/tauri.conf.json` decodes to a real minisign public key with untrusted comment `A235525764C1D161`. No "PLACEHOLDER" string found in the file. The audit text incorrectly characterized it as a placeholder.
+- **G-12**: iOS CI workflow exists at `.github/workflows/ios-build.yml` (44 lines) performing: checkout, install xcodegen, generate project, xcodebuild for iOS Simulator. XcodeGen `project.yml` (51 lines) is complete with targets, schemes, and settings. `.xcodeproj` is intentionally not committed -- this is standard XcodeGen practice. `apps/ios/SETUP.md` documents the full workflow.
+
 ---
 
-*End of audit. Revision 5 generated on 2026-03-04. 10 gaps resolved total (4 in v3, 3 in v4, 3 in v5). 5 open gaps remain (1 HIGH, 1 MEDIUM, 3 LOW).*
+*End of audit. Revision 6 generated on 2026-03-04. 13 gaps resolved total (4 in v3, 3 in v4, 3 in v5, 3 in v6). 2 open gaps remain (both LOW).*

@@ -40,20 +40,15 @@
 - Prometheus /metrics: FULLY IMPLEMENTED (prometheus.ts + wiring.ts + gateway /metrics handler + tests) -- G-05 is RESOLVED
 - Integration Plan (Tiers 1-3, Sprints 1-12) all committed to main
 
-## Gap Status (updated March 4, 2026 deep review)
-RESOLVED since audit v4:
-- G-02: Golden dataset 105 turns
-- G-05: Prometheus /metrics fully implemented
-- G-15: GLOSSARY.md + TROUBLESHOOTING.md exist (9KB + 11KB)
-- G-06: DND timezone IS comprehensively tested (55+ tests in router.test.ts including Europe/Berlin, America/New_York, Asia/Tokyo, America/St_Johns, DST transitions, same-UTC-cross-timezone)
-- G-08: CLI learning command IS fully implemented (529 lines: status, discoveries, approve, reject, journal, sources)
-- G-14: iOS VoiceOver IS implemented (48 accessibility attributes across 7 Swift view files)
-- G-10: Desktop WCAG partial (66 ARIA attributes across 6 Svelte routes -- present but not verified against AA spec)
+## Gap Status (updated March 4, 2026 -- audit v6)
+13 of 15 gaps resolved. Only 2 LOW gaps remain:
+- LOW: G-01 -- config/validator.ts inlined in loader.ts (ACCEPTED, structural only)
+- LOW: G-10 -- Desktop WCAG 2.1 AA not formally verified (66 ARIA attrs exist, needs checklist pass)
 
-Still genuinely open:
-- HIGH: G-12 -- iOS .xcodeproj missing (XcodeGen project.yml exists, SETUP.md documents generation, but no CI integration)
-- LOW: G-01 -- config/validator.ts inlined in loader.ts (structural only, functional)
-- LOW: G-11 -- Tauri updater pubkey looks real (decoded to minisign key) but needs verification against actual signing key
+All HIGH/MEDIUM gaps resolved:
+- G-07 RESOLVED: HAEntityResolver (265 lines) with exact/fuzzy/semantic matching
+- G-11 RESOLVED: Tauri pubkey is real minisign key (A235525764C1D161)
+- G-12 RESOLVED: iOS CI with xcodegen exists, .xcodeproj intentionally not committed
 
 TODOs in production code (4 total, all benign):
 - apps/ios/PushNotificationService.swift:71 -- "TODO: Send token to Eidolon Core server via WebSocket" (feature gap)
@@ -102,14 +97,16 @@ TODOs in production code (4 total, all benign):
 - Lint issues are formatting-only in protocol (import ordering, whitespace) -- safe auto-fix
 - Integration Plan Tiers 1-3 (12 sprints, 43 findings) all merged to main before v0.1.6
 
-## Post-v1.0 Plan (v1.1 -- created March 2026)
-- Plan file: docs/POST_V1_PLAN.md
-- Top 4 features: Calendar Integration, Advanced HA, Web Dashboard Enhancement, Multi-GPU Pool
-- Discord channel ALREADY EXISTS (403+109 lines) -- not a v1.1 candidate
-- WhatsApp, OTel, Mobile Widget deferred to v1.2
-- GPUManager is single-worker (230 lines, config.url based) -- needs pool refactor for multi-GPU
-- AutomationEngine (426 lines) supports natural language schedule parsing
-- MCP module has health.ts (160 lines) and templates.ts (221 lines) -- HA builds on these
-- Web app already has 5 routes, 6 stores (~5,090 lines) -- enhancement not greenfield
-- Estimated total: 34 new files (~7,005 lines), 7 test files (~1,370 lines), 28 modifications
-- Recommended 5-week sprint plan: calendar+GPU parallel -> HA+web core -> web calendar+polish
+## Post-v1.0 Plans
+v1.1 (COMPLETED): Calendar, Advanced HA, Web Dashboard, Multi-GPU Pool
+v1.2 (PLANNED): WhatsApp Channel, Email Channel, OpenTelemetry -- docs/V1.2_V2.0_PLAN.md
+v2.0 (PLANNED): Plugin System, Local LLM Support (ILLMProvider) -- docs/V1.2_V2.0_PLAN.md
+- v1.2 estimate: 5.5 sprints (~8 weeks with parallelism)
+- v2.0 estimate: 6 sprints (~6 weeks with parallelism)
+- Total: ~14 weeks calendar time, 58 new files, ~9,970 new lines
+- WhatsApp uses official Business API (NOT Baileys), webhook-based
+- Email uses IMAP polling + SMTP sending (imapflow + nodemailer)
+- OTel uses @opentelemetry/sdk-node, HTTP exporter (gRPC may not work on Bun)
+- Plugin system: npm packages in ~/.eidolon/plugins/, permission-based sandbox
+- Local LLM: ILLMProvider abstraction, Ollama + llama.cpp providers, model router by task type
+- Key pattern: new channels follow TelegramChannel pattern exactly (injectable client, Result, auth check, rate limit)
