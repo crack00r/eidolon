@@ -39,6 +39,12 @@ import {
 import type { CalendarManager } from "../calendar/index.ts";
 import { AuthRateLimiter } from "./rate-limiter.ts";
 import { extractWebhookResult, handleWebhookRequest, type WebhookDeps } from "./webhook.ts";
+import type { WhatsAppChannel } from "../channels/whatsapp/channel.ts";
+import {
+  handleVerificationChallenge,
+  parseWebhookPayload,
+  verifyWebhookSignature,
+} from "../channels/whatsapp/webhook.ts";
 
 // ---------------------------------------------------------------------------
 // Zod schemas for RPC method parameters
@@ -318,6 +324,11 @@ export class GatewayServer {
   private broadcastFailureCount = 0;
   private startTime = 0;
   private server: ReturnType<typeof Bun.serve> | undefined;
+
+  /** WhatsApp channel reference for webhook routing. Set via setWhatsAppChannel(). */
+  private whatsAppChannel: WhatsAppChannel | undefined;
+  private whatsAppVerifyToken: string | undefined;
+  private whatsAppAppSecret: string | undefined;
 
   constructor(deps: {
     config: GatewayConfig;
@@ -960,6 +971,11 @@ export class GatewayServer {
           return new Response(body, { status: 200, headers });
         }
 
+        // GET|POST /webhooks/whatsapp -- WhatsApp Cloud API webhook
+        if (url.pathname === "/webhooks/whatsapp" && (req.method === "GET" || req.method === "POST")) {
+          return self.handleWhatsAppWebhook(req, isTls);
+        }
+
         // POST /webhooks/:id -- webhook ingestion endpoint
         if (url.pathname.startsWith("/webhooks/") && req.method === "POST") {
           const endpointId = url.pathname.slice("/webhooks/".length);
@@ -1140,6 +1156,93 @@ export class GatewayServer {
     }
 
     return response;
+  }
+
+  // -------------------------------------------------------------------------
+  // WhatsApp webhook integration
+  // -------------------------------------------------------------------------
+
+  /**
+   * Register the WhatsApp channel for webhook routing.
+   * Called by the daemon after WhatsApp channel initialization.
+   */
+  setWhatsAppChannel(channel: WhatsAppChannel, verifyToken: string, appSecret: string): void {
+    this.whatsAppChannel = channel;
+    this.whatsAppVerifyToken = verifyToken;
+    this.whatsAppAppSecret = appSecret;
+    this.logger.info("whatsapp-webhook", "WhatsApp webhook handler registered");
+  }
+
+  /**
+   * Handle WhatsApp webhook requests.
+   * GET: Meta verification challenge (hub.mode, hub.verify_token, hub.challenge).
+   * POST: Event delivery with X-Hub-Signature-256 HMAC verification.
+   */
+  private async handleWhatsAppWebhook(req: Request, isTls: boolean): Promise<Response> {
+    // GET: Verification challenge from Meta
+    if (req.method === "GET") {
+      const url = new URL(req.url);
+      if (!this.whatsAppVerifyToken) {
+        return secureResponse("WhatsApp webhook not configured", 503, isTls);
+      }
+      const result = handleVerificationChallenge(url.searchParams, this.whatsAppVerifyToken);
+      if (result.ok) {
+        this.logger.info("whatsapp-webhook", "Verification challenge accepted");
+        return new Response(result.value, { status: 200, headers: { "Content-Type": "text/plain" } });
+      }
+      this.logger.warn("whatsapp-webhook", `Verification failed: ${result.error.message}`);
+      return secureResponse("Verification failed", 403, isTls);
+    }
+
+    // POST: Event delivery
+    if (req.method === "POST") {
+      if (!this.whatsAppChannel || !this.whatsAppAppSecret) {
+        return secureResponse("WhatsApp webhook not configured", 503, isTls);
+      }
+
+      // Read body
+      let bodyText: string;
+      try {
+        bodyText = await req.text();
+      } catch {
+        return secureResponse("Failed to read body", 400, isTls);
+      }
+
+      // Verify HMAC-SHA256 signature
+      const signature = req.headers.get("X-Hub-Signature-256") ?? "";
+      const signatureValid = await verifyWebhookSignature(bodyText, signature, this.whatsAppAppSecret);
+      if (!signatureValid) {
+        this.logger.warn("whatsapp-webhook", "Invalid webhook signature");
+        return secureResponse("Invalid signature", 401, isTls);
+      }
+
+      // Parse JSON body
+      let body: unknown;
+      try {
+        body = JSON.parse(bodyText);
+      } catch {
+        return secureResponse("Invalid JSON", 400, isTls);
+      }
+
+      // Parse webhook payload
+      const parseResult = parseWebhookPayload(body);
+      if (!parseResult.ok) {
+        this.logger.warn("whatsapp-webhook", `Payload parse error: ${parseResult.error.message}`);
+        // Return 200 even on parse errors to prevent Meta from retrying
+        return new Response("OK", { status: 200 });
+      }
+
+      // Route events to the WhatsApp channel
+      if (parseResult.value.length > 0) {
+        this.whatsAppChannel.handleWebhookEvents(parseResult.value).catch((err: unknown) => {
+          this.logger.error("whatsapp-webhook", "Error handling webhook events", err);
+        });
+      }
+
+      return new Response("OK", { status: 200 });
+    }
+
+    return secureResponse("Method not allowed", 405, isTls);
   }
 
   // -------------------------------------------------------------------------

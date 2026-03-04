@@ -16,6 +16,14 @@ import type { DiscordChannel, DiscordConfig, IDiscordClient } from "../channels/
 import { MessageRouter } from "../channels/router.ts";
 import type { TelegramConfig } from "../channels/telegram/channel.ts";
 import { TelegramChannel } from "../channels/telegram/channel.ts";
+import type { EmailChannelConfig } from "../channels/email/channel.ts";
+import { EmailChannel } from "../channels/email/channel.ts";
+import { BunImapClient } from "../channels/email/imap.ts";
+import { BunSmtpClient } from "../channels/email/smtp.ts";
+import type { WhatsAppChannelConfig } from "../channels/whatsapp/channel.ts";
+import { WhatsAppChannel } from "../channels/whatsapp/channel.ts";
+import type { WhatsAppApiConfig } from "../channels/whatsapp/api.ts";
+import { WhatsAppCloudApi } from "../channels/whatsapp/api.ts";
 import { ClaudeCodeManager } from "../claude/manager.ts";
 import { loadConfig } from "../config/loader.ts";
 import { getConfigPath, getDataDir, getPidFilePath } from "../config/paths.ts";
@@ -106,6 +114,8 @@ interface InitializedModules {
   messageRouter?: MessageRouter;
   telegramChannel?: TelegramChannel;
   discordChannel?: DiscordChannel;
+  whatsappChannel?: WhatsAppChannel;
+  emailChannel?: EmailChannel;
   gpuManager?: GPUManager;
   gpuWorkerPool?: GPUWorkerPool;
   calendarManager?: CalendarManager;
@@ -879,7 +889,150 @@ export class EidolonDaemon {
               }
             }
 
-            if (!config?.channels.telegram?.enabled && !config?.channels.discord?.enabled) {
+            // Wire up WhatsApp channel if configured and enabled
+            if (config?.channels.whatsapp?.enabled) {
+              const waConfig = config.channels.whatsapp;
+
+              const accessToken = waConfig.accessToken;
+              const verifyToken = waConfig.verifyToken;
+              const appSecret = waConfig.appSecret;
+
+              if (typeof accessToken !== "string" || typeof verifyToken !== "string" || typeof appSecret !== "string") {
+                logger.warn(
+                  "daemon",
+                  "WhatsApp channel skipped: one or more secrets (accessToken, verifyToken, appSecret) " +
+                    "are unresolved secret references. Ensure the master key is set and secrets exist.",
+                );
+              } else {
+                const apiConfig: WhatsAppApiConfig = {
+                  phoneNumberId: waConfig.phoneNumberId,
+                  accessToken,
+                };
+                const api = new WhatsAppCloudApi(apiConfig, logger);
+
+                const channelConfig: WhatsAppChannelConfig = {
+                  phoneNumberId: waConfig.phoneNumberId,
+                  accessToken,
+                  verifyToken,
+                  appSecret,
+                  allowedPhoneNumbers: waConfig.allowedPhoneNumbers,
+                };
+                const channel = new WhatsAppChannel(channelConfig, api, logger);
+
+                // Wire inbound messages from WhatsApp -> MessageRouter -> EventBus
+                channel.onMessage(async (message) => {
+                  const result = this.modules.messageRouter?.routeInbound(message);
+                  if (result && !result.ok) {
+                    logger.error("daemon", "Failed to route WhatsApp inbound message", undefined, {
+                      messageId: message.id,
+                      error: result.error.message,
+                    });
+                  }
+                });
+
+                // Register channel with the router for outbound routing
+                this.modules.messageRouter.registerChannel(channel);
+
+                // Connect (webhook mode -- just marks as ready)
+                const connectResult = await channel.connect();
+                if (connectResult.ok) {
+                  this.modules.whatsappChannel = channel;
+                  logger.info("daemon", "WhatsApp channel connected");
+                } else {
+                  logger.error("daemon", `WhatsApp channel failed to connect: ${connectResult.error.message}`);
+                }
+              }
+            }
+
+            // Wire up Email channel if configured and enabled
+            if (config?.channels.email?.enabled) {
+              const emailConfig = config.channels.email;
+
+              const imapPassword = emailConfig.imap.password;
+              const smtpPassword = emailConfig.smtp.password;
+
+              if (typeof imapPassword !== "string" || typeof smtpPassword !== "string") {
+                logger.warn(
+                  "daemon",
+                  "Email channel skipped: one or more secrets (imap.password, smtp.password) " +
+                    "are unresolved secret references. Ensure the master key is set and secrets exist.",
+                );
+              } else {
+                const imapClient = new BunImapClient({
+                  host: emailConfig.imap.host,
+                  port: emailConfig.imap.port,
+                  tls: emailConfig.imap.tls,
+                  user: emailConfig.imap.user,
+                  password: imapPassword,
+                  folder: emailConfig.imap.folder,
+                });
+
+                const smtpClient = new BunSmtpClient({
+                  host: emailConfig.smtp.host,
+                  port: emailConfig.smtp.port,
+                  tls: emailConfig.smtp.tls,
+                  user: emailConfig.smtp.user,
+                  password: smtpPassword,
+                  from: emailConfig.smtp.from,
+                });
+
+                const channelConfig: EmailChannelConfig = {
+                  imap: {
+                    host: emailConfig.imap.host,
+                    port: emailConfig.imap.port,
+                    tls: emailConfig.imap.tls,
+                    user: emailConfig.imap.user,
+                    password: imapPassword,
+                    pollIntervalMs: emailConfig.imap.pollIntervalMs,
+                    folder: emailConfig.imap.folder,
+                  },
+                  smtp: {
+                    host: emailConfig.smtp.host,
+                    port: emailConfig.smtp.port,
+                    tls: emailConfig.smtp.tls,
+                    user: emailConfig.smtp.user,
+                    password: smtpPassword,
+                    from: emailConfig.smtp.from,
+                  },
+                  allowedSenders: emailConfig.allowedSenders,
+                  subjectPrefix: emailConfig.subjectPrefix,
+                  maxAttachmentSizeMb: emailConfig.maxAttachmentSizeMb,
+                  threadingEnabled: emailConfig.threadingEnabled,
+                };
+
+                const channel = new EmailChannel(channelConfig, imapClient, smtpClient, logger);
+
+                // Wire inbound messages from Email -> MessageRouter -> EventBus
+                channel.onMessage(async (message) => {
+                  const result = this.modules.messageRouter?.routeInbound(message);
+                  if (result && !result.ok) {
+                    logger.error("daemon", "Failed to route Email inbound message", undefined, {
+                      messageId: message.id,
+                      error: result.error.message,
+                    });
+                  }
+                });
+
+                // Register channel with the router for outbound routing
+                this.modules.messageRouter.registerChannel(channel);
+
+                // Connect (IMAP + SMTP)
+                const connectResult = await channel.connect();
+                if (connectResult.ok) {
+                  this.modules.emailChannel = channel;
+                  logger.info("daemon", "Email channel connected");
+                } else {
+                  logger.error("daemon", `Email channel failed to connect: ${connectResult.error.message}`);
+                }
+              }
+            }
+
+            if (
+              !config?.channels.telegram?.enabled &&
+              !config?.channels.discord?.enabled &&
+              !config?.channels.whatsapp?.enabled &&
+              !config?.channels.email?.enabled
+            ) {
               logger.info("daemon", "No channel adapters configured");
             }
 
@@ -1041,6 +1194,34 @@ export class EidolonDaemon {
           });
 
           logger?.info("daemon", "GPU pool RPC handlers registered on gateway");
+        },
+      });
+
+      // 19a-wa. Wire WhatsApp webhook handler to GatewayServer (needs GatewayServer, WhatsAppChannel)
+      initOrder.push({
+        name: "GatewayWhatsAppWiring",
+        fn: () => {
+          const gatewayServer = this.modules.gatewayServer;
+          const whatsappChannel = this.modules.whatsappChannel;
+          const config = this.modules.config;
+          const logger = this.modules.logger;
+
+          if (!gatewayServer || !whatsappChannel || !config?.channels.whatsapp) {
+            logger?.debug("daemon", "WhatsApp gateway wiring skipped: missing gateway or channel");
+            return;
+          }
+
+          const waConfig = config.channels.whatsapp;
+          const verifyToken = waConfig.verifyToken;
+          const appSecret = waConfig.appSecret;
+
+          if (typeof verifyToken !== "string" || typeof appSecret !== "string") {
+            logger?.warn("daemon", "WhatsApp gateway wiring skipped: unresolved secrets");
+            return;
+          }
+
+          gatewayServer.setWhatsAppChannel(whatsappChannel, verifyToken, appSecret);
+          logger?.info("daemon", "WhatsApp webhook handler registered on gateway");
         },
       });
 
@@ -1570,6 +1751,28 @@ export class EidolonDaemon {
         logger?.info("daemon", "Discord channel disconnected");
       } catch (err: unknown) {
         logger?.error("daemon", "Error disconnecting Discord channel", err);
+      }
+    }
+
+    // 17 -> WhatsApp channel (disconnect)
+    if (this.modules.whatsappChannel) {
+      try {
+        await this.modules.whatsappChannel.disconnect();
+        this.modules.messageRouter?.unregisterChannel("whatsapp");
+        logger?.info("daemon", "WhatsApp channel disconnected");
+      } catch (err: unknown) {
+        logger?.error("daemon", "Error disconnecting WhatsApp channel", err);
+      }
+    }
+
+    // 17 -> Email channel (disconnect)
+    if (this.modules.emailChannel) {
+      try {
+        await this.modules.emailChannel.disconnect();
+        this.modules.messageRouter?.unregisterChannel("email");
+        logger?.info("daemon", "Email channel disconnected");
+      } catch (err: unknown) {
+        logger?.error("daemon", "Error disconnecting Email channel", err);
       }
     }
 

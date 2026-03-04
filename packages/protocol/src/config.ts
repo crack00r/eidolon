@@ -216,6 +216,50 @@ export const LearningConfigSchema = z.object({
 // Channels
 // ---------------------------------------------------------------------------
 
+export const WhatsAppConfigSchema = z.object({
+  enabled: z.boolean().default(false),
+  phoneNumberId: z.string(),
+  businessAccountId: z.string(),
+  accessToken: SecretRefSchema.or(z.string()),
+  verifyToken: SecretRefSchema.or(z.string()),
+  appSecret: SecretRefSchema.or(z.string()),
+  allowedPhoneNumbers: z.array(z.string()), // E.164 format
+  notifyOnDiscovery: z.boolean().default(true),
+  dndSchedule: z
+    .object({
+      start: z.string().default("22:00"),
+      end: z.string().default("07:00"),
+    })
+    .optional(),
+});
+
+export const EmailConfigSchema = z
+  .object({
+    enabled: z.boolean().default(false),
+    imap: z.object({
+      host: z.string(),
+      port: z.number().int().positive().default(993),
+      tls: z.boolean().default(true),
+      user: z.string(),
+      password: SecretRefSchema.or(z.string()),
+      pollIntervalMs: z.number().int().positive().default(30_000),
+      folder: z.string().default("INBOX"),
+    }),
+    smtp: z.object({
+      host: z.string(),
+      port: z.number().int().positive().default(587),
+      tls: z.boolean().default(true),
+      user: z.string(),
+      password: SecretRefSchema.or(z.string()),
+      from: z.string(),
+    }),
+    allowedSenders: z.array(z.string()),
+    subjectPrefix: z.string().default("[Eidolon]"),
+    maxAttachmentSizeMb: z.number().positive().default(10),
+    threadingEnabled: z.boolean().default(true),
+  })
+  .optional();
+
 export const ChannelConfigSchema = z.object({
   telegram: z
     .object({
@@ -240,6 +284,8 @@ export const ChannelConfigSchema = z.object({
       dmOnly: z.boolean().default(true),
     })
     .optional(),
+  whatsapp: WhatsAppConfigSchema.optional(),
+  email: EmailConfigSchema,
 });
 
 // ---------------------------------------------------------------------------
@@ -558,3 +604,5 @@ export type CalendarConfigInferred = z.infer<typeof CalendarConfigSchema>;
 export type HomeAutomationConfig = z.infer<typeof HomeAutomationConfigSchema>;
 export type ClaudeAccount = z.infer<typeof ClaudeAccountSchema>;
 export type WebhookEndpointConfig = z.infer<typeof WebhookEndpointSchema>;
+export type WhatsAppConfig = z.infer<typeof WhatsAppConfigSchema>;
+export type EmailConfig = z.infer<typeof EmailConfigSchema>;
