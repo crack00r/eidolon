@@ -3,8 +3,8 @@
 > **Date:** 2026-03-03
 > **Auditor:** eidolon-planner agent
 > **Scope:** All design documents, IMPLEMENTATION_PLAN.md, and ROADMAP.md compared against actual codebase
-> **Verdict: ~96% complete. 0 CRITICAL, 1 HIGH, 2 MEDIUM, 5 LOW open gaps (was 2 HIGH, 3 MEDIUM, 6 LOW in v3; 2 gaps resolved in v4).**
-> **Revision 4** -- marked G-02 (golden dataset) and G-05 (Prometheus metrics) as RESOLVED; updated test counts; created GLOSSARY.md and TROUBLESHOOTING.md (G-15 resolved)
+> **Verdict: ~97% complete. 0 CRITICAL, 1 HIGH, 1 MEDIUM, 3 LOW open gaps (was 1 HIGH, 2 MEDIUM, 5 LOW in v4; 3 gaps resolved in v5).**
+> **Revision 5** -- marked G-06 (DND timezone tests), G-08 (CLI learning command), and G-14 (iOS VoiceOver) as RESOLVED; added G-12 iOS CI note
 
 ---
 
@@ -39,18 +39,24 @@ plan's ~13,810 estimate (2.8x), with 93 test files containing ~1,197 test defini
 The 3-database split, IClaudeProcess abstraction, Result pattern, and Zod validation are
 consistently applied throughout.
 
-**Revision 4 updates:** Two previously HIGH/MEDIUM gaps have been resolved since v3. (1) The
-golden dataset (G-02) now contains 105 annotated conversation turns (plan required 50+), covering
-German/English, facts, decisions, preferences, corrections, and edge cases. (2) Prometheus metrics
-(G-05) are fully implemented with `MetricsRegistry` in `metrics/prometheus.ts`, event bus wiring
-in `metrics/wiring.ts`, a `GET /metrics` endpoint in the gateway server, and dedicated tests for
-all components. Additionally, `docs/GLOSSARY.md` and `docs/TROUBLESHOOTING.md` have been created,
-resolving G-15.
+**Revision 5 updates:** Three gaps have been resolved since v4. (1) DND schedule enforcement
+(G-06) now has 55+ timezone-aware tests in `packages/core/src/channels/__tests__/router.test.ts`
+covering Europe/Berlin, America/New_York, Asia/Tokyo, America/St_Johns (half-hour offset), DST
+transitions (spring forward/fall back), cross-timezone comparison, and invalid timezone fallback.
+The implementation uses `Intl.DateTimeFormat` with `formatToParts()`. (2) The CLI learning command
+(G-08) is fully implemented at 529 lines in `packages/cli/src/commands/learning.ts` with
+subcommands: status, discoveries, approve, reject, journal, sources, all importing from
+`@eidolon/core` with proper error handling. (3) iOS VoiceOver accessibility (G-14) is implemented
+with 48 accessibility attributes across 7 Swift view files (ChatView: 13, MemoryView: 9,
+VoiceOverlay: 9, LearningView: 7, DashboardView: 5, SettingsView: 4, ContentView: 1) including
+`accessibilityLabel`, `accessibilityHint`, and `accessibilityValue`. Additionally, an iOS CI
+workflow has been added in v0.1.6 (xcodegen + xcodebuild in GitHub Actions), partially addressing
+G-12.
 
 One HIGH-severity gap remains: the iOS app lacks a `.xcodeproj` file (source files exist,
-SETUP.md provides manual instructions). Two MEDIUM gaps include DND schedule without timezone
-tests and HA entity resolution being MCP-passthrough only. Five LOW gaps are cosmetic or
-structural deviations from the plan that do not affect functionality.
+SETUP.md provides manual instructions), though an iOS CI workflow was added in v0.1.6. One MEDIUM
+gap is HA entity resolution being MCP-passthrough only. Three LOW gaps are cosmetic or structural
+deviations from the plan that do not affect functionality.
 
 No CRITICAL gaps were found. No empty function bodies, no `throw new Error("not implemented")`
 patterns, no placeholder return values, and only 4 TODO/FIXME comments in the entire codebase
@@ -421,7 +427,7 @@ All exit criteria met structurally. Circuit breakers have full state transition 
 
 ### Gaps Found
 
-- **[MEDIUM] G-06: DND schedule enforcement is basic.** The DND schedule is implemented in `router.ts` with `isDndActive()`, but it only suppresses non-critical notifications. The config schema defines `dndSchedule.start` and `dndSchedule.end` fields, and the implementation reads them, but there are no tests specifically for DND behavior and the logic does not handle timezone-aware DND transitions.
+- ~~**[MEDIUM] G-06: DND schedule enforcement is basic.**~~ **RESOLVED in v5.** DND schedule enforcement now has 55+ timezone-aware tests in `packages/core/src/channels/__tests__/router.test.ts` covering Europe/Berlin, America/New_York, Asia/Tokyo, America/St_Johns (half-hour offset), DST transitions (spring forward/fall back), cross-timezone comparison, and invalid timezone fallback. The implementation uses `Intl.DateTimeFormat` with `formatToParts()` for robust timezone handling.
 
 ### Missing Files
 
@@ -433,7 +439,7 @@ None.
 
 Structurally met. User allowlist filtering is implemented. Channel-to-EventBus-to-CognitiveLoop flow is wired in the daemon.
 
-**Phase 4 verdict: ~95% complete**
+**Phase 4 verdict: COMPLETE**
 
 ---
 
@@ -487,19 +493,19 @@ None expected. Phase 4.5 is explicitly "configuration only, no new code files."
 
 ### Gaps Found
 
-- **[LOW] G-08: CLI learning command is a stub.** `cli/src/commands/learning.ts` is 15 lines and prints "Not yet implemented -- Phase 5". The core learning modules are fully implemented, but the CLI wiring is not done. Users cannot interact with learning via CLI.
+- ~~**[LOW] G-08: CLI learning command is a stub.**~~ **RESOLVED in v5.** The CLI learning command is fully implemented at 529 lines in `packages/cli/src/commands/learning.ts` with subcommands: status, discoveries, approve, reject, journal, sources. All import from `@eidolon/core` with proper error handling.
 
 ### Missing Files
 
-None in core. CLI wiring missing.
+None.
 
 ### Exit Criteria Assessment
 
 > "Eidolon discovers content during idle periods, filters by relevance, stores knowledge, and can implement code changes in a safe branch. All code implementations require user approval. Auto-lint/test gates code changes."
 
-Core modules meet all criteria. CLI interaction gap does not affect the underlying functionality.
+All exit criteria met. Core modules are fully implemented. CLI learning command provides user interaction with status, discoveries, approve, reject, journal, and sources subcommands.
 
-**Phase 5 verdict: ~90% complete (CLI stub)**
+**Phase 5 verdict: COMPLETE**
 
 ---
 
@@ -636,23 +642,23 @@ Structurally met. All routes present. System tray implemented. Build workflow ex
 
 ### Gaps Found
 
-- **[HIGH] G-12: No .xcodeproj file.** The iOS app has all source files but no Xcode project file. `SETUP.md` provides manual instructions: "No `.xcodeproj` is included -- create it fresh in Xcode." While this works for developers, it means the iOS app cannot be built from CI without manual setup. The plan lists `Eidolon.xcodeproj` as a deliverable.
+- **[HIGH] G-12: No .xcodeproj file.** The iOS app has all source files but no Xcode project file. `SETUP.md` provides manual instructions: "No `.xcodeproj` is included -- create it fresh in Xcode." While this works for developers, it means the iOS app cannot be built from CI without manual setup. The plan lists `Eidolon.xcodeproj` as a deliverable. **Note (v5):** An iOS CI workflow was added in v0.1.6 using xcodegen + xcodebuild in GitHub Actions, which generates the project file automatically during CI builds. This partially mitigates the gap, though a committed project file is still absent from the repository.
 
 - ~~**[MEDIUM] G-13: iOS voice mode not implemented.**~~ **CORRECTED in v3.** iOS voice mode IS implemented. `AudioService.swift` (297 lines) provides AVAudioSession with `.playAndRecord` category and `.voiceChat` mode (echo cancellation), AVAudioEngine-based microphone capture, format conversion to 16 kHz mono PCM via AVAudioConverter, real-time RMS level metering, and proper permission handling. The `Info.plist` includes microphone usage description.
 
-- **[LOW] G-14: No VoiceOver accessibility.** Grep for `accessibilityLabel`, `accessibilityHint`, `VoiceOver` in iOS source returns zero results. The plan mentions "VoiceOver accessibility support" as a deliverable.
+- ~~**[LOW] G-14: No VoiceOver accessibility.**~~ **RESOLVED in v5.** iOS VoiceOver accessibility is implemented with 48 accessibility attributes across 7 Swift view files (ChatView: 13, MemoryView: 9, VoiceOverlay: 9, LearningView: 7, DashboardView: 5, SettingsView: 4, ContentView: 1) including `accessibilityLabel`, `accessibilityHint`, and `accessibilityValue`.
 
 ### Missing Files
 
-- `Eidolon.xcodeproj` (or equivalent) -- HIGH gap
+- `Eidolon.xcodeproj` (or equivalent) -- HIGH gap (mitigated by xcodegen in iOS CI workflow added v0.1.6)
 
 ### Exit Criteria Assessment
 
 > "iOS app connects to Core over Tailscale or Cloudflare Tunnel, chat works, voice works, push notifications arrive. Available on TestFlight."
 
-Mostly met. Chat, push notifications, and voice mode audio service are implemented. Cloudflare Tunnel networking is implemented. Voice UI integration (button in ChatView, playback) may need additional wiring. TestFlight distribution requires the missing Xcode project.
+Mostly met. Chat, push notifications, voice mode audio service, and VoiceOver accessibility are implemented. Cloudflare Tunnel networking is implemented. Voice UI integration (button in ChatView, playback) may need additional wiring. TestFlight distribution is partially addressed by the iOS CI workflow (xcodegen + xcodebuild).
 
-**Phase 8 verdict: ~90% complete**
+**Phase 8 verdict: ~92% complete**
 
 ---
 
@@ -772,11 +778,10 @@ None found. All exported functions have implementations. Test files use `(): voi
 
 ### Stub Implementations
 
-Two CLI command files are explicit stubs:
+One CLI command file remains as an explicit stub:
 - `packages/cli/src/commands/channel.ts` (15 lines): "Not yet implemented -- Phase 4"
-- `packages/cli/src/commands/learning.ts` (15 lines): "Not yet implemented -- Phase 5"
 
-The underlying core modules for both channels and learning are fully implemented. Only the CLI wiring is missing.
+The underlying core module for channels is fully implemented. Only the CLI wiring is missing. The learning CLI stub was resolved in v5 (now 529 lines with full subcommand support).
 
 ### Placeholder Return Values
 
@@ -827,20 +832,20 @@ Modules without dedicated tests: `audit/logger.ts`, `privacy/retention.ts`, `con
 | ~~G-03~~ | ~~MEDIUM~~ | ~~2~~ | ~~No PDF document indexing~~ | ~~Users cannot search PDF content~~ | **RESOLVED v3**: PDF IS implemented via pdf-parse dynamic import |
 | ~~G-04~~ | ~~MEDIUM~~ | ~~2~~ | ~~Entity resolution thresholds hardcoded~~ | ~~Per-type thresholds not configurable~~ | **RESOLVED v3**: Thresholds ARE configurable via constructor parameter |
 | ~~G-05~~ | ~~MEDIUM~~ | ~~3~~ | ~~No Prometheus /metrics endpoint~~ | ~~No external monitoring integration~~ | **RESOLVED v4**: MetricsRegistry + wiring.ts + GET /metrics + tests |
-| G-06 | MEDIUM | 4 | DND schedule enforcement is basic | Timezone edge cases, no dedicated tests | Open |
+| ~~G-06~~ | ~~MEDIUM~~ | ~~4~~ | ~~DND schedule enforcement is basic~~ | ~~Timezone edge cases, no dedicated tests~~ | **RESOLVED v5**: 55+ timezone-aware tests with Intl.DateTimeFormat |
 | G-07 | MEDIUM | 4.5 | HA entity resolution is MCP-passthrough only | No Eidolon-native HA intelligence | Open |
-| G-08 | LOW | 5 | CLI learning command is a stub | Users cannot interact with learning via CLI | Open |
+| ~~G-08~~ | ~~LOW~~ | ~~5~~ | ~~CLI learning command is a stub~~ | ~~Users cannot interact with learning via CLI~~ | **RESOLVED v5**: 529 lines with status/discoveries/approve/reject/journal/sources |
 | ~~G-09~~ | ~~MEDIUM~~ | ~~6/8~~ | ~~iOS voice mode not implemented~~ | ~~iOS users have no voice capability~~ | **RESOLVED v3**: AudioService.swift has full AVAudioSession/microphone |
 | G-10 | LOW | 7 | Desktop WCAG 2.1 AA not verified | Accessibility may be insufficient | Open |
 | G-11 | LOW | 7 | Tauri updater pubkey is placeholder | Must replace before release | Open |
-| G-12 | HIGH | 8 | No .xcodeproj file for iOS | Cannot build iOS from CI | Open |
+| G-12 | HIGH | 8 | No .xcodeproj file for iOS | Cannot build iOS from CI | Open (iOS CI workflow added v0.1.6 with xcodegen) |
 | ~~G-13~~ | ~~MEDIUM~~ | ~~8~~ | ~~iOS voice mode missing~~ | ~~See G-09~~ | **RESOLVED v3**: Same as G-09 |
-| G-14 | LOW | 8 | No VoiceOver accessibility in iOS | iOS accessibility not implemented | Open |
+| ~~G-14~~ | ~~LOW~~ | ~~8~~ | ~~No VoiceOver accessibility in iOS~~ | ~~iOS accessibility not implemented~~ | **RESOLVED v5**: 48 accessibility attributes across 7 Swift views |
 | ~~G-15~~ | ~~LOW~~ | ~~9~~ | ~~Glossary and troubleshooting docs missing~~ | ~~Documentation gap~~ | **RESOLVED v4**: GLOSSARY.md and TROUBLESHOOTING.md created |
 
-**Summary: 0 CRITICAL, 1 HIGH, 2 MEDIUM, 5 LOW open gaps (7 gaps resolved total: 4 in v3, 3 in v4)**
+**Summary: 0 CRITICAL, 1 HIGH, 1 MEDIUM, 3 LOW open gaps (10 gaps resolved total: 4 in v3, 3 in v4, 3 in v5)**
 
-Note: G-12 (iOS .xcodeproj) severity could be reduced to MEDIUM since source files exist and SETUP.md provides manual instructions; CI automation is the only gap.
+Note: G-12 (iOS .xcodeproj) severity could be reduced to MEDIUM since source files exist, SETUP.md provides manual instructions, and an iOS CI workflow using xcodegen was added in v0.1.6.
 
 ---
 
@@ -850,21 +855,17 @@ Note: G-12 (iOS .xcodeproj) severity could be reduced to MEDIUM since source fil
 
 1. **G-12 (iOS .xcodeproj):** Either commit an Xcode project file, create a Swift Package Manager project, or add a CI script that generates the project from existing source files. The current SETUP.md approach blocks automated iOS builds.
 
-### Priority 2: Address MEDIUM Gaps
+### Priority 2: Address MEDIUM Gap
 
-2. **G-06 (DND timezone):** Add timezone-aware DND schedule tests and ensure the `isDndActive()` check handles timezone transitions correctly (e.g., user crossing midnight boundary).
-
-3. **G-07 (HA entity resolution):** Consider whether Eidolon-native HA entity resolution is desired or if MCP-passthrough is sufficient. Document the decision. If native resolution is wanted, add a lightweight entity mapping layer.
+2. **G-07 (HA entity resolution):** Consider whether Eidolon-native HA entity resolution is desired or if MCP-passthrough is sufficient. Document the decision. If native resolution is wanted, add a lightweight entity mapping layer.
 
 ### Priority 3: Address LOW Gaps Before Release
 
-4. **G-11 (Tauri pubkey):** Generate an Ed25519 signing key and replace the placeholder in `tauri.conf.json`.
+3. **G-11 (Tauri pubkey):** Generate an Ed25519 signing key and replace the placeholder in `tauri.conf.json`.
 
-5. **G-08 (CLI learning):** Wire the existing core learning modules to the CLI command. This is a small task since the core modules are fully implemented.
+4. **G-10 (Desktop accessibility):** Add ARIA attributes to desktop Svelte components for WCAG 2.1 AA compliance.
 
-6. **G-10/G-14 (Accessibility):** Add ARIA attributes to desktop Svelte components and VoiceOver labels to iOS views.
-
-7. **G-01 (Config validator):** Structural deviation only. Low priority -- consider extracting `validateAndResolve()` into a standalone `validator.ts` for consistency with the plan.
+5. **G-01 (Config validator):** Structural deviation only. Low priority -- consider extracting `validateAndResolve()` into a standalone `validator.ts` for consistency with the plan.
 
 ### Resolved in v3
 
@@ -880,6 +881,15 @@ The following gaps have been addressed since v3:
 - **G-05**: Prometheus metrics fully implemented (`MetricsRegistry`, `wiring.ts`, `GET /metrics` endpoint, dedicated tests)
 - **G-15**: `docs/GLOSSARY.md` and `docs/TROUBLESHOOTING.md` created with comprehensive content
 
+### Resolved in v5
+
+The following gaps have been addressed since v4:
+- **G-06**: DND schedule enforcement now has 55+ timezone-aware tests in `packages/core/src/channels/__tests__/router.test.ts` covering Europe/Berlin, America/New_York, Asia/Tokyo, America/St_Johns (half-hour offset), DST transitions (spring forward/fall back), cross-timezone comparison, and invalid timezone fallback. Implementation uses `Intl.DateTimeFormat` with `formatToParts()`.
+- **G-08**: CLI learning command fully implemented at 529 lines in `packages/cli/src/commands/learning.ts` with subcommands: status, discoveries, approve, reject, journal, sources. All import from `@eidolon/core` with proper error handling.
+- **G-14**: iOS VoiceOver accessibility implemented with 48 accessibility attributes across 7 Swift view files (ChatView: 13, MemoryView: 9, VoiceOverlay: 9, LearningView: 7, DashboardView: 5, SettingsView: 4, ContentView: 1) including `accessibilityLabel`, `accessibilityHint`, and `accessibilityValue`.
+
+Additionally, an iOS CI workflow was added in v0.1.6 (xcodegen + xcodebuild in GitHub Actions), partially mitigating G-12.
+
 ---
 
-*End of audit. Revision 4 generated on 2026-03-03. 7 gaps resolved total (4 in v3, 3 in v4). 8 open gaps remain (1 HIGH, 2 MEDIUM, 5 LOW).*
+*End of audit. Revision 5 generated on 2026-03-04. 10 gaps resolved total (4 in v3, 3 in v4, 3 in v5). 5 open gaps remain (1 HIGH, 1 MEDIUM, 3 LOW).*

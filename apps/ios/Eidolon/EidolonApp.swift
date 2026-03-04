@@ -16,6 +16,9 @@ struct EidolonApp: App {
                 .environmentObject(networkManager)
                 .environmentObject(pushNotificationService)
                 .preferredColorScheme(.dark)
+                .task {
+                    pushNotificationService.bind(to: webSocketService)
+                }
         }
     }
 }

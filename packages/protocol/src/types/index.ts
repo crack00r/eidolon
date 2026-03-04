@@ -4,12 +4,12 @@
 
 export * from "./calendar.ts";
 export * from "./channels.ts";
-export * from "./home-automation.ts";
 export * from "./claude.ts";
 export * from "./database.ts";
 export * from "./events.ts";
 export * from "./gateway.ts";
 export * from "./health.ts";
+export * from "./home-automation.ts";
 export * from "./learning.ts";
 export * from "./logging.ts";
 export * from "./memory.ts";

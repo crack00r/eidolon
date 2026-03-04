@@ -1,0 +1,43 @@
+name: iOS Build
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/ios/**"
+  pull_request:
+    branches: [main]
+    paths:
+      - "apps/ios/**"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build iOS (Simulator)
+    runs-on: macos-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        working-directory: apps/ios
+        run: xcodegen generate
+
+      - name: Build for iOS Simulator
+        working-directory: apps/ios
+        run: |
+          xcodebuild build \
+            -project Eidolon.xcodeproj \
+            -scheme Eidolon \
+            -destination 'platform=iOS Simulator,name=iPhone 16' \
+            -configuration Debug \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
