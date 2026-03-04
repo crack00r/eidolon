@@ -567,9 +567,7 @@ export const PluginConfigSchema = z.object({
   enabled: z.boolean().default(false),
   directory: z.string().default(""),
   autoUpdate: z.boolean().default(false),
-  allowedPermissions: z
-    .array(z.string())
-    .default(["events:listen", "events:emit", "config:read", "gateway:register"]),
+  allowedPermissions: z.array(z.string()).default(["events:listen", "events:emit", "config:read", "gateway:register"]),
   blockedPlugins: z.array(z.string()).default([]),
 });
 
@@ -610,15 +608,7 @@ export const LLMConfigSchema = z.object({
     .default({}),
   routing: z
     .record(
-      z.enum([
-        "conversation",
-        "extraction",
-        "filtering",
-        "dreaming",
-        "code-generation",
-        "summarization",
-        "embedding",
-      ]),
+      z.enum(["conversation", "extraction", "filtering", "dreaming", "code-generation", "summarization", "embedding"]),
       z.array(z.enum(["claude", "ollama", "llamacpp"])),
     )
     .default({}),

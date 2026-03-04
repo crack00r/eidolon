@@ -99,16 +99,10 @@ export interface ILLMProvider {
   listModels(): Promise<readonly string[]>;
 
   /** Non-streaming completion. */
-  complete(
-    messages: readonly LLMMessage[],
-    options?: LLMCompletionOptions,
-  ): Promise<LLMCompletionResult>;
+  complete(messages: readonly LLMMessage[], options?: LLMCompletionOptions): Promise<LLMCompletionResult>;
 
   /** Streaming completion. */
-  stream(
-    messages: readonly LLMMessage[],
-    options?: LLMCompletionOptions,
-  ): AsyncIterable<LLMStreamEvent>;
+  stream(messages: readonly LLMMessage[], options?: LLMCompletionOptions): AsyncIterable<LLMStreamEvent>;
 
   /** Generate embeddings (optional -- not all providers support it). */
   embed?(texts: readonly string[]): Promise<readonly Float32Array[]>;

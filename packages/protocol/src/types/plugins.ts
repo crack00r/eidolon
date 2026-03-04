@@ -64,13 +64,7 @@ export interface PluginManifest {
 // Plugin lifecycle states
 // ---------------------------------------------------------------------------
 
-export type PluginState =
-  | "discovered"
-  | "loaded"
-  | "initialized"
-  | "started"
-  | "stopped"
-  | "error";
+export type PluginState = "discovered" | "loaded" | "initialized" | "started" | "stopped" | "error";
 
 // ---------------------------------------------------------------------------
 // Runtime plugin info
