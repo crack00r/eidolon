@@ -371,18 +371,16 @@ export const HomeAutomationConfigSchema = z.object({
   haUrl: z.string().optional(),
   haToken: SecretRefSchema.or(z.string()).optional(),
   syncIntervalMinutes: z.number().int().positive().default(5),
-  domainPolicies: z
-    .array(HADomainPolicySchema)
-    .default([
-      { domain: "light", level: "safe" as const },
-      { domain: "switch", level: "safe" as const },
-      { domain: "sensor", level: "safe" as const },
-      { domain: "climate", level: "needs_approval" as const },
-      { domain: "lock", level: "needs_approval" as const },
-      { domain: "alarm_control_panel", level: "dangerous" as const },
-      { domain: "cover", level: "safe" as const },
-      { domain: "media_player", level: "safe" as const },
-    ]),
+  domainPolicies: z.array(HADomainPolicySchema).default([
+    { domain: "light", level: "safe" as const },
+    { domain: "switch", level: "safe" as const },
+    { domain: "sensor", level: "safe" as const },
+    { domain: "climate", level: "needs_approval" as const },
+    { domain: "lock", level: "needs_approval" as const },
+    { domain: "alarm_control_panel", level: "dangerous" as const },
+    { domain: "cover", level: "safe" as const },
+    { domain: "media_player", level: "safe" as const },
+  ]),
   anomalyDetection: z
     .object({
       enabled: z.boolean().default(true),

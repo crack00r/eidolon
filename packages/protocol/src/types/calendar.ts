@@ -51,9 +51,7 @@ export interface CalendarProvider {
   connect(): Promise<Result<void, EidolonError>>;
   disconnect(): Promise<void>;
   listEvents(start: number, end: number): Promise<Result<CalendarEvent[], EidolonError>>;
-  createEvent(
-    event: Omit<CalendarEvent, "id" | "syncedAt">,
-  ): Promise<Result<CalendarEvent, EidolonError>>;
+  createEvent(event: Omit<CalendarEvent, "id" | "syncedAt">): Promise<Result<CalendarEvent, EidolonError>>;
   deleteEvent(eventId: string): Promise<Result<void, EidolonError>>;
   sync(since?: string): Promise<Result<CalendarSyncResult, EidolonError>>;
 }
