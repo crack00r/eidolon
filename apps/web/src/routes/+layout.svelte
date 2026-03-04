@@ -42,31 +42,35 @@ function isActive(pathname: string, href: string): boolean {
 }
 </script>
 
+<a class="skip-to-content" href="#main-content">Skip to content</a>
+
 <div class="layout">
-  <aside class="sidebar">
+  <aside class="sidebar" aria-label="Main navigation">
     <div class="sidebar-header">
       <h1 class="logo">Eidolon</h1>
       <span class="logo-sub">Web</span>
-      <div class="connection-status">
+      <div class="connection-status" role="status" aria-live="polite">
         <span
           class="status-dot"
           style="background-color: {stateColor($connectionState)}"
+          aria-hidden="true"
         ></span>
-        <span class="status-text">{$connectionState}</span>
+        <span class="status-text">Connection: {$connectionState}</span>
       </div>
     </div>
 
-    <nav class="nav">
+    <nav class="nav" aria-label="Primary">
       {#each navItems as item}
         <a
           class="nav-item"
           class:active={isActive($page.url.pathname, item.href)}
           href={item.href}
+          aria-current={isActive($page.url.pathname, item.href) ? "page" : undefined}
         >
-          <span class="nav-icon">{item.icon}</span>
+          <span class="nav-icon" aria-hidden="true">{item.icon}</span>
           <span class="nav-label">{item.label}</span>
           {#if item.href === "/approvals" && $pendingApprovalCount > 0}
-            <span class="nav-badge">{$pendingApprovalCount}</span>
+            <span class="nav-badge" aria-label="{$pendingApprovalCount} pending approvals">{$pendingApprovalCount}</span>
           {/if}
         </a>
       {/each}
@@ -77,12 +81,30 @@ function isActive(pathname: string, href: string): boolean {
     </div>
   </aside>
 
-  <main class="content">
+  <main class="content" id="main-content">
     {@render children()}
   </main>
 </div>
 
 <style>
+  .skip-to-content {
+    position: absolute;
+    top: -100%;
+    left: 16px;
+    z-index: 1000;
+    padding: 8px 16px;
+    background: var(--accent);
+    color: white;
+    border-radius: var(--radius);
+    font-size: 14px;
+    font-weight: 600;
+    text-decoration: none;
+  }
+
+  .skip-to-content:focus {
+    top: 8px;
+  }
+
   .layout {
     display: flex;
     height: 100vh;

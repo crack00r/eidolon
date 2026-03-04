@@ -91,6 +91,7 @@ onMount(() => {
         class="create-btn"
         onclick={() => (showCreateForm = !showCreateForm)}
         disabled={!$isConnected}
+        aria-expanded={showCreateForm}
       >
         {showCreateForm ? "Cancel" : "New Scene"}
       </button>
@@ -105,7 +106,7 @@ onMount(() => {
   </header>
 
   {#if $automationError}
-    <div class="error-banner">{$automationError}</div>
+    <div class="error-banner" role="alert">{$automationError}</div>
   {/if}
 
   {#if showCreateForm}
@@ -189,6 +190,7 @@ onMount(() => {
             <button
               class="delete-btn"
               onclick={() => handleDelete(scene.id)}
+              aria-label="Delete scene: {scene.name}"
             >
               Delete
             </button>

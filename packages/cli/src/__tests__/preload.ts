@@ -20,6 +20,7 @@ mock.module("@eidolon/core", () => ({
   getConfigPath: () => "/tmp/eidolon-test/config.json",
   getConfigDir: () => "/tmp/eidolon-test/config",
   validateAndResolve: () => ({ ok: true, value: {} }),
+  validateConfig: () => ({ ok: true, value: {} }),
 
   // ── Directories ─────────────────────────────────────────────────────────
   getDataDir: () => "/tmp/eidolon-test/data",

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { createTestConfig } from "@eidolon/test-utils";
-import { validateAndResolve } from "../loader.ts";
+import { validateAndResolve } from "../validator.ts";
 
 describe("validateAndResolve", () => {
   test("valid minimal config passes", () => {

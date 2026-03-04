@@ -180,24 +180,25 @@ onDestroy(() => {
 <div class="dashboard">
   <!-- Header Section -->
   <header class="dashboard-header">
-    <div class="brain-state">
+    <div class="brain-state" role="status" aria-live="polite">
       <span
         class="brain-dot {brainStateCssClass($cognitiveState)}"
         style="background-color: {brainStateColor($cognitiveState)}"
+        aria-hidden="true"
       ></span>
-      <span class="brain-label">{$cognitiveState.charAt(0).toUpperCase() + $cognitiveState.slice(1)}</span>
+      <span class="brain-label">Brain state: {$cognitiveState.charAt(0).toUpperCase() + $cognitiveState.slice(1)}</span>
     </div>
     <div class="header-meta">
       <span class="uptime-label">Uptime</span>
       <span class="uptime-value">{displayUptime}</span>
     </div>
     {#if !$isConnected}
-      <div class="disconnected-banner">
+      <div class="disconnected-banner" role="alert">
         Not connected ({$connectionState})
       </div>
     {/if}
     {#if $dashboardError}
-      <div class="error-banner">{$dashboardError}</div>
+      <div class="error-banner" role="alert">{$dashboardError}</div>
     {/if}
   </header>
 
@@ -210,7 +211,14 @@ onDestroy(() => {
         <span class="card-title">Energy</span>
       </div>
       <div class="card-body">
-        <div class="energy-bar-track">
+        <div
+          class="energy-bar-track"
+          role="progressbar"
+          aria-valuenow={$energyLevel.current}
+          aria-valuemin={0}
+          aria-valuemax={$energyLevel.max}
+          aria-label="Energy budget"
+        >
           <div
             class="energy-bar-fill"
             style="width: {$energyLevel.max > 0 ? ($energyLevel.current / $energyLevel.max) * 100 : 0}%; background-color: {energyColor($energyLevel.current, $energyLevel.max)}"
@@ -311,8 +319,8 @@ onDestroy(() => {
         <span class="card-title">Health</span>
       </div>
       <div class="card-body">
-        <span class="health-dot" style="background: {$overallStatus === 'healthy' ? 'var(--success)' : $overallStatus === 'degraded' ? 'var(--warning)' : 'var(--error)'}"></span>
-        <span class="card-stat-sub health-label">{$overallStatus}</span>
+        <span class="health-dot" style="background: {$overallStatus === 'healthy' ? 'var(--success)' : $overallStatus === 'degraded' ? 'var(--warning)' : 'var(--error)'}" aria-hidden="true"></span>
+        <span class="card-stat-sub health-label">System health: {$overallStatus}</span>
       </div>
     </a>
   </section>
@@ -322,7 +330,7 @@ onDestroy(() => {
     <!-- Activity Feed -->
     <div class="activity-feed">
       <h2 class="section-title">Activity Feed</h2>
-      <div class="feed-list">
+      <div class="feed-list" aria-live="polite" aria-label="Recent activity events">
         {#if $recentEvents.length === 0}
           <div class="feed-empty">No recent events</div>
         {:else}

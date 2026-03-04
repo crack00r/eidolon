@@ -83,6 +83,7 @@ function shortenType(type: string): string {
             class="priority-icon"
             style="color: {priorityColor(event.priority)}"
             title={event.priority}
+            aria-label="Priority: {event.priority}"
           >
             {priorityIcon(event.priority)}
           </span>

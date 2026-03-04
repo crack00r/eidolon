@@ -225,10 +225,11 @@ function stateColor(state: string): string {
     <section class="settings-section">
       <h3 class="section-title">Gateway Connection</h3>
 
-      <div class="connection-info">
+      <div class="connection-info" role="status" aria-live="polite">
         <span
           class="status-dot"
           style="background-color: {stateColor($connectionState)}"
+          aria-hidden="true"
         ></span>
         <span class="status-text">
           Status: <strong>{$connectionState}</strong>
@@ -316,7 +317,7 @@ function stateColor(state: string): string {
       </p>
 
       {#if autoDetectStatus === "checking"}
-        <div class="discovery-status">
+        <div class="discovery-status" role="status" aria-live="polite">
           Checking for local server...
         </div>
       {/if}
@@ -372,7 +373,7 @@ function stateColor(state: string): string {
       </div>
 
       {#if pairingError}
-        <div class="discovery-error">
+        <div class="discovery-error" role="alert">
           {pairingError}
         </div>
       {/if}

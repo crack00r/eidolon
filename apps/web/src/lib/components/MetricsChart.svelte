@@ -133,6 +133,8 @@ function xTicks(minTime: number, maxTime: number, count: number): number[] {
       viewBox="0 0 {WIDTH} {height}"
       preserveAspectRatio="xMidYMid meet"
       class="chart-svg"
+      role="img"
+      aria-label="{title || 'Metrics chart'}{yLabel ? ` (${yLabel})` : ''}"
     >
       <!-- Grid lines -->
       {#each yTickValues as tick}

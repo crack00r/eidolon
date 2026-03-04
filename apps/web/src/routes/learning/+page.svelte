@@ -87,7 +87,7 @@ async function handleRefresh(): Promise<void> {
   </header>
 
   {#if $learningError}
-    <div class="error-banner">{$learningError}</div>
+    <div class="error-banner" role="alert">{$learningError}</div>
   {/if}
 
   <div class="items-list">
@@ -134,10 +134,10 @@ async function handleRefresh(): Promise<void> {
 
           <div class="item-actions">
             {#if item.status === "pending"}
-              <button class="approve-btn" onclick={() => handleApprove(item.id)}>
+              <button class="approve-btn" onclick={() => handleApprove(item.id)} aria-label="Approve {item.title}">
                 Approve
               </button>
-              <button class="reject-btn" onclick={() => handleReject(item.id)}>
+              <button class="reject-btn" onclick={() => handleReject(item.id)} aria-label="Reject {item.title}">
                 Reject
               </button>
             {:else}

@@ -64,7 +64,7 @@ $effect(() => {
     </button>
   </header>
 
-  <div class="messages" bind:this={messagesContainer}>
+  <div class="messages" bind:this={messagesContainer} role="log" aria-label="Chat messages" aria-live="polite">
     {#if $messages.length === 0}
       <div class="empty-state">
         <p class="empty-title">No messages yet</p>
@@ -84,7 +84,7 @@ $effect(() => {
           </div>
           <div class="message-content">
             {#if msg.streaming}
-              <span>{msg.content}</span><span class="cursor">|</span>
+              <span>{msg.content}</span><span class="cursor" aria-hidden="true">|</span>
             {:else}
               {msg.content}
             {/if}
@@ -94,10 +94,10 @@ $effect(() => {
               {#if msg.rating}
                 <span class="feedback-done">{msg.rating >= 4 ? "Rated positively" : "Rated negatively"}</span>
               {:else}
-                <button class="feedback-btn" class:active={msg.rating === 5} onclick={() => handleRate(msg.id, 5)} title="Good response">
+                <button class="feedback-btn" class:active={msg.rating === 5} onclick={() => handleRate(msg.id, 5)} aria-label="Rate as good response">
                   +
                 </button>
-                <button class="feedback-btn" class:active={msg.rating === 1} onclick={() => handleRate(msg.id, 1)} title="Poor response">
+                <button class="feedback-btn" class:active={msg.rating === 1} onclick={() => handleRate(msg.id, 1)} aria-label="Rate as poor response">
                   -
                 </button>
               {/if}
@@ -116,6 +116,7 @@ $effect(() => {
       onkeydown={handleKeydown}
       disabled={!$isConnected || $isStreaming}
       rows={1}
+      aria-label="Message input"
     ></textarea>
     <button
       class="send-btn"

@@ -88,10 +88,10 @@ function timeRemaining(timeoutAt: number): string {
 
   <div class="card-actions">
     {#if item.status === "pending"}
-      <button class="approve-btn" onclick={() => onApprove(item.id)}>
+      <button class="approve-btn" onclick={() => onApprove(item.id)} aria-label="Approve action: {item.action}">
         Approve
       </button>
-      <button class="reject-btn" onclick={() => onReject(item.id)}>
+      <button class="reject-btn" onclick={() => onReject(item.id)} aria-label="Reject action: {item.action}">
         Reject
       </button>
     {:else}

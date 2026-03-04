@@ -213,26 +213,31 @@ onDestroy(() => {
       <h2>Calendar</h2>
     </div>
     <div class="header-controls">
-      <div class="view-tabs">
+      <div class="view-tabs" role="tablist" aria-label="Calendar view">
         <button
           class="tab-btn"
           class:active={viewMode === "week"}
           onclick={() => (viewMode = "week")}
+          role="tab"
+          aria-selected={viewMode === "week"}
         >Week</button>
         <button
           class="tab-btn"
           class:active={viewMode === "day"}
           onclick={() => (viewMode = "day")}
+          role="tab"
+          aria-selected={viewMode === "day"}
         >Day</button>
       </div>
       <div class="nav-controls">
-        <button class="nav-btn" onclick={() => navigate(-1)}>Prev</button>
-        <button class="nav-btn today-btn" onclick={() => navigate(0)}>Today</button>
-        <button class="nav-btn" onclick={() => navigate(1)}>Next</button>
+        <button class="nav-btn" onclick={() => navigate(-1)} aria-label="Previous {viewMode}">Prev</button>
+        <button class="nav-btn today-btn" onclick={() => navigate(0)} aria-label="Go to today">Today</button>
+        <button class="nav-btn" onclick={() => navigate(1)} aria-label="Next {viewMode}">Next</button>
       </div>
       <button
         class="create-btn"
         onclick={() => (showCreateForm = !showCreateForm)}
+        aria-expanded={showCreateForm}
       >
         {showCreateForm ? "Cancel" : "+ New Event"}
       </button>
@@ -242,7 +247,7 @@ onDestroy(() => {
   <div class="date-label">{headerLabel}</div>
 
   {#if $calendarError}
-    <div class="error-banner">{$calendarError}</div>
+    <div class="error-banner" role="alert">{$calendarError}</div>
   {/if}
 
   <!-- Quick-create form -->
@@ -254,13 +259,14 @@ onDestroy(() => {
           class="form-input title-input"
           placeholder="Event title"
           bind:value={newTitle}
+          aria-label="Event title"
         />
       </div>
       <div class="form-row">
-        <input type="date" class="form-input" bind:value={newDate} />
-        <input type="time" class="form-input time-input" bind:value={newStartTime} />
-        <span class="form-separator">-</span>
-        <input type="time" class="form-input time-input" bind:value={newEndTime} />
+        <input type="date" class="form-input" bind:value={newDate} aria-label="Event date" />
+        <input type="time" class="form-input time-input" bind:value={newStartTime} aria-label="Start time" />
+        <span class="form-separator" aria-hidden="true">-</span>
+        <input type="time" class="form-input time-input" bind:value={newEndTime} aria-label="End time" />
       </div>
       <div class="form-row">
         <input
@@ -268,6 +274,7 @@ onDestroy(() => {
           class="form-input"
           placeholder="Description (optional)"
           bind:value={newDescription}
+          aria-label="Event description"
         />
         <button
           class="submit-btn"

@@ -80,13 +80,13 @@ onMount(() => {
       {/if}
     </div>
     <div class="header-controls">
-      <select class="filter-select" bind:value={filterStatus}>
+      <select class="filter-select" bind:value={filterStatus} aria-label="Filter by status">
         <option value="all">All</option>
         <option value="pending">Pending</option>
         <option value="approved">Approved</option>
         <option value="denied">Denied</option>
       </select>
-      <select class="filter-select" bind:value={sortField}>
+      <select class="filter-select" bind:value={sortField} aria-label="Sort by">
         <option value="createdAt">Newest</option>
         <option value="level">Risk Level</option>
         <option value="action">Action</option>
@@ -102,7 +102,7 @@ onMount(() => {
   </header>
 
   {#if $approvalError}
-    <div class="error-banner">{$approvalError}</div>
+    <div class="error-banner" role="alert">{$approvalError}</div>
   {/if}
 
   <div class="items-list">

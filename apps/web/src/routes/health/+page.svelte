@@ -143,8 +143,9 @@ onDestroy(() => {
       <span
         class="status-indicator"
         style="background: {statusColor($overallStatus)}"
+        aria-hidden="true"
       ></span>
-      <span class="status-text">{$overallStatus}</span>
+      <span class="status-text">Status: {$overallStatus}</span>
     </div>
     <div class="header-meta">
       <span class="uptime-label">Uptime</span>
@@ -153,7 +154,7 @@ onDestroy(() => {
   </header>
 
   {#if $healthError}
-    <div class="error-banner">{$healthError}</div>
+    <div class="error-banner" role="alert">{$healthError}</div>
   {/if}
 
   {#if !$isConnected}
@@ -196,8 +197,9 @@ onDestroy(() => {
                 <span
                   class="check-dot"
                   style="background: {statusColor(check.status)}"
+                  aria-hidden="true"
                 ></span>
-                <span class="check-name">{check.name}</span>
+                <span class="check-name">{check.name} ({check.status})</span>
                 {#if check.message}
                   <span class="check-message">{check.message}</span>
                 {/if}
@@ -266,8 +268,8 @@ onDestroy(() => {
                   <div class="worker-stats">
                     {#if worker.gpuUtil !== undefined}
                       <div class="gpu-stat">
-                        <span class="gpu-stat-label">GPU</span>
-                        <div class="bar-track">
+                        <span class="gpu-stat-label" id="gpu-label-{worker.name}">GPU</span>
+                        <div class="bar-track" role="progressbar" aria-valuenow={worker.gpuUtil} aria-valuemin={0} aria-valuemax={100} aria-labelledby="gpu-label-{worker.name}">
                           <div
                             class="bar-fill"
                             style="width: {worker.gpuUtil}%; background: {worker.gpuUtil > 90 ? 'var(--error)' : worker.gpuUtil > 70 ? 'var(--warning)' : 'var(--success)'}"
@@ -278,8 +280,8 @@ onDestroy(() => {
                     {/if}
                     {#if worker.vramUsed !== undefined && worker.vramTotal !== undefined}
                       <div class="gpu-stat">
-                        <span class="gpu-stat-label">VRAM</span>
-                        <div class="bar-track">
+                        <span class="gpu-stat-label" id="vram-label-{worker.name}">VRAM</span>
+                        <div class="bar-track" role="progressbar" aria-valuenow={worker.vramUsed} aria-valuemin={0} aria-valuemax={worker.vramTotal} aria-labelledby="vram-label-{worker.name}">
                           <div
                             class="bar-fill"
                             style="width: {(worker.vramUsed / worker.vramTotal) * 100}%; background: var(--accent)"

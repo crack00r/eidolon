@@ -120,7 +120,7 @@ function cancelDelete(): void {
     <h2>Memory Browser</h2>
   </header>
 
-  <div class="search-bar">
+  <div class="search-bar" role="search" aria-label="Memory search">
     <input
       type="text"
       class="search-input"
@@ -128,6 +128,7 @@ function cancelDelete(): void {
       bind:value={searchInput}
       oninput={handleInput}
       disabled={!$isConnected}
+      aria-label="Search memories"
     />
     {#if searchInput}
       <button class="clear-btn" onclick={handleClear}>Clear</button>
@@ -138,7 +139,7 @@ function cancelDelete(): void {
   </div>
 
   {#if $memoryError}
-    <div class="error-banner">{$memoryError}</div>
+    <div class="error-banner" role="alert">{$memoryError}</div>
   {/if}
 
   <div class="memory-content">
@@ -175,7 +176,7 @@ function cancelDelete(): void {
           <span class="type-badge" style="color: {typeColor($selectedMemory.type)}">
             {typeLabel($selectedMemory.type)}
           </span>
-          <button class="close-detail" onclick={() => { selectMemoryItem(null); cancelEdit(); }}>Close</button>
+          <button class="close-detail" onclick={() => { selectMemoryItem(null); cancelEdit(); }} aria-label="Close detail panel">Close</button>
         </div>
         <div class="detail-meta">
           <div class="meta-row">
@@ -230,14 +231,24 @@ function cancelDelete(): void {
     {/if}
 
     {#if showDeleteConfirm}
-      <!-- svelte-ignore a11y_click_events_have_key_events -->
-      <!-- svelte-ignore a11y_no_static_element_interactions -->
-      <div class="modal-overlay" onclick={cancelDelete}>
-        <!-- svelte-ignore a11y_click_events_have_key_events -->
-        <!-- svelte-ignore a11y_no_static_element_interactions -->
-        <div class="modal-dialog" onclick={(e) => e.stopPropagation()}>
-          <h3 class="modal-title">Delete Memory</h3>
-          <p class="modal-message">Are you sure you want to permanently delete this memory? This action cannot be undone.</p>
+      <div
+        class="modal-overlay"
+        role="presentation"
+        onclick={cancelDelete}
+        onkeydown={(e) => { if (e.key === "Escape") cancelDelete(); }}
+      >
+        <div
+          class="modal-dialog"
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="delete-modal-title"
+          aria-describedby="delete-modal-desc"
+          tabindex="-1"
+          onclick={(e) => e.stopPropagation()}
+          onkeydown={(e) => e.stopPropagation()}
+        >
+          <h3 class="modal-title" id="delete-modal-title">Delete Memory</h3>
+          <p class="modal-message" id="delete-modal-desc">Are you sure you want to permanently delete this memory? This action cannot be undone.</p>
           <div class="modal-actions">
             <button class="action-btn delete-btn" onclick={executeDelete} disabled={$isDeleting}>
               {$isDeleting ? "Deleting..." : "Delete"}
