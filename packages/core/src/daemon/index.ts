@@ -66,6 +66,10 @@ import { MemoryStore } from "../memory/store.ts";
 import { MetricsRegistry } from "../metrics/prometheus.ts";
 import { TokenTracker } from "../metrics/token-tracker.ts";
 import { type MetricsWiringHandle, wireMetrics } from "../metrics/wiring.ts";
+import type { TelemetryProvider } from "../telemetry/provider.ts";
+import { initTelemetry } from "../telemetry/provider.ts";
+import { createMetricsBridge } from "../telemetry/metrics-bridge.ts";
+import type { MetricsBridgeHandle } from "../telemetry/metrics-bridge.ts";
 import { CalendarManager } from "../calendar/manager.ts";
 import { HAManager } from "../home-automation/manager.ts";
 import { AutomationEngine } from "../scheduler/automation.ts";
@@ -123,6 +127,8 @@ interface InitializedModules {
   mcpHealthMonitor?: MCPHealthMonitor;
   metricsRegistry?: MetricsRegistry;
   metricsWiring?: MetricsWiringHandle;
+  telemetryProvider?: TelemetryProvider;
+  metricsBridge?: MetricsBridgeHandle;
   gatewayServer?: GatewayServer;
   tailscaleDetector?: TailscaleDetector;
   discoveryBroadcaster?: DiscoveryBroadcaster;
@@ -352,6 +358,27 @@ export class EidolonDaemon {
         fn: () => {
           this.modules.metricsRegistry = new MetricsRegistry();
           this.modules.logger?.info("daemon", "MetricsRegistry initialized");
+        },
+      });
+
+      // 7c. Telemetry (needs Config, Logger, MetricsRegistry)
+      initOrder.push({
+        name: "Telemetry",
+        fn: async () => {
+          const config = this.modules.config;
+          const logger = this.modules.logger;
+          if (!config || !logger) return;
+
+          this.modules.telemetryProvider = await initTelemetry(config.telemetry, logger);
+
+          // Bridge existing MetricsRegistry to OTel if enabled
+          if (this.modules.metricsRegistry) {
+            this.modules.metricsBridge = await createMetricsBridge(
+              this.modules.metricsRegistry,
+              this.modules.telemetryProvider.enabled,
+              logger,
+            );
+          }
         },
       });
 
@@ -1773,6 +1800,26 @@ export class EidolonDaemon {
         logger?.info("daemon", "Email channel disconnected");
       } catch (err: unknown) {
         logger?.error("daemon", "Error disconnecting Email channel", err);
+      }
+    }
+
+    // 7c -> MetricsBridge (dispose before telemetry shutdown)
+    if (this.modules.metricsBridge) {
+      try {
+        this.modules.metricsBridge.dispose();
+        logger?.info("daemon", "MetricsBridge disposed");
+      } catch (err: unknown) {
+        logger?.error("daemon", "Error disposing MetricsBridge", err);
+      }
+    }
+
+    // 7c -> TelemetryProvider (flush pending spans/metrics)
+    if (this.modules.telemetryProvider) {
+      try {
+        await this.modules.telemetryProvider.shutdown();
+        logger?.info("daemon", "TelemetryProvider shut down");
+      } catch (err: unknown) {
+        logger?.error("daemon", "Error shutting down TelemetryProvider", err);
       }
     }
 

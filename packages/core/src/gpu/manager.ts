@@ -8,6 +8,9 @@
 import type { EidolonError, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 import type { Logger } from "../logging/logger.ts";
+import type { ITracer } from "../telemetry/tracer.ts";
+import { NoopTracer } from "../telemetry/tracer.ts";
+import { injectTraceContext } from "../telemetry/propagation.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -49,11 +52,13 @@ const JSON_CONTENT_TYPE_PREFIX = "application/json";
 export class GPUManager {
   private readonly config: GpuWorkerConfig;
   private readonly logger: Logger;
+  private readonly tracer: ITracer;
   private available = false;
 
-  constructor(config: GpuWorkerConfig, logger: Logger) {
+  constructor(config: GpuWorkerConfig, logger: Logger, tracer?: ITracer) {
     this.config = config;
     this.logger = logger.child("gpu-manager");
+    this.tracer = tracer ?? new NoopTracer();
 
     // Finding #1: Warn if GPU API key may be sent over plain HTTP
     if (this.config.apiKey && this.config.url.startsWith("http://")) {
@@ -67,21 +72,30 @@ export class GPUManager {
 
   /** Check if the GPU worker is reachable and healthy. */
   async checkHealth(): Promise<Result<GpuHealth, EidolonError>> {
+    const span = this.tracer.startSpan("gpu.health_check", {
+      "gpu.url": this.config.url,
+    });
+
     const result = await this.request<GpuHealth>("/health", { method: "GET" });
 
     if (result.ok) {
       this.available = true;
+      span.setAttribute("gpu.status", result.value.status);
+      span.setAttribute("gpu.available", result.value.gpu.available);
+      span.setStatus("ok");
       this.logger.debug("health", "GPU worker healthy", {
         status: result.value.status,
         gpu: result.value.gpu.available ? result.value.gpu.name : "none",
       });
     } else {
       this.available = false;
+      span.setStatus("error", result.error.message);
       this.logger.warn("health", "GPU worker unavailable", {
         error: result.error.message,
       });
     }
 
+    span.end();
     return result;
   }
 
@@ -106,6 +120,13 @@ export class GPUManager {
     const headers = new Headers(options?.headers);
     if (this.config.apiKey) {
       headers.set("X-API-Key", this.config.apiKey);
+    }
+
+    // Inject trace context for cross-service distributed tracing
+    const traceHeaders: Record<string, string> = {};
+    injectTraceContext(this.tracer, traceHeaders);
+    for (const [key, value] of Object.entries(traceHeaders)) {
+      headers.set(key, value);
     }
 
     try {

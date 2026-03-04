@@ -18,6 +18,8 @@ import type {
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 import { Bot, GrammyError, HttpError } from "grammy";
 import type { Logger } from "../../logging/logger.ts";
+import type { ITracer } from "../../telemetry/tracer.ts";
+import { NoopTracer } from "../../telemetry/tracer.ts";
 import { formatForTelegram, splitMessage } from "./formatter.ts";
 import { downloadTelegramFile, toAttachment } from "./media.ts";
 
@@ -73,15 +75,17 @@ export class TelegramChannel implements Channel {
 
   private readonly config: TelegramConfig;
   private readonly logger: Logger;
+  private readonly tracer: ITracer;
   private readonly allowedUserSet: ReadonlySet<number>;
   private readonly userRateLimits: Map<number, RateWindow> = new Map();
   private bot: Bot | null = null;
   private connected = false;
   private messageHandler: ((message: InboundMessage) => Promise<void>) | null = null;
 
-  constructor(config: TelegramConfig, logger: Logger) {
+  constructor(config: TelegramConfig, logger: Logger, tracer?: ITracer) {
     this.config = config;
     this.logger = logger;
+    this.tracer = tracer ?? new NoopTracer();
     this.allowedUserSet = new Set(config.allowedUserIds);
   }
 
@@ -145,6 +149,10 @@ export class TelegramChannel implements Channel {
 
     // The channelId for Telegram outbound is the chat ID
     const chatId = message.replyToId ?? message.channelId;
+    const span = this.tracer.startSpan("telegram.send", {
+      "telegram.chat_id": chatId,
+      "message.format": message.format ?? "text",
+    });
 
     try {
       const typingEnabled = this.config.typingIndicator !== false;
@@ -153,6 +161,7 @@ export class TelegramChannel implements Channel {
       const formatted = message.format === "markdown" ? formatForTelegram(message.text) : message.text;
 
       const chunks = splitMessage(formatted);
+      span.setAttribute("message.chunks", chunks.length);
 
       for (const chunk of chunks) {
         // Typing indicator is best-effort: failure must not block message delivery
@@ -170,6 +179,8 @@ export class TelegramChannel implements Channel {
         const parseMode = message.format === "markdown" ? ("MarkdownV2" as const) : undefined;
         const bot = this.bot;
         if (!bot) {
+          span.setStatus("error", "Bot disconnected during send");
+          span.end();
           return Err(createError(ErrorCode.CHANNEL_SEND_FAILED, "Telegram bot disconnected during send"));
         }
         await this.sendWithRetry(() =>
@@ -179,9 +190,13 @@ export class TelegramChannel implements Channel {
         );
       }
 
+      span.setStatus("ok");
+      span.end();
       return Ok(undefined);
     } catch (cause) {
       this.logger.error("telegram", "Failed to send message", cause, { chatId });
+      span.setStatus("error", cause instanceof Error ? cause.message : String(cause));
+      span.end();
       return Err(createError(ErrorCode.CHANNEL_SEND_FAILED, "Failed to send Telegram message", cause));
     }
   }
@@ -367,10 +382,21 @@ export class TelegramChannel implements Channel {
       return;
     }
 
+    const span = this.tracer.startSpan("telegram.dispatch", {
+      "message.id": message.id,
+      "message.user_id": message.userId,
+      "message.has_text": !!message.text,
+      "message.has_attachments": !!(message.attachments && message.attachments.length > 0),
+    });
+
     try {
       await this.messageHandler(message);
+      span.setStatus("ok");
     } catch (err) {
       this.logger.error("telegram", "Message handler error", err, { id: message.id });
+      span.setStatus("error", err instanceof Error ? err.message : String(err));
+    } finally {
+      span.end();
     }
   }
 

@@ -26,6 +26,8 @@ import { z } from "zod";
 import type { Logger } from "../logging/logger.ts";
 import type { EventBus } from "../loop/event-bus.ts";
 import { formatPrometheus, type MetricsRegistry, PROMETHEUS_CONTENT_TYPE } from "../metrics/prometheus.ts";
+import type { ITracer } from "../telemetry/tracer.ts";
+import { NoopTracer } from "../telemetry/tracer.ts";
 import type { RateLimitTracker } from "../metrics/rate-limits.ts";
 import {
   createJsonRpcError,
@@ -315,6 +317,7 @@ export class GatewayServer {
   private readonly metricsRegistry: MetricsRegistry | undefined;
   private readonly rateLimitTracker: RateLimitTracker | undefined;
   private readonly calendarManager: CalendarManager | undefined;
+  private readonly tracer: ITracer;
 
   private readonly clients: Map<string, ClientState> = new Map();
   private readonly handlers: Map<GatewayMethod, MethodHandler> = new Map();
@@ -337,6 +340,7 @@ export class GatewayServer {
     metricsRegistry?: MetricsRegistry;
     rateLimitTracker?: RateLimitTracker;
     calendarManager?: CalendarManager;
+    tracer?: ITracer;
   }) {
     this.config = deps.config;
     this.logger = deps.logger.child("gateway");
@@ -344,6 +348,7 @@ export class GatewayServer {
     this.metricsRegistry = deps.metricsRegistry;
     this.rateLimitTracker = deps.rateLimitTracker;
     this.calendarManager = deps.calendarManager;
+    this.tracer = deps.tracer ?? new NoopTracer();
     this.rateLimiter = new AuthRateLimiter(deps.config.rateLimiting, this.logger);
 
     this.registerBuiltinHandlers();
@@ -1441,11 +1446,18 @@ export class GatewayServer {
       return;
     }
 
-    // Execute handler
+    // Execute handler with tracing
+    const span = this.tracer.startSpan("gateway.rpc", {
+      "rpc.method": request.method,
+      "rpc.id": request.id,
+      "client.id": clientId,
+    });
+
     try {
       const handlerResult = await handler(request.params ?? {}, clientId);
       const response = createJsonRpcResponse(request.id, handlerResult);
       this.safeSend(ws, JSON.stringify(response));
+      span.setStatus("ok");
     } catch (err) {
       const isValidation = err instanceof RpcValidationError;
       if (!isValidation) {
@@ -1455,6 +1467,9 @@ export class GatewayServer {
       const message = isValidation ? (err as RpcValidationError).message : "Internal server error";
       const errResp = createJsonRpcError(request.id, code, message);
       this.safeSend(ws, JSON.stringify(errResp));
+      span.setStatus("error", message);
+    } finally {
+      span.end();
     }
   }
 

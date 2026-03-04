@@ -10,6 +10,8 @@ import { randomUUID } from "node:crypto";
 import type { BusEvent, EidolonError, Result } from "@eidolon/protocol";
 import { Err, Ok } from "@eidolon/protocol";
 import type { Logger } from "../logging/logger.ts";
+import type { ITracer } from "../telemetry/tracer.ts";
+import { NoopTracer } from "../telemetry/tracer.ts";
 import type { BudgetCategory, EnergyBudget } from "./energy-budget.ts";
 import type { EventBus } from "./event-bus.ts";
 import type { PriorityEvaluator, PriorityScore } from "./priority.ts";
@@ -36,6 +38,8 @@ export interface CognitiveLoopOptions {
   readonly handler?: EventHandler;
   /** Estimated tokens per action when handler doesn't report. */
   readonly defaultTokenEstimate?: number;
+  /** OpenTelemetry tracer for distributed tracing. Defaults to NoopTracer. */
+  readonly tracer?: ITracer;
 }
 
 export interface CycleResult {
@@ -85,6 +89,7 @@ export class CognitiveLoop {
   private readonly energyBudget: EnergyBudget;
   private readonly restCalculator: RestCalculator;
   private readonly logger: Logger;
+  private readonly tracer: ITracer;
   private readonly handler: EventHandler | undefined;
   private readonly actionCategories: Record<ActionType, BudgetCategory>;
   private readonly defaultTokenEstimate: number;
@@ -122,6 +127,7 @@ export class CognitiveLoop {
     this.restCalculator = restCalculator;
     this.supervisor = supervisor;
     this.logger = logger;
+    this.tracer = options?.tracer ?? new NoopTracer();
     this.handler = options?.handler;
     this.actionCategories = {
       ...DEFAULT_ACTION_CATEGORIES,
@@ -173,6 +179,7 @@ export class CognitiveLoop {
   /** Run a single PEAR cycle. Exposed for testing. */
   async runOneCycle(): Promise<Result<CycleResult, EidolonError>> {
     const traceId = randomUUID();
+    const cycleSpan = this.tracer.startSpan("cognitive-loop.cycle", { "trace.id": traceId });
 
     // Reset hourly budget if needed
     this.energyBudget.resetIfNewHour();
@@ -186,6 +193,8 @@ export class CognitiveLoop {
     }
     const dequeueResult = this.eventBus.dequeue();
     if (!dequeueResult.ok) {
+      cycleSpan.setStatus("error", dequeueResult.error.message);
+      cycleSpan.end();
       return Err(dequeueResult.error);
     }
 
@@ -207,6 +216,10 @@ export class CognitiveLoop {
       this.stats.totalRestMs += restMs;
       this.stats.totalCycles++;
       this.stats.lastCycleAt = Date.now();
+      cycleSpan.setAttribute("phase", "rest");
+      cycleSpan.setAttribute("rest.ms", restMs);
+      cycleSpan.setStatus("ok");
+      cycleSpan.end();
       return Ok({
         hadEvent: false,
         action: null,
@@ -253,6 +266,11 @@ export class CognitiveLoop {
         this.logger.warn("loop", `clearAction (defer) failed: ${deferClearResult.error.message}`);
       }
       this.stateMachine.completeCycle();
+      cycleSpan.setAttribute("event.type", event.type);
+      cycleSpan.setAttribute("event.priority", event.priority);
+      cycleSpan.addEvent("deferred", { reason: "energy_budget_exceeded" });
+      cycleSpan.setStatus("ok");
+      cycleSpan.end();
       return Ok({
         hadEvent: true,
         action: null,
@@ -316,6 +334,13 @@ export class CognitiveLoop {
     this.stats.totalCycles++;
     this.stats.lastCycleAt = Date.now();
     this.stateMachine.completeCycle();
+
+    cycleSpan.setAttribute("event.type", event.type);
+    cycleSpan.setAttribute("event.priority", event.priority);
+    cycleSpan.setAttribute("action.type", priority.suggestedAction);
+    cycleSpan.setAttribute("tokens.used", tokensUsed);
+    cycleSpan.setStatus(handlerSucceeded ? "ok" : "error", handlerSucceeded ? undefined : "handler failed");
+    cycleSpan.end();
 
     return Ok({
       hadEvent: true,

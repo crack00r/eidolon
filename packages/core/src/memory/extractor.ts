@@ -13,6 +13,8 @@
 import type { ConsolidationResult, EidolonError, MemoryType, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 import type { Logger } from "../logging/logger.ts";
+import type { ITracer } from "../telemetry/tracer.ts";
+import { NoopTracer } from "../telemetry/tracer.ts";
 import type { MemoryConsolidator } from "./consolidation.ts";
 import type { CreateMemoryInput } from "./store.ts";
 
@@ -59,6 +61,8 @@ export interface ExtractorOptions {
    * existing memories before writing to the store.
    */
   readonly consolidator?: MemoryConsolidator;
+  /** OpenTelemetry tracer for distributed tracing. Defaults to NoopTracer. */
+  readonly tracer?: ITracer;
 }
 
 // ---------------------------------------------------------------------------
@@ -263,6 +267,7 @@ function validateExtractedMemory(mem: unknown): ExtractedMemory | null {
 
 export class MemoryExtractor {
   private readonly logger: Logger;
+  private readonly tracer: ITracer;
   private readonly strategy: ExtractorOptions["strategy"];
   private readonly llmExtractFn?: LlmExtractFn;
   private readonly minContentLength: number;
@@ -271,6 +276,7 @@ export class MemoryExtractor {
 
   constructor(logger: Logger, options?: ExtractorOptions) {
     this.logger = logger.child("memory-extractor");
+    this.tracer = options?.tracer ?? new NoopTracer();
     this.strategy = options?.strategy ?? DEFAULT_STRATEGY;
     this.llmExtractFn = options?.llmExtractFn;
     this.minContentLength = options?.minContentLength ?? DEFAULT_MIN_CONTENT_LENGTH;
@@ -286,6 +292,12 @@ export class MemoryExtractor {
    * granted and a consentCheckFn was provided, returns empty array with warning.
    */
   async extract(turn: ConversationTurn): Promise<Result<ExtractedMemory[], EidolonError>> {
+    const span = this.tracer.startSpan("memory.extract", {
+      "extraction.strategy": this.strategy,
+      "input.user_length": turn.userMessage.length,
+      "input.assistant_length": turn.assistantResponse.length,
+    });
+
     try {
       // PRIV-001: Check GDPR consent before extracting
       if (this.consentCheckFn && !this.consentCheckFn()) {
@@ -293,10 +305,16 @@ export class MemoryExtractor {
           "extract",
           "Memory extraction skipped: GDPR consent not granted. Run 'eidolon privacy consent --grant' to enable.",
         );
+        span.setAttribute("skipped", "consent_not_granted");
+        span.setStatus("ok");
+        span.end();
         return Ok([]);
       }
 
       if (!MemoryExtractor.isWorthExtracting(turn)) {
+        span.setAttribute("skipped", "trivial_message");
+        span.setStatus("ok");
+        span.end();
         return Ok([]);
       }
 
@@ -323,6 +341,8 @@ export class MemoryExtractor {
           });
           // If strategy is "llm" only and it fails, return the error
           if (this.strategy === "llm") {
+            span.setStatus("error", "LLM extraction failed");
+            span.end();
             return Err(createError(ErrorCode.MEMORY_EXTRACTION_FAILED, "LLM extraction failed", cause));
           }
           // For hybrid, we continue with rule-based results
@@ -348,8 +368,17 @@ export class MemoryExtractor {
         strategy: this.strategy,
       });
 
+      span.setAttribute("results.rule_based_count", ruleBased.length);
+      span.setAttribute("results.llm_count", llmBased.length);
+      span.setAttribute("results.merged_count", merged.length);
+      span.setAttribute("results.sensitive_count", sensitiveCount);
+      span.setStatus("ok");
+      span.end();
+
       return Ok(merged);
     } catch (cause) {
+      span.setStatus("error", "Memory extraction failed");
+      span.end();
       return Err(createError(ErrorCode.MEMORY_EXTRACTION_FAILED, "Memory extraction failed", cause));
     }
   }

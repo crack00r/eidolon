@@ -24,6 +24,8 @@ import type {
 } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 import type { Logger } from "../../logging/logger.ts";
+import type { ITracer } from "../../telemetry/tracer.ts";
+import { NoopTracer } from "../../telemetry/tracer.ts";
 import type { WhatsAppApiClient } from "./api.ts";
 import { formatForWhatsApp, splitWhatsAppMessage } from "./formatter.ts";
 import type { WhatsAppWebhookEvent, WhatsAppWebhookMessage } from "./webhook.ts";
@@ -79,6 +81,7 @@ export class WhatsAppChannel implements Channel {
   private readonly config: WhatsAppChannelConfig;
   private readonly api: WhatsAppApiClient;
   private readonly logger: Logger;
+  private readonly tracer: ITracer;
   private readonly allowedPhoneSet: ReadonlySet<string>;
   private readonly userRateLimits: Map<string, RateWindow> = new Map();
   /** Tracks last inbound timestamp per user for the 24-hour messaging window. */
@@ -86,10 +89,11 @@ export class WhatsAppChannel implements Channel {
   private connected = false;
   private messageHandler: ((message: InboundMessage) => Promise<void>) | null = null;
 
-  constructor(config: WhatsAppChannelConfig, api: WhatsAppApiClient, logger: Logger) {
+  constructor(config: WhatsAppChannelConfig, api: WhatsAppApiClient, logger: Logger, tracer?: ITracer) {
     this.config = config;
     this.api = api;
     this.logger = logger;
+    this.tracer = tracer ?? new NoopTracer();
     this.allowedPhoneSet = new Set(config.allowedPhoneNumbers);
   }
 
@@ -118,9 +122,15 @@ export class WhatsAppChannel implements Channel {
     }
 
     const to = message.channelId;
+    const span = this.tracer.startSpan("whatsapp.send", {
+      "whatsapp.to": to,
+      "message.format": message.format ?? "text",
+    });
 
     // Check 24-hour messaging window
     if (!this.isWithinMessagingWindow(to)) {
+      span.setStatus("error", "Outside 24-hour messaging window");
+      span.end();
       return Err(
         createError(
           ErrorCode.CHANNEL_SEND_FAILED,
@@ -134,19 +144,26 @@ export class WhatsAppChannel implements Channel {
       const formatted = message.format === "markdown" ? formatForWhatsApp(message.text) : message.text;
 
       const chunks = splitWhatsAppMessage(formatted);
+      span.setAttribute("message.chunks", chunks.length);
 
       for (const chunk of chunks) {
         const result = await this.api.sendText(to, chunk);
         if (!result.ok) {
+          span.setStatus("error", result.error.message);
+          span.end();
           return Err(
             createError(ErrorCode.CHANNEL_SEND_FAILED, `Failed to send WhatsApp message: ${result.error.message}`),
           );
         }
       }
 
+      span.setStatus("ok");
+      span.end();
       return Ok(undefined);
     } catch (cause) {
       this.logger.error("whatsapp", "Failed to send message", cause, { to });
+      span.setStatus("error", cause instanceof Error ? cause.message : String(cause));
+      span.end();
       return Err(createError(ErrorCode.CHANNEL_SEND_FAILED, "Failed to send WhatsApp message", cause));
     }
   }
@@ -168,10 +185,25 @@ export class WhatsAppChannel implements Channel {
    * Each event may contain multiple messages.
    */
   async handleWebhookEvents(events: readonly WhatsAppWebhookEvent[]): Promise<void> {
-    for (const event of events) {
-      for (const msg of event.messages) {
-        await this.handleIncomingMessage(msg, event.phoneNumberId);
+    const span = this.tracer.startSpan("whatsapp.webhook", {
+      "webhook.event_count": events.length,
+    });
+
+    let messageCount = 0;
+    try {
+      for (const event of events) {
+        for (const msg of event.messages) {
+          messageCount++;
+          await this.handleIncomingMessage(msg, event.phoneNumberId);
+        }
       }
+      span.setAttribute("webhook.message_count", messageCount);
+      span.setStatus("ok");
+    } catch (err) {
+      span.setStatus("error", err instanceof Error ? err.message : String(err));
+      throw err;
+    } finally {
+      span.end();
     }
   }
 

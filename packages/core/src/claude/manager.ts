@@ -10,6 +10,8 @@ import type { ClaudeSessionOptions, EidolonError, IClaudeProcess, Result, Stream
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 import type { Subprocess } from "bun";
 import type { Logger } from "../logging/logger.ts";
+import type { ITracer } from "../telemetry/tracer.ts";
+import { NoopTracer } from "../telemetry/tracer.ts";
 import { buildClaudeArgs } from "./args.ts";
 import { parseStreamLine } from "./parser.ts";
 
@@ -20,9 +22,11 @@ import { parseStreamLine } from "./parser.ts";
 export class ClaudeCodeManager implements IClaudeProcess {
   private readonly activeSessions = new Map<string, Subprocess>();
   private readonly logger: Logger;
+  private readonly tracer: ITracer;
 
-  constructor(logger: Logger) {
+  constructor(logger: Logger, tracer?: ITracer) {
     this.logger = logger.child("claude");
+    this.tracer = tracer ?? new NoopTracer();
   }
 
   /**
@@ -32,6 +36,10 @@ export class ClaudeCodeManager implements IClaudeProcess {
   async *run(prompt: string, options: ClaudeSessionOptions): AsyncGenerator<StreamEvent> {
     const args = buildClaudeArgs(prompt, options);
     const sessionId = options.sessionId ?? `session-${randomUUID()}`;
+    const span = this.tracer.startSpan("claude.session", {
+      "session.id": sessionId,
+      ...(options.model ? { model: options.model } : {}),
+    });
 
     this.logger.info("manager", "Starting Claude Code session", {
       sessionId,
@@ -166,12 +174,15 @@ export class ClaudeCodeManager implements IClaudeProcess {
 
       if (exitCode !== 0) {
         const stderr = await stderrPromise;
+        span.setStatus("error", `Claude Code exited with code ${String(exitCode)}`);
         yield {
           type: "error",
           error: `Claude Code exited with code ${String(exitCode)}`,
           timestamp: Date.now(),
         };
         this.logger.error("manager", `Claude stderr: ${stderr}`, { sessionId: options.sessionId });
+      } else {
+        span.setStatus("ok");
       }
 
       yield { type: "done", timestamp: Date.now() };
@@ -180,6 +191,7 @@ export class ClaudeCodeManager implements IClaudeProcess {
       this.activeSessions.delete(sessionId);
       // Ensure stderr is consumed even if generator is abandoned early
       stderrPromise.catch(() => {});
+      span.end();
     }
   }
 

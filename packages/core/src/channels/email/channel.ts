@@ -21,6 +21,8 @@ import type {
 } from "@eidolon/protocol";
 import { createError, Err, Ok } from "@eidolon/protocol";
 import type { Logger } from "../../logging/logger.ts";
+import type { ITracer } from "../../telemetry/tracer.ts";
+import { NoopTracer } from "../../telemetry/tracer.ts";
 import { buildReplySubject, formatEmailResponse } from "./formatter.ts";
 import type { IImapClient, ImapMessage } from "./imap.ts";
 import { extractThreadInfo, isValidEmail, parseEmailBody, sanitizeEmailContent, stripQuotedReply, stripSignature } from "./parser.ts";
@@ -104,6 +106,7 @@ export class EmailChannel implements Channel {
   private readonly imapClient: IImapClient;
   private readonly smtpClient: ISmtpClient;
   private readonly logger: Logger;
+  private readonly tracer: ITracer;
 
   private messageHandler: ((message: InboundMessage) => Promise<void>) | null = null;
   private pollTimer: ReturnType<typeof setInterval> | null = null;
@@ -126,11 +129,13 @@ export class EmailChannel implements Channel {
     imapClient: IImapClient,
     smtpClient: ISmtpClient,
     logger: Logger,
+    tracer?: ITracer,
   ) {
     this.config = config;
     this.imapClient = imapClient;
     this.smtpClient = smtpClient;
     this.logger = logger;
+    this.tracer = tracer ?? new NoopTracer();
     this.allowedPatterns = config.allowedSenders.map((s) => s.toLowerCase().trim());
   }
 
@@ -191,6 +196,11 @@ export class EmailChannel implements Channel {
       return Err(createError("CHANNEL_SEND_FAILED", "Email SMTP client is not connected"));
     }
 
+    const span = this.tracer.startSpan("email.send", {
+      "email.channel_id": message.channelId,
+      "email.is_reply": !!message.replyToId,
+    });
+
     try {
       // Look up threading context if this is a reply
       const thread = message.replyToId ? this.threadMap.get(message.replyToId) : undefined;
@@ -207,8 +217,13 @@ export class EmailChannel implements Channel {
       const to = thread ? thread.originalSender : message.channelId;
 
       if (!to || !isValidEmail(to)) {
+        span.setStatus("error", "Invalid recipient email address");
+        span.end();
         return Err(createError("CHANNEL_SEND_FAILED", `Invalid recipient email address: ${to}`));
       }
+
+      span.setAttribute("email.to", to);
+      span.setAttribute("email.subject", finalSubject);
 
       // Build threading headers
       let inReplyTo: string | undefined;
@@ -233,6 +248,8 @@ export class EmailChannel implements Channel {
       });
 
       if (!sendResult.ok) {
+        span.setStatus("error", sendResult.error.message);
+        span.end();
         return Err(sendResult.error);
       }
 
@@ -242,9 +259,13 @@ export class EmailChannel implements Channel {
         messageId: sendResult.value,
       });
 
+      span.setStatus("ok");
+      span.end();
       return Ok(undefined);
     } catch (cause) {
       this.logger.error("email", "Failed to send email", cause);
+      span.setStatus("error", cause instanceof Error ? cause.message : String(cause));
+      span.end();
       return Err(createError("CHANNEL_SEND_FAILED", "Failed to send email", cause));
     }
   }
@@ -305,6 +326,12 @@ export class EmailChannel implements Channel {
   }
 
   private async processInboundEmail(email: ImapMessage): Promise<void> {
+    const span = this.tracer.startSpan("email.process_inbound", {
+      "email.from": email.from,
+      "email.subject": email.subject,
+      "email.uid": email.uid,
+    });
+
     // Check sender authorization
     if (!this.isAllowedSender(email.from)) {
       this.logger.warn("email", "Email from unauthorized sender", {
@@ -313,6 +340,9 @@ export class EmailChannel implements Channel {
       });
       // Mark as read to avoid re-processing
       await this.imapClient.markAsRead(email.uid);
+      span.setAttribute("email.skipped", "unauthorized");
+      span.setStatus("ok");
+      span.end();
       return;
     }
 
@@ -320,6 +350,9 @@ export class EmailChannel implements Channel {
     if (this.isRateLimited(email.from)) {
       this.logger.warn("email", "Rate limited sender", { from: email.from });
       await this.imapClient.markAsRead(email.uid);
+      span.setAttribute("email.skipped", "rate_limited");
+      span.setStatus("ok");
+      span.end();
       return;
     }
 
@@ -335,6 +368,9 @@ export class EmailChannel implements Channel {
         subject: email.subject,
       });
       await this.imapClient.markAsRead(email.uid);
+      span.setAttribute("email.skipped", "empty_body");
+      span.setStatus("ok");
+      span.end();
       return;
     }
 
@@ -379,8 +415,20 @@ export class EmailChannel implements Channel {
     // Mark as read before dispatching
     await this.imapClient.markAsRead(email.uid);
 
+    span.setAttribute("email.has_attachments", attachments.length > 0);
+    span.setAttribute("email.is_reply", threadInfo.isReply);
+    span.setAttribute("email.body_length", safeText.length);
+
     // Dispatch to handler
-    await this.dispatchMessage(inbound);
+    try {
+      await this.dispatchMessage(inbound);
+      span.setStatus("ok");
+    } catch (err) {
+      span.setStatus("error", err instanceof Error ? err.message : String(err));
+      throw err;
+    } finally {
+      span.end();
+    }
   }
 
   // -----------------------------------------------------------------------

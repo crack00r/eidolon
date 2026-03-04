@@ -546,6 +546,20 @@ export const DigestConfigSchema = z.object({
 });
 
 // ---------------------------------------------------------------------------
+// Telemetry (OpenTelemetry)
+// ---------------------------------------------------------------------------
+
+export const TelemetryConfigSchema = z.object({
+  enabled: z.boolean().default(false),
+  endpoint: z.string().default("http://localhost:4318"),
+  protocol: z.enum(["grpc", "http"]).default("http"),
+  serviceName: z.string().default("eidolon-core"),
+  sampleRate: z.number().min(0).max(1).default(1.0),
+  exportIntervalMs: z.number().int().positive().default(5000),
+  attributes: z.record(z.string(), z.string()).default({}),
+});
+
+// ---------------------------------------------------------------------------
 // Daemon
 // ---------------------------------------------------------------------------
 
@@ -577,6 +591,7 @@ export const EidolonConfigSchema = z.object({
   homeAutomation: HomeAutomationConfigSchema.default({}),
   database: DatabaseConfigSchema,
   logging: LoggingConfigSchema,
+  telemetry: TelemetryConfigSchema.default({}),
   daemon: DaemonConfigSchema,
 });
 
@@ -600,6 +615,7 @@ export type LoggingConfig = z.infer<typeof LoggingConfigSchema>;
 export type PrivacyConfig = z.infer<typeof PrivacyConfigSchema>;
 export type DigestConfig = z.infer<typeof DigestConfigSchema>;
 export type DaemonConfig = z.infer<typeof DaemonConfigSchema>;
+export type TelemetryConfig = z.infer<typeof TelemetryConfigSchema>;
 export type CalendarConfigInferred = z.infer<typeof CalendarConfigSchema>;
 export type HomeAutomationConfig = z.infer<typeof HomeAutomationConfigSchema>;
 export type ClaudeAccount = z.infer<typeof ClaudeAccountSchema>;

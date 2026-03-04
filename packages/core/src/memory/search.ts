@@ -14,6 +14,8 @@ import type { Database } from "bun:sqlite";
 import type { EidolonError, Memory, MemorySearchQuery, MemorySearchResult, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 import type { Logger } from "../logging/logger.ts";
+import type { ITracer } from "../telemetry/tracer.ts";
+import { NoopTracer } from "../telemetry/tracer.ts";
 import { EmbeddingModel } from "./embeddings.ts";
 import type { MemoryStore } from "./store.ts";
 
@@ -68,6 +70,7 @@ export class MemorySearch {
   private readonly store: MemoryStore;
   private readonly embeddingModel: EmbeddingModel;
   private readonly logger: Logger;
+  private readonly tracer: ITracer;
   private readonly bm25Weight: number;
   private readonly vectorWeight: number;
   private readonly graphWeight: number;
@@ -80,11 +83,13 @@ export class MemorySearch {
     db: Database,
     logger: Logger,
     options?: MemorySearchOptions,
+    tracer?: ITracer,
   ) {
     this.store = store;
     this.embeddingModel = embeddingModel;
     this.db = db;
     this.logger = logger.child("memory-search");
+    this.tracer = tracer ?? new NoopTracer();
     this.bm25Weight = Math.max(MIN_WEIGHT, Math.min(MAX_WEIGHT, options?.bm25Weight ?? DEFAULT_BM25_WEIGHT));
     this.vectorWeight = Math.max(MIN_WEIGHT, Math.min(MAX_WEIGHT, options?.vectorWeight ?? DEFAULT_VECTOR_WEIGHT));
     this.graphWeight = Math.max(MIN_WEIGHT, Math.min(MAX_WEIGHT, options?.graphWeight ?? DEFAULT_GRAPH_WEIGHT));
@@ -100,20 +105,36 @@ export class MemorySearch {
     if (!query.text || query.text.trim().length === 0) {
       return Ok([]);
     }
+    const searchSpan = this.tracer.startSpan("memory.search", {
+      "query.length": query.text.length,
+      "query.limit": query.limit ?? DEFAULT_LIMIT,
+    });
     const limit = Math.max(1, Math.min(query.limit ?? DEFAULT_LIMIT, MAX_SEARCH_LIMIT));
 
     // BM25 search
     const bm25Result = this.searchBm25(query.text, limit);
-    if (!bm25Result.ok) return bm25Result;
+    if (!bm25Result.ok) {
+      searchSpan.setStatus("error", "BM25 search failed");
+      searchSpan.end();
+      return bm25Result;
+    }
 
     // Vector search -- requires embedding model to be initialised
     let vectorList: Array<{ memoryId: string; similarity: number }> = [];
     if (this.embeddingModel.isInitialized) {
       const embResult = await this.embeddingModel.embed(query.text, "query");
-      if (!embResult.ok) return Err(embResult.error);
+      if (!embResult.ok) {
+        searchSpan.setStatus("error", "Embedding failed");
+        searchSpan.end();
+        return Err(embResult.error);
+      }
 
       const vecResult = await this.searchVector(embResult.value, limit);
-      if (!vecResult.ok) return vecResult;
+      if (!vecResult.ok) {
+        searchSpan.setStatus("error", "Vector search failed");
+        searchSpan.end();
+        return vecResult;
+      }
       vectorList = vecResult.value;
     } else {
       this.logger.warn("search", "Embedding model not initialized; skipping vector search");
@@ -200,6 +221,12 @@ export class MemorySearch {
       fusedCount: fused.length,
       returnedCount: results.length,
     });
+
+    searchSpan.setAttribute("results.bm25_count", bm25Ranked.length);
+    searchSpan.setAttribute("results.vector_count", vectorRanked.length);
+    searchSpan.setAttribute("results.total", results.length);
+    searchSpan.setStatus("ok");
+    searchSpan.end();
 
     return Ok(results);
   }
