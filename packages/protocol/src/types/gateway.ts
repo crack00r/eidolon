@@ -66,7 +66,18 @@ export type GatewayMethod =
   | "ha.entities"
   | "ha.scenes"
   | "ha.execute"
-  | "ha.state";
+  | "ha.state"
+  // Plugin methods
+  | "plugin.list"
+  | "plugin.info"
+  | "plugin.install"
+  | "plugin.uninstall"
+  | "plugin.enable"
+  | "plugin.disable"
+  // LLM provider methods
+  | "llm.providers"
+  | "llm.models"
+  | "llm.complete";
 
 // ---------------------------------------------------------------------------
 // Push notification types (server → client, no response expected)

@@ -18,4 +18,6 @@ export * from "./metrics.ts";
 export * from "./scheduling.ts";
 export * from "./security.ts";
 export * from "./sessions.ts";
+export * from "./plugins.ts";
+export * from "./llm.ts";
 export * from "./voice.ts";

@@ -560,6 +560,71 @@ export const TelemetryConfigSchema = z.object({
 });
 
 // ---------------------------------------------------------------------------
+// Plugin System
+// ---------------------------------------------------------------------------
+
+export const PluginConfigSchema = z.object({
+  enabled: z.boolean().default(false),
+  directory: z.string().default(""),
+  autoUpdate: z.boolean().default(false),
+  allowedPermissions: z
+    .array(z.string())
+    .default(["events:listen", "events:emit", "config:read", "gateway:register"]),
+  blockedPlugins: z.array(z.string()).default([]),
+});
+
+// ---------------------------------------------------------------------------
+// Local LLM Providers
+// ---------------------------------------------------------------------------
+
+export const OllamaProviderSchema = z.object({
+  enabled: z.boolean().default(false),
+  host: z.string().default("http://localhost:11434"),
+  defaultModel: z.string().default("llama3.2"),
+  models: z
+    .record(
+      z.string(),
+      z.object({
+        contextLength: z.number().int().positive().default(8192),
+        supportsTools: z.boolean().default(false),
+      }),
+    )
+    .default({}),
+});
+
+export const LlamaCppProviderSchema = z.object({
+  enabled: z.boolean().default(false),
+  serverPath: z.string().default(""),
+  modelPath: z.string().default(""),
+  gpuLayers: z.number().int().min(0).default(0),
+  contextLength: z.number().int().positive().default(8192),
+  port: z.number().int().positive().default(8421),
+});
+
+export const LLMConfigSchema = z.object({
+  providers: z
+    .object({
+      ollama: OllamaProviderSchema.optional(),
+      llamacpp: LlamaCppProviderSchema.optional(),
+    })
+    .default({}),
+  routing: z
+    .record(
+      z.enum([
+        "conversation",
+        "extraction",
+        "filtering",
+        "dreaming",
+        "code-generation",
+        "summarization",
+        "embedding",
+      ]),
+      z.array(z.enum(["claude", "ollama", "llamacpp"])),
+    )
+    .default({}),
+});
+
+// ---------------------------------------------------------------------------
 // Daemon
 // ---------------------------------------------------------------------------
 
@@ -592,6 +657,8 @@ export const EidolonConfigSchema = z.object({
   database: DatabaseConfigSchema,
   logging: LoggingConfigSchema,
   telemetry: TelemetryConfigSchema.default({}),
+  plugins: PluginConfigSchema.default({}),
+  llm: LLMConfigSchema.default({}),
   daemon: DaemonConfigSchema,
 });
 
@@ -618,6 +685,10 @@ export type DaemonConfig = z.infer<typeof DaemonConfigSchema>;
 export type TelemetryConfig = z.infer<typeof TelemetryConfigSchema>;
 export type CalendarConfigInferred = z.infer<typeof CalendarConfigSchema>;
 export type HomeAutomationConfig = z.infer<typeof HomeAutomationConfigSchema>;
+export type PluginConfig = z.infer<typeof PluginConfigSchema>;
+export type LLMConfig = z.infer<typeof LLMConfigSchema>;
+export type OllamaProviderConfig = z.infer<typeof OllamaProviderSchema>;
+export type LlamaCppProviderConfig = z.infer<typeof LlamaCppProviderSchema>;
 export type ClaudeAccount = z.infer<typeof ClaudeAccountSchema>;
 export type WebhookEndpointConfig = z.infer<typeof WebhookEndpointSchema>;
 export type WhatsAppConfig = z.infer<typeof WhatsAppConfigSchema>;

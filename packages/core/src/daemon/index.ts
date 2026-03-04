@@ -74,6 +74,14 @@ import { CalendarManager } from "../calendar/manager.ts";
 import { HAManager } from "../home-automation/manager.ts";
 import { AutomationEngine } from "../scheduler/automation.ts";
 import { TaskScheduler } from "../scheduler/scheduler.ts";
+import { ClaudeProvider } from "../llm/claude-provider.ts";
+import { LlamaCppProvider } from "../llm/llamacpp-provider.ts";
+import { ModelRouter } from "../llm/router.ts";
+import { OllamaProvider } from "../llm/ollama-provider.ts";
+import { discoverPlugins } from "../plugins/loader.ts";
+import { PluginLifecycleManager } from "../plugins/lifecycle.ts";
+import { PluginRegistry } from "../plugins/registry.ts";
+import type { SandboxDeps } from "../plugins/sandbox.ts";
 import { getMasterKey } from "../secrets/master-key.ts";
 import { SecretStore } from "../secrets/store.ts";
 
@@ -129,6 +137,9 @@ interface InitializedModules {
   metricsWiring?: MetricsWiringHandle;
   telemetryProvider?: TelemetryProvider;
   metricsBridge?: MetricsBridgeHandle;
+  pluginRegistry?: PluginRegistry;
+  pluginLifecycle?: PluginLifecycleManager;
+  modelRouter?: ModelRouter;
   gatewayServer?: GatewayServer;
   tailscaleDetector?: TailscaleDetector;
   discoveryBroadcaster?: DiscoveryBroadcaster;
@@ -582,6 +593,99 @@ export class EidolonDaemon {
             const message = err instanceof Error ? err.message : String(err);
             logger.warn("daemon", `ClaudeCodeManager skipped: ${message}`);
           }
+        },
+      });
+
+      // 14b. Plugin System (needs Logger, Config)
+      initOrder.push({
+        name: "PluginSystem",
+        fn: async () => {
+          const logger = this.modules.logger;
+          const config = this.modules.config;
+          if (!logger || !config) return;
+
+          if (!config.plugins?.enabled) {
+            logger.debug("daemon", "Plugin system disabled in config");
+            return;
+          }
+
+          try {
+            const registry = new PluginRegistry(logger);
+            this.modules.pluginRegistry = registry;
+
+            const pluginDir = config.plugins.directory || "";
+            const loaded = await discoverPlugins(pluginDir, logger);
+
+            const sandboxDeps: SandboxDeps = {
+              logger,
+              config,
+              eventBus: this.modules.eventBus,
+              gateway: this.modules.gatewayServer,
+              messageRouter: this.modules.messageRouter,
+            };
+
+            const lifecycle = new PluginLifecycleManager(
+              registry,
+              config.plugins,
+              sandboxDeps,
+              logger,
+              this.modules.eventBus,
+            );
+            this.modules.pluginLifecycle = lifecycle;
+
+            await lifecycle.initAll(loaded);
+            await lifecycle.startAll();
+            logger.info("daemon", `Plugin system started (${loaded.length} plugins)`);
+          } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : String(err);
+            logger.warn("daemon", `Plugin system init failed: ${message}`);
+          }
+        },
+      });
+
+      // 14c. ModelRouter + LLM Providers (needs Logger, Config, ClaudeCodeManager)
+      initOrder.push({
+        name: "ModelRouter",
+        fn: async () => {
+          const logger = this.modules.logger;
+          const config = this.modules.config;
+          if (!logger || !config) return;
+
+          const llmConfig = config.llm ?? { providers: {}, routing: {} };
+          const router = new ModelRouter(llmConfig, logger);
+          this.modules.modelRouter = router;
+
+          // Register Claude provider (wraps existing ClaudeCodeManager)
+          if (this.modules.claudeManager) {
+            const claudeProvider = new ClaudeProvider(this.modules.claudeManager, logger);
+            router.registerProvider(claudeProvider);
+          }
+
+          // Register Ollama provider if configured
+          const ollamaConfig = llmConfig.providers?.ollama;
+          if (ollamaConfig?.enabled) {
+            const ollama = new OllamaProvider(ollamaConfig, logger);
+            const available = await ollama.isAvailable();
+            if (available) {
+              router.registerProvider(ollama);
+            } else {
+              logger.warn("daemon", "Ollama configured but not available");
+            }
+          }
+
+          // Register llama.cpp provider if configured
+          const llamacppConfig = llmConfig.providers?.llamacpp;
+          if (llamacppConfig?.enabled) {
+            const llamacpp = new LlamaCppProvider(llamacppConfig, logger);
+            const available = await llamacpp.isAvailable();
+            if (available) {
+              router.registerProvider(llamacpp);
+            } else {
+              logger.warn("daemon", "llama.cpp configured but not available");
+            }
+          }
+
+          logger.info("daemon", `ModelRouter initialized with ${router.getAllProviders().length} providers`);
         },
       });
 
@@ -1461,6 +1565,48 @@ export class EidolonDaemon {
         },
       });
 
+      // 19d. Wire plugin + LLM RPC handlers to gateway
+      initOrder.push({
+        name: "PluginLlmGatewayWiring",
+        fn: () => {
+          const gateway = this.modules.gatewayServer;
+          const logger = this.modules.logger;
+          if (!gateway || !logger) return;
+
+          // Plugin RPC handlers
+          const registry = this.modules.pluginRegistry;
+          if (registry) {
+            gateway.registerHandler("plugin.list" as never, async () => registry.getAll());
+            gateway.registerHandler("plugin.info" as never, async (params: unknown) => {
+              const { name } = params as { name: string };
+              return registry.get(name) ?? null;
+            });
+            logger.info("daemon", "Plugin RPC handlers wired to gateway");
+          }
+
+          // LLM RPC handlers
+          const router = this.modules.modelRouter;
+          if (router) {
+            gateway.registerHandler("llm.providers" as never, async () =>
+              router.getAllProviders().map((p) => ({ type: p.type, name: p.name })),
+            );
+            gateway.registerHandler("llm.models" as never, async () => {
+              const result: Array<{ provider: string; models: readonly string[] }> = [];
+              for (const p of router.getAllProviders()) {
+                try {
+                  const models = await p.listModels();
+                  result.push({ provider: p.type, models });
+                } catch {
+                  result.push({ provider: p.type, models: [] });
+                }
+              }
+              return result;
+            });
+            logger.info("daemon", "LLM RPC handlers wired to gateway");
+          }
+        },
+      });
+
       // 20. TailscaleDetector (needs Logger)
       initOrder.push({
         name: "TailscaleDetector",
@@ -1736,6 +1882,17 @@ export class EidolonDaemon {
         logger?.info("daemon", "HAManager disposed");
       } catch (err: unknown) {
         logger?.error("daemon", "Error disposing HAManager", err);
+      }
+    }
+
+    // 14b -> Plugin system (stop and destroy all plugins)
+    if (this.modules.pluginLifecycle) {
+      try {
+        await this.modules.pluginLifecycle.stopAll();
+        await this.modules.pluginLifecycle.destroyAll();
+        logger?.info("daemon", "Plugin lifecycle stopped and destroyed");
+      } catch (err: unknown) {
+        logger?.error("daemon", "Error stopping plugin lifecycle", err);
       }
     }
 

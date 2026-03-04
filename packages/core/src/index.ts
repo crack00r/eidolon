@@ -27,4 +27,6 @@ export * from "./privacy/index.ts";
 export * from "./research/index.ts";
 export * from "./scheduler/index.ts";
 export * from "./secrets/index.ts";
+export * from "./plugins/index.ts";
+export * from "./llm/index.ts";
 export * from "./telemetry/index.ts";

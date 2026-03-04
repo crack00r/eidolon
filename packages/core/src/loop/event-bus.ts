@@ -70,6 +70,12 @@ const VALID_EVENT_TYPES = new Set<string>([
   "ha:state_changed",
   "ha:anomaly_detected",
   "ha:scene_executed",
+  "plugin:loaded",
+  "plugin:started",
+  "plugin:stopped",
+  "plugin:error",
+  "llm:provider_available",
+  "llm:provider_unavailable",
 ]);
 const VALID_PRIORITIES = new Set<string>(["critical", "high", "normal", "low"]);
 

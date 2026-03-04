@@ -6,4 +6,5 @@ export { createTestConfig } from "./test-config.ts";
 export type { TestDatabaseDir } from "./test-database.ts";
 export { createTestDatabaseDir } from "./test-database.ts";
 export { createTestEvent, createTestUserMessageEvent } from "./test-events.ts";
+export { FakeLLMProvider } from "./fake-llm-provider.ts";
 export { collectAsync, eventually, sleep, waitFor } from "./test-helpers.ts";
