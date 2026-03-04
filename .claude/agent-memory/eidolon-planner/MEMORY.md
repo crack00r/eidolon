@@ -40,16 +40,26 @@
 - Prometheus /metrics: FULLY IMPLEMENTED (prometheus.ts + wiring.ts + gateway /metrics handler + tests) -- G-05 is RESOLVED
 - Integration Plan (Tiers 1-3, Sprints 1-12) all committed to main
 
-## Gap Status (updated from v3 audit)
-RESOLVED since audit v3:
-- G-02: Golden dataset now has 105 turns (was 3 at audit time)
-- G-05: Prometheus /metrics IS implemented (MetricsRegistry, wiring.ts, gateway handler, 2 tests)
+## Gap Status (updated March 4, 2026 deep review)
+RESOLVED since audit v4:
+- G-02: Golden dataset 105 turns
+- G-05: Prometheus /metrics fully implemented
+- G-15: GLOSSARY.md + TROUBLESHOOTING.md exist (9KB + 11KB)
+- G-06: DND timezone IS comprehensively tested (55+ tests in router.test.ts including Europe/Berlin, America/New_York, Asia/Tokyo, America/St_Johns, DST transitions, same-UTC-cross-timezone)
+- G-08: CLI learning command IS fully implemented (529 lines: status, discoveries, approve, reject, journal, sources)
+- G-14: iOS VoiceOver IS implemented (48 accessibility attributes across 7 Swift view files)
+- G-10: Desktop WCAG partial (66 ARIA attributes across 6 Svelte routes -- present but not verified against AA spec)
 
-Still open:
-- HIGH: G-12 -- iOS .xcodeproj missing (source files exist, SETUP.md has manual instructions)
-- MEDIUM: G-06 -- DND schedule enforcement basic (no timezone tests)
-- MEDIUM: G-07 -- HA entity resolution is MCP-passthrough only (by design)
-- LOW: G-01, G-08, G-10, G-11, G-14, G-15 (cosmetic/structural)
+Still genuinely open:
+- HIGH: G-12 -- iOS .xcodeproj missing (XcodeGen project.yml exists, SETUP.md documents generation, but no CI integration)
+- LOW: G-01 -- config/validator.ts inlined in loader.ts (structural only, functional)
+- LOW: G-11 -- Tauri updater pubkey looks real (decoded to minisign key) but needs verification against actual signing key
+
+TODOs in production code (4 total, all benign):
+- apps/ios/PushNotificationService.swift:71 -- "TODO: Send token to Eidolon Core server via WebSocket" (feature gap)
+- apps/web/hooks.server.ts:17 -- "TODO: In production, add report-to CSP directive" (security enhancement)
+- packages/core extractor.ts:141 -- TODO regex pattern (intentional, for memory extraction)
+- packages/core daemon-memory-integration.test.ts:279 -- TODO in test fixture data (not real TODO)
 
 ## Key File Paths (line counts verified v2)
 - /Users/manuelguttmann/Projekte/eidolon/packages/core/src/claude/manager.ts -- ClaudeCodeManager (232 lines)
