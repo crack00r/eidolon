@@ -1,6 +1,6 @@
 # Roadmap
 
-> **Status: Implemented — v0.1.6 released. All phases through v2.0 completed (1888 tests, 0 typecheck errors).**
+> **Status: Implemented — v0.1.6 released. All phases through v2.0 completed (2502 tests passing, 0 typecheck errors).**
 > Updated 2026-03-06. All phases implemented per [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
 
 Development is organized into phases. Each phase produces a working system that builds on the previous one. No phase begins until the prior phase is stable and tested.
@@ -322,6 +322,8 @@ All v2.0 features have been implemented. See [V1.2_V2.0_PLAN.md](V1.2_V2.0_PLAN.
 
 | Feature | Description | Status |
 |---|---|---|
+| Secondary node replication | Disaster recovery to secondary server | Under consideration |
+| Multi-user | Complete per-user memory isolation | Under consideration |
 | Custom model fine-tuning | Fine-tune local models on personal data | Under consideration |
 
 ## Versioning
