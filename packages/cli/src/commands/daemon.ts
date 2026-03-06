@@ -161,7 +161,7 @@ async function startForeground(configPath?: string): Promise<void> {
   console.log("Starting Eidolon daemon in foreground mode...");
 
   try {
-    await daemon.start({ configPath, foreground: true });
+    await daemon.start();
     console.log("Eidolon daemon is running. Press Ctrl+C to stop.");
 
     // Keep the process alive. Signal handlers in EidolonDaemon

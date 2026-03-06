@@ -1,17 +1,18 @@
 /**
- * REM Phase (Associative Discovery) -- uses LLM (stubbed for now).
+ * REM Phase (Associative Discovery) -- uses LLM for non-obvious connections.
  *
  * 1. Take recent short-term memories (last 7 days by default).
  * 2. For each, find the 5 most semantically similar memories from long-term.
  * 3. Create "related_to" edges between related memories (similarity > 0.3).
- * 4. LLM analysis for non-obvious connections (stubbed: the interface is
- *    defined but the LLM call is not wired to Claude yet).
+ * 4. LLM analysis: ask a fast model to find non-obvious connections between
+ *    memory pairs, create edges and association memories from insights.
  * 5. Train ComplEx embeddings on all KG triples (if ComplEx is available).
  */
 
-import type { EidolonError, Result } from "@eidolon/protocol";
+import type { EidolonError, ILLMProvider, LLMMessage, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 import type { Logger } from "../../logging/logger.ts";
+import type { ModelRouter } from "../../llm/router.ts";
 import type { GraphMemory } from "../graph.ts";
 import type { ComplExEmbeddings, Triple } from "../knowledge-graph/complex.ts";
 import type { KGRelationStore } from "../knowledge-graph/relations.ts";
@@ -25,6 +26,8 @@ import type { MemoryStore } from "../store.ts";
 export interface RemResult {
   readonly edgesCreated: number;
   readonly associationsFound: number;
+  readonly memoriesCreated: number;
+  readonly tokensUsed: number;
   readonly complexTrained: boolean;
 }
 
@@ -38,6 +41,12 @@ export type AnalyzeConnectionsFn = (
   related: readonly string[],
 ) => Promise<Array<{ insight: string; confidence: number }>>;
 
+/** Parsed insight from the LLM response. */
+interface LlmInsight {
+  readonly insight: string;
+  readonly confidence: number;
+}
+
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
@@ -45,6 +54,18 @@ export type AnalyzeConnectionsFn = (
 const DEFAULT_RECENT_DAYS = 7;
 const DEFAULT_MAX_NEIGHBORS = 5;
 const MIN_SIMILARITY_FOR_EDGE = 0.3;
+const MIN_INSIGHT_CONFIDENCE = 0.5;
+
+const ASSOCIATION_PROMPT_SYSTEM = `You are a memory analysis system. Given a recent memory and a list of related memories, find non-obvious connections, patterns, or insights that link them. Focus on connections that are NOT immediately apparent from surface-level similarity.
+
+Respond ONLY with a JSON array of objects. Each object must have:
+- "insight": a concise description of the connection (1-2 sentences)
+- "confidence": a number from 0.0 to 1.0 indicating how confident you are
+
+Example response:
+[{"insight":"Both memories reference TypeScript preferences, suggesting the user consistently favors typed languages for reliability.","confidence":0.85}]
+
+If no non-obvious connections exist, return an empty array: []`;
 
 // ---------------------------------------------------------------------------
 // RemPhase
@@ -56,6 +77,7 @@ export class RemPhase {
   private readonly graph: GraphMemory;
   private readonly complex: ComplExEmbeddings | null;
   private readonly kgRelations: KGRelationStore | null;
+  private readonly router: ModelRouter | null;
   private readonly logger: Logger;
 
   constructor(
@@ -65,12 +87,14 @@ export class RemPhase {
     complex: ComplExEmbeddings | null,
     kgRelations: KGRelationStore | null,
     logger: Logger,
+    router?: ModelRouter | null,
   ) {
     this.store = store;
     this.search = search;
     this.graph = graph;
     this.complex = complex;
     this.kgRelations = kgRelations;
+    this.router = router ?? null;
     this.logger = logger.child("rem");
   }
 
@@ -98,6 +122,11 @@ export class RemPhase {
 
       let edgesCreated = 0;
       let associationsFound = 0;
+      let memoriesCreated = 0;
+      let tokensUsed = 0;
+
+      // Resolve the LLM provider once (use "dreaming" task type, fast tier)
+      const llmProvider = await this.resolveLlmProvider();
 
       // 2. For each recent memory, find similar long-term memories
       for (const recent of recentMemories) {
@@ -144,19 +173,43 @@ export class RemPhase {
           }
         }
 
-        // 4. LLM analysis (stubbed) -- if an analyzeFn is provided, call it
-        if (options?.analyzeFn && related.length > 0) {
+        // 4. LLM analysis for non-obvious connections
+        if (related.length > 0) {
           const relatedContents = related.map((r) => r.memory.content);
-          try {
-            const insights = await options.analyzeFn(recent.content, relatedContents);
-            this.logger.debug("run", `LLM analysis returned ${insights.length} insights`, {
-              memoryId: recent.id,
-            });
-            // Future: create new memories or edges from insights
-          } catch {
-            this.logger.warn("run", "LLM analysis failed (non-critical)", {
-              memoryId: recent.id,
-            });
+          const llmResult = await this.analyzeWithLlm(
+            recent.content,
+            relatedContents,
+            llmProvider,
+            options?.analyzeFn,
+          );
+
+          tokensUsed += llmResult.tokensUsed;
+
+          // Create association memories from high-confidence insights
+          for (const insight of llmResult.insights) {
+            if (insight.confidence >= MIN_INSIGHT_CONFIDENCE) {
+              const createResult = this.store.create({
+                type: "relationship",
+                layer: "long_term",
+                content: insight.insight,
+                confidence: insight.confidence,
+                source: "dreaming:rem",
+                tags: ["association", "rem-discovery"],
+              });
+
+              if (createResult.ok) {
+                memoriesCreated++;
+
+                // Create edge from the source memory to the new association
+                this.graph.createEdge({
+                  sourceId: recent.id,
+                  targetId: createResult.value.id,
+                  relation: "related_to",
+                  weight: insight.confidence,
+                });
+                edgesCreated++;
+              }
+            }
           }
         }
       }
@@ -171,6 +224,8 @@ export class RemPhase {
       const result: RemResult = {
         edgesCreated,
         associationsFound,
+        memoriesCreated,
+        tokensUsed,
         complexTrained,
       };
 
@@ -178,6 +233,8 @@ export class RemPhase {
         recentMemories: recentMemories.length,
         edgesCreated,
         associationsFound,
+        memoriesCreated,
+        tokensUsed,
         complexTrained,
       });
 
@@ -190,6 +247,131 @@ export class RemPhase {
   // -------------------------------------------------------------------------
   // Private
   // -------------------------------------------------------------------------
+
+  /** Resolve the LLM provider for dreaming tasks. Returns null if unavailable. */
+  private async resolveLlmProvider(): Promise<ILLMProvider | null> {
+    if (!this.router) {
+      this.logger.debug("resolveLlmProvider", "No LLM router configured, skipping LLM analysis");
+      return null;
+    }
+
+    try {
+      const provider = await this.router.selectProvider({ type: "dreaming" });
+      if (!provider) {
+        this.logger.warn("resolveLlmProvider", "No LLM provider available for dreaming tasks");
+        return null;
+      }
+      return provider;
+    } catch {
+      this.logger.warn("resolveLlmProvider", "Failed to resolve LLM provider, degrading gracefully");
+      return null;
+    }
+  }
+
+  /**
+   * Analyze a recent memory against related memories using the LLM or a custom
+   * analyzeFn. Falls back gracefully if neither is available.
+   */
+  private async analyzeWithLlm(
+    recentContent: string,
+    relatedContents: readonly string[],
+    provider: ILLMProvider | null,
+    analyzeFn?: AnalyzeConnectionsFn,
+  ): Promise<{ insights: readonly LlmInsight[]; tokensUsed: number }> {
+    // Prefer custom analyzeFn if provided (e.g. in tests)
+    if (analyzeFn) {
+      try {
+        const insights = await analyzeFn(recentContent, relatedContents);
+        return { insights, tokensUsed: 0 };
+      } catch {
+        this.logger.warn("analyzeWithLlm", "Custom analyzeFn failed (non-critical)");
+        return { insights: [], tokensUsed: 0 };
+      }
+    }
+
+    // No provider available -- skip LLM analysis gracefully
+    if (!provider) {
+      return { insights: [], tokensUsed: 0 };
+    }
+
+    try {
+      const messages = this.buildAssociationPrompt(recentContent, relatedContents);
+      const completion = await provider.complete(messages, {
+        temperature: 0.7,
+        maxTokens: 512,
+      });
+
+      const insights = this.parseInsightsResponse(completion.content);
+      const tokens = completion.usage.inputTokens + completion.usage.outputTokens;
+
+      this.logger.debug("analyzeWithLlm", `LLM returned ${insights.length} insights`, {
+        tokensUsed: tokens,
+      });
+
+      return { insights, tokensUsed: tokens };
+    } catch {
+      this.logger.warn("analyzeWithLlm", "LLM call failed (non-critical), skipping");
+      return { insights: [], tokensUsed: 0 };
+    }
+  }
+
+  /** Build the prompt messages for associative discovery. */
+  private buildAssociationPrompt(
+    recentContent: string,
+    relatedContents: readonly string[],
+  ): readonly LLMMessage[] {
+    const relatedList = relatedContents
+      .map((c, i) => `${i + 1}. ${c}`)
+      .join("\n");
+
+    const userMessage = `Recent memory:\n"${recentContent}"\n\nRelated memories:\n${relatedList}\n\nFind non-obvious connections between the recent memory and the related memories. Return JSON only.`;
+
+    return [
+      { role: "system", content: ASSOCIATION_PROMPT_SYSTEM },
+      { role: "user", content: userMessage },
+    ];
+  }
+
+  /** Parse the LLM response into structured insights. */
+  private parseInsightsResponse(content: string): readonly LlmInsight[] {
+    try {
+      // Extract JSON from the response (handle markdown fences)
+      let jsonStr = content.trim();
+      const fenceMatch = /```(?:json)?\s*([\s\S]*?)```/.exec(jsonStr);
+      if (fenceMatch?.[1]) {
+        jsonStr = fenceMatch[1].trim();
+      }
+
+      const parsed: unknown = JSON.parse(jsonStr);
+      if (!Array.isArray(parsed)) {
+        this.logger.warn("parseInsightsResponse", "LLM response is not an array");
+        return [];
+      }
+
+      const insights: LlmInsight[] = [];
+      for (const item of parsed) {
+        if (
+          typeof item === "object" &&
+          item !== null &&
+          "insight" in item &&
+          "confidence" in item &&
+          typeof (item as Record<string, unknown>).insight === "string" &&
+          typeof (item as Record<string, unknown>).confidence === "number"
+        ) {
+          const raw = item as { insight: string; confidence: number };
+          insights.push({
+            insight: raw.insight,
+            confidence: Math.max(0, Math.min(1, raw.confidence)),
+          });
+        }
+      }
+
+      return insights;
+    } catch {
+      this.logger.warn("parseInsightsResponse", "Failed to parse LLM response as JSON");
+      return [];
+    }
+  }
 
   /** Collect all triples from KG relations and train ComplEx. */
   private trainComplEx(): Result<void, EidolonError> {

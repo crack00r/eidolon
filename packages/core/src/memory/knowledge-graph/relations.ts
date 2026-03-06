@@ -309,6 +309,44 @@ export class KGRelationStore {
     }
   }
 
+  /**
+   * Get triples involving any of the given entity IDs.
+   * Returns (subject_name, predicate, object_name, confidence) for display.
+   */
+  getTriplesForEntities(entityIds: readonly string[], limit?: number): Result<TripleResult[], EidolonError> {
+    if (entityIds.length === 0) return Ok([]);
+    try {
+      const maxResults = limit ?? 50;
+      const placeholders = entityIds.map(() => "?").join(", ");
+      const rows = this.db
+        .query(
+          `SELECT
+             s.name AS subject,
+             r.type AS predicate,
+             t.name AS object,
+             r.confidence
+           FROM kg_relations r
+           JOIN kg_entities s ON s.id = r.source_id
+           JOIN kg_entities t ON t.id = r.target_id
+           WHERE r.source_id IN (${placeholders}) OR r.target_id IN (${placeholders})
+           ORDER BY r.confidence DESC, r.created_at DESC
+           LIMIT ?`,
+        )
+        .all(...entityIds, ...entityIds, maxResults) as TripleRow[];
+
+      return Ok(
+        rows.map((r) => ({
+          subject: r.subject,
+          predicate: r.predicate,
+          object: r.object,
+          confidence: r.confidence,
+        })),
+      );
+    } catch (cause) {
+      return Err(createError(ErrorCode.DB_QUERY_FAILED, "Failed to get triples for entities", cause));
+    }
+  }
+
   /** Get all triples as (subject_name, predicate, object_name) for display. */
   getAllTriples(limit?: number): Result<TripleResult[], EidolonError> {
     try {

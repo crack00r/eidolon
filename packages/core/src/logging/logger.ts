@@ -15,6 +15,8 @@ export interface Logger {
   warn(module: string, message: string, data?: Record<string, unknown>): void;
   error(module: string, message: string, error?: unknown, data?: Record<string, unknown>): void;
   child(module: string): Logger;
+  /** Update the log level at runtime. Affects this logger and all child loggers. */
+  setLevel?(level: LogLevel): void;
 }
 
 /** Options for creating a logger with optional file rotation and traceId. */
@@ -135,40 +137,60 @@ function writeEntry(entry: LogEntry, format: "json" | "pretty", rotator?: LogRot
  * Optionally accepts a LogRotator for file output and a traceId for correlation.
  */
 export function createLogger(config: LoggingConfig, options?: CreateLoggerOptions): Logger {
-  return createLoggerWithPrefix(config, "", options);
+  const state: MutableLogState = { level: config.level, format: config.format };
+  return createLoggerWithPrefix(state, "", options);
+}
+
+/**
+ * Mutable wrapper around LoggingConfig so that setLevel() can propagate
+ * to the root logger and all child loggers sharing the same state object.
+ */
+interface MutableLogState {
+  level: LogLevel;
+  readonly format: "json" | "pretty";
 }
 
 /**
  * Internal factory that supports module prefixing for child loggers.
+ * All loggers in the same tree share the same `state` reference so that
+ * setLevel() on any logger immediately affects the entire tree.
  */
-function createLoggerWithPrefix(config: LoggingConfig, prefix: string, options?: CreateLoggerOptions): Logger {
+function createLoggerWithPrefix(
+  state: MutableLogState,
+  prefix: string,
+  options?: CreateLoggerOptions,
+): Logger {
   const resolveModule = (module: string): string => (prefix ? `${prefix}:${module}` : module);
   const rotator = options?.rotator;
   const traceId = options?.traceId;
 
   const logger: Logger = {
     debug(module: string, message: string, data?: Record<string, unknown>): void {
-      if (!shouldLog("debug", config.level)) return;
-      writeEntry(buildEntry("debug", resolveModule(module), message, data, undefined, traceId), config.format, rotator);
+      if (!shouldLog("debug", state.level)) return;
+      writeEntry(buildEntry("debug", resolveModule(module), message, data, undefined, traceId), state.format, rotator);
     },
 
     info(module: string, message: string, data?: Record<string, unknown>): void {
-      if (!shouldLog("info", config.level)) return;
-      writeEntry(buildEntry("info", resolveModule(module), message, data, undefined, traceId), config.format, rotator);
+      if (!shouldLog("info", state.level)) return;
+      writeEntry(buildEntry("info", resolveModule(module), message, data, undefined, traceId), state.format, rotator);
     },
 
     warn(module: string, message: string, data?: Record<string, unknown>): void {
-      if (!shouldLog("warn", config.level)) return;
-      writeEntry(buildEntry("warn", resolveModule(module), message, data, undefined, traceId), config.format, rotator);
+      if (!shouldLog("warn", state.level)) return;
+      writeEntry(buildEntry("warn", resolveModule(module), message, data, undefined, traceId), state.format, rotator);
     },
 
     error(module: string, message: string, error?: unknown, data?: Record<string, unknown>): void {
-      if (!shouldLog("error", config.level)) return;
-      writeEntry(buildEntry("error", resolveModule(module), message, data, error, traceId), config.format, rotator);
+      if (!shouldLog("error", state.level)) return;
+      writeEntry(buildEntry("error", resolveModule(module), message, data, error, traceId), state.format, rotator);
     },
 
     child(module: string): Logger {
-      return createLoggerWithPrefix(config, resolveModule(module), options);
+      return createLoggerWithPrefix(state, resolveModule(module), options);
+    },
+
+    setLevel(level: LogLevel): void {
+      state.level = level;
     },
   };
 

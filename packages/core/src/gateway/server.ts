@@ -16,6 +16,7 @@
 
 import { randomUUID, timingSafeEqual } from "node:crypto";
 import type {
+  BrainConfig,
   ConnectedClientInfo,
   GatewayConfig,
   GatewayMethod,
@@ -30,12 +31,14 @@ import {
   parseWebhookPayload,
   verifyWebhookSignature,
 } from "../channels/whatsapp/webhook.ts";
+import type { ModelRouter } from "../llm/router.ts";
 import type { Logger } from "../logging/logger.ts";
 import type { EventBus } from "../loop/event-bus.ts";
 import { formatPrometheus, type MetricsRegistry, PROMETHEUS_CONTENT_TYPE } from "../metrics/prometheus.ts";
 import type { RateLimitTracker } from "../metrics/rate-limits.ts";
 import type { ITracer } from "../telemetry/tracer.ts";
 import { NoopTracer } from "../telemetry/tracer.ts";
+import { handleOpenAIRequest, type OpenAICompatDeps } from "./openai-compat.ts";
 import {
   createJsonRpcError,
   createJsonRpcResponse,
@@ -318,6 +321,8 @@ export class GatewayServer {
   private readonly rateLimitTracker: RateLimitTracker | undefined;
   private readonly calendarManager: CalendarManager | undefined;
   private readonly tracer: ITracer;
+  private readonly modelRouter: ModelRouter | undefined;
+  private readonly brainConfig: BrainConfig | undefined;
 
   private readonly clients: Map<string, ClientState> = new Map();
   private readonly handlers: Map<GatewayMethod, MethodHandler> = new Map();
@@ -341,6 +346,8 @@ export class GatewayServer {
     rateLimitTracker?: RateLimitTracker;
     calendarManager?: CalendarManager;
     tracer?: ITracer;
+    modelRouter?: ModelRouter;
+    brainConfig?: BrainConfig;
   }) {
     this.config = deps.config;
     this.logger = deps.logger.child("gateway");
@@ -349,6 +356,8 @@ export class GatewayServer {
     this.rateLimitTracker = deps.rateLimitTracker;
     this.calendarManager = deps.calendarManager;
     this.tracer = deps.tracer ?? new NoopTracer();
+    this.modelRouter = deps.modelRouter;
+    this.brainConfig = deps.brainConfig;
     this.rateLimiter = new AuthRateLimiter(deps.config.rateLimiting, this.logger);
 
     this.registerBuiltinHandlers();
@@ -947,7 +956,7 @@ export class GatewayServer {
       hostname: host,
       ...(tlsConfig ? { tls: tlsConfig } : {}),
 
-      fetch(req, server) {
+      async fetch(req, server) {
         const url = new URL(req.url);
         const isTls = self.config.tls.enabled;
 
@@ -985,6 +994,18 @@ export class GatewayServer {
         if (url.pathname.startsWith("/webhooks/") && req.method === "POST") {
           const endpointId = url.pathname.slice("/webhooks/".length);
           return self.handleWebhookRoute(req, endpointId, isTls);
+        }
+
+        // OpenAI-compatible REST API: /v1/models, /v1/chat/completions
+        if (url.pathname.startsWith("/v1/")) {
+          const openAIDeps: OpenAICompatDeps = {
+            logger: self.logger,
+            brainConfig: self.brainConfig,
+            router: self.modelRouter,
+            authToken: typeof self.config.auth.token === "string" ? self.config.auth.token : undefined,
+          };
+          const openAIResp = await handleOpenAIRequest(req, openAIDeps);
+          if (openAIResp) return openAIResp;
         }
 
         if (url.pathname !== "/ws") {

@@ -12,6 +12,7 @@
  */
 
 import type { Database } from "bun:sqlite";
+import type { BusEvent, EventType } from "@eidolon/protocol";
 import type { Logger } from "../logging/logger.ts";
 import { FeedbackStore } from "./store.ts";
 
@@ -102,14 +103,16 @@ export function adjustSessionMemoryConfidence(
  * @param logger     Logger instance
  */
 export function subscribeFeedbackConfidenceAdjustment(
-  eventBus: { subscribe: (type: string, handler: (event: { payload: Record<string, unknown> }) => void) => () => void },
+  eventBus: { subscribe: (type: EventType, handler: (event: BusEvent) => void) => () => void },
   memoryDb: Database,
   logger: Logger,
 ): () => void {
   const log = logger.child("feedback-confidence");
 
   return eventBus.subscribe("user:feedback", (event) => {
-    const payload = event.payload;
+    const raw = event.payload;
+    const payload = typeof raw === "object" && raw !== null ? (raw as Record<string, unknown>) : undefined;
+    if (!payload) return;
     const sessionId = typeof payload.sessionId === "string" ? payload.sessionId : undefined;
     const rating = typeof payload.rating === "number" ? payload.rating : undefined;
 

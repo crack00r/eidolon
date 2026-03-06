@@ -117,10 +117,10 @@ export class DreamRunner {
             startedAt,
             completedAt: Date.now(),
             memoriesProcessed: rem.associationsFound,
-            memoriesCreated: 0,
+            memoriesCreated: rem.memoriesCreated,
             memoriesRemoved: 0,
             edgesCreated: rem.edgesCreated,
-            tokensUsed: 0, // Will be non-zero once LLM is wired
+            tokensUsed: rem.tokensUsed,
           });
         }
 
@@ -134,10 +134,10 @@ export class DreamRunner {
             startedAt,
             completedAt: Date.now(),
             memoriesProcessed: nrem.memoriesPromoted,
-            memoriesCreated: nrem.schemasCreated,
+            memoriesCreated: nrem.schemasCreated + nrem.skillsExtracted,
             memoriesRemoved: 0,
             edgesCreated: 0,
-            tokensUsed: 0, // Will be non-zero once LLM is wired
+            tokensUsed: nrem.tokensUsed,
           });
         }
 

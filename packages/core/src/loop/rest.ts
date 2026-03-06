@@ -44,12 +44,22 @@ const MODERATE_IDLE_REST_MS = 15_000;
 const PENDING_LEARNING_REST_MS = 60_000;
 
 export class RestCalculator {
-  private readonly config: RestConfig;
+  private config: RestConfig;
   private readonly logger: Logger;
 
   constructor(config: RestConfig, logger: Logger) {
     this.config = config;
     this.logger = logger;
+  }
+
+  /** Update the rest configuration (used by hot-reload). */
+  updateConfig(config: RestConfig): void {
+    this.config = config;
+    this.logger.info("rest", "Rest configuration updated via hot-reload", {
+      activeMinMs: config.activeMinMs,
+      idleMinMs: config.idleMinMs,
+      maxMs: config.maxMs,
+    });
   }
 
   /** Calculate how long to rest based on current context. */

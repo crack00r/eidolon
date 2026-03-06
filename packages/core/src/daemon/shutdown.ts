@@ -327,6 +327,17 @@ export async function teardownModules(
     }
   }
 
+  // 12b -> DocumentIndexer: stop re-indexing interval
+  if (modules.documentIndexerInterval) {
+    try {
+      clearInterval(modules.documentIndexerInterval);
+      modules.documentIndexerInterval = undefined;
+      logger?.info("daemon", "DocumentIndexer interval cleared");
+    } catch (err: unknown) {
+      logger?.error("daemon", "Error clearing DocumentIndexer interval", err);
+    }
+  }
+
   // 15 -> SessionSupervisor: unregister any remaining sessions.
   //    Claude subprocesses were aborted in performShutdown step 2,
   //    but during startup-failure teardown performShutdown is not called.
@@ -343,6 +354,27 @@ export async function teardownModules(
       }
     }
     logger?.info("daemon", `SessionSupervisor: cleaned up ${remaining.length} remaining session(s)`);
+  }
+
+  // 10b -> Feedback confidence subscription: unsubscribe before EventBus dispose
+  if (modules.feedbackConfidenceUnsub) {
+    try {
+      modules.feedbackConfidenceUnsub();
+      modules.feedbackConfidenceUnsub = undefined;
+      logger?.info("daemon", "Feedback confidence subscription unsubscribed");
+    } catch (err: unknown) {
+      logger?.error("daemon", "Error unsubscribing feedback confidence", err);
+    }
+  }
+
+  // 10c -> ApprovalManager: stop periodic timeout checking
+  if (modules.approvalManager) {
+    try {
+      modules.approvalManager.stop();
+      logger?.info("daemon", "ApprovalManager stopped");
+    } catch (err: unknown) {
+      logger?.error("daemon", "Error stopping ApprovalManager", err);
+    }
   }
 
   // 10 -> EventBus: dispose subscribers as safety net.
@@ -384,6 +416,17 @@ export async function teardownModules(
       logger?.info("daemon", "MCPHealthMonitor disposed");
     } catch (err: unknown) {
       logger?.error("daemon", "Error disposing MCPHealthMonitor", err);
+    }
+  }
+
+  // 4b -> ConfigWatcher: stop watching config file
+  if (modules.configWatcher) {
+    try {
+      modules.configWatcher.stop();
+      modules.configWatcher = undefined;
+      logger?.info("daemon", "ConfigWatcher stopped");
+    } catch (err: unknown) {
+      logger?.error("daemon", "Error stopping ConfigWatcher", err);
     }
   }
 

@@ -16,6 +16,8 @@ import { join } from "node:path";
 import type { EidolonError, Memory, MemoryType, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 import type { Logger } from "../logging/logger.ts";
+import type { CommunityDetector } from "./knowledge-graph/communities.ts";
+import type { KGEntityStore } from "./knowledge-graph/entities.ts";
 import type { KGRelationStore, TripleResult } from "./knowledge-graph/relations.ts";
 import type { MemorySearch } from "./search.ts";
 import type { MemoryStore } from "./store.ts";
@@ -33,6 +35,7 @@ export type ContextProvider = () => Result<string, EidolonError>;
 export interface MemoryInjectorOptions {
   readonly maxMemories?: number;
   readonly maxKgTriples?: number;
+  readonly maxCommunities?: number;
   readonly includeKnowledgeGraph?: boolean;
   readonly contextProviders?: readonly ContextProvider[];
 }
@@ -44,12 +47,19 @@ export interface InjectionContext {
   readonly staticContext?: string;
 }
 
+/** Aggregated Knowledge Graph context for MEMORY.md injection. */
+interface KnowledgeGraphContext {
+  readonly triples: readonly TripleResult[];
+  readonly communitySummaries: readonly string[];
+}
+
 // ---------------------------------------------------------------------------
 // Defaults
 // ---------------------------------------------------------------------------
 
 const DEFAULT_MAX_MEMORIES = 20;
 const DEFAULT_MAX_KG_TRIPLES = 10;
+const DEFAULT_MAX_COMMUNITIES = 3;
 const DEFAULT_INCLUDE_KG = true;
 const RECENT_HIGH_CONFIDENCE_LIMIT = 10;
 const MIN_CONFIDENCE_RECENT = 0.8;
@@ -95,27 +105,34 @@ function sanitizeForMarkdown(text: string): string {
 export class MemoryInjector {
   private readonly store: MemoryStore;
   private readonly search: MemorySearch;
+  private readonly kgEntities: KGEntityStore | null;
   private readonly kgRelations: KGRelationStore | null;
+  private readonly communityDetector: CommunityDetector | null;
   private readonly logger: Logger;
   private readonly maxMemories: number;
   private readonly maxKgTriples: number;
+  private readonly maxCommunities: number;
   private readonly includeKnowledgeGraph: boolean;
   private readonly contextProviders: readonly ContextProvider[];
 
   constructor(
     store: MemoryStore,
     search: MemorySearch,
-    _kgEntities: unknown,
+    kgEntities: KGEntityStore | null,
     kgRelations: KGRelationStore | null,
     logger: Logger,
     options?: MemoryInjectorOptions,
+    communityDetector?: CommunityDetector | null,
   ) {
     this.store = store;
     this.search = search;
+    this.kgEntities = kgEntities;
     this.kgRelations = kgRelations;
+    this.communityDetector = communityDetector ?? null;
     this.logger = logger.child("memory-injector");
     this.maxMemories = options?.maxMemories ?? DEFAULT_MAX_MEMORIES;
     this.maxKgTriples = options?.maxKgTriples ?? DEFAULT_MAX_KG_TRIPLES;
+    this.maxCommunities = options?.maxCommunities ?? DEFAULT_MAX_COMMUNITIES;
     this.includeKnowledgeGraph = options?.includeKnowledgeGraph ?? DEFAULT_INCLUDE_KG;
     this.contextProviders = options?.contextProviders ?? [];
   }
@@ -129,25 +146,16 @@ export class MemoryInjector {
 
       const memories = memoriesResult.value;
 
-      // 2. Collect KG triples
-      let triples: TripleResult[] = [];
-      if (this.includeKnowledgeGraph && this.kgRelations !== null) {
-        const triplesResult = this.kgRelations.getAllTriples(this.maxKgTriples);
-        if (triplesResult.ok) {
-          triples = triplesResult.value;
-        } else {
-          this.logger.warn("generateMemoryMd", "Failed to fetch KG triples", {
-            error: triplesResult.error.message,
-          });
-        }
-      }
+      // 2. Collect KG context (entities, triples, communities)
+      const kgContext = this.collectKnowledgeGraphContext(context.query);
 
       // 3. Format markdown
-      const md = this.formatMarkdown(context.staticContext, memories, triples);
+      const md = this.formatMarkdown(context.staticContext, memories, kgContext);
 
       this.logger.debug("generateMemoryMd", "Generated MEMORY.md", {
         memoryCount: memories.length,
-        tripleCount: triples.length,
+        tripleCount: kgContext.triples.length,
+        communityCount: kgContext.communitySummaries.length,
         hasStaticContext: context.staticContext !== undefined,
       });
 
@@ -171,6 +179,97 @@ export class MemoryInjector {
     } catch (cause) {
       return Err(createError(ErrorCode.DB_QUERY_FAILED, "Failed to write MEMORY.md", cause));
     }
+  }
+
+  // -----------------------------------------------------------------------
+  // Private: Knowledge Graph context
+  // -----------------------------------------------------------------------
+
+  /**
+   * Collect KG context: find entities matching the query, get their triples,
+   * and find relevant community summaries.
+   * Falls back to global top-N triples when no query or no entity matches.
+   */
+  private collectKnowledgeGraphContext(query?: string): KnowledgeGraphContext {
+    const empty: KnowledgeGraphContext = { triples: [], communitySummaries: [] };
+
+    if (!this.includeKnowledgeGraph) return empty;
+    if (this.kgRelations === null) return empty;
+
+    let triples: TripleResult[] = [];
+    let communitySummaries: string[] = [];
+
+    // Try to find entities matching the query for context-aware triples
+    const matchedEntityIds = this.findRelevantEntityIds(query);
+
+    if (matchedEntityIds.length > 0) {
+      // Get triples specifically for the matched entities
+      const triplesResult = this.kgRelations.getTriplesForEntities(matchedEntityIds, this.maxKgTriples);
+      if (triplesResult.ok) {
+        triples = triplesResult.value;
+      } else {
+        this.logger.warn("collectKnowledgeGraphContext", "Failed to fetch entity triples", {
+          error: triplesResult.error.message,
+        });
+      }
+
+      // Find communities containing these entities
+      if (this.communityDetector !== null) {
+        const communityResult = this.communityDetector.findCommunitiesForEntities(matchedEntityIds);
+        if (communityResult.ok) {
+          communitySummaries = communityResult.value
+            .slice(0, this.maxCommunities)
+            .filter((c) => c.summary.length > 0)
+            .map((c) => `**${sanitizeForMarkdown(c.name)}**: ${sanitizeForMarkdown(c.summary)}`);
+        } else {
+          this.logger.warn("collectKnowledgeGraphContext", "Failed to fetch communities", {
+            error: communityResult.error.message,
+          });
+        }
+      }
+    }
+
+    // Fall back to global triples if no entity-specific results
+    if (triples.length === 0) {
+      const globalResult = this.kgRelations.getAllTriples(this.maxKgTriples);
+      if (globalResult.ok) {
+        triples = globalResult.value;
+      } else {
+        this.logger.warn("collectKnowledgeGraphContext", "Failed to fetch global KG triples", {
+          error: globalResult.error.message,
+        });
+      }
+    }
+
+    return { triples, communitySummaries };
+  }
+
+  /**
+   * Search for KG entities relevant to the query.
+   * Uses prefix search on entity names, splitting the query into words.
+   */
+  private findRelevantEntityIds(query?: string): string[] {
+    if (!query || this.kgEntities === null) return [];
+
+    const entityIds = new Set<string>();
+    const words = query.split(/\s+/).filter((w) => w.length >= 2);
+
+    for (const word of words) {
+      const result = this.kgEntities.searchByName(word, 5);
+      if (result.ok) {
+        for (const entity of result.value) {
+          entityIds.add(entity.id);
+        }
+      }
+    }
+
+    // Also try exact name match on the full query
+    const exactResult = this.kgEntities.findByName(query);
+    if (exactResult.ok && exactResult.value !== null) {
+      entityIds.add(exactResult.value.id);
+    }
+
+    return [...entityIds];
   }
 
   // -----------------------------------------------------------------------
@@ -219,9 +318,10 @@ export class MemoryInjector {
   private formatMarkdown(
     staticContext: string | undefined,
     memories: readonly Memory[],
-    triples: readonly TripleResult[],
+    kgContext: KnowledgeGraphContext,
   ): string {
     const sections: string[] = ["# Memory Context"];
+    const { triples, communitySummaries } = kgContext;
 
     // Static context
     if (staticContext) {
@@ -230,7 +330,7 @@ export class MemoryInjector {
     }
 
     // No content at all
-    if (memories.length === 0 && triples.length === 0 && !staticContext) {
+    if (memories.length === 0 && triples.length === 0 && communitySummaries.length === 0 && !staticContext) {
       sections.push("");
       sections.push("No relevant memories found for this context.");
       return `${sections.join("\n")}\n`;
@@ -256,15 +356,26 @@ export class MemoryInjector {
       }
     }
 
-    // Knowledge Graph triples
-    if (triples.length > 0) {
+    // Knowledge Graph Context (triples + communities)
+    if (triples.length > 0 || communitySummaries.length > 0) {
       sections.push("");
-      sections.push("## Knowledge Graph");
-      for (const triple of triples) {
-        const subject = sanitizeForMarkdown(triple.subject);
-        const predicate = sanitizeForMarkdown(triple.predicate);
-        const object = sanitizeForMarkdown(triple.object);
-        sections.push(`- ${subject} ${predicate} ${object} (confidence: ${triple.confidence})`);
+      sections.push("## Knowledge Graph Context");
+
+      if (triples.length > 0) {
+        for (const triple of triples) {
+          const subject = sanitizeForMarkdown(triple.subject);
+          const predicate = sanitizeForMarkdown(triple.predicate);
+          const object = sanitizeForMarkdown(triple.object);
+          sections.push(`- ${subject} ${predicate} ${object} (confidence: ${triple.confidence})`);
+        }
+      }
+
+      if (communitySummaries.length > 0) {
+        sections.push("");
+        sections.push("### Related Clusters");
+        for (const summary of communitySummaries) {
+          sections.push(`- ${summary}`);
+        }
       }
     }
 

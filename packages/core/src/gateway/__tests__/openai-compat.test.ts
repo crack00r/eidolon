@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import type { BrainConfig } from "@eidolon/protocol";
+import type { BrainConfig, LLMConfig } from "@eidolon/protocol";
+import { FakeLLMProvider } from "@eidolon/test-utils";
 import type { Logger } from "../../logging/logger.ts";
+import { ModelRouter } from "../../llm/router.ts";
 import { handleOpenAIRequest, type OpenAICompatDeps } from "../openai-compat.ts";
 
 // ---------------------------------------------------------------------------
@@ -21,9 +23,30 @@ function createSilentLogger(): Logger {
 
 const logger = createSilentLogger();
 
+function makeRouter(provider?: FakeLLMProvider): ModelRouter {
+  // Route conversation tasks to all provider types so fakes work
+  const config: LLMConfig = {
+    providers: {},
+    routing: { conversation: ["claude", "ollama", "llamacpp"] },
+  };
+  const router = new ModelRouter(config, logger);
+  if (provider) {
+    router.registerProvider(provider);
+  }
+  return router;
+}
+
 function makeDeps(overrides?: Partial<OpenAICompatDeps>): OpenAICompatDeps {
+  // By default wire up a fake provider so completions work
+  const defaultProvider = FakeLLMProvider.withResponse("Hello from the LLM provider!", "ollama");
+  defaultProvider.setStreamEvents([
+    { type: "text", text: "Hello " },
+    { type: "text", text: "world!" },
+    { type: "done", usage: { inputTokens: 10, outputTokens: 5 } },
+  ]);
   return {
     logger,
+    router: makeRouter(defaultProvider),
     ...overrides,
   };
 }
@@ -188,9 +211,6 @@ describe("handleOpenAIRequest", () => {
       const body = (await parseJsonBody(resp!)) as Record<string, unknown>;
       const data = body.data as Array<Record<string, unknown>>;
 
-      // eidolon-default + 3 unique claude models
-      expect(data.length).toBe(4);
-
       const ids = data.map((m) => m.id);
       expect(ids).toContain("eidolon-default");
       expect(ids).toContain("claude-sonnet-4-20250514");
@@ -205,7 +225,8 @@ describe("handleOpenAIRequest", () => {
         fast: "claude-sonnet-4-20250514",
       });
       const req = makeRequest("/v1/models");
-      const resp = await handleOpenAIRequest(req, makeDeps({ brainConfig }));
+      // Use no-router deps to get a predictable count
+      const resp = await handleOpenAIRequest(req, makeDeps({ brainConfig, router: makeRouter() }));
 
       // biome-ignore lint/style/noNonNullAssertion: test assertion
       const body = (await parseJsonBody(resp!)) as Record<string, unknown>;
@@ -223,7 +244,8 @@ describe("handleOpenAIRequest", () => {
       // biome-ignore lint/style/noNonNullAssertion: test assertion
       const body = (await parseJsonBody(resp!)) as Record<string, unknown>;
       const data = body.data as Array<Record<string, unknown>>;
-      const anthropicModels = data.filter((m) => m.id !== "eidolon-default");
+      const anthropicModels = data.filter((m) => m.id !== "eidolon-default" && m.owned_by === "anthropic");
+      expect(anthropicModels.length).toBeGreaterThan(0);
       for (const model of anthropicModels) {
         expect(model.owned_by).toBe("anthropic");
       }
@@ -237,6 +259,19 @@ describe("handleOpenAIRequest", () => {
       expect(resp?.headers.get("X-Frame-Options")).toBe("DENY");
       expect(resp?.headers.get("Content-Type")).toBe("application/json");
     });
+
+    test("includes registered provider models", async () => {
+      const provider = FakeLLMProvider.withResponse("test", "ollama");
+      const router = makeRouter(provider);
+      const req = makeRequest("/v1/models");
+      const resp = await handleOpenAIRequest(req, makeDeps({ router }));
+
+      // biome-ignore lint/style/noNonNullAssertion: test assertion
+      const body = (await parseJsonBody(resp!)) as Record<string, unknown>;
+      const data = body.data as Array<Record<string, unknown>>;
+      const ids = data.map((m) => m.id);
+      expect(ids).toContain(provider.name);
+    });
   });
 
   // ---------------------------------------------------------------------------
@@ -244,13 +279,16 @@ describe("handleOpenAIRequest", () => {
   // ---------------------------------------------------------------------------
 
   describe("POST /v1/chat/completions", () => {
-    test("returns valid completion response", async () => {
+    test("returns completion from real LLM provider", async () => {
+      const provider = FakeLLMProvider.withResponse("Hello from Eidolon!", "ollama");
+      const deps = makeDeps({ router: makeRouter(provider) });
+
       const req = makeRequest("/v1/chat/completions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: makeChatBody(),
       });
-      const resp = await handleOpenAIRequest(req, makeDeps());
+      const resp = await handleOpenAIRequest(req, deps);
       expect(resp).not.toBeNull();
       expect(resp?.status).toBe(200);
 
@@ -259,7 +297,6 @@ describe("handleOpenAIRequest", () => {
       expect(body.object).toBe("chat.completion");
       expect(typeof body.id).toBe("string");
       expect((body.id as string).startsWith("chatcmpl-")).toBe(true);
-      expect(body.model).toBe("eidolon-default");
       expect(typeof body.created).toBe("number");
 
       const choices = body.choices as Array<Record<string, unknown>>;
@@ -269,8 +306,7 @@ describe("handleOpenAIRequest", () => {
 
       const message = choices[0]?.message as Record<string, unknown>;
       expect(message.role).toBe("assistant");
-      expect(typeof message.content).toBe("string");
-      expect((message.content as string).length).toBeGreaterThan(0);
+      expect(message.content).toBe("Hello from Eidolon!");
 
       const usage = body.usage as Record<string, unknown>;
       expect(typeof usage.prompt_tokens).toBe("number");
@@ -279,30 +315,70 @@ describe("handleOpenAIRequest", () => {
       expect(usage.total_tokens).toBe((usage.prompt_tokens as number) + (usage.completion_tokens as number));
     });
 
-    test("includes the user message content in the stub response", async () => {
+    test("passes messages to the provider", async () => {
+      const provider = FakeLLMProvider.withResponse("Response", "ollama");
+      const deps = makeDeps({ router: makeRouter(provider) });
+
       const req = makeRequest("/v1/chat/completions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: makeChatBody({ messages: [{ role: "user", content: "Test message" }] }),
       });
-      const resp = await handleOpenAIRequest(req, makeDeps());
-      // biome-ignore lint/style/noNonNullAssertion: test assertion
-      const body = (await parseJsonBody(resp!)) as Record<string, unknown>;
-      const choices = body.choices as Array<Record<string, unknown>>;
-      const message = choices[0]?.message as Record<string, unknown>;
-      expect(message.content as string).toContain("12 chars");
+      await handleOpenAIRequest(req, deps);
+
+      const calls = provider.getCalls();
+      expect(calls.length).toBe(1);
+      expect(calls[0]?.messages[0]?.role).toBe("user");
+      expect(calls[0]?.messages[0]?.content).toBe("Test message");
     });
 
-    test("reflects the requested model in the response", async () => {
+    test("resolves eidolon-default model via brain config", async () => {
+      const provider = FakeLLMProvider.withResponse("test", "ollama");
+      const brainConfig = makeBrainConfig({ default: "claude-sonnet-4-20250514" });
+      const deps = makeDeps({ router: makeRouter(provider), brainConfig });
+
       const req = makeRequest("/v1/chat/completions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: makeChatBody({ model: "claude-opus-4-20250514" }),
+        body: makeChatBody({ model: "eidolon-default" }),
       });
-      const resp = await handleOpenAIRequest(req, makeDeps());
+      const resp = await handleOpenAIRequest(req, deps);
+
       // biome-ignore lint/style/noNonNullAssertion: test assertion
       const body = (await parseJsonBody(resp!)) as Record<string, unknown>;
-      expect(body.model).toBe("claude-opus-4-20250514");
+      expect(body.model).toBe("claude-sonnet-4-20250514");
+    });
+
+    test("maps OpenAI model names to Eidolon equivalents", async () => {
+      const provider = FakeLLMProvider.withResponse("test", "ollama");
+      const deps = makeDeps({ router: makeRouter(provider) });
+
+      const req = makeRequest("/v1/chat/completions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: makeChatBody({ model: "gpt-4o" }),
+      });
+      const resp = await handleOpenAIRequest(req, deps);
+
+      // biome-ignore lint/style/noNonNullAssertion: test assertion
+      const body = (await parseJsonBody(resp!)) as Record<string, unknown>;
+      expect(body.model).toBe("claude-sonnet-4-20250514");
+    });
+
+    test("passes through unknown model names unchanged", async () => {
+      const provider = FakeLLMProvider.withResponse("test", "ollama");
+      const deps = makeDeps({ router: makeRouter(provider) });
+
+      const req = makeRequest("/v1/chat/completions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: makeChatBody({ model: "my-custom-model" }),
+      });
+      const resp = await handleOpenAIRequest(req, deps);
+
+      // biome-ignore lint/style/noNonNullAssertion: test assertion
+      const body = (await parseJsonBody(resp!)) as Record<string, unknown>;
+      expect(body.model).toBe("my-custom-model");
     });
 
     test("returns error for invalid JSON body", async () => {
@@ -377,6 +453,56 @@ describe("handleOpenAIRequest", () => {
       const resp = await handleOpenAIRequest(req, makeDeps());
       expect(resp?.status).toBe(400);
     });
+
+    test("returns 503 when no provider is available", async () => {
+      const deps = makeDeps({ router: makeRouter() }); // no provider registered
+
+      const req = makeRequest("/v1/chat/completions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: makeChatBody(),
+      });
+      const resp = await handleOpenAIRequest(req, deps);
+      expect(resp).not.toBeNull();
+      expect(resp?.status).toBe(503);
+
+      // biome-ignore lint/style/noNonNullAssertion: test assertion
+      const body = (await parseJsonBody(resp!)) as Record<string, unknown>;
+      const error = body.error as Record<string, unknown>;
+      expect(error.code).toBe("no_provider");
+    });
+
+    test("returns 503 when no router is configured", async () => {
+      const deps = makeDeps({ router: undefined });
+
+      const req = makeRequest("/v1/chat/completions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: makeChatBody(),
+      });
+      const resp = await handleOpenAIRequest(req, deps);
+      expect(resp?.status).toBe(503);
+    });
+
+    test("returns token usage from provider", async () => {
+      const provider = new FakeLLMProvider("ollama");
+      // The default completion response has inputTokens: 10, outputTokens: 5
+      const deps = makeDeps({ router: makeRouter(provider) });
+
+      const req = makeRequest("/v1/chat/completions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: makeChatBody(),
+      });
+      const resp = await handleOpenAIRequest(req, deps);
+
+      // biome-ignore lint/style/noNonNullAssertion: test assertion
+      const body = (await parseJsonBody(resp!)) as Record<string, unknown>;
+      const usage = body.usage as Record<string, unknown>;
+      expect(usage.prompt_tokens).toBe(10);
+      expect(usage.completion_tokens).toBe(5);
+      expect(usage.total_tokens).toBe(15);
+    });
   });
 
   // ---------------------------------------------------------------------------
@@ -397,44 +523,55 @@ describe("handleOpenAIRequest", () => {
     });
 
     test("streams valid SSE chunks ending with [DONE]", async () => {
+      const provider = FakeLLMProvider.withResponse("test", "ollama");
+      provider.setStreamEvents([
+        { type: "text", text: "Hello " },
+        { type: "text", text: "world!" },
+        { type: "done", usage: { inputTokens: 10, outputTokens: 5 } },
+      ]);
+      const deps = makeDeps({ router: makeRouter(provider) });
+
       const req = makeRequest("/v1/chat/completions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: makeChatBody({ stream: true }),
       });
-      const resp = await handleOpenAIRequest(req, makeDeps());
+      const resp = await handleOpenAIRequest(req, deps);
       expect(resp).not.toBeNull();
 
       const text = (await resp?.text()) ?? "";
       const lines = text.split("\n").filter((l) => l.startsWith("data: "));
 
-      expect(lines.length).toBeGreaterThan(2);
+      // 2 text chunks + 1 done chunk + 1 [DONE] sentinel
+      expect(lines.length).toBe(4);
 
       // Last data line should be [DONE]
       expect(lines[lines.length - 1]).toBe("data: [DONE]");
 
-      // All other lines should be parseable JSON
+      // Content lines should be parseable JSON
       const jsonLines = lines.slice(0, -1);
       for (const line of jsonLines) {
         const payload = JSON.parse(line.slice("data: ".length)) as Record<string, unknown>;
         expect(payload.object).toBe("chat.completion.chunk");
         expect(typeof payload.id).toBe("string");
         expect((payload.id as string).startsWith("chatcmpl-")).toBe(true);
-        expect(payload.model).toBe("eidolon-default");
-
-        const choices = payload.choices as Array<Record<string, unknown>>;
-        expect(choices.length).toBe(1);
-        expect(choices[0]?.index).toBe(0);
       }
     });
 
     test("final content chunk has finish_reason stop", async () => {
+      const provider = FakeLLMProvider.withResponse("test", "ollama");
+      provider.setStreamEvents([
+        { type: "text", text: "Hi" },
+        { type: "done", usage: { inputTokens: 5, outputTokens: 1 } },
+      ]);
+      const deps = makeDeps({ router: makeRouter(provider) });
+
       const req = makeRequest("/v1/chat/completions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: makeChatBody({ stream: true }),
       });
-      const resp = await handleOpenAIRequest(req, makeDeps());
+      const resp = await handleOpenAIRequest(req, deps);
       const text = (await resp?.text()) ?? "";
       const lines = text.split("\n").filter((l) => l.startsWith("data: ") && l !== "data: [DONE]");
 
@@ -444,17 +581,25 @@ describe("handleOpenAIRequest", () => {
       expect(choices[0]?.finish_reason).toBe("stop");
     });
 
-    test("content chunks have delta.content with text", async () => {
+    test("content chunks have delta.content with text from provider", async () => {
+      const provider = FakeLLMProvider.withResponse("test", "ollama");
+      provider.setStreamEvents([
+        { type: "text", text: "Alpha " },
+        { type: "text", text: "Beta" },
+        { type: "done", usage: { inputTokens: 5, outputTokens: 2 } },
+      ]);
+      const deps = makeDeps({ router: makeRouter(provider) });
+
       const req = makeRequest("/v1/chat/completions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: makeChatBody({ stream: true }),
       });
-      const resp = await handleOpenAIRequest(req, makeDeps());
+      const resp = await handleOpenAIRequest(req, deps);
       const text = (await resp?.text()) ?? "";
       const lines = text.split("\n").filter((l) => l.startsWith("data: ") && l !== "data: [DONE]");
 
-      // All but last should have content in delta
+      // Content chunks are all but the last (which has finish_reason: stop)
       const contentChunks = lines.slice(0, -1);
       let concatenated = "";
       for (const line of contentChunks) {
@@ -465,9 +610,7 @@ describe("handleOpenAIRequest", () => {
         concatenated += delta.content as string;
       }
 
-      // The concatenated content should form the full response
-      expect(concatenated).toContain("[Eidolon]");
-      expect(concatenated).toContain("stub response");
+      expect(concatenated).toBe("Alpha Beta");
     });
 
     test("all chunks share the same completion ID", async () => {
@@ -487,6 +630,44 @@ describe("handleOpenAIRequest", () => {
       }
 
       expect(ids.size).toBe(1);
+    });
+
+    test("includes usage in the final done chunk", async () => {
+      const provider = FakeLLMProvider.withResponse("test", "ollama");
+      provider.setStreamEvents([
+        { type: "text", text: "Hi" },
+        { type: "done", usage: { inputTokens: 42, outputTokens: 7 } },
+      ]);
+      const deps = makeDeps({ router: makeRouter(provider) });
+
+      const req = makeRequest("/v1/chat/completions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: makeChatBody({ stream: true }),
+      });
+      const resp = await handleOpenAIRequest(req, deps);
+      const text = (await resp?.text()) ?? "";
+      const lines = text.split("\n").filter((l) => l.startsWith("data: ") && l !== "data: [DONE]");
+
+      // The last JSON chunk (finish_reason: stop) should have usage
+      const lastChunk = JSON.parse(lines[lines.length - 1]?.slice("data: ".length) ?? "{}") as Record<string, unknown>;
+      const usage = lastChunk.usage as Record<string, unknown> | undefined;
+      expect(usage).toBeDefined();
+      expect(usage?.prompt_tokens).toBe(42);
+      expect(usage?.completion_tokens).toBe(7);
+      expect(usage?.total_tokens).toBe(49);
+    });
+
+    test("returns 503 when no provider is available for streaming", async () => {
+      const deps = makeDeps({ router: makeRouter() });
+
+      const req = makeRequest("/v1/chat/completions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: makeChatBody({ stream: true }),
+      });
+      const resp = await handleOpenAIRequest(req, deps);
+      expect(resp?.status).toBe(503);
     });
   });
 
@@ -514,6 +695,42 @@ describe("handleOpenAIRequest", () => {
       expect(resp).not.toBeNull();
       expect(resp?.headers.get("X-Content-Type-Options")).toBe("nosniff");
       expect(resp?.headers.get("X-Frame-Options")).toBe("DENY");
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Tests: Model name mapping
+  // ---------------------------------------------------------------------------
+
+  describe("model name mapping", () => {
+    test("maps gpt-4 to claude-opus", async () => {
+      const provider = FakeLLMProvider.withResponse("test", "ollama");
+      const deps = makeDeps({ router: makeRouter(provider) });
+
+      const req = makeRequest("/v1/chat/completions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: makeChatBody({ model: "gpt-4" }),
+      });
+      const resp = await handleOpenAIRequest(req, deps);
+      // biome-ignore lint/style/noNonNullAssertion: test assertion
+      const body = (await parseJsonBody(resp!)) as Record<string, unknown>;
+      expect(body.model).toBe("claude-opus-4-20250514");
+    });
+
+    test("maps gpt-3.5-turbo to claude-haiku", async () => {
+      const provider = FakeLLMProvider.withResponse("test", "ollama");
+      const deps = makeDeps({ router: makeRouter(provider) });
+
+      const req = makeRequest("/v1/chat/completions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: makeChatBody({ model: "gpt-3.5-turbo" }),
+      });
+      const resp = await handleOpenAIRequest(req, deps);
+      // biome-ignore lint/style/noNonNullAssertion: test assertion
+      const body = (await parseJsonBody(resp!)) as Record<string, unknown>;
+      expect(body.model).toBe("claude-haiku-3-20250414");
     });
   });
 });

@@ -174,6 +174,22 @@ export const MemoryConfigSchema = z.object({
       maxFileSize: z.number().int().positive().default(1_048_576),
     })
     .optional(),
+  indexing: z
+    .object({
+      /** Whether document indexing is enabled. */
+      enabled: z.boolean().default(false),
+      /** Directory paths to index (absolute or relative to data dir). */
+      paths: z.array(z.string()).default([]),
+      /** File extensions to index. */
+      fileTypes: z.array(z.string()).default([".md", ".txt", ".pdf", ".ts", ".py", ".js"]),
+      /** Directory names to exclude from scanning. */
+      exclude: z.array(z.string()).default(["node_modules", ".git", "dist"]),
+      /** Maximum file size in bytes. Files exceeding this are skipped. */
+      maxFileSize: z.number().int().positive().default(1_048_576),
+      /** Re-check interval in seconds for changed files. */
+      recheckIntervalSeconds: z.number().int().positive().default(3600),
+    })
+    .default({}),
 });
 
 // ---------------------------------------------------------------------------

@@ -14,8 +14,10 @@ import { GatewayServer } from "../gateway/server.ts";
 import { GPUManager } from "../gpu/manager.ts";
 import type { GPUWorkerPoolConfig } from "../gpu/pool.ts";
 import { GPUWorkerPool } from "../gpu/pool.ts";
+import { STTClient } from "../gpu/stt-client.ts";
 import type { GPUWorkerConfig as PoolWorkerConfig } from "../gpu/worker.ts";
 import { HAManager } from "../home-automation/manager.ts";
+import { registerFeedbackHandlers } from "../feedback/gateway-handlers.ts";
 import { type MetricsWiringHandle, wireMetrics } from "../metrics/wiring.ts";
 import type { Logger } from "../logging/logger.ts";
 import type { InitializedModules } from "./types.ts";
@@ -90,6 +92,22 @@ export function buildGatewayInitSteps(
     },
   });
 
+  // 18a. STTClient (needs GPUManager, Logger)
+  steps.push({
+    name: "STTClient",
+    fn: () => {
+      const logger = modules.logger;
+      const gpuManager = modules.gpuManager;
+      if (!logger || !gpuManager) {
+        logger?.debug("daemon", "STTClient skipped: no GPUManager available");
+        return;
+      }
+
+      modules.sttClient = new STTClient(gpuManager, logger);
+      logger.info("daemon", "STTClient initialized");
+    },
+  });
+
   // 19. GatewayServer (needs Config, Logger, EventBus)
   steps.push({
     name: "GatewayServer",
@@ -107,6 +125,8 @@ export function buildGatewayInitSteps(
         logger,
         eventBus,
         metricsRegistry: modules.metricsRegistry,
+        modelRouter: modules.modelRouter,
+        brainConfig: config.brain,
       });
       await modules.gatewayServer.start();
       logger.info("daemon", `GatewayServer started on ${config.gateway.host}:${config.gateway.port}`);
@@ -414,6 +434,48 @@ export function buildGatewayInitSteps(
           return result;
         });
         logger.info("daemon", "LLM RPC handlers wired to gateway");
+      }
+    },
+  });
+
+  // 19e. Wire feedback RPC handlers to gateway
+  steps.push({
+    name: "GatewayFeedbackWiring",
+    fn: () => {
+      const gateway = modules.gatewayServer;
+      const feedbackStore = modules.feedbackStore;
+      const eventBus = modules.eventBus;
+      const logger = modules.logger;
+      if (!gateway || !feedbackStore || !eventBus || !logger) {
+        logger?.debug("daemon", "Feedback gateway wiring skipped: missing gateway, feedbackStore, or eventBus");
+        return;
+      }
+
+      registerFeedbackHandlers({ gateway, feedbackStore, eventBus, logger });
+      logger.info("daemon", "Feedback RPC handlers registered on gateway");
+    },
+  });
+
+  // 19f. Wire profile.get RPC handler to gateway
+  steps.push({
+    name: "GatewayProfileWiring",
+    fn: () => {
+      const gateway = modules.gatewayServer;
+      const profileGenerator = modules.profileGenerator;
+      const logger = modules.logger;
+      if (!gateway || !logger) {
+        logger?.debug("daemon", "Profile gateway wiring skipped: missing gateway");
+        return;
+      }
+
+      if (profileGenerator) {
+        gateway.registerHandler("profile.get" as never, async () => {
+          const profile = profileGenerator.generateProfile();
+          return { profile };
+        });
+        logger.info("daemon", "Profile RPC handler (profile.get) wired to gateway");
+      } else {
+        logger.debug("daemon", "Profile gateway wiring skipped: no UserProfileGenerator available");
       }
     },
   });

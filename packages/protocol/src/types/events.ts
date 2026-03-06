@@ -72,6 +72,17 @@ export interface UserMessagePayload {
   }>;
 }
 
+export interface UserVoicePayload {
+  readonly channelId: string;
+  readonly userId: string;
+  /** Base64-encoded audio data. */
+  readonly audioBase64?: string;
+  /** MIME type of the audio (e.g. "audio/wav", "audio/opus"). */
+  readonly mimeType?: string;
+  /** Pre-transcribed text (if STT was done client-side). */
+  readonly text?: string;
+}
+
 export interface MemoryExtractedPayload {
   readonly sessionId: string;
   readonly memoryIds: readonly string[];

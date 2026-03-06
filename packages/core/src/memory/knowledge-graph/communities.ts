@@ -247,6 +247,26 @@ export class CommunityDetector {
     }
   }
 
+  /** Find communities containing any of the given entity IDs. */
+  findCommunitiesForEntities(entityIds: readonly string[]): Result<KGCommunity[], EidolonError> {
+    if (entityIds.length === 0) return Ok([]);
+    try {
+      const rows = this.db.query("SELECT * FROM kg_communities ORDER BY created_at DESC").all() as CommunityRow[];
+      const entityIdSet = new Set(entityIds);
+      const matches: KGCommunity[] = [];
+      for (const row of rows) {
+        const community = rowToCommunity(row);
+        const hasOverlap = community.entityIds.some((id) => entityIdSet.has(id));
+        if (hasOverlap) {
+          matches.push(community);
+        }
+      }
+      return Ok(matches);
+    } catch (cause) {
+      return Err(createError(ErrorCode.DB_QUERY_FAILED, "Failed to find communities for entities", cause));
+    }
+  }
+
   /** Get all communities. */
   getCommunities(): Result<KGCommunity[], EidolonError> {
     try {
@@ -325,6 +345,19 @@ export class CommunityDetector {
       return Ok(summary);
     } catch (cause) {
       return Err(createError(ErrorCode.DB_QUERY_FAILED, `Failed to summarize community ${communityId}`, cause));
+    }
+  }
+
+  /**
+   * Update the summary text of a community.
+   * Used by the NREM phase to store LLM-generated summaries.
+   */
+  updateSummary(communityId: string, summary: string): Result<void, EidolonError> {
+    try {
+      this.db.query("UPDATE kg_communities SET summary = ? WHERE id = ?").run(summary, communityId);
+      return Ok(undefined);
+    } catch (cause) {
+      return Err(createError(ErrorCode.DB_QUERY_FAILED, `Failed to update community summary ${communityId}`, cause));
     }
   }
 

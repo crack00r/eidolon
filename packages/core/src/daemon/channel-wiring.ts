@@ -7,6 +7,9 @@
  */
 
 import type { EidolonConfig } from "@eidolon/protocol";
+import type { DiscordConfig } from "../channels/discord/channel.ts";
+import { DiscordChannel } from "../channels/discord/channel.ts";
+import { createDiscordJsClient } from "../channels/discord/discordjs-client.ts";
 import { BunImapClient } from "../channels/email/imap.ts";
 import { BunSmtpClient } from "../channels/email/smtp.ts";
 import { MessageRouter } from "../channels/router.ts";
@@ -42,7 +45,7 @@ export async function wireChannels(modules: InitializedModules): Promise<void> {
     });
 
     await wireTelegram(modules, config, logger);
-    wireDiscord(modules, config, logger);
+    await wireDiscord(modules, config, logger);
     await wireWhatsApp(modules, config, logger);
     await wireEmail(modules, config, logger);
 
@@ -117,7 +120,7 @@ async function wireTelegram(modules: InitializedModules, config: EidolonConfig |
 // Discord
 // ---------------------------------------------------------------------------
 
-function wireDiscord(_modules: InitializedModules, config: EidolonConfig | undefined, logger: Logger): void {
+async function wireDiscord(modules: InitializedModules, config: EidolonConfig | undefined, logger: Logger): Promise<void> {
   if (!config?.channels.discord?.enabled) return;
 
   const dcConfig = config.channels.discord;
@@ -132,14 +135,44 @@ function wireDiscord(_modules: InitializedModules, config: EidolonConfig | undef
     return;
   }
 
-  // Discord requires a real discord.js client in production.
-  // The daemon expects an IDiscordClient to be provided externally
-  // or uses a default stub that logs a warning.
-  logger.warn(
-    "daemon",
-    "Discord channel configured but no IDiscordClient implementation provided. " +
-      "Discord integration requires discord.js to be installed and a client adapter to be wired.",
-  );
+  // Dynamically create the discord.js adapter (graceful failure if not installed)
+  const clientResult = await createDiscordJsClient();
+  if (!clientResult.ok) {
+    logger.warn("daemon", `Discord channel skipped: ${clientResult.error}`);
+    return;
+  }
+
+  const discordConfig: DiscordConfig = {
+    botToken,
+    allowedUserIds: dcConfig.allowedUserIds,
+    guildId: dcConfig.guildId,
+    dmOnly: dcConfig.dmOnly,
+  };
+
+  const channel = new DiscordChannel(discordConfig, clientResult.client, logger);
+
+  // Wire inbound messages from Discord -> MessageRouter -> EventBus
+  channel.onMessage(async (message) => {
+    const result = modules.messageRouter?.routeInbound(message);
+    if (result && !result.ok) {
+      logger.error("daemon", "Failed to route Discord inbound message", undefined, {
+        messageId: message.id,
+        error: result.error.message,
+      });
+    }
+  });
+
+  // Register channel with the router for outbound routing
+  modules.messageRouter?.registerChannel(channel);
+
+  // Connect (login to Discord)
+  const connectResult = await channel.connect();
+  if (connectResult.ok) {
+    modules.discordChannel = channel;
+    logger.info("daemon", "Discord channel connected");
+  } else {
+    logger.error("daemon", `Discord channel failed to connect: ${connectResult.error.message}`);
+  }
 }
 
 // ---------------------------------------------------------------------------

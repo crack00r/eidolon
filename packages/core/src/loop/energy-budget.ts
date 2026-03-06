@@ -36,7 +36,7 @@ function getHourBucket(timestamp: number): number {
 }
 
 export class EnergyBudget {
-  private readonly config: EnergyBudgetConfig;
+  private config: EnergyBudgetConfig;
   private readonly logger: Logger;
   private usage: HourlyUsage;
 
@@ -131,6 +131,14 @@ export class EnergyBudget {
         used,
         remaining: Math.max(0, allocated - used),
       };
+    });
+  }
+
+  /** Update the budget configuration (used by hot-reload). */
+  updateConfig(config: EnergyBudgetConfig): void {
+    this.config = config;
+    this.logger.info("energy-budget", "Budget configuration updated via hot-reload", {
+      maxTokensPerHour: config.maxTokensPerHour,
     });
   }
 

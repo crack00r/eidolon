@@ -135,6 +135,12 @@ export interface IModelRouter {
    * Returns provider names in priority order.
    */
   route(task: TaskRequirement): readonly LLMProviderType[];
+
+  /**
+   * Select the first available provider for a task.
+   * Returns undefined if no provider is available.
+   */
+  selectProvider(task: TaskRequirement): Promise<ILLMProvider | undefined>;
 }
 
 // ---------------------------------------------------------------------------

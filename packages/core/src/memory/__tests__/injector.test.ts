@@ -10,6 +10,7 @@ import { MEMORY_MIGRATIONS } from "../../database/schemas/memory.ts";
 import type { Logger } from "../../logging/logger.ts";
 import type { EmbeddingModel, EmbeddingPrefix } from "../embeddings.ts";
 import { MemoryInjector } from "../injector.ts";
+import { CommunityDetector } from "../knowledge-graph/communities.ts";
 import { KGEntityStore } from "../knowledge-graph/entities.ts";
 import { KGRelationStore } from "../knowledge-graph/relations.ts";
 import { MemorySearch } from "../search.ts";
@@ -194,7 +195,7 @@ describe("MemoryInjector", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
-    expect(result.value).toContain("## Knowledge Graph");
+    expect(result.value).toContain("## Knowledge Graph Context");
     expect(result.value).toContain("- Manuel uses TypeScript (confidence: 0.95)");
   });
 
@@ -212,7 +213,7 @@ describe("MemoryInjector", () => {
 
     expect(result.value).toContain("# Memory Context");
     expect(result.value).toContain("- A test fact");
-    expect(result.value).not.toContain("## Knowledge Graph");
+    expect(result.value).not.toContain("## Knowledge Graph Context");
   });
 
   // -----------------------------------------------------------------------
@@ -273,5 +274,119 @@ describe("MemoryInjector", () => {
     // Count the number of "- Memory item" lines
     const lines = result.value.split("\n").filter((l) => l.startsWith("- Memory item"));
     expect(lines.length).toBeLessThanOrEqual(5);
+  });
+
+  // -----------------------------------------------------------------------
+  // 9. Query-aware KG: returns triples for matching entities
+  // -----------------------------------------------------------------------
+
+  test("generateMemoryMd returns query-relevant KG triples", async () => {
+    // Create entities
+    const tsResult = entityStore.create({ name: "TypeScript", type: "technology" });
+    const bunResult = entityStore.create({ name: "Bun", type: "technology" });
+    const rustResult = entityStore.create({ name: "Rust", type: "technology" });
+    expect(tsResult.ok && bunResult.ok && rustResult.ok).toBe(true);
+    if (!tsResult.ok || !bunResult.ok || !rustResult.ok) return;
+
+    // Create relations: TypeScript -> Bun, Rust -> unrelated
+    relationStore.create({
+      sourceId: bunResult.value.id,
+      targetId: tsResult.value.id,
+      type: "uses",
+      confidence: 0.9,
+      source: "test",
+    });
+    relationStore.create({
+      sourceId: rustResult.value.id,
+      targetId: bunResult.value.id,
+      type: "related_to",
+      confidence: 0.8,
+      source: "test",
+    });
+
+    const injector = new MemoryInjector(store, search, entityStore, relationStore, logger);
+
+    // Query for "TypeScript" -- should get the TypeScript-related triple
+    const result = await injector.generateMemoryMd({ query: "TypeScript" });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.value).toContain("## Knowledge Graph Context");
+    expect(result.value).toContain("Bun uses TypeScript");
+  });
+
+  // -----------------------------------------------------------------------
+  // 10. Includes community summaries when available
+  // -----------------------------------------------------------------------
+
+  test("generateMemoryMd includes community summaries", async () => {
+    // Create entities that form a community
+    const tsResult = entityStore.create({ name: "TypeScript", type: "technology" });
+    const bunResult = entityStore.create({ name: "Bun", type: "technology" });
+    expect(tsResult.ok && bunResult.ok).toBe(true);
+    if (!tsResult.ok || !bunResult.ok) return;
+
+    // Create bidirectional relations so community detection finds them
+    relationStore.create({
+      sourceId: tsResult.value.id,
+      targetId: bunResult.value.id,
+      type: "related_to",
+      confidence: 0.9,
+      source: "test",
+    });
+    relationStore.create({
+      sourceId: bunResult.value.id,
+      targetId: tsResult.value.id,
+      type: "depends_on",
+      confidence: 0.85,
+      source: "test",
+    });
+
+    // Detect communities
+    const detector = new CommunityDetector(db, logger);
+    const detectResult = detector.detectCommunities();
+    expect(detectResult.ok).toBe(true);
+
+    const injector = new MemoryInjector(store, search, entityStore, relationStore, logger, undefined, detector);
+
+    // Query for "TypeScript" to trigger entity-aware path
+    const result = await injector.generateMemoryMd({ query: "TypeScript" });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.value).toContain("## Knowledge Graph Context");
+    expect(result.value).toContain("### Related Clusters");
+    expect(result.value).toContain("Community:");
+  });
+
+  // -----------------------------------------------------------------------
+  // 11. Falls back to global triples when no entity matches query
+  // -----------------------------------------------------------------------
+
+  test("generateMemoryMd falls back to global triples for unmatched query", async () => {
+    // Create entities and a relation
+    const aResult = entityStore.create({ name: "SQLite", type: "technology" });
+    const bResult = entityStore.create({ name: "WAL", type: "concept" });
+    expect(aResult.ok && bResult.ok).toBe(true);
+    if (!aResult.ok || !bResult.ok) return;
+
+    relationStore.create({
+      sourceId: aResult.value.id,
+      targetId: bResult.value.id,
+      type: "uses",
+      confidence: 0.95,
+      source: "test",
+    });
+
+    const injector = new MemoryInjector(store, search, entityStore, relationStore, logger);
+
+    // Query that doesn't match any entity name
+    const result = await injector.generateMemoryMd({ query: "xyznonexistent" });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    // Should still show the global triples as fallback
+    expect(result.value).toContain("## Knowledge Graph Context");
+    expect(result.value).toContain("SQLite uses WAL");
   });
 });
