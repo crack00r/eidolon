@@ -33,8 +33,12 @@ final class ChatViewModel: ObservableObject {
     }
 
     deinit {
-        if let id = pushHandlerId {
-            webSocketService?.removePushHandler(id)
+        let service = webSocketService
+        let handlerId = pushHandlerId
+        Task { @MainActor in
+            if let id = handlerId {
+                service?.removePushHandler(id)
+            }
         }
     }
 

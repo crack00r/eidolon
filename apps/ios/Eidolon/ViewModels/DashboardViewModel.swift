@@ -33,8 +33,12 @@ final class DashboardViewModel: ObservableObject {
 
     deinit {
         pollTimer?.invalidate()
-        if let id = pushHandlerId {
-            webSocketService?.removePushHandler(id)
+        let service = webSocketService
+        let handlerId = pushHandlerId
+        Task { @MainActor in
+            if let id = handlerId {
+                service?.removePushHandler(id)
+            }
         }
     }
 

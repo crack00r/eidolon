@@ -119,7 +119,9 @@ final class DiscoveryService: ObservableObject {
             }
 
             listener.newConnectionHandler = { [weak self] connection in
-                self?.handleConnection(connection)
+                Task { @MainActor in
+                    self?.handleConnection(connection)
+                }
             }
 
             listener.start(queue: .main)
@@ -166,10 +168,12 @@ final class DiscoveryService: ObservableObject {
     // MARK: - UDP Connection Handling
 
     private func handleConnection(_ connection: NWConnection) {
-        connection.stateUpdateHandler = { state in
+        connection.stateUpdateHandler = { [weak self] state in
             switch state {
             case .ready:
-                self.receiveData(on: connection)
+                Task { @MainActor in
+                    self?.receiveData(on: connection)
+                }
             case .failed, .cancelled:
                 connection.cancel()
             default:
@@ -187,12 +191,14 @@ final class DiscoveryService: ObservableObject {
                 return
             }
 
-            if let data = data {
-                self?.processBeaconData(data)
-            }
+            Task { @MainActor in
+                if let data = data {
+                    self?.processBeaconData(data)
+                }
 
-            // Continue receiving
-            self?.receiveData(on: connection)
+                // Continue receiving
+                self?.receiveData(on: connection)
+            }
         }
     }
 
