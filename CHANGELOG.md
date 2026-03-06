@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > [release-please](https://github.com/googleapis/release-please).
 > Do not edit manually.
 
+## [0.1.7](https://github.com/crack00r/eidolon/compare/v0.1.6...v0.1.7) (2026-03-06)
+
+
+### Documentation
+
+* update roadmap and plans to reflect v2.0 completion ([13d90dc](https://github.com/crack00r/eidolon/commit/13d90dca5ed0520460d13445c3eefda0f047c62d))
+
 ## [0.1.6](https://github.com/crack00r/eidolon/compare/v0.1.5...v0.1.6) (2026-03-06)
 
 
