@@ -32,6 +32,15 @@
 - FakeClaudeProcess regex matchers with `^` anchors distinguish retry prompts from initial prompts
 - When testing retries, place retry rule (matching `^Your previous response`) BEFORE the initial rule in addRule order
 
+## Daemon Event Handler Wiring
+- `user:message` handler in daemon delegates to `handleUserMessage()` private method
+- `user:voice` handler delegates to `handleUserVoice()` which extracts text and re-delegates to message handler
+- WorkspacePreparer and MemoryInjector are initialized as sub-steps of CognitiveLoop init (16f-ii, 16f-iii)
+- CognitiveLoop.start() is called after `this._running = true` in daemon start (fire-and-forget, runs in background)
+- MemoryInjector constructor: `(store, search, kgEntities, kgRelations, logger, options?)` -- KG args can be null
+- WorkspacePreparer constructor: `(logger, workspacesDir?)` -- workspacesDir defaults to cache dir
+- Token usage is estimated from text lengths when actual token counts aren't available from stream events
+
 ## Desktop App (Tauri)
 - Tauri CLI available via `cargo tauri` (cargo-tauri crate)
 - Updater signing keys: `cargo tauri signer generate -w ~/.tauri/eidolon.key --ci -p ""`

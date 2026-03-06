@@ -6,9 +6,10 @@
  * PID file lifecycle.
  */
 
+import { randomUUID } from "node:crypto";
 import { existsSync, lstatSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import type { EidolonConfig } from "@eidolon/protocol";
+import type { EidolonConfig, UserMessagePayload } from "@eidolon/protocol";
 import { SECRETS_DB_FILENAME, VERSION } from "@eidolon/protocol";
 import { AuditLogger } from "../audit/logger.ts";
 import { BackupManager } from "../backup/manager.ts";
@@ -26,6 +27,7 @@ import { WhatsAppCloudApi } from "../channels/whatsapp/api.ts";
 import type { WhatsAppChannelConfig } from "../channels/whatsapp/channel.ts";
 import { WhatsAppChannel } from "../channels/whatsapp/channel.ts";
 import { ClaudeCodeManager } from "../claude/manager.ts";
+import { WorkspacePreparer } from "../claude/workspace.ts";
 import { loadConfig } from "../config/loader.ts";
 import { getConfigPath, getDataDir, getPidFilePath } from "../config/paths.ts";
 import { DatabaseManager } from "../database/manager.ts";
@@ -67,6 +69,7 @@ import { MemoryCompressor } from "../memory/compression.ts";
 import { MemoryConsolidator } from "../memory/consolidation.ts";
 import { EmbeddingModel } from "../memory/embeddings.ts";
 import { MemoryExtractor } from "../memory/extractor.ts";
+import { MemoryInjector } from "../memory/injector.ts";
 import { MemorySearch } from "../memory/search.ts";
 import { MemoryStore } from "../memory/store.ts";
 import { MetricsRegistry } from "../metrics/prometheus.ts";
@@ -120,6 +123,8 @@ interface InitializedModules {
   taskScheduler?: TaskScheduler;
   automationEngine?: AutomationEngine;
   memoryExtractor?: MemoryExtractor;
+  memoryInjector?: MemoryInjector;
+  workspacePreparer?: WorkspacePreparer;
   cognitiveLoop?: CognitiveLoop;
   digestBuilder?: DigestBuilder;
   schedulerInterval?: ReturnType<typeof setInterval>;
@@ -820,6 +825,24 @@ export class EidolonDaemon {
             `MemoryExtractor initialized (strategy: ${extractionStrategy}, consolidator: ${this.modules.memoryConsolidator ? "yes" : "no"})`,
           );
 
+          // 16f-ii. WorkspacePreparer (needs Logger)
+          this.modules.workspacePreparer = new WorkspacePreparer(logger);
+          logger.info("daemon", "WorkspacePreparer initialized");
+
+          // 16f-iii. MemoryInjector (needs MemoryStore, MemorySearch, Logger)
+          if (this.modules.memoryStore && this.modules.memorySearch) {
+            this.modules.memoryInjector = new MemoryInjector(
+              this.modules.memoryStore,
+              this.modules.memorySearch,
+              null, // KG entities -- not wired in daemon yet
+              null, // KG relations -- not wired in daemon yet
+              logger,
+            );
+            logger.info("daemon", "MemoryInjector initialized");
+          } else {
+            logger.warn("daemon", "MemoryInjector skipped: MemoryStore or MemorySearch not available");
+          }
+
           // 16g. CognitiveLoop -- build the event handler
           const handler: EventHandler = async (event, priority): Promise<EventHandlerResult> => {
             logger.info(
@@ -836,14 +859,10 @@ export class EidolonDaemon {
 
             switch (event.type) {
               case "user:message": {
-                logger.info("loop-handler", "User message received -- acknowledged (session routing not yet wired)", {
-                  eventId: event.id,
-                });
-                return { success: true, tokensUsed: 0 };
+                return this.handleUserMessage(event, logger);
               }
               case "user:voice": {
-                logger.info("loop-handler", "Voice input received -- acknowledged", { eventId: event.id });
-                return { success: true, tokensUsed: 0 };
+                return this.handleUserVoice(event, logger);
               }
               case "user:approval": {
                 logger.info("loop-handler", "User approval received", { eventId: event.id });
@@ -1657,6 +1676,19 @@ export class EidolonDaemon {
 
       this._running = true;
       this.modules.logger?.info("daemon", "Eidolon daemon started successfully");
+
+      // Start the CognitiveLoop (PEAR cycle) in the background.
+      // start() returns a promise that resolves when stop() is called.
+      if (this.modules.cognitiveLoop) {
+        this.modules.cognitiveLoop.start().catch((err: unknown) => {
+          this.modules.logger?.error(
+            "daemon",
+            `CognitiveLoop crashed: ${err instanceof Error ? err.message : String(err)}`,
+            err,
+          );
+        });
+        this.modules.logger?.info("daemon", "CognitiveLoop started (PEAR cycle active)");
+      }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
       this.modules.logger?.error("daemon", `Startup failed: ${message}`, err);
@@ -1664,6 +1696,276 @@ export class EidolonDaemon {
       // Teardown already-initialized modules in reverse
       await this.teardownModules();
       throw err;
+    }
+  }
+
+  // -----------------------------------------------------------------------
+  // Event Handlers
+  // -----------------------------------------------------------------------
+
+  /**
+   * Handle user:message events. Invokes Claude Code with memory context
+   * and routes the response back to the originating channel.
+   */
+  private async handleUserMessage(
+    event: { readonly id: string; readonly payload: unknown },
+    logger: Logger,
+  ): Promise<EventHandlerResult> {
+    try {
+      // Runtime-validate payload fields (event.payload is typed as unknown)
+      const rawPayload = event.payload as Record<string, unknown>;
+      const channelId = typeof rawPayload.channelId === "string" ? rawPayload.channelId : undefined;
+      const userId = typeof rawPayload.userId === "string" ? rawPayload.userId : undefined;
+      const text = typeof rawPayload.text === "string" ? rawPayload.text : undefined;
+
+      if (!channelId || !userId) {
+        logger.warn("loop-handler", "Invalid user:message payload: missing channelId or userId", {
+          eventId: event.id,
+        });
+        return { success: false, tokensUsed: 0, error: "Invalid payload: missing channelId or userId" };
+      }
+
+      if (!text || text.trim().length === 0) {
+        logger.debug("loop-handler", "Empty user message, skipping", { eventId: event.id });
+        return { success: true, tokensUsed: 0 };
+      }
+
+      logger.info("loop-handler", "Processing user message", {
+        eventId: event.id,
+        channelId,
+        userId,
+        textLength: text.length,
+      });
+
+      const config = this.modules.config;
+      const claudeManager = this.modules.claudeManager;
+      const workspacePreparer = this.modules.workspacePreparer;
+      const messageRouter = this.modules.messageRouter;
+
+      if (!config || !claudeManager || !workspacePreparer || !messageRouter) {
+        logger.warn("loop-handler", "Cannot process message: missing modules (config, claudeManager, workspacePreparer, or messageRouter)");
+        return { success: false, tokensUsed: 0, error: "Required modules not initialized" };
+      }
+
+      const sessionId = `msg-${randomUUID()}`;
+
+      // 1. Generate MEMORY.md content via MemoryInjector
+      let memoryMdContent = "# Memory Context\n\nNo memory system available.\n";
+      if (this.modules.memoryInjector) {
+        const memResult = await this.modules.memoryInjector.generateMemoryMd({
+          query: text,
+          staticContext: `User: ${config.identity.ownerName}\nTime: ${new Date().toISOString()}`,
+        });
+        if (memResult.ok) {
+          memoryMdContent = memResult.value;
+        } else {
+          logger.warn("loop-handler", `MemoryInjector failed: ${memResult.error.message}`);
+        }
+      }
+
+      // 2. Prepare workspace with CLAUDE.md + MEMORY.md
+      const claudeMd = [
+        "# Eidolon System Instructions",
+        "",
+        `You are Eidolon, an autonomous personal AI assistant for ${config.identity.ownerName}.`,
+        `Current time: ${new Date().toISOString()}`,
+        "",
+        "## Rules",
+        "- Read MEMORY.md for context about the user and previous conversations.",
+        "- When you learn something new about the user, state it explicitly.",
+        "- When making decisions, explain your reasoning.",
+        "- For external actions, always confirm with the user first.",
+        "",
+        `## Current Session`,
+        `- Channel: ${channelId}`,
+        `- Session type: main`,
+        "",
+      ].join("\n");
+
+      const prepareResult = await workspacePreparer.prepare(sessionId, {
+        claudeMd,
+        additionalFiles: {
+          "MEMORY.md": memoryMdContent,
+        },
+      });
+
+      if (!prepareResult.ok) {
+        logger.error("loop-handler", `Workspace preparation failed: ${prepareResult.error.message}`);
+        return { success: false, tokensUsed: 0, error: prepareResult.error.message };
+      }
+
+      const workspaceDir = prepareResult.value;
+
+      // Steps 3-7 are wrapped in try/finally to guarantee workspace cleanup
+      try {
+        // 3. Invoke Claude Code
+        const responseChunks: string[] = [];
+        let totalTokens = 0;
+
+        for await (const streamEvent of claudeManager.run(text, {
+          sessionId,
+          workspaceDir,
+          model: config.brain.model.default,
+          timeoutMs: config.brain.session.timeoutMs,
+        })) {
+          switch (streamEvent.type) {
+            case "text": {
+              if (streamEvent.content) {
+                responseChunks.push(streamEvent.content);
+              }
+              break;
+            }
+            case "error": {
+              logger.error("loop-handler", `Claude stream error: ${streamEvent.error ?? "unknown"}`, undefined, {
+                sessionId,
+              });
+              break;
+            }
+            case "done": {
+              // done events don't carry token info in StreamEvent, but we track what we can
+              break;
+            }
+            default:
+              break;
+          }
+        }
+
+        const responseText = responseChunks.join("");
+
+        if (responseText.length === 0) {
+          logger.warn("loop-handler", "Claude returned empty response", { sessionId });
+          return { success: true, tokensUsed: 0 };
+        }
+
+        // 4. Route response back to the originating channel
+        const outboundResult = await messageRouter.routeOutbound({
+          id: `resp-${randomUUID()}`,
+          channelId,
+          text: responseText,
+          format: "markdown",
+          replyToId: event.id,
+        });
+
+        if (!outboundResult.ok) {
+          logger.error("loop-handler", `Failed to send response: ${outboundResult.error.message}`, undefined, {
+            channelId,
+          });
+        }
+
+        // 5. Fire-and-forget memory extraction
+        if (this.modules.memoryExtractor) {
+          this.modules.memoryExtractor
+            .extract({
+              userMessage: text,
+              assistantResponse: responseText,
+              sessionId,
+              timestamp: Date.now(),
+            })
+            .then((extractResult) => {
+              if (extractResult.ok) {
+                logger.debug("loop-handler", `Extracted ${extractResult.value.length} memories from conversation`, {
+                  sessionId,
+                });
+              } else {
+                logger.warn("loop-handler", `Memory extraction failed: ${extractResult.error.message}`);
+              }
+            })
+            .catch((err: unknown) => {
+              logger.warn("loop-handler", `Memory extraction threw: ${err instanceof Error ? err.message : String(err)}`);
+            });
+        }
+
+        // 6. Record token usage (estimate based on text lengths)
+        if (this.modules.tokenTracker) {
+          const estimatedInput = Math.ceil(text.length / 4);
+          const estimatedOutput = Math.ceil(responseText.length / 4);
+          totalTokens = estimatedInput + estimatedOutput;
+          this.modules.tokenTracker.record({
+            sessionId,
+            sessionType: "main",
+            model: config.brain.model.default,
+            inputTokens: estimatedInput,
+            outputTokens: estimatedOutput,
+            cacheReadTokens: 0,
+            cacheWriteTokens: 0,
+            costUsd: 0,
+            timestamp: Date.now(),
+          });
+        }
+
+        logger.info("loop-handler", "User message processed successfully", {
+          sessionId,
+          responseLength: responseText.length,
+          tokensUsed: totalTokens,
+        });
+
+        return { success: true, tokensUsed: totalTokens };
+      } catch (claudeErr: unknown) {
+        const errMsg = claudeErr instanceof Error ? claudeErr.message : String(claudeErr);
+        logger.error("loop-handler", `Message processing failed: ${errMsg}`);
+        return { success: false, tokensUsed: 0, error: errMsg };
+      } finally {
+        // 7. Always clean up workspace, even on error
+        workspacePreparer.cleanup(sessionId);
+      }
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      logger.error("loop-handler", `user:message handler failed: ${errMsg}`);
+      return { success: false, tokensUsed: 0, error: errMsg };
+    }
+  }
+
+  /**
+   * Handle user:voice events. Extracts text from the payload (if present)
+   * and delegates to the text message handler. If no text is available
+   * (pure audio), logs a warning that STT is not wired yet.
+   */
+  private async handleUserVoice(
+    event: { readonly id: string; readonly payload: unknown },
+    logger: Logger,
+  ): Promise<EventHandlerResult> {
+    try {
+      // Runtime-validate payload fields
+      const rawPayload = event.payload as Record<string, unknown>;
+      const channelId = typeof rawPayload.channelId === "string" ? rawPayload.channelId : undefined;
+      const userId = typeof rawPayload.userId === "string" ? rawPayload.userId : undefined;
+      const text = typeof rawPayload.text === "string" ? rawPayload.text : undefined;
+
+      if (!channelId || !userId) {
+        logger.warn("loop-handler", "Voice payload missing channelId or userId, using defaults", {
+          eventId: event.id,
+          hasChannelId: !!channelId,
+          hasUserId: !!userId,
+        });
+      }
+
+      if (!text || text.trim().length === 0) {
+        logger.warn("loop-handler", "Voice input received without transcription -- STT not wired yet", {
+          eventId: event.id,
+        });
+        return { success: true, tokensUsed: 0 };
+      }
+
+      // Delegate to the text message handler with the transcribed text
+      logger.info("loop-handler", "Voice input with transcription, delegating to message handler", {
+        eventId: event.id,
+        textLength: text.length,
+      });
+
+      const syntheticPayload: UserMessagePayload = {
+        channelId: channelId ?? "voice",
+        userId: userId ?? "unknown",
+        text,
+      };
+
+      return this.handleUserMessage(
+        { id: event.id, payload: syntheticPayload },
+        logger,
+      );
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      logger.error("loop-handler", `user:voice handler failed: ${errMsg}`);
+      return { success: false, tokensUsed: 0, error: errMsg };
     }
   }
 

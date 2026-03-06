@@ -17,28 +17,28 @@
 - docs/design/SECURITY.md -- secrets, GPU auth, GDPR
 - docs/design/TESTING.md -- test strategy, FakeClaudeProcess
 
-## Codebase Structure (Verified March 2026 Audit v3)
-- packages/protocol/src/ -- 22 files, ~1,337 lines (config.ts=391, 16 type files)
-- packages/core/src/ -- 90+ source files, ~19,685 lines across 17 modules
-- packages/cli/src/ -- 21 files, ~3,409 lines (12 command files + utils)
-- packages/test-utils/src/ -- 6 files, ~360 lines
+## Codebase Structure (Verified March 6, 2026 -- Full Audit v7)
+- packages/protocol/src/ -- 22 files, ~3,499 lines
+- packages/core/src/ -- 90+ source files, ~37,476 lines across 30+ modules
+- packages/core tests -- 104 test files, ~30,647 lines
+- packages/cli/src/ -- 21 files, ~4,223 lines (20 command files + utils)
+- packages/test-utils/src/ -- 6 files, ~717 lines
 - services/gpu-worker/src/ -- 8 Python files, ~1,156 lines
-- apps/desktop/ -- Tauri 2.0 + Svelte + Rust, ~4,852 lines (6 routes, 6 stores, Rust backend 252 lines)
-- apps/ios/ -- Swift/SwiftUI, ~2,790 lines (3 views, 3 viewmodels, 6 services incl AudioService)
-- apps/web/ -- SvelteKit dashboard, ~5,090 lines (6 routes, 6 stores, hooks)
-- deploy/ -- systemd, launchd, Windows service files, ~913 lines
-- Total source: ~38,442 lines (2.8x original estimate of ~13,810)
-- Tests: 72 files, ~916 test() + 13 it() definitions, ~17,812 test lines
+- apps/desktop/ -- Tauri 2.0 + Svelte + Rust, ~4,852 lines
+- apps/ios/ -- Swift/SwiftUI, ~2,790 lines (24 Swift files)
+- apps/web/ -- SvelteKit dashboard, ~5,090 lines (45 files)
+- deploy/ -- systemd, launchd, Windows service files
+- Total source: ~60,000+ lines
+- Tests: 117 test files, 1,718 test() calls, ~30,647 test lines
 
-## Live Status (March 3, 2026 -- verified live run)
-- Version: 0.1.5 released, 0.1.6 release PR pending (PR #8)
-- Tests: 1,197 pass (1,069 core + 104 cli + 24 test-utils), 6 skip (embeddings model slow tests), 0 fail
-- TypeCheck: 0 errors across all packages including apps
-- Lint: 3 Biome errors in protocol (import order + formatting only, safe fix)
-- Open GitHub Issues: 0
-- Golden dataset: 105 annotated turns (plan requires 50+) -- G-02 is RESOLVED
-- Prometheus /metrics: FULLY IMPLEMENTED (prometheus.ts + wiring.ts + gateway /metrics handler + tests) -- G-05 is RESOLVED
-- Integration Plan (Tiers 1-3, Sprints 1-12) all committed to main
+## Live Status (March 6, 2026 -- verified live run)
+- Version: 0.1.6 released (PR #8 merged)
+- Tests: 1,538 core + 112 cli + 24 test-utils = 1,674 passing, 0 fail
+- TypeCheck: 0 errors across all 6 packages (protocol, core, cli, test-utils, desktop, web)
+- Open GitHub Issues: 0, Open PRs: 0
+- All 119 commits on main, clean working tree
+- All v1.2 + v2.0 features implemented (WhatsApp, Email, OTel, Plugins, Local LLM)
+- V1.2_V2.0_PLAN.md header is STALE -- says "Planning" but code is committed
 
 ## Gap Status (updated March 4, 2026 -- audit v6)
 13 of 15 gaps resolved. Only 2 LOW gaps remain:
@@ -97,16 +97,16 @@ TODOs in production code (4 total, all benign):
 - Lint issues are formatting-only in protocol (import ordering, whitespace) -- safe auto-fix
 - Integration Plan Tiers 1-3 (12 sprints, 43 findings) all merged to main before v0.1.6
 
-## Post-v1.0 Plans
-v1.1 (COMPLETED): Calendar, Advanced HA, Web Dashboard, Multi-GPU Pool
-v1.2 (PLANNED): WhatsApp Channel, Email Channel, OpenTelemetry -- docs/V1.2_V2.0_PLAN.md
-v2.0 (PLANNED): Plugin System, Local LLM Support (ILLMProvider) -- docs/V1.2_V2.0_PLAN.md
-- v1.2 estimate: 5.5 sprints (~8 weeks with parallelism)
-- v2.0 estimate: 6 sprints (~6 weeks with parallelism)
-- Total: ~14 weeks calendar time, 58 new files, ~9,970 new lines
-- WhatsApp uses official Business API (NOT Baileys), webhook-based
-- Email uses IMAP polling + SMTP sending (imapflow + nodemailer)
-- OTel uses @opentelemetry/sdk-node, HTTP exporter (gRPC may not work on Bun)
-- Plugin system: npm packages in ~/.eidolon/plugins/, permission-based sandbox
-- Local LLM: ILLMProvider abstraction, Ollama + llama.cpp providers, model router by task type
-- Key pattern: new channels follow TelegramChannel pattern exactly (injectable client, Result, auth check, rate limit)
+## Post-v1.0 Plans (all implemented as of March 6, 2026)
+v1.1 (DONE): Calendar, Advanced HA, Web Dashboard, Multi-GPU Pool, Discord, Mobile Widget
+v1.2 (DONE, docs stale): WhatsApp (1,126L), Email (1,899L), OpenTelemetry (529L)
+v2.0 (DONE, docs stale): Plugin System (351L), Local LLM (535L, Ollama + llama.cpp)
+- WhatsApp uses injectable WhatsAppApiClient interface, no npm SDK dep (uses fetch)
+- Email uses injectable IImapClient interface, no imapflow/nodemailer dep
+- Discord uses injectable IDiscordClient interface, no discord.js dep
+- Telegram is the ONLY channel with real npm dep (grammy)
+- OTel uses real @opentelemetry/* packages (7 deps), dynamic imports
+- Plugin system: npm packages in ~/.eidolon/plugins/, permission sandbox
+- Local LLM: ILLMProvider in protocol, OllamaProvider + LlamaCppProvider + ClaudeProvider + ModelRouter
+v1.3 (DEFERRED): Multi-user, Mobile widget enhancements
+v2.1+ (FUTURE): Secondary replication, Full multi-user, Model fine-tuning
