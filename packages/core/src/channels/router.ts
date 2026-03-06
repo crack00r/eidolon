@@ -9,6 +9,7 @@
 
 import type { Channel, EidolonError, InboundMessage, OutboundMessage, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
+import type { TtsFallbackChain } from "../gpu/fallback.ts";
 import type { Logger } from "../logging/logger.ts";
 import type { EventBus } from "../loop/event-bus.ts";
 
@@ -95,6 +96,8 @@ export interface MessageRouterOptions {
   readonly dndSchedule?: DndSchedule;
   /** Injectable clock for testing DND. */
   readonly nowProvider?: () => Date;
+  /** TTS fallback chain for synthesizing voice responses on voice-capable channels. */
+  readonly ttsFallbackChain?: TtsFallbackChain;
 }
 
 export class MessageRouter {
@@ -103,12 +106,14 @@ export class MessageRouter {
   private readonly logger: Logger;
   private readonly dndSchedule: DndSchedule | undefined;
   private readonly nowProvider: (() => Date) | undefined;
+  private readonly ttsFallbackChain: TtsFallbackChain | undefined;
 
   constructor(eventBus: EventBus, logger: Logger, options?: MessageRouterOptions) {
     this.eventBus = eventBus;
     this.logger = logger;
     this.dndSchedule = options?.dndSchedule;
     this.nowProvider = options?.nowProvider;
+    this.ttsFallbackChain = options?.ttsFallbackChain;
   }
 
   /** Register a channel for message routing. */
@@ -201,6 +206,52 @@ export class MessageRouter {
       return sendResult;
     }
     return Ok(true);
+  }
+
+  /**
+   * Route an outbound message with optional TTS synthesis for voice-capable channels.
+   * If the channel supports voice and a TTS fallback chain is configured,
+   * synthesizes audio and attaches it to the message as a voice attachment.
+   */
+  async routeOutboundWithVoice(message: OutboundMessage): Promise<Result<void, EidolonError>> {
+    const channel = this.channels.get(message.channelId);
+    if (!channel) {
+      return Err(createError(ErrorCode.CHANNEL_SEND_FAILED, `No channel registered with ID: ${message.channelId}`));
+    }
+
+    // If channel supports voice and TTS is available, synthesize audio
+    if (channel.capabilities.voice && this.ttsFallbackChain && message.text) {
+      const ttsResult = await this.ttsFallbackChain.synthesize(message.text);
+
+      if (ttsResult.ok && ttsResult.value.byteLength > 0) {
+        // Attach audio to the message
+        const voiceMessage: OutboundMessage = {
+          ...message,
+          attachments: [
+            ...(message.attachments ?? []),
+            {
+              type: "voice",
+              data: ttsResult.value,
+              mimeType: "audio/opus",
+              filename: "response.opus",
+            },
+          ],
+        };
+
+        this.logger.debug("router", `Outbound with TTS to ${message.channelId}`, {
+          audioBytes: ttsResult.value.byteLength,
+        });
+
+        return channel.send(voiceMessage);
+      }
+
+      if (!ttsResult.ok) {
+        this.logger.warn("router", `TTS failed for outbound, sending text-only: ${ttsResult.error.message}`);
+      }
+    }
+
+    // Fall back to text-only
+    return channel.send(message);
   }
 
   /** Get all registered channels. */

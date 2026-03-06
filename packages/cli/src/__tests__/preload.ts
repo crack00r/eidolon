@@ -198,6 +198,20 @@ mock.module("@eidolon/core", () => ({
   RemPhase: class {},
   NremPhase: class {},
 
+  // ── Plugins ─────────────────────────────────────────────────────────────
+  PluginRegistry: class {
+    getAll() {
+      return [];
+    }
+    get() {
+      return null;
+    }
+    register() {}
+  },
+  PluginLifecycleManager: class {},
+  discoverPlugins: async () => [],
+  createPluginContext: () => ({}),
+
   // ── Learning ──────────────────────────────────────────────────────────────
   DiscoveryEngine: class {
     getStats() {

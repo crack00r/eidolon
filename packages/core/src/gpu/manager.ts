@@ -11,6 +11,7 @@ import type { Logger } from "../logging/logger.ts";
 import { injectTraceContext } from "../telemetry/propagation.ts";
 import type { ITracer } from "../telemetry/tracer.ts";
 import { NoopTracer } from "../telemetry/tracer.ts";
+import type { TtsRequest, TtsResult } from "./tts-client.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -107,6 +108,60 @@ export class GPUManager {
   /** Get the base URL of the worker. */
   get baseUrl(): string {
     return this.config.url;
+  }
+
+  /**
+   * Synthesize text to speech via the GPU worker's TTS endpoint.
+   * Convenience method wrapping request() with proper payload serialization
+   * and audio response handling.
+   */
+  async synthesize(request: TtsRequest): Promise<Result<TtsResult, EidolonError>> {
+    if (!this.available) {
+      return Err(createError(ErrorCode.GPU_UNAVAILABLE, "GPU worker is not available for TTS"));
+    }
+
+    const span = this.tracer.startSpan("gpu.tts_synthesize", {
+      "tts.text_length": request.text.length,
+      "tts.voice": request.voice ?? "default",
+      "tts.format": request.format ?? "opus",
+    });
+
+    const startMs = Date.now();
+
+    const body = JSON.stringify({
+      text: request.text,
+      voice: request.voice,
+      speed: request.speed,
+      format: request.format ?? "opus",
+    });
+
+    const result = await this.request<ArrayBuffer>("/tts/synthesize", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body,
+    });
+
+    if (!result.ok) {
+      span.setStatus("error", result.error.message);
+      span.end();
+      return Err(createError(ErrorCode.TTS_FAILED, `TTS synthesis failed: ${result.error.message}`));
+    }
+
+    const audio = new Uint8Array(result.value);
+    const durationMs = Date.now() - startMs;
+
+    span.setAttribute("tts.audio_bytes", audio.byteLength);
+    span.setAttribute("tts.duration_ms", durationMs);
+    span.setStatus("ok");
+    span.end();
+
+    this.logger.debug("synthesize", "TTS completed", {
+      textLength: request.text.length,
+      audioBytes: audio.byteLength,
+      durationMs,
+    });
+
+    return Ok({ audio, format: request.format ?? "opus", durationMs });
   }
 
   /** Make an authenticated request to the worker. */

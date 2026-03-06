@@ -1,15 +1,38 @@
 {
-  "name": "@eidolon/cli",
+  "name": "@eidolon-ai/cli",
   "version": "0.1.6",
-  "private": true,
   "type": "module",
-  "main": "src/index.ts",
+  "description": "CLI for Eidolon -- autonomous, self-learning AI assistant daemon",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/crack00r/eidolon.git",
+    "directory": "packages/cli"
+  },
+  "keywords": [
+    "ai",
+    "assistant",
+    "daemon",
+    "claude",
+    "self-learning",
+    "memory",
+    "cli"
+  ],
+  "main": "dist/eidolon",
   "types": "src/index.ts",
   "bin": {
-    "eidolon": "src/index.ts"
+    "eidolon": "./dist/eidolon"
+  },
+  "files": [
+    "dist/",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "build": "bun build src/index.ts --outdir dist --target bun",
+    "prepublishOnly": "bun build src/index.ts --outfile dist/eidolon --target bun",
     "test": "bun test src/",
     "typecheck": "tsc --noEmit",
     "lint": "biome check src/",
@@ -24,5 +47,8 @@
     "@biomejs/biome": "^2.0.0",
     "@types/bun": "^1.2.0",
     "typescript": "^5.7"
+  },
+  "engines": {
+    "bun": ">=1.1.0"
   }
 }

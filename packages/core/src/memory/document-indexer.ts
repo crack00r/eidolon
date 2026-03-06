@@ -3,10 +3,10 @@
  * memory system so they participate in the same search as conversation memories.
  *
  * Supported file types:
- *   - Markdown (.md)     → chunked by heading
- *   - Plain text (.txt)  → chunked by paragraph
- *   - PDF (.pdf)         → chunked by page
- *   - Code (.ts, .tsx, .js, .jsx, .py, .rs, .go) → chunked by double-newline blocks
+ *   - Markdown (.md)     -> chunked by heading
+ *   - Plain text (.txt)  -> chunked by paragraph
+ *   - PDF (.pdf)         -> chunked by page
+ *   - Code (.ts, .tsx, .js, .jsx, .py, .rs, .go) -> chunked by double-newline blocks
  */
 
 import type { Database } from "bun:sqlite";
@@ -15,7 +15,11 @@ import { extname, join, resolve } from "node:path";
 import type { EidolonError, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 import type { Logger } from "../logging/logger.ts";
+import { chunkCode, chunkMarkdown, chunkPdfText, chunkPlainText, chunkText } from "./chunkers.ts";
 import type { MemoryStore } from "./store.ts";
+
+// Re-export DocumentChunk for backward compatibility
+export type { DocumentChunk } from "./chunkers.ts";
 
 // pdf-parse is an optional dependency; we dynamically import to avoid hard failures
 // when it is not installed.
@@ -25,14 +29,6 @@ type PdfParseFn = (dataBuffer: Buffer) => Promise<PdfParseResult>;
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
-
-export interface DocumentChunk {
-  readonly content: string;
-  readonly source: string;
-  readonly chunkIndex: number;
-  readonly heading?: string;
-  readonly metadata: Record<string, unknown>;
-}
 
 export interface IndexingOptions {
   readonly fileTypes?: readonly string[];
@@ -48,9 +44,6 @@ export interface IndexingOptions {
 const DEFAULT_FILE_TYPES: readonly string[] = [".md", ".txt", ".pdf", ".ts", ".py", ".js"];
 const DEFAULT_EXCLUDE: readonly string[] = ["node_modules", ".git", "dist"];
 const DEFAULT_MAX_FILE_SIZE = 1_048_576; // 1 MB
-const DEFAULT_CHUNK_MAX_LENGTH = 2000;
-
-const CODE_EXTENSIONS = new Set([".ts", ".tsx", ".js", ".jsx", ".py", ".rs", ".go"]);
 
 /** Maximum directory recursion depth to prevent excessive traversal or symlink loops. */
 const MAX_DIRECTORY_DEPTH = 20;
@@ -66,7 +59,7 @@ export class DocumentIndexer {
   private readonly fileTypes: readonly string[];
   private readonly exclude: readonly string[];
   private readonly maxFileSize: number;
-  private readonly chunkMaxLength: number;
+  private readonly chunkMaxLength: number | undefined;
 
   constructor(db: Database, store: MemoryStore, logger: Logger, options?: IndexingOptions) {
     this.db = db;
@@ -75,7 +68,7 @@ export class DocumentIndexer {
     this.fileTypes = options?.fileTypes ?? DEFAULT_FILE_TYPES;
     this.exclude = options?.exclude ?? DEFAULT_EXCLUDE;
     this.maxFileSize = options?.maxFileSize ?? DEFAULT_MAX_FILE_SIZE;
-    this.chunkMaxLength = options?.chunkMaxLength ?? DEFAULT_CHUNK_MAX_LENGTH;
+    this.chunkMaxLength = options?.chunkMaxLength;
   }
 
   // -------------------------------------------------------------------------
@@ -236,147 +229,23 @@ export class DocumentIndexer {
   }
 
   // -------------------------------------------------------------------------
-  // Static chunking methods
+  // Static chunking methods (delegate to chunkers module)
   // -------------------------------------------------------------------------
 
   /** Dispatch to the appropriate chunker based on file extension. */
-  static chunkText(content: string, filePath: string, maxLength?: number): DocumentChunk[] {
-    const ext = extname(filePath).toLowerCase();
-    if (ext === ".md") return DocumentIndexer.chunkMarkdown(content, filePath, maxLength);
-    if (ext === ".pdf") return DocumentIndexer.chunkPdfText(content, filePath, maxLength);
-    if (CODE_EXTENSIONS.has(ext)) return DocumentIndexer.chunkCode(content, filePath, maxLength);
-    return DocumentIndexer.chunkPlainText(content, filePath, maxLength);
-  }
+  static chunkText = chunkText;
 
-  /** Chunk markdown by headings. Sections exceeding maxLength are split at paragraph boundaries. */
-  static chunkMarkdown(content: string, filePath: string, maxLength?: number): DocumentChunk[] {
-    const limit = maxLength ?? DEFAULT_CHUNK_MAX_LENGTH;
-    const lines = content.split("\n");
-    const sections: Array<{ heading?: string; lines: string[] }> = [];
-    let current: { heading?: string; lines: string[] } = { lines: [] };
+  /** Chunk markdown by headings. */
+  static chunkMarkdown = chunkMarkdown;
 
-    for (const line of lines) {
-      if (/^#{1,6}\s/.test(line)) {
-        // Flush the previous section if it has content
-        if (current.lines.length > 0) {
-          sections.push(current);
-        }
-        current = { heading: line.replace(/^#+\s*/, "").trim(), lines: [line] };
-      } else {
-        current.lines.push(line);
-      }
-    }
-    // Flush the last section
-    if (current.lines.length > 0) {
-      sections.push(current);
-    }
+  /** Chunk already-extracted PDF text by page separators. */
+  static chunkPdfText = chunkPdfText;
 
-    const chunks: DocumentChunk[] = [];
+  /** Chunk code files by double-newline-separated blocks. */
+  static chunkCode = chunkCode;
 
-    for (const section of sections) {
-      const sectionText = section.lines.join("\n").trim();
-      if (sectionText.length === 0) continue;
-
-      if (sectionText.length <= limit) {
-        chunks.push({
-          content: sectionText,
-          source: filePath,
-          chunkIndex: chunks.length,
-          heading: section.heading,
-          metadata: {},
-        });
-      } else {
-        // Split oversized sections at paragraph boundaries
-        const paragraphs = sectionText.split(/\n\n+/);
-        let buffer = "";
-
-        for (const para of paragraphs) {
-          const candidate = buffer.length === 0 ? para : `${buffer}\n\n${para}`;
-          if (candidate.length > limit && buffer.length > 0) {
-            chunks.push({
-              content: buffer.trim(),
-              source: filePath,
-              chunkIndex: chunks.length,
-              heading: section.heading,
-              metadata: {},
-            });
-            buffer = para;
-          } else {
-            buffer = candidate;
-          }
-        }
-        if (buffer.trim().length > 0) {
-          chunks.push({
-            content: buffer.trim(),
-            source: filePath,
-            chunkIndex: chunks.length,
-            heading: section.heading,
-            metadata: {},
-          });
-        }
-      }
-    }
-
-    return chunks;
-  }
-
-  /**
-   * Chunk already-extracted PDF text by page separators (form-feed characters).
-   * Each page becomes a separate chunk. Pages exceeding maxLength are split
-   * at paragraph boundaries.
-   */
-  static chunkPdfText(content: string, filePath: string, maxLength?: number): DocumentChunk[] {
-    const limit = maxLength ?? DEFAULT_CHUNK_MAX_LENGTH;
-    // pdf-parse separates pages with form-feed characters (\f)
-    const pages = content.split("\f");
-    const chunks: DocumentChunk[] = [];
-
-    for (let pageIdx = 0; pageIdx < pages.length; pageIdx++) {
-      const pageText = (pages[pageIdx] ?? "").trim();
-      if (pageText.length === 0) continue;
-
-      if (pageText.length <= limit) {
-        chunks.push({
-          content: pageText,
-          source: filePath,
-          chunkIndex: chunks.length,
-          heading: `Page ${pageIdx + 1}`,
-          metadata: { page: pageIdx + 1 },
-        });
-      } else {
-        // Split oversized pages at paragraph boundaries
-        const paragraphs = pageText.split(/\n\n+/);
-        let buffer = "";
-
-        for (const para of paragraphs) {
-          const candidate = buffer.length === 0 ? para : `${buffer}\n\n${para}`;
-          if (candidate.length > limit && buffer.length > 0) {
-            chunks.push({
-              content: buffer.trim(),
-              source: filePath,
-              chunkIndex: chunks.length,
-              heading: `Page ${pageIdx + 1}`,
-              metadata: { page: pageIdx + 1 },
-            });
-            buffer = para;
-          } else {
-            buffer = candidate;
-          }
-        }
-        if (buffer.trim().length > 0) {
-          chunks.push({
-            content: buffer.trim(),
-            source: filePath,
-            chunkIndex: chunks.length,
-            heading: `Page ${pageIdx + 1}`,
-            metadata: { page: pageIdx + 1 },
-          });
-        }
-      }
-    }
-
-    return chunks;
-  }
+  /** Chunk plain text by paragraphs. */
+  static chunkPlainText = chunkPlainText;
 
   /**
    * Extract text from a PDF file using pdf-parse.
@@ -474,20 +343,6 @@ export class DocumentIndexer {
     return Ok(chunks.length);
   }
 
-  /** Chunk code files by double-newline-separated blocks, merging small blocks. */
-  static chunkCode(content: string, filePath: string, maxLength?: number): DocumentChunk[] {
-    const limit = maxLength ?? DEFAULT_CHUNK_MAX_LENGTH;
-    const blocks = content.split(/\n\n+/);
-    return mergeBlocks(blocks, filePath, limit);
-  }
-
-  /** Chunk plain text by paragraphs, merging small paragraphs. */
-  static chunkPlainText(content: string, filePath: string, maxLength?: number): DocumentChunk[] {
-    const limit = maxLength ?? DEFAULT_CHUNK_MAX_LENGTH;
-    const paragraphs = content.split(/\n\n+/);
-    return mergeBlocks(paragraphs, filePath, limit);
-  }
-
   // -------------------------------------------------------------------------
   // Private helpers
   // -------------------------------------------------------------------------
@@ -535,43 +390,4 @@ export class DocumentIndexer {
 
     return results;
   }
-}
-
-// ---------------------------------------------------------------------------
-// Shared utility
-// ---------------------------------------------------------------------------
-
-/** Merge small blocks into chunks that don't exceed maxLength. */
-function mergeBlocks(blocks: string[], filePath: string, maxLength: number): DocumentChunk[] {
-  const chunks: DocumentChunk[] = [];
-  let buffer = "";
-
-  for (const block of blocks) {
-    const trimmed = block.trim();
-    if (trimmed.length === 0) continue;
-
-    const candidate = buffer.length === 0 ? trimmed : `${buffer}\n\n${trimmed}`;
-    if (candidate.length > maxLength && buffer.length > 0) {
-      chunks.push({
-        content: buffer,
-        source: filePath,
-        chunkIndex: chunks.length,
-        metadata: {},
-      });
-      buffer = trimmed;
-    } else {
-      buffer = candidate;
-    }
-  }
-
-  if (buffer.trim().length > 0) {
-    chunks.push({
-      content: buffer.trim(),
-      source: filePath,
-      chunkIndex: chunks.length,
-      metadata: {},
-    });
-  }
-
-  return chunks;
 }

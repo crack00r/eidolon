@@ -1,0 +1,23 @@
+{
+  "identity": {
+    "ownerName": "Developer"
+  },
+  "brain": {
+    "accounts": [
+      {
+        "type": "oauth",
+        "name": "dev",
+        "credential": "oauth"
+      }
+    ]
+  },
+  "gateway": {
+    "host": "0.0.0.0",
+    "port": 8419,
+    "auth": { "type": "none" }
+  },
+  "logging": {
+    "level": "debug",
+    "format": "pretty"
+  }
+}
