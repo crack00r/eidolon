@@ -21,6 +21,14 @@ export type { SafetyLevel, SafetyResult } from "./safety.ts";
 export { SafetyClassifier } from "./safety.ts";
 export type { RelevanceResponse, StructuredRelevanceOptions } from "./structured-relevance.ts";
 export { createStructuredRelevanceScorerFn, RelevanceResponseSchema } from "./structured-relevance.ts";
+export type { RouterRelevanceOptions } from "./router-relevance.ts";
+export { createRouterRelevanceScorerFn } from "./router-relevance.ts";
+export {
+  createRunCommandFn,
+  createImplementFn,
+  createGitWorktree,
+  removeGitWorktree,
+} from "./pipeline-factory.ts";
 export type { CrawledItem, CrawlerSourceConfig, CrawlOptions } from "./crawlers/index.ts";
 export {
   ArxivCrawler,

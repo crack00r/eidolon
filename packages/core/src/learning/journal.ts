@@ -11,6 +11,8 @@
  * Falls back to in-memory-only when no database is provided (e.g. in tests).
  */
 
+import { mkdirSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import type { Database } from "bun:sqlite";
 import type { Logger } from "../logging/logger.ts";
 
@@ -182,6 +184,141 @@ export class LearningJournal {
       }
     }
     this.logger.debug("learning", "Journal cleared");
+  }
+
+  /**
+   * Export the journal to a markdown file on disk.
+   *
+   * Writes to `{journalDir}/YYYY-MM-DD.md` by default, or a custom filename.
+   * Creates the directory if it does not exist.
+   *
+   * @param journalDir - Directory to write journal files to.
+   * @param filename - Optional override filename (default: today's date).
+   * @returns The full path to the written file, or null on failure.
+   */
+  exportToFile(journalDir: string, filename?: string): string | null {
+    const dateStr = formatDate(new Date()).slice(0, 10); // YYYY-MM-DD
+    const fname = filename ?? `${dateStr}.md`;
+    const filePath = join(journalDir, fname);
+
+    try {
+      mkdirSync(dirname(filePath), { recursive: true });
+
+      // Filter entries for today if using default filename
+      let entriesToExport: JournalEntry[];
+      if (!filename) {
+        entriesToExport = this.entries.filter((e) => {
+          const entryDate = formatDate(new Date(e.timestamp)).slice(0, 10);
+          return entryDate === dateStr;
+        });
+      } else {
+        entriesToExport = [...this.entries];
+      }
+
+      if (entriesToExport.length === 0) {
+        this.logger.debug("learning", "No entries to export for this date", { dateStr });
+        return null;
+      }
+
+      const lines: string[] = [`# Learning Journal - ${dateStr}`, ""];
+
+      // Group entries by type
+      const byType = new Map<JournalEntryType, JournalEntry[]>();
+      for (const entry of entriesToExport) {
+        const existing = byType.get(entry.type) ?? [];
+        existing.push(entry);
+        byType.set(entry.type, existing);
+      }
+
+      // Discoveries
+      const discoveries = byType.get("discovery") ?? [];
+      if (discoveries.length > 0) {
+        lines.push(`## Discoveries (${discoveries.length} items)`);
+        for (const d of discoveries) {
+          const score = d.metadata.score !== undefined ? ` (score: ${d.metadata.score})` : "";
+          lines.push(`- ${sanitizeForMarkdown(d.title)}${score}`);
+        }
+        lines.push("");
+      }
+
+      // Evaluations
+      const evaluations = byType.get("evaluation") ?? [];
+      if (evaluations.length > 0) {
+        lines.push(`## Evaluations (${evaluations.length} items)`);
+        for (const e of evaluations) {
+          lines.push(`- ${sanitizeForMarkdown(e.title)}: ${sanitizeForMarkdown(e.content)}`);
+        }
+        lines.push("");
+      }
+
+      // Approvals
+      const approvals = byType.get("approval") ?? [];
+      if (approvals.length > 0) {
+        lines.push("## Approvals");
+        for (const a of approvals) {
+          lines.push(`- ${sanitizeForMarkdown(a.title)}`);
+        }
+        lines.push("");
+      }
+
+      // Rejections
+      const rejections = byType.get("rejection") ?? [];
+      if (rejections.length > 0) {
+        lines.push("## Rejections");
+        for (const r of rejections) {
+          lines.push(`- ${sanitizeForMarkdown(r.title)}: ${sanitizeForMarkdown(r.content)}`);
+        }
+        lines.push("");
+      }
+
+      // Implementations
+      const implementations = byType.get("implementation") ?? [];
+      if (implementations.length > 0) {
+        lines.push("## Implementations");
+        for (const impl of implementations) {
+          const branch = impl.metadata.branch ? ` (branch: ${impl.metadata.branch})` : "";
+          lines.push(`- ${sanitizeForMarkdown(impl.title)}${branch}`);
+          if (impl.content.length > 0) {
+            lines.push(`  ${sanitizeForMarkdown(impl.content)}`);
+          }
+        }
+        lines.push("");
+      }
+
+      // Errors
+      const errors = byType.get("error") ?? [];
+      if (errors.length > 0) {
+        lines.push("## Errors");
+        for (const err of errors) {
+          lines.push(`- ${sanitizeForMarkdown(err.title)}: ${sanitizeForMarkdown(err.content)}`);
+        }
+        lines.push("");
+      }
+
+      // Token usage summary from metadata
+      let totalTokens = 0;
+      for (const entry of entriesToExport) {
+        const tokens = entry.metadata.tokensUsed;
+        if (typeof tokens === "number") {
+          totalTokens += tokens;
+        }
+      }
+      if (totalTokens > 0) {
+        lines.push("## Token Usage");
+        lines.push(`- Total: ${totalTokens} tokens`);
+        lines.push("");
+      }
+
+      writeFileSync(filePath, lines.join("\n"), "utf-8");
+      this.logger.info("learning", `Journal exported to ${filePath}`, {
+        entryCount: entriesToExport.length,
+      });
+
+      return filePath;
+    } catch (err: unknown) {
+      this.logger.error("learning", `Failed to export journal to ${filePath}`, err);
+      return null;
+    }
   }
 
   /** ERR-007: Dispose of the journal, clearing any periodic timers. */

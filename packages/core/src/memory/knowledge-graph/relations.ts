@@ -61,6 +61,14 @@ export interface TripleResult {
   readonly confidence: number;
 }
 
+/** Triple with entity IDs (not names) for embedding training. */
+export interface TripleWithIds {
+  readonly subjectId: string;
+  readonly predicate: string;
+  readonly objectId: string;
+  readonly confidence: number;
+}
+
 // ---------------------------------------------------------------------------
 // Internal row shape from SQLite
 // ---------------------------------------------------------------------------
@@ -79,6 +87,13 @@ interface TripleRow {
   readonly subject: string;
   readonly predicate: string;
   readonly object: string;
+  readonly confidence: number;
+}
+
+interface TripleIdRow {
+  readonly subject_id: string;
+  readonly predicate: string;
+  readonly object_id: string;
   readonly confidence: number;
 }
 
@@ -344,6 +359,39 @@ export class KGRelationStore {
       );
     } catch (cause) {
       return Err(createError(ErrorCode.DB_QUERY_FAILED, "Failed to get triples for entities", cause));
+    }
+  }
+
+  /**
+   * Get all triples with entity IDs (not names) for ComplEx embedding training.
+   * Returns (subject_id, predicate, object_id, confidence).
+   */
+  getAllTriplesWithIds(limit?: number): Result<TripleWithIds[], EidolonError> {
+    try {
+      const maxResults = limit ?? 100;
+      const rows = this.db
+        .query(
+          `SELECT
+             r.source_id AS subject_id,
+             r.type AS predicate,
+             r.target_id AS object_id,
+             r.confidence
+           FROM kg_relations r
+           ORDER BY r.created_at DESC
+           LIMIT ?`,
+        )
+        .all(maxResults) as TripleIdRow[];
+
+      return Ok(
+        rows.map((r) => ({
+          subjectId: r.subject_id,
+          predicate: r.predicate,
+          objectId: r.object_id,
+          confidence: r.confidence,
+        })),
+      );
+    } catch (cause) {
+      return Err(createError(ErrorCode.DB_QUERY_FAILED, "Failed to get all triples with IDs", cause));
     }
   }
 

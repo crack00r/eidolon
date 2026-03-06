@@ -20,6 +20,7 @@ import { HAManager } from "../home-automation/manager.ts";
 import { registerFeedbackHandlers } from "../feedback/gateway-handlers.ts";
 import { type MetricsWiringHandle, wireMetrics } from "../metrics/wiring.ts";
 import type { Logger } from "../logging/logger.ts";
+import { buildCoreRpcWiringStep } from "./core-rpc-wiring.ts";
 import type { InitializedModules } from "./types.ts";
 
 // ---------------------------------------------------------------------------
@@ -132,6 +133,9 @@ export function buildGatewayInitSteps(
       logger.info("daemon", `GatewayServer started on ${config.gateway.host}:${config.gateway.port}`);
     },
   });
+
+  // 19-core. Wire core RPC handlers (chat, memory, session, learning, voice)
+  steps.push(buildCoreRpcWiringStep(modules));
 
   // 19a. Wire GPU pool RPC handlers to GatewayServer
   steps.push({

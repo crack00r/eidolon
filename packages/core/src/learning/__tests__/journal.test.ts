@@ -1,3 +1,6 @@
+import { existsSync, readFileSync, rmSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 import { describe, expect, test } from "bun:test";
 import type { Logger } from "../../logging/logger.ts";
 import { LearningJournal } from "../journal.ts";
@@ -154,5 +157,96 @@ describe("LearningJournal", () => {
     // Entry 1 should have been evicted
     expect(recent.map((e) => e.title)).not.toContain("Entry 1");
     expect(recent[0]?.title).toBe("Entry 4");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// exportToFile
+// ---------------------------------------------------------------------------
+
+describe("LearningJournal.exportToFile", () => {
+  const logger = createSilentLogger();
+
+  function makeTempDir(): string {
+    const dir = join(tmpdir(), `eidolon-journal-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    return dir;
+  }
+
+  test("writes a markdown file with grouped entries", () => {
+    const journal = new LearningJournal(logger);
+    const dir = makeTempDir();
+
+    try {
+      journal.addEntry("discovery", "Found sqlite-vec 0.2", "From Reddit", { score: 85 });
+      journal.addEntry("approval", "Approved sqlite-vec", "User approved via CLI");
+      journal.addEntry("implementation", "Implemented sqlite-vec", "Updated dep", { branch: "learning/sqlite-vec" });
+      journal.addEntry("error", "Lint failed", "biome returned 2 errors");
+
+      const filePath = journal.exportToFile(dir, "test-export.md");
+
+      expect(filePath).not.toBeNull();
+      expect(existsSync(filePath as string)).toBe(true);
+
+      const content = readFileSync(filePath as string, "utf-8");
+      expect(content).toContain("# Learning Journal");
+      expect(content).toContain("Discoveries (1 items)");
+      expect(content).toContain("Approvals");
+      expect(content).toContain("Implementations");
+      expect(content).toContain("Errors");
+      expect(content).toContain("sqlite\\-vec");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("returns null when no entries match the date", () => {
+    const journal = new LearningJournal(logger);
+    const dir = makeTempDir();
+
+    try {
+      // No entries added, default filename filters by today
+      const filePath = journal.exportToFile(dir);
+      expect(filePath).toBeNull();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("includes token usage summary from metadata", () => {
+    const journal = new LearningJournal(logger);
+    const dir = makeTempDir();
+
+    try {
+      journal.addEntry("discovery", "Item A", "Content", { tokensUsed: 500 });
+      journal.addEntry("implementation", "Item B", "Content", { tokensUsed: 3000 });
+
+      const filePath = journal.exportToFile(dir, "tokens.md");
+      expect(filePath).not.toBeNull();
+
+      const content = readFileSync(filePath as string, "utf-8");
+      expect(content).toContain("Token Usage");
+      expect(content).toContain("3500 tokens");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("creates nested directories if needed", () => {
+    const journal = new LearningJournal(logger);
+    const dir = join(makeTempDir(), "nested", "deep");
+
+    try {
+      journal.addEntry("discovery", "Test", "Content");
+
+      const filePath = journal.exportToFile(dir, "nested-test.md");
+      expect(filePath).not.toBeNull();
+      expect(existsSync(filePath as string)).toBe(true);
+    } finally {
+      // Clean up from the top-level temp dir
+      const topDir = dir.split("/nested/")[0];
+      if (topDir) {
+        rmSync(topDir, { recursive: true, force: true });
+      }
+    }
   });
 });

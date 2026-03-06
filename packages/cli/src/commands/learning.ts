@@ -288,8 +288,15 @@ export function registerLearningCommand(program: Command): void {
           return;
         }
 
+        // Record approval in the learning journal
+        sys.journal.addEntry("approval", disc.title, `Discovery ${shortId(disc.id)} approved via CLI`, {
+          discoveryId: disc.id,
+          status: disc.status,
+        });
+
         console.log(`Discovery ${shortId(disc.id)} approved: "${truncate(disc.title, 60)}"`);
       } finally {
+        sys.journal.dispose();
         sys.db.close();
       }
     });
@@ -332,8 +339,15 @@ export function registerLearningCommand(program: Command): void {
           return;
         }
 
+        // Record rejection in the learning journal
+        sys.journal.addEntry("rejection", disc.title, `Discovery ${shortId(disc.id)} rejected via CLI`, {
+          discoveryId: disc.id,
+          status: disc.status,
+        });
+
         console.log(`Discovery ${shortId(disc.id)} rejected: "${truncate(disc.title, 60)}"`);
       } finally {
+        sys.journal.dispose();
         sys.db.close();
       }
     });
