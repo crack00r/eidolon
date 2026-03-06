@@ -10,8 +10,6 @@ import type { Logger } from "../../../logging/logger.ts";
 import type { EmbeddingModel, EmbeddingPrefix } from "../../embeddings.ts";
 import { GraphMemory } from "../../graph.ts";
 import { CommunityDetector } from "../../knowledge-graph/communities.ts";
-import { KGEntityStore } from "../../knowledge-graph/entities.ts";
-import { KGRelationStore } from "../../knowledge-graph/relations.ts";
 import { MemorySearch } from "../../search.ts";
 import type { CreateMemoryInput } from "../../store.ts";
 import { MemoryStore } from "../../store.ts";
@@ -432,14 +430,18 @@ describe("RemPhase with LLM router", () => {
     const rem = new RemPhase(store, search, graph, null, null, logger, router);
 
     // Create memories that will match via BM25
-    store.create(makeInput({
-      layer: "short_term",
-      content: "Bun runtime is fast for JavaScript",
-    }));
-    store.create(makeInput({
-      layer: "long_term",
-      content: "JavaScript is the language of the web and Bun is fast",
-    }));
+    store.create(
+      makeInput({
+        layer: "short_term",
+        content: "Bun runtime is fast for JavaScript",
+      }),
+    );
+    store.create(
+      makeInput({
+        layer: "long_term",
+        content: "JavaScript is the language of the web and Bun is fast",
+      }),
+    );
 
     const result = await rem.run({ recentDays: 30 });
     expect(result.ok).toBe(true);
@@ -468,14 +470,18 @@ describe("RemPhase with LLM router", () => {
 
     const rem = new RemPhase(store, search, graph, null, null, logger, router);
 
-    store.create(makeInput({
-      layer: "short_term",
-      content: "Bun runtime is fast for JavaScript",
-    }));
-    store.create(makeInput({
-      layer: "long_term",
-      content: "JavaScript is the language of the web and Bun is fast",
-    }));
+    store.create(
+      makeInput({
+        layer: "short_term",
+        content: "Bun runtime is fast for JavaScript",
+      }),
+    );
+    store.create(
+      makeInput({
+        layer: "long_term",
+        content: "JavaScript is the language of the web and Bun is fast",
+      }),
+    );
 
     const result = await rem.run({ recentDays: 30 });
     expect(result.ok).toBe(true);
@@ -494,14 +500,18 @@ describe("RemPhase with LLM router", () => {
 
     const rem = new RemPhase(store, search, graph, null, null, logger, router);
 
-    store.create(makeInput({
-      layer: "short_term",
-      content: "Bun runtime is fast for JavaScript",
-    }));
-    store.create(makeInput({
-      layer: "long_term",
-      content: "JavaScript is the language of the web and Bun is fast",
-    }));
+    store.create(
+      makeInput({
+        layer: "short_term",
+        content: "Bun runtime is fast for JavaScript",
+      }),
+    );
+    store.create(
+      makeInput({
+        layer: "long_term",
+        content: "JavaScript is the language of the web and Bun is fast",
+      }),
+    );
 
     const result = await rem.run({ recentDays: 30 });
     expect(result.ok).toBe(true);
@@ -515,10 +525,12 @@ describe("RemPhase with LLM router", () => {
   test("degrades gracefully when no router is provided", async () => {
     const rem = new RemPhase(store, search, graph, null, null, logger, null);
 
-    store.create(makeInput({
-      layer: "short_term",
-      content: "Some recent memory",
-    }));
+    store.create(
+      makeInput({
+        layer: "short_term",
+        content: "Some recent memory",
+      }),
+    );
 
     const result = await rem.run({ recentDays: 30 });
     expect(result.ok).toBe(true);
@@ -535,14 +547,18 @@ describe("RemPhase with LLM router", () => {
 
     const rem = new RemPhase(store, search, graph, null, null, logger, router);
 
-    store.create(makeInput({
-      layer: "short_term",
-      content: "Bun runtime is fast for JavaScript",
-    }));
-    store.create(makeInput({
-      layer: "long_term",
-      content: "JavaScript is the language of the web and Bun is fast",
-    }));
+    store.create(
+      makeInput({
+        layer: "short_term",
+        content: "Bun runtime is fast for JavaScript",
+      }),
+    );
+    store.create(
+      makeInput({
+        layer: "long_term",
+        content: "JavaScript is the language of the web and Bun is fast",
+      }),
+    );
 
     const result = await rem.run({ recentDays: 30 });
     expect(result.ok).toBe(true);
@@ -560,14 +576,18 @@ describe("RemPhase with LLM router", () => {
 
     const rem = new RemPhase(store, search, graph, null, null, logger, router);
 
-    store.create(makeInput({
-      layer: "short_term",
-      content: "Bun runtime is fast for JavaScript",
-    }));
-    store.create(makeInput({
-      layer: "long_term",
-      content: "JavaScript is the language of the web and Bun is fast",
-    }));
+    store.create(
+      makeInput({
+        layer: "short_term",
+        content: "Bun runtime is fast for JavaScript",
+      }),
+    );
+    store.create(
+      makeInput({
+        layer: "long_term",
+        content: "JavaScript is the language of the web and Bun is fast",
+      }),
+    );
 
     const result = await rem.run({ recentDays: 30 });
     expect(result.ok).toBe(true);
@@ -586,14 +606,18 @@ describe("RemPhase with LLM router", () => {
 
     const rem = new RemPhase(store, search, graph, null, null, logger, router);
 
-    store.create(makeInput({
-      layer: "short_term",
-      content: "Bun runtime is fast for JavaScript",
-    }));
-    store.create(makeInput({
-      layer: "long_term",
-      content: "JavaScript is the language of the web and Bun is fast",
-    }));
+    store.create(
+      makeInput({
+        layer: "short_term",
+        content: "Bun runtime is fast for JavaScript",
+      }),
+    );
+    store.create(
+      makeInput({
+        layer: "long_term",
+        content: "JavaScript is the language of the web and Bun is fast",
+      }),
+    );
 
     const customFn = async (): Promise<Array<{ insight: string; confidence: number }>> => {
       return [{ insight: "Custom insight from analyzeFn", confidence: 0.9 }];
@@ -712,7 +736,11 @@ describe("NremPhase with LLM router", () => {
     db.close();
   });
 
-  function seedOldShortTermMemories(count: number, type: "fact" | "episode" | "decision" = "fact", tags: string[] = []): void {
+  function _seedOldShortTermMemories(
+    count: number,
+    type: "fact" | "episode" | "decision" = "fact",
+    tags: string[] = [],
+  ): void {
     const oldTime = Date.now() - 10 * 24 * 60 * 60 * 1000; // 10 days ago
     for (let i = 0; i < count; i++) {
       db.query(
@@ -734,7 +762,11 @@ describe("NremPhase with LLM router", () => {
     }
   }
 
-  function seedLongTermMemories(count: number, type: "fact" | "episode" | "decision" = "fact", tags: string[] = []): void {
+  function seedLongTermMemories(
+    count: number,
+    type: "fact" | "episode" | "decision" = "fact",
+    tags: string[] = [],
+  ): void {
     for (let i = 0; i < count; i++) {
       store.create({
         type,
@@ -865,9 +897,7 @@ describe("NremPhase with LLM router", () => {
     expect(communities.ok).toBe(true);
     if (!communities.ok) return;
     // At least one community should have the LLM-generated summary
-    const hasLlmSummary = communities.value.some(
-      (c) => c.summary.includes("TypeScript development"),
-    );
+    const hasLlmSummary = communities.value.some((c) => c.summary.includes("TypeScript development"));
     expect(hasLlmSummary).toBe(true);
   });
 

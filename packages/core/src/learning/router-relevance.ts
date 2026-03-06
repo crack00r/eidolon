@@ -113,10 +113,7 @@ export function createRouterRelevanceScorerFn(
       ...options?.completionOptions,
     };
 
-    const result = await provider.complete(
-      [{ role: "user", content: prompt }],
-      completionOptions,
-    );
+    const result = await provider.complete([{ role: "user", content: prompt }], completionOptions);
 
     // Parse JSON from the response content
     const jsonMatch = result.content.match(/\{[\s\S]*\}/);

@@ -1,9 +1,8 @@
 /**
  * CommunityDetector -- Louvain-style community detection on the Knowledge Graph.
  *
- * Builds an undirected adjacency graph from kg_relations, then iteratively
- * moves nodes between communities to maximize modularity. Detected communities
- * are persisted to the kg_communities table.
+ * Detects communities of densely connected entities using the Louvain algorithm
+ * (implemented in louvain.ts) and persists results to the kg_communities table.
  *
  * All public methods return Result<T, EidolonError>.
  */
@@ -13,6 +12,7 @@ import { randomUUID } from "node:crypto";
 import type { EidolonError, KGCommunity, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 import type { Logger } from "../../logging/logger.ts";
+import { buildAdjacencyGraph, louvainPhase1 } from "./louvain.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -27,25 +27,9 @@ export interface CommunityDetectorOptions {
   readonly minModularityGain?: number;
 }
 
-/** Internal adjacency representation. */
-interface AdjacencyGraph {
-  /** Set of all node IDs. */
-  readonly nodes: ReadonlySet<string>;
-  /** Adjacency list: nodeId -> Map<neighbourId, edge weight>. */
-  readonly adjacency: ReadonlyMap<string, Map<string, number>>;
-  /** Total sum of all edge weights (each undirected edge counted once). */
-  readonly totalWeight: number;
-}
-
 // ---------------------------------------------------------------------------
 // Internal row shapes
 // ---------------------------------------------------------------------------
-
-interface RelationEdgeRow {
-  readonly source_id: string;
-  readonly target_id: string;
-  readonly confidence: number;
-}
 
 interface CommunityRow {
   readonly id: string;
@@ -83,98 +67,6 @@ function rowToCommunity(row: CommunityRow): KGCommunity {
   };
 }
 
-/**
- * Build an undirected adjacency graph from the kg_relations table.
- * Edge weights are the confidence values; parallel edges are summed.
- * Self-loops are ignored.
- */
-function buildAdjacencyGraph(db: Database): AdjacencyGraph {
-  const rows = db.query("SELECT source_id, target_id, confidence FROM kg_relations").all() as RelationEdgeRow[];
-
-  const adjacency = new Map<string, Map<string, number>>();
-  const nodes = new Set<string>();
-  let totalWeight = 0;
-
-  const ensureNode = (id: string): Map<string, number> => {
-    nodes.add(id);
-    let neighbours = adjacency.get(id);
-    if (!neighbours) {
-      neighbours = new Map<string, number>();
-      adjacency.set(id, neighbours);
-    }
-    return neighbours;
-  };
-
-  for (const row of rows) {
-    if (row.source_id === row.target_id) continue; // skip self-loops
-    const weight = row.confidence;
-
-    const srcNeighbours = ensureNode(row.source_id);
-    const tgtNeighbours = ensureNode(row.target_id);
-
-    // Undirected: add weight in both directions
-    srcNeighbours.set(row.target_id, (srcNeighbours.get(row.target_id) ?? 0) + weight);
-    tgtNeighbours.set(row.source_id, (tgtNeighbours.get(row.source_id) ?? 0) + weight);
-    totalWeight += weight;
-  }
-
-  return { nodes, adjacency, totalWeight };
-}
-
-/**
- * Compute the weighted degree of a node (sum of all incident edge weights).
- */
-function weightedDegree(adjacency: ReadonlyMap<string, Map<string, number>>, nodeId: string): number {
-  const neighbours = adjacency.get(nodeId);
-  if (!neighbours) return 0;
-  let sum = 0;
-  for (const w of neighbours.values()) {
-    sum += w;
-  }
-  return sum;
-}
-
-/**
- * Compute the modularity gain from moving node `nodeId` into community `targetCommunity`.
- *
- * deltaQ = [sum_in + 2*k_i_in] / (2*m) - [(sum_tot + k_i) / (2*m)]^2
- *        - [sum_in/(2*m) - (sum_tot/(2*m))^2 - (k_i/(2*m))^2]
- *
- * Simplified to:
- *   deltaQ = k_i_in / m - resolution * k_i * sum_tot / (2 * m^2)
- *
- * where:
- *   k_i_in  = sum of weights from node i to nodes in target community
- *   k_i     = weighted degree of node i
- *   sum_tot = sum of weighted degrees of nodes in target community
- *   m       = total weight of graph
- */
-function modularityGain(
-  adjacency: ReadonlyMap<string, Map<string, number>>,
-  nodeId: string,
-  targetMembers: ReadonlySet<string>,
-  communityDegreeSum: number,
-  totalWeight: number,
-  resolution: number,
-): number {
-  if (totalWeight === 0) return 0;
-
-  const neighbours = adjacency.get(nodeId);
-  let kIn = 0;
-  if (neighbours) {
-    for (const [nId, w] of neighbours) {
-      if (targetMembers.has(nId)) {
-        kIn += w;
-      }
-    }
-  }
-
-  const ki = weightedDegree(adjacency, nodeId);
-  const m = totalWeight;
-
-  return kIn / m - (resolution * ki * communityDegreeSum) / (2 * m * m);
-}
-
 // ---------------------------------------------------------------------------
 // CommunityDetector
 // ---------------------------------------------------------------------------
@@ -207,7 +99,15 @@ export class CommunityDetector {
       }
 
       // Phase 1: Local modularity optimisation
-      const assignment = this.louvainPhase1(graph);
+      const { assignment, iterations, communityCount } = louvainPhase1(graph, {
+        resolution: this.resolution,
+        maxIterations: this.maxIterations,
+        minModularityGain: this.minModularityGain,
+      });
+
+      this.logger.debug("louvainPhase1", `Completed in ${iterations} iterations`, {
+        communities: communityCount,
+      });
 
       // Collect communities: communityId -> set of entity IDs
       const communityMap = new Map<string, Set<string>>();
@@ -220,7 +120,7 @@ export class CommunityDetector {
         members.add(nodeId);
       }
 
-      // Filter out singleton communities (a single isolated node is not interesting)
+      // Filter out singleton communities
       const significantCommunities = [...communityMap.entries()].filter(([, members]) => members.size > 1);
 
       // Persist to database
@@ -277,9 +177,7 @@ export class CommunityDetector {
     }
   }
 
-  /**
-   * Generate a text summary of a community's entities and their relationships.
-   */
+  /** Generate a text summary of a community's entities and their relationships. */
   summarizeCommunity(communityId: string): Result<string, EidolonError> {
     try {
       const communityResult = this.getCommunity(communityId);
@@ -319,9 +217,6 @@ export class CommunityDetector {
         target_name: string;
       }>;
 
-      // Filter to only internal relations (both source and target in the community)
-      // The SQL already handles this via the WHERE clause
-
       // Build summary text
       const entityDescriptions = entities.map((e) => `${e.name} (${e.type})`);
       const lines: string[] = [
@@ -348,10 +243,7 @@ export class CommunityDetector {
     }
   }
 
-  /**
-   * Update the summary text of a community.
-   * Used by the NREM phase to store LLM-generated summaries.
-   */
+  /** Update the summary text of a community. */
   updateSummary(communityId: string, summary: string): Result<void, EidolonError> {
     try {
       this.db.query("UPDATE kg_communities SET summary = ? WHERE id = ?").run(summary, communityId);
@@ -362,130 +254,8 @@ export class CommunityDetector {
   }
 
   // -------------------------------------------------------------------------
-  // Private: Louvain Algorithm
+  // Private: Persistence
   // -------------------------------------------------------------------------
-
-  /**
-   * Louvain Phase 1: Iteratively move each node to the neighbouring community
-   * that maximises modularity gain. Returns a map from nodeId -> communityId.
-   */
-  private louvainPhase1(graph: AdjacencyGraph): Map<string, string> {
-    const { nodes, adjacency, totalWeight } = graph;
-
-    // Initialise: each node is its own community
-    const assignment = new Map<string, string>();
-    for (const nodeId of nodes) {
-      assignment.set(nodeId, nodeId);
-    }
-
-    // Track community membership: communityId -> Set of nodeIds
-    const communityMembers = new Map<string, Set<string>>();
-    for (const nodeId of nodes) {
-      communityMembers.set(nodeId, new Set([nodeId]));
-    }
-
-    // Track sum of weighted degrees per community
-    const communityDegreeSum = new Map<string, number>();
-    for (const nodeId of nodes) {
-      communityDegreeSum.set(nodeId, weightedDegree(adjacency, nodeId));
-    }
-
-    let improved = true;
-    let iteration = 0;
-
-    while (improved && iteration < this.maxIterations) {
-      improved = false;
-      iteration++;
-
-      for (const nodeId of nodes) {
-        const currentCommunity = assignment.get(nodeId);
-        if (currentCommunity === undefined) continue;
-
-        const ki = weightedDegree(adjacency, nodeId);
-        const neighbours = adjacency.get(nodeId);
-        if (!neighbours) continue;
-
-        // Collect neighbouring communities
-        const neighbourCommunities = new Set<string>();
-        for (const [nId] of neighbours) {
-          const nComm = assignment.get(nId);
-          if (nComm !== undefined && nComm !== currentCommunity) {
-            neighbourCommunities.add(nComm);
-          }
-        }
-
-        if (neighbourCommunities.size === 0) continue;
-
-        // Compute the loss of removing nodeId from its current community
-        const currentMembers = communityMembers.get(currentCommunity);
-        if (!currentMembers) continue;
-
-        // Temporarily remove node from current community for gain calculation
-        const currentDegSum = (communityDegreeSum.get(currentCommunity) ?? 0) - ki;
-
-        // Create a temp set without the current node for computing k_i_in for removal cost
-        const currentMembersWithout = new Set(currentMembers);
-        currentMembersWithout.delete(nodeId);
-
-        const removeLoss = modularityGain(
-          adjacency,
-          nodeId,
-          currentMembersWithout,
-          currentDegSum,
-          totalWeight,
-          this.resolution,
-        );
-
-        // Find the best community to move to
-        let bestCommunity = currentCommunity;
-        let bestGain = 0;
-
-        for (const targetCommunity of neighbourCommunities) {
-          const targetMembers = communityMembers.get(targetCommunity);
-          if (!targetMembers) continue;
-
-          const targetDegSum = communityDegreeSum.get(targetCommunity) ?? 0;
-
-          const gain =
-            modularityGain(adjacency, nodeId, targetMembers, targetDegSum, totalWeight, this.resolution) - removeLoss;
-
-          if (gain > bestGain + this.minModularityGain) {
-            bestGain = gain;
-            bestCommunity = targetCommunity;
-          }
-        }
-
-        // Move node if beneficial
-        if (bestCommunity !== currentCommunity) {
-          // Remove from current community
-          currentMembers.delete(nodeId);
-          communityDegreeSum.set(currentCommunity, (communityDegreeSum.get(currentCommunity) ?? 0) - ki);
-
-          // Clean up empty communities
-          if (currentMembers.size === 0) {
-            communityMembers.delete(currentCommunity);
-            communityDegreeSum.delete(currentCommunity);
-          }
-
-          // Add to best community
-          const bestMembers = communityMembers.get(bestCommunity);
-          if (bestMembers) {
-            bestMembers.add(nodeId);
-          }
-          communityDegreeSum.set(bestCommunity, (communityDegreeSum.get(bestCommunity) ?? 0) + ki);
-
-          assignment.set(nodeId, bestCommunity);
-          improved = true;
-        }
-      }
-    }
-
-    this.logger.debug("louvainPhase1", `Completed in ${iteration} iterations`, {
-      communities: communityMembers.size,
-    });
-
-    return assignment;
-  }
 
   /**
    * Persist detected communities to the kg_communities table.

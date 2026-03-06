@@ -165,7 +165,7 @@ describe("DocumentIndexer daemon wiring", () => {
 
     const absPath = resolve(filePath);
     const sourceTag = `document:${absPath}`;
-    const countBefore = (
+    const _countBefore = (
       db.query("SELECT COUNT(*) as count FROM memories WHERE source = ?").get(sourceTag) as {
         count: number;
       }

@@ -30,10 +30,7 @@ export function createRunCommandFn(logger: Logger, timeoutMs?: number): RunComma
   const timeout = timeoutMs ?? DEFAULT_COMMAND_TIMEOUT_MS;
   const childLogger = logger.child("pipeline-cmd");
 
-  return async (
-    command: string,
-    cwd: string,
-  ): Promise<Result<{ stdout: string; exitCode: number }, EidolonError>> => {
+  return async (command: string, cwd: string): Promise<Result<{ stdout: string; exitCode: number }, EidolonError>> => {
     childLogger.debug("run", `Executing: ${command}`, { cwd });
 
     try {
@@ -112,9 +109,7 @@ export function createImplementFn(claude: IClaudeProcess, logger: Logger): Imple
         }
         if (event.type === "error" && event.error) {
           childLogger.warn("implement", `Claude error during implementation: ${event.error}`);
-          return Err(
-            createError(ErrorCode.CLAUDE_PROCESS_CRASHED, `Implementation failed: ${event.error}`),
-          );
+          return Err(createError(ErrorCode.CLAUDE_PROCESS_CRASHED, `Implementation failed: ${event.error}`));
         }
       }
 
@@ -126,9 +121,7 @@ export function createImplementFn(claude: IClaudeProcess, logger: Logger): Imple
       return Ok(output);
     } catch (cause) {
       childLogger.error("implement", "Implementation session crashed", cause);
-      return Err(
-        createError(ErrorCode.CLAUDE_PROCESS_CRASHED, "Implementation session crashed", cause),
-      );
+      return Err(createError(ErrorCode.CLAUDE_PROCESS_CRASHED, "Implementation session crashed", cause));
     }
   };
 }
@@ -166,10 +159,7 @@ export async function createGitWorktree(
 
   childLogger.info("create", `Creating worktree: ${worktreePath} on branch ${branch}`);
 
-  const result = await runCommand(
-    `git worktree add -b ${branch} ${worktreePath}`,
-    repoDir,
-  );
+  const result = await runCommand(`git worktree add -b ${branch} ${worktreePath}`, repoDir);
 
   if (!result.ok) {
     return Err(result.error);
@@ -177,9 +167,7 @@ export async function createGitWorktree(
 
   if (result.value.exitCode !== 0) {
     childLogger.warn("create", `Worktree creation failed: ${result.value.stdout}`);
-    return Err(
-      createError(ErrorCode.DISCOVERY_FAILED, `Failed to create git worktree: ${result.value.stdout}`),
-    );
+    return Err(createError(ErrorCode.DISCOVERY_FAILED, `Failed to create git worktree: ${result.value.stdout}`));
   }
 
   childLogger.info("create", `Worktree created at ${worktreePath}`);
@@ -199,10 +187,7 @@ export async function removeGitWorktree(
 
   childLogger.info("remove", `Removing worktree: ${worktreePath}`);
 
-  const result = await runCommand(
-    `git worktree remove ${worktreePath} --force`,
-    repoDir,
-  );
+  const result = await runCommand(`git worktree remove ${worktreePath} --force`, repoDir);
 
   if (!result.ok) {
     childLogger.warn("remove", `Worktree removal failed: ${result.error.message}`);

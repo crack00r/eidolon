@@ -2,9 +2,9 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from "bun:test
 import type { Server } from "bun";
 import type { Logger } from "../../logging/logger.ts";
 import { ArxivCrawler } from "../crawlers/arxiv.ts";
-import { CrawlerRegistry } from "../crawlers/index.ts";
 import { GitHubCrawler } from "../crawlers/github.ts";
 import { HackerNewsCrawler } from "../crawlers/hackernews.ts";
+import { CrawlerRegistry } from "../crawlers/index.ts";
 import { RedditCrawler } from "../crawlers/reddit.ts";
 import { RssCrawler } from "../crawlers/rss.ts";
 import { sanitizeContent } from "../crawlers/sanitize.ts";

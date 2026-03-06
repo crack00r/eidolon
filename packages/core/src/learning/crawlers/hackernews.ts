@@ -7,9 +7,9 @@
  */
 
 import { z } from "zod";
+import type { Logger } from "../../logging/logger.ts";
 import type { SourceType } from "../discovery.ts";
 import { BaseCrawler, type CrawledItem, type CrawlerSourceConfig, type CrawlOptions } from "./base.ts";
-import type { Logger } from "../../logging/logger.ts";
 
 /** Zod schema for a single HN item. */
 const HNItemSchema = z.object({
@@ -38,12 +38,9 @@ export class HackerNewsCrawler extends BaseCrawler {
     super(logger.child("crawler:hackernews"), 500);
   }
 
-  protected async crawlSource(
-    config: CrawlerSourceConfig,
-    options: CrawlOptions,
-  ): Promise<CrawledItem[]> {
-    const limit = options.maxItems ?? Number(config.config["limit"] ?? DEFAULT_LIMIT);
-    const minScore = options.minScore ?? Number(config.config["minScore"] ?? DEFAULT_MIN_SCORE);
+  protected async crawlSource(config: CrawlerSourceConfig, options: CrawlOptions): Promise<CrawledItem[]> {
+    const limit = options.maxItems ?? Number(config.config.limit ?? DEFAULT_LIMIT);
+    const minScore = options.minScore ?? Number(config.config.minScore ?? DEFAULT_MIN_SCORE);
 
     // Fetch top story IDs
     const topStoriesUrl = "https://hacker-news.firebaseio.com/v0/topstories.json";
@@ -130,7 +127,7 @@ function buildHNContent(story: z.infer<typeof HNItemSchema>): string {
       .replace(/&quot;/g, '"')
       .replace(/&#x27;/g, "'");
 
-    const truncated = cleaned.length > 3000 ? cleaned.slice(0, 3000) + "..." : cleaned;
+    const truncated = cleaned.length > 3000 ? `${cleaned.slice(0, 3000)}...` : cleaned;
     parts.push("", truncated);
   }
 

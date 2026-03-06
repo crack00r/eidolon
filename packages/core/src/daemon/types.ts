@@ -3,7 +3,6 @@
  */
 
 import type { EidolonConfig } from "@eidolon/protocol";
-import type { ConfigWatcher } from "../config/watcher.ts";
 import type { AuditLogger } from "../audit/logger.ts";
 import type { BackupManager } from "../backup/manager.ts";
 import type { CalendarManager } from "../calendar/manager.ts";
@@ -14,10 +13,12 @@ import type { TelegramChannel } from "../channels/telegram/channel.ts";
 import type { WhatsAppChannel } from "../channels/whatsapp/channel.ts";
 import type { ClaudeCodeManager } from "../claude/manager.ts";
 import type { WorkspacePreparer } from "../claude/workspace.ts";
+import type { ConfigWatcher } from "../config/watcher.ts";
 import type { DatabaseManager } from "../database/manager.ts";
 import type { DigestBuilder } from "../digest/builder.ts";
 import type { DiscoveryBroadcaster } from "../discovery/broadcaster.ts";
 import type { TailscaleDetector } from "../discovery/tailscale.ts";
+import type { FeedbackStore } from "../feedback/store.ts";
 import type { GatewayServer } from "../gateway/server.ts";
 import type { GPUManager } from "../gpu/manager.ts";
 import type { GPUWorkerPool } from "../gpu/pool.ts";
@@ -44,20 +45,19 @@ import type { MemoryInjector } from "../memory/injector.ts";
 import type { CommunityDetector } from "../memory/knowledge-graph/communities.ts";
 import type { KGEntityStore } from "../memory/knowledge-graph/entities.ts";
 import type { KGRelationStore } from "../memory/knowledge-graph/relations.ts";
-import type { MemorySearch } from "../memory/search.ts";
 import type { UserProfileGenerator } from "../memory/profile.ts";
+import type { MemorySearch } from "../memory/search.ts";
 import type { MemoryStore } from "../memory/store.ts";
 import type { MetricsRegistry } from "../metrics/prometheus.ts";
 import type { TokenTracker } from "../metrics/token-tracker.ts";
 import type { MetricsWiringHandle } from "../metrics/wiring.ts";
 import type { PluginLifecycleManager } from "../plugins/lifecycle.ts";
 import type { PluginRegistry } from "../plugins/registry.ts";
-import type { FeedbackStore } from "../feedback/store.ts";
+import type { ResearchEngine } from "../research/engine.ts";
 import type { AutomationEngine } from "../scheduler/automation.ts";
 import type { TaskScheduler } from "../scheduler/scheduler.ts";
 import type { SecretStore } from "../secrets/store.ts";
 import type { ApprovalManager } from "../security/approval-manager.ts";
-import type { ResearchEngine } from "../research/engine.ts";
 import type { MetricsBridgeHandle } from "../telemetry/metrics-bridge.ts";
 import type { TelemetryProvider } from "../telemetry/provider.ts";
 

@@ -10,6 +10,8 @@ import type { EidolonConfig } from "@eidolon/protocol";
 import type { DiscordConfig } from "../channels/discord/channel.ts";
 import { DiscordChannel } from "../channels/discord/channel.ts";
 import { createDiscordJsClient } from "../channels/discord/discordjs-client.ts";
+import type { EmailChannelConfig } from "../channels/email/channel.ts";
+import { EmailChannel } from "../channels/email/channel.ts";
 import { BunImapClient } from "../channels/email/imap.ts";
 import { BunSmtpClient } from "../channels/email/smtp.ts";
 import { MessageRouter } from "../channels/router.ts";
@@ -19,8 +21,6 @@ import type { WhatsAppApiConfig } from "../channels/whatsapp/api.ts";
 import { WhatsAppCloudApi } from "../channels/whatsapp/api.ts";
 import type { WhatsAppChannelConfig } from "../channels/whatsapp/channel.ts";
 import { WhatsAppChannel } from "../channels/whatsapp/channel.ts";
-import type { EmailChannelConfig } from "../channels/email/channel.ts";
-import { EmailChannel } from "../channels/email/channel.ts";
 import type { Logger } from "../logging/logger.ts";
 import type { InitializedModules } from "./types.ts";
 
@@ -69,7 +69,11 @@ export async function wireChannels(modules: InitializedModules): Promise<void> {
 // Telegram
 // ---------------------------------------------------------------------------
 
-async function wireTelegram(modules: InitializedModules, config: EidolonConfig | undefined, logger: Logger): Promise<void> {
+async function wireTelegram(
+  modules: InitializedModules,
+  config: EidolonConfig | undefined,
+  logger: Logger,
+): Promise<void> {
   if (!config?.channels.telegram?.enabled) return;
 
   const tgConfig = config.channels.telegram;
@@ -120,7 +124,11 @@ async function wireTelegram(modules: InitializedModules, config: EidolonConfig |
 // Discord
 // ---------------------------------------------------------------------------
 
-async function wireDiscord(modules: InitializedModules, config: EidolonConfig | undefined, logger: Logger): Promise<void> {
+async function wireDiscord(
+  modules: InitializedModules,
+  config: EidolonConfig | undefined,
+  logger: Logger,
+): Promise<void> {
   if (!config?.channels.discord?.enabled) return;
 
   const dcConfig = config.channels.discord;
@@ -179,7 +187,11 @@ async function wireDiscord(modules: InitializedModules, config: EidolonConfig | 
 // WhatsApp
 // ---------------------------------------------------------------------------
 
-async function wireWhatsApp(modules: InitializedModules, config: EidolonConfig | undefined, logger: Logger): Promise<void> {
+async function wireWhatsApp(
+  modules: InitializedModules,
+  config: EidolonConfig | undefined,
+  logger: Logger,
+): Promise<void> {
   if (!config?.channels.whatsapp?.enabled) return;
 
   const waConfig = config.channels.whatsapp;
@@ -239,7 +251,11 @@ async function wireWhatsApp(modules: InitializedModules, config: EidolonConfig |
 // Email
 // ---------------------------------------------------------------------------
 
-async function wireEmail(modules: InitializedModules, config: EidolonConfig | undefined, logger: Logger): Promise<void> {
+async function wireEmail(
+  modules: InitializedModules,
+  config: EidolonConfig | undefined,
+  logger: Logger,
+): Promise<void> {
   if (!config?.channels.email?.enabled) return;
 
   const emailConfig = config.channels.email;

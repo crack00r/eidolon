@@ -51,10 +51,7 @@ export function findTemplatesDir(startDir?: string): Result<string, EidolonError
       return Ok(candidate);
     }
     return Err(
-      createError(
-        ErrorCode.CONFIG_NOT_FOUND,
-        `Workspace template directory does not contain CLAUDE.md: ${candidate}`,
-      ),
+      createError(ErrorCode.CONFIG_NOT_FOUND, `Workspace template directory does not contain CLAUDE.md: ${candidate}`),
     );
   }
 
@@ -70,12 +67,7 @@ export function findTemplatesDir(startDir?: string): Result<string, EidolonError
     dir = parent;
   }
 
-  return Err(
-    createError(
-      ErrorCode.CONFIG_NOT_FOUND,
-      "Could not find workspace/ template directory with CLAUDE.md",
-    ),
-  );
+  return Err(createError(ErrorCode.CONFIG_NOT_FOUND, "Could not find workspace/ template directory with CLAUDE.md"));
 }
 
 /**
@@ -114,8 +106,6 @@ export async function loadWorkspaceTemplates(
 
     return Ok({ claudeMd, soulMd });
   } catch (cause) {
-    return Err(
-      createError(ErrorCode.CONFIG_PARSE_ERROR, "Failed to load workspace templates", cause),
-    );
+    return Err(createError(ErrorCode.CONFIG_PARSE_ERROR, "Failed to load workspace templates", cause));
   }
 }

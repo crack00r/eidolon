@@ -4,6 +4,7 @@ import { Ok } from "@eidolon/protocol";
 import type { Logger } from "../../../logging/logger.ts";
 import { EmailChannel, type EmailChannelConfig } from "../channel.ts";
 import type { IImapClient, ImapMessage } from "../imap.ts";
+import { isAllowedSender } from "../polling.ts";
 import type { ISmtpClient, SmtpMessage } from "../smtp.ts";
 
 // ---------------------------------------------------------------------------
@@ -407,11 +408,12 @@ describe("EmailChannel", () => {
       expect(received.length).toBe(1);
     });
 
-    test("isAllowedSender exposed for direct testing", () => {
-      expect(channel.isAllowedSender("alice@example.com")).toBe(true);
-      expect(channel.isAllowedSender("ALICE@EXAMPLE.COM")).toBe(true);
-      expect(channel.isAllowedSender("anyone@trusted.org")).toBe(true);
-      expect(channel.isAllowedSender("evil@attacker.com")).toBe(false);
+    test("isAllowedSender standalone function", () => {
+      const patterns = ["alice@example.com", "*@trusted.org"];
+      expect(isAllowedSender("alice@example.com", patterns)).toBe(true);
+      expect(isAllowedSender("ALICE@EXAMPLE.COM", patterns)).toBe(true);
+      expect(isAllowedSender("anyone@trusted.org", patterns)).toBe(true);
+      expect(isAllowedSender("evil@attacker.com", patterns)).toBe(false);
     });
   });
 

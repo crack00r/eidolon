@@ -16,10 +16,10 @@ import { wireChannels } from "./channel-wiring.ts";
 import { buildGatewayInitSteps } from "./gateway-wiring.ts";
 import { buildCoreInitSteps } from "./initializer.ts";
 import {
-  type SignalHandlerState,
   registerSignalHandlers,
   removePidFile,
   removeSignalHandlers,
+  type SignalHandlerState,
   writePidFile,
 } from "./lifecycle.ts";
 import { performShutdown, teardownModules } from "./shutdown.ts";

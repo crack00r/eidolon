@@ -6,7 +6,13 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import type { ILLMProvider, IModelRouter, LLMCompletionOptions, LLMCompletionResult, LLMMessage } from "@eidolon/protocol";
+import type {
+  ILLMProvider,
+  IModelRouter,
+  LLMCompletionOptions,
+  LLMCompletionResult,
+  LLMMessage,
+} from "@eidolon/protocol";
 import type { Logger } from "../../logging/logger.ts";
 import { RelevanceFilter } from "../relevance.ts";
 import { createRouterRelevanceScorerFn } from "../router-relevance.ts";
@@ -33,7 +39,10 @@ function createFakeProvider(responseContent: string): ILLMProvider {
     name: "Fake Ollama",
     isAvailable: async () => true,
     listModels: async () => ["test-model"],
-    complete: async (_messages: readonly LLMMessage[], _options?: LLMCompletionOptions): Promise<LLMCompletionResult> => ({
+    complete: async (
+      _messages: readonly LLMMessage[],
+      _options?: LLMCompletionOptions,
+    ): Promise<LLMCompletionResult> => ({
       content: responseContent,
       usage: { inputTokens: 100, outputTokens: 50 },
       model: "test-model",
@@ -47,7 +56,7 @@ function createFakeProvider(responseContent: string): ILLMProvider {
 
 function createFakeRouter(provider: ILLMProvider | undefined): IModelRouter {
   return {
-    route: () => provider ? [provider.type] : [],
+    route: () => (provider ? [provider.type] : []),
     selectProvider: async () => provider,
   };
 }
@@ -70,11 +79,11 @@ describe("createRouterRelevanceScorerFn", () => {
     const router = createFakeRouter(provider);
     const scorerFn = createRouterRelevanceScorerFn(router, logger);
 
-    const result = await scorerFn(
-      "New TypeScript AI Framework",
-      "A framework for building AI apps with TypeScript",
-      ["TypeScript", "AI", "self-hosted"],
-    );
+    const result = await scorerFn("New TypeScript AI Framework", "A framework for building AI apps with TypeScript", [
+      "TypeScript",
+      "AI",
+      "self-hosted",
+    ]);
 
     expect(result.score).toBe(0.85);
     expect(result.reason).toBe("Directly relevant to TypeScript development");

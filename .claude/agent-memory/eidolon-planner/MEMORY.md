@@ -31,30 +31,43 @@
 - Total source: ~60,000+ lines
 - Tests: 117 test files, 1,718 test() calls, ~30,647 test lines
 
-## Live Status (March 6, 2026 -- verified live run)
+## Live Status (March 6, 2026 -- deep audit v9)
 - Version: 0.1.6 released (PR #8 merged)
-- Tests: 1,538 core + 112 cli + 24 test-utils = 1,674 passing, 0 fail
-- TypeCheck: 0 errors across all 6 packages (protocol, core, cli, test-utils, desktop, web)
-- Open GitHub Issues: 0, Open PRs: 0
-- All 119 commits on main, clean working tree
-- All v1.2 + v2.0 features implemented (WhatsApp, Email, OTel, Plugins, Local LLM)
-- V1.2_V2.0_PLAN.md header is STALE -- says "Planning" but code is committed
+- Tests: 1,538 core + 112 cli + 92 protocol + 24 test-utils = 1,774 passing (1,810 test() calls), 0 fail, 6 skipped
+- TypeCheck: 0 errors across all 6 packages
+- Lint: 4 warnings (unused private fields in caldav, google, whatsapp), 2 infos
+- npm: @eidolon-ai/cli NOT published (404 from registry)
+- README: claims "522 tests" but actual is 1,774 (stale)
+- Total source: 98,322 lines across all packages/apps/services
 
-## Gap Status (updated March 4, 2026 -- audit v6)
-13 of 15 gaps resolved. Only 2 LOW gaps remain:
-- LOW: G-01 -- config/validator.ts inlined in loader.ts (ACCEPTED, structural only)
-- LOW: G-10 -- Desktop WCAG 2.1 AA not formally verified (66 ARIA attrs exist, needs checklist pass)
+## Deep Audit Findings (March 6, 2026 -- audit v8)
 
-All HIGH/MEDIUM gaps resolved:
-- G-07 RESOLVED: HAEntityResolver (265 lines) with exact/fuzzy/semantic matching
-- G-11 RESOLVED: Tauri pubkey is real minisign key (A235525764C1D161)
-- G-12 RESOLVED: iOS CI with xcodegen exists, .xcodeproj intentionally not committed
+### Priority 1 -- Blocks v1.0
+- daemon/index.ts is 2,538 lines (8.5x over 300-line limit) -- god-object, must decompose
+- Self-learning discovery.ts has NO HTTP crawling (CRUD layer only, no data source)
+- Dreaming REM/NREM LLM calls are STUBBED (interfaces exist, not wired to LLM)
+- CI broken on main (Biome lint formatting)
+- CLI not published to npm
 
-TODOs in production code (4 total, all benign):
-- apps/ios/PushNotificationService.swift:71 -- "TODO: Send token to Eidolon Core server via WebSocket" (feature gap)
-- apps/web/hooks.server.ts:17 -- "TODO: In production, add report-to CSP directive" (security enhancement)
-- packages/core extractor.ts:141 -- TODO regex pattern (intentional, for memory extraction)
-- packages/core daemon-memory-integration.test.ts:279 -- TODO in test fixture data (not real TODO)
+### Priority 2 -- Should fix before v1.0
+- Discord channel not wired in daemon (logs warning, skips)
+- OpenAI compat API returns stub text responses
+- Privacy module (consent.ts, retention.ts) has ZERO tests
+- Voice STT pipeline not wired in daemon
+- gateway/server.ts at 1,632 lines needs decomposition
+
+### Integration Wiring Status (v9)
+WIRED: Telegram, WhatsApp, Email, Memory injection, Gateway WS, Calendar, HA, Metrics, Plugins, Local LLM
+NOT WIRED: Discord (logs warning, skips), OpenAI compat (stub), Discovery crawling (missing), Dreaming LLM (stub), Voice STT (incomplete), ConfigWatcher, DocumentIndexer, ResearchEngine, Profile, Feedback, KG entities/relations (null in MemoryInjector)
+PARTIALLY WIRED: user:approval (logs only, not routed to ApprovalManager), scheduler:task_due (logs only, no execution)
+GATEWAY METHODS MISSING: chat.send/stream, memory.search/delete, session.list/info, learning.list/approve/reject, voice.start/stop, feedback.submit/list, brain.getLog/triggerAction, metrics.rateLimits, llm.complete (~20 core methods)
+
+### 28+ files exceed 300-line limit (top 5)
+- daemon/index.ts: 2,538 lines
+- gateway/server.ts: 1,632 lines
+- memory/store.ts: 639 lines
+- email/channel.ts: 590 lines
+- knowledge-graph/communities.ts: 518 lines
 
 ## Key File Paths (line counts verified v2)
 - /Users/manuelguttmann/Projekte/eidolon/packages/core/src/claude/manager.ts -- ClaudeCodeManager (232 lines)
@@ -110,3 +123,10 @@ v2.0 (DONE, docs stale): Plugin System (351L), Local LLM (535L, Ollama + llama.c
 - Local LLM: ILLMProvider in protocol, OllamaProvider + LlamaCppProvider + ClaudeProvider + ModelRouter
 v1.3 (DEFERRED): Multi-user, Mobile widget enhancements
 v2.1+ (FUTURE): Secondary replication, Full multi-user, Model fine-tuning
+
+## Master Task List (March 6, 2026)
+- docs/TASK_LIST.md: 92 tasks total (17 P0, 42 P1, 21 P2, 12 P3)
+- Modules without __tests__/: audit, privacy (GDPR-critical!), llm (tests at core level), plugins (tests at core level)
+- No workspace/ template directory exists (SOUL.md, CLAUDE.md templates missing)
+- CLI stubs: plugin (6 commands), llm (3 commands), channel (1 command)
+- Golden dataset: 105 extraction entries, 0 search relevance entries

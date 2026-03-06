@@ -9,11 +9,7 @@
  * even when discord.js is not installed.
  */
 
-import type {
-  DiscordInboundMessage,
-  DiscordMessage,
-  IDiscordClient,
-} from "./channel.ts";
+import type { DiscordInboundMessage, DiscordMessage, IDiscordClient } from "./channel.ts";
 
 // ---------------------------------------------------------------------------
 // Minimal type shapes for the untyped discord.js objects we interact with.

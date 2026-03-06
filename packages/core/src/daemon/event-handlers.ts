@@ -9,8 +9,8 @@
 import { randomUUID } from "node:crypto";
 import type { UserMessagePayload } from "@eidolon/protocol";
 import { loadWorkspaceTemplates } from "../claude/templates.ts";
-import type { EventHandler, EventHandlerResult } from "../loop/cognitive-loop.ts";
 import type { Logger } from "../logging/logger.ts";
+import type { EventHandler, EventHandlerResult } from "../loop/cognitive-loop.ts";
 import { handleAutomationDue, handleScheduledTask } from "./task-executor.ts";
 import type { InitializedModules } from "./types.ts";
 
@@ -278,10 +278,7 @@ async function handleUserMessage(
             }
           })
           .catch((err: unknown) => {
-            logger.warn(
-              "loop-handler",
-              `Memory extraction threw: ${err instanceof Error ? err.message : String(err)}`,
-            );
+            logger.warn("loop-handler", `Memory extraction threw: ${err instanceof Error ? err.message : String(err)}`);
           });
       }
 
@@ -662,9 +659,7 @@ async function handleResearchStarted(
     const sources = rawSources.filter((s): s is string => typeof s === "string");
 
     const maxSources =
-      typeof rawPayload.maxSources === "number" && rawPayload.maxSources > 0
-        ? rawPayload.maxSources
-        : 10;
+      typeof rawPayload.maxSources === "number" && rawPayload.maxSources > 0 ? rawPayload.maxSources : 10;
 
     logger.info("loop-handler", `Starting research: "${query}"`, {
       eventId: event.id,
@@ -799,7 +794,7 @@ async function handleResearchStarted(
 // ---------------------------------------------------------------------------
 
 function handleUserFeedback(
-  modules: InitializedModules,
+  _modules: InitializedModules,
   event: { readonly id: string; readonly payload: unknown },
   logger: Logger,
 ): EventHandlerResult {

@@ -50,9 +50,7 @@ function createTestConfig(overrides?: Partial<EidolonConfig>): EidolonConfig {
   const base: EidolonConfig = {
     identity: { name: "Eidolon", ownerName: "Test" },
     brain: {
-      accounts: [
-        { type: "oauth" as const, name: "test", credential: "oauth", priority: 50, enabled: true },
-      ],
+      accounts: [{ type: "oauth" as const, name: "test", credential: "oauth", priority: 50, enabled: true }],
       model: {
         default: "claude-sonnet-4-20250514",
         complex: "claude-opus-4-20250514",

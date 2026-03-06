@@ -11,11 +11,11 @@
 
 import type { EidolonError, ILLMProvider, LLMMessage, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
-import type { Logger } from "../../logging/logger.ts";
 import type { ModelRouter } from "../../llm/router.ts";
+import type { Logger } from "../../logging/logger.ts";
 import type { GraphMemory } from "../graph.ts";
-import { ComplExEmbeddings } from "../knowledge-graph/complex.ts";
 import type { Triple } from "../knowledge-graph/complex.ts";
+import { ComplExEmbeddings } from "../knowledge-graph/complex.ts";
 import type { KGRelationStore, RelationPredicate } from "../knowledge-graph/relations.ts";
 import type { MemorySearch } from "../search.ts";
 import type { MemoryStore } from "../store.ts";
@@ -179,12 +179,7 @@ export class RemPhase {
         // 4. LLM analysis for non-obvious connections
         if (related.length > 0) {
           const relatedContents = related.map((r) => r.memory.content);
-          const llmResult = await this.analyzeWithLlm(
-            recent.content,
-            relatedContents,
-            llmProvider,
-            options?.analyzeFn,
-          );
+          const llmResult = await this.analyzeWithLlm(recent.content, relatedContents, llmProvider, options?.analyzeFn);
 
           tokensUsed += llmResult.tokensUsed;
 
@@ -330,13 +325,8 @@ export class RemPhase {
   }
 
   /** Build the prompt messages for associative discovery. */
-  private buildAssociationPrompt(
-    recentContent: string,
-    relatedContents: readonly string[],
-  ): readonly LLMMessage[] {
-    const relatedList = relatedContents
-      .map((c, i) => `${i + 1}. ${c}`)
-      .join("\n");
+  private buildAssociationPrompt(recentContent: string, relatedContents: readonly string[]): readonly LLMMessage[] {
+    const relatedList = relatedContents.map((c, i) => `${i + 1}. ${c}`).join("\n");
 
     const userMessage = `Recent memory:\n"${recentContent}"\n\nRelated memories:\n${relatedList}\n\nFind non-obvious connections between the recent memory and the related memories. Return JSON only.`;
 
@@ -439,9 +429,7 @@ export class RemPhase {
     const predicates = [...new Set(triplesResult.value.map((t) => t.predicate))];
 
     // Build a set of existing triples for fast lookup
-    const existingTriples = new Set(
-      triplesResult.value.map((t) => `${t.subjectId}|${t.predicate}|${t.objectId}`),
-    );
+    const existingTriples = new Set(triplesResult.value.map((t) => `${t.subjectId}|${t.predicate}|${t.objectId}`));
 
     let created = 0;
 

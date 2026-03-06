@@ -9,14 +9,13 @@
 import { Database } from "bun:sqlite";
 import { afterEach, describe, expect, test } from "bun:test";
 import type { BusEvent, SecurityConfig } from "@eidolon/protocol";
-import type { AuditEvent } from "@eidolon/protocol";
+import { AuditLogger } from "../../audit/logger.ts";
 import { runMigrations } from "../../database/migrations.ts";
 import { AUDIT_MIGRATIONS } from "../../database/schemas/audit.ts";
 import { OPERATIONAL_MIGRATIONS } from "../../database/schemas/operational.ts";
 import type { Logger } from "../../logging/logger.ts";
 import { EventBus } from "../../loop/event-bus.ts";
 import type { PriorityScore } from "../../loop/priority.ts";
-import { AuditLogger } from "../../audit/logger.ts";
 import { ApprovalManager } from "../../security/approval-manager.ts";
 import { buildEventHandler } from "../event-handlers.ts";
 import type { InitializedModules } from "../types.ts";

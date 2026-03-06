@@ -19,3 +19,10 @@
 - router.ts: well covered -- DND logic, timezone, cross-midnight, same-day, boundaries, DST, integration
 - DND timezone tests cover: Europe/Berlin (CET/CEST), America/New_York (EST/EDT), Asia/Tokyo (no DST), America/St_Johns (half-hour offset)
 - DST transition tests verify both spring forward and fall back for Berlin and NYC
+- audit/logger.ts: fully covered (32 tests) -- log, query with all filters, hash chain, append-only, tamper detection, volume
+
+## Audit Logger Testing
+- Schema: apply all 3 migrations with db.run() (table, indexes, integrity hash + triggers)
+- Tamper test: drop trigger, modify data, re-create trigger, verify integrity fails
+- Append-only: UPDATE and DELETE throw trigger error messages
+- AuditLogger constructor: (db: Database, logger: Logger)

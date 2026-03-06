@@ -56,7 +56,7 @@ export function sanitizeContent(raw: string, maxLength = 50_000): string {
 
   // Truncate
   if (content.length > maxLength) {
-    content = content.slice(0, maxLength) + "\n\n[TRUNCATED]";
+    content = `${content.slice(0, maxLength)}\n\n[TRUNCATED]`;
   }
 
   return content.trim();

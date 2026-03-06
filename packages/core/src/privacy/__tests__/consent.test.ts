@@ -2,8 +2,8 @@ import { Database } from "bun:sqlite";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { isErr, isOk } from "@eidolon/protocol";
 import type { Logger } from "../../logging/logger.ts";
-import { ConsentManager } from "../consent.ts";
 import type { ConsentType } from "../consent.ts";
+import { ConsentManager } from "../consent.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers

@@ -6,9 +6,9 @@
  * approach since we only need title, link, description, and pubDate.
  */
 
+import type { Logger } from "../../logging/logger.ts";
 import type { SourceType } from "../discovery.ts";
 import { BaseCrawler, type CrawledItem, type CrawlerSourceConfig, type CrawlOptions } from "./base.ts";
-import type { Logger } from "../../logging/logger.ts";
 
 /** Default maximum items per feed. */
 const DEFAULT_LIMIT = 20;
@@ -23,19 +23,19 @@ export class RssCrawler extends BaseCrawler {
     super(logger.child("crawler:rss"), 1000);
   }
 
-  protected async crawlSource(
-    config: CrawlerSourceConfig,
-    options: CrawlOptions,
-  ): Promise<CrawledItem[]> {
-    const feedsRaw = String(config.config["feeds"] ?? "");
+  protected async crawlSource(config: CrawlerSourceConfig, options: CrawlOptions): Promise<CrawledItem[]> {
+    const feedsRaw = String(config.config.feeds ?? "");
     if (!feedsRaw) {
       this.logger.warn("crawlSource", "No feeds configured, skipping RSS crawl");
       return [];
     }
 
-    const feeds = feedsRaw.split(",").map((s) => s.trim()).filter(Boolean);
-    const limit = options.maxItems ?? Number(config.config["limit"] ?? DEFAULT_LIMIT);
-    const maxAgeMs = Number(config.config["maxAgeDays"] ?? 7) * 24 * 60 * 60 * 1000 || DEFAULT_MAX_AGE_MS;
+    const feeds = feedsRaw
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const limit = options.maxItems ?? Number(config.config.limit ?? DEFAULT_LIMIT);
+    const maxAgeMs = Number(config.config.maxAgeDays ?? 7) * 24 * 60 * 60 * 1000 || DEFAULT_MAX_AGE_MS;
 
     const items: CrawledItem[] = [];
 
@@ -47,11 +47,7 @@ export class RssCrawler extends BaseCrawler {
     return items;
   }
 
-  private async crawlFeed(
-    feedUrl: string,
-    limit: number,
-    maxAgeMs: number,
-  ): Promise<CrawledItem[]> {
+  private async crawlFeed(feedUrl: string, limit: number, maxAgeMs: number): Promise<CrawledItem[]> {
     try {
       const response = await this.rateLimitedFetch(feedUrl);
       const xml = await response.text();
@@ -181,9 +177,7 @@ function buildRssContent(entry: FeedEntry): string {
   const parts: string[] = [];
 
   if (entry.description) {
-    const desc = entry.description.length > 3000
-      ? entry.description.slice(0, 3000) + "..."
-      : entry.description;
+    const desc = entry.description.length > 3000 ? `${entry.description.slice(0, 3000)}...` : entry.description;
     parts.push(desc);
   }
 

@@ -69,10 +69,7 @@ function toBase64(data: string): string {
 
 /** Create a mock STTClient that returns a configurable result. */
 function createMockSttClient(
-  result: Result<
-    { text: string; language: string; confidence: number; durationSeconds: number },
-    EidolonError
-  >,
+  result: Result<{ text: string; language: string; confidence: number; durationSeconds: number }, EidolonError>,
 ): {
   transcribe: (audio: Uint8Array, mimeType?: string) => Promise<typeof result>;
   lastAudio: Uint8Array | undefined;
@@ -159,7 +156,7 @@ describe("Voice STT Pipeline", () => {
     expect(sttClient.lastMimeType).toBe("audio/wav");
 
     // Verify decoded audio bytes match
-    const expectedBytes = new TextEncoder().encode(audioData);
+    const _expectedBytes = new TextEncoder().encode(audioData);
     expect(sttClient.lastAudio?.length).toBe(audioData.length);
 
     // Verify user:message was published to EventBus
@@ -200,9 +197,7 @@ describe("Voice STT Pipeline", () => {
 
   test("empty transcription result is treated as success with no further action", async () => {
     const eventBus = new EventBus(db, logger);
-    const sttClient = createMockSttClient(
-      Ok({ text: "   ", language: "en", confidence: 0.1, durationSeconds: 0.5 }),
-    );
+    const sttClient = createMockSttClient(Ok({ text: "   ", language: "en", confidence: 0.1, durationSeconds: 0.5 }));
 
     const modules: InitializedModules = {
       logger,

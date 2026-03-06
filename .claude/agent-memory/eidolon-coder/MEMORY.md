@@ -41,6 +41,16 @@
 - WorkspacePreparer constructor: `(logger, workspacesDir?)` -- workspacesDir defaults to cache dir
 - Token usage is estimated from text lengths when actual token counts aren't available from stream events
 
+## Learning Crawlers
+- Crawlers live in `packages/core/src/learning/crawlers/` with one file per source type
+- `BaseCrawler` abstract class provides rate limiting (`rateLimitedFetch()`), sanitization, and Result wrapping
+- `CrawlerRegistry` maps source types to crawler instances and provides `crawlAll()`
+- `sanitizeContent()` in `crawlers/sanitize.ts` strips injection patterns and dangerous shell commands
+- Source config uses `config: Record<string, string | number | boolean>` from LearningConfigSchema
+- Tests use `Bun.serve({ port: 0 })` as mock HTTP server, subclass crawlers to override `rateLimitedFetch()` for URL rewriting
+- `Bun.serve()` Server type requires generic parameter: `Server<unknown>`
+- Pre-existing type errors in `audit/__tests__/logger.test.ts` (22 errors, all TS2532/TS18048) -- not from crawlers
+
 ## Desktop App (Tauri)
 - Tauri CLI available via `cargo tauri` (cargo-tauri crate)
 - Updater signing keys: `cargo tauri signer generate -w ~/.tauri/eidolon.key --ci -p ""`

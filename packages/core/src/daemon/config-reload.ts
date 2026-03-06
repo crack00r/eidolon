@@ -88,11 +88,7 @@ const ALL_CONFIG_SECTIONS: readonly string[] = [
 ];
 
 /** Check if a section value changed between old and new config. */
-function sectionChanged(
-  oldConfig: Record<string, unknown>,
-  newConfig: Record<string, unknown>,
-  path: string,
-): boolean {
+function sectionChanged(oldConfig: Record<string, unknown>, newConfig: Record<string, unknown>, path: string): boolean {
   const oldVal = getNestedValue(oldConfig, path);
   const newVal = getNestedValue(newConfig, path);
   return JSON.stringify(oldVal) !== JSON.stringify(newVal);
@@ -155,19 +151,13 @@ export function buildConfigReloadHandler(
     // ClaudeCodeManager reads config.brain on each session spawn
 
     // 3. loop.energyBudget
-    if (
-      sectionChanged(oldRecord, newRecord, "loop.energyBudget") &&
-      modules.energyBudget
-    ) {
+    if (sectionChanged(oldRecord, newRecord, "loop.energyBudget") && modules.energyBudget) {
       modules.energyBudget.updateConfig(newConfig.loop.energyBudget);
       logger.info("config-reload", "EnergyBudget configuration updated");
     }
 
     // 4. loop.rest
-    if (
-      sectionChanged(oldRecord, newRecord, "loop.rest") &&
-      modules.restCalculator
-    ) {
+    if (sectionChanged(oldRecord, newRecord, "loop.rest") && modules.restCalculator) {
       modules.restCalculator.updateConfig(newConfig.loop.rest);
       logger.info("config-reload", "RestCalculator configuration updated");
     }
@@ -192,10 +182,7 @@ export function buildConfigReloadHandler(
     if (sectionChanged(oldRecord, newRecord, "logging.level")) {
       if (modules.logger?.setLevel) {
         modules.logger.setLevel(newConfig.logging.level);
-        logger.info(
-          "config-reload",
-          `Log level changed: ${oldConfig.logging.level} -> ${newConfig.logging.level}`,
-        );
+        logger.info("config-reload", `Log level changed: ${oldConfig.logging.level} -> ${newConfig.logging.level}`);
       } else {
         logger.info(
           "config-reload",

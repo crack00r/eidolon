@@ -155,11 +155,7 @@ interface MutableLogState {
  * All loggers in the same tree share the same `state` reference so that
  * setLevel() on any logger immediately affects the entire tree.
  */
-function createLoggerWithPrefix(
-  state: MutableLogState,
-  prefix: string,
-  options?: CreateLoggerOptions,
-): Logger {
+function createLoggerWithPrefix(state: MutableLogState, prefix: string, options?: CreateLoggerOptions): Logger {
   const resolveModule = (module: string): string => (prefix ? `${prefix}:${module}` : module);
   const rotator = options?.rotator;
   const traceId = options?.traceId;

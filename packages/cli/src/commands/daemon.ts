@@ -152,7 +152,7 @@ export function registerDaemonCommand(program: Command): void {
 // Start modes
 // ---------------------------------------------------------------------------
 
-async function startForeground(configPath?: string): Promise<void> {
+async function startForeground(_configPath?: string): Promise<void> {
   // Dynamic import to avoid loading core modules for status/stop commands
   const { EidolonDaemon } = await import("@eidolon/core");
 

@@ -11,9 +11,9 @@
  * Falls back to in-memory-only when no database is provided (e.g. in tests).
  */
 
+import type { Database } from "bun:sqlite";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import type { Database } from "bun:sqlite";
 import type { Logger } from "../logging/logger.ts";
 
 export type JournalEntryType = "discovery" | "evaluation" | "approval" | "rejection" | "implementation" | "error";

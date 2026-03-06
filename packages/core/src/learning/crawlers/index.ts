@@ -9,21 +9,21 @@ import type { EidolonError, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode } from "@eidolon/protocol";
 import type { Logger } from "../../logging/logger.ts";
 import type { SourceType } from "../discovery.ts";
-import type { BaseCrawler, CrawledItem, CrawlerSourceConfig, CrawlOptions } from "./base.ts";
 import { ArxivCrawler } from "./arxiv.ts";
+import type { BaseCrawler, CrawledItem, CrawlerSourceConfig, CrawlOptions } from "./base.ts";
 import { GitHubCrawler } from "./github.ts";
 import { HackerNewsCrawler } from "./hackernews.ts";
 import { RedditCrawler } from "./reddit.ts";
 import { RssCrawler } from "./rss.ts";
 
+export { ArxivCrawler } from "./arxiv.ts";
 export type { CrawledItem, CrawlerSourceConfig, CrawlOptions } from "./base.ts";
 export { BaseCrawler } from "./base.ts";
-export { sanitizeContent } from "./sanitize.ts";
-export { ArxivCrawler } from "./arxiv.ts";
 export { GitHubCrawler } from "./github.ts";
 export { HackerNewsCrawler } from "./hackernews.ts";
 export { RedditCrawler } from "./reddit.ts";
 export { RssCrawler } from "./rss.ts";
+export { sanitizeContent } from "./sanitize.ts";
 
 /**
  * Registry that instantiates and manages crawlers for all supported source types.
@@ -54,9 +54,7 @@ export class CrawlerRegistry {
   ): Promise<Result<CrawledItem[], EidolonError>> {
     const crawler = this.crawlers.get(config.type);
     if (!crawler) {
-      return Err(
-        createError(ErrorCode.DISCOVERY_FAILED, `Unknown source type: ${config.type}`),
-      );
+      return Err(createError(ErrorCode.DISCOVERY_FAILED, `Unknown source type: ${config.type}`));
     }
 
     return crawler.crawl(config, options);

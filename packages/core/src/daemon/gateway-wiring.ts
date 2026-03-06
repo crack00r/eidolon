@@ -10,6 +10,7 @@ import type { CalendarEvent } from "@eidolon/protocol";
 import { CalendarManager } from "../calendar/manager.ts";
 import { DiscoveryBroadcaster } from "../discovery/broadcaster.ts";
 import { TailscaleDetector } from "../discovery/tailscale.ts";
+import { registerFeedbackHandlers } from "../feedback/gateway-handlers.ts";
 import { GatewayServer } from "../gateway/server.ts";
 import { GPUManager } from "../gpu/manager.ts";
 import type { GPUWorkerPoolConfig } from "../gpu/pool.ts";
@@ -17,9 +18,7 @@ import { GPUWorkerPool } from "../gpu/pool.ts";
 import { STTClient } from "../gpu/stt-client.ts";
 import type { GPUWorkerConfig as PoolWorkerConfig } from "../gpu/worker.ts";
 import { HAManager } from "../home-automation/manager.ts";
-import { registerFeedbackHandlers } from "../feedback/gateway-handlers.ts";
-import { type MetricsWiringHandle, wireMetrics } from "../metrics/wiring.ts";
-import type { Logger } from "../logging/logger.ts";
+import { wireMetrics } from "../metrics/wiring.ts";
 import { buildCoreRpcWiringStep } from "./core-rpc-wiring.ts";
 import type { InitializedModules } from "./types.ts";
 

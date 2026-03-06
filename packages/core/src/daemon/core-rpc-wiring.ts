@@ -8,7 +8,6 @@
 import type { GatewayMethod } from "@eidolon/protocol";
 import type { CoreRpcDeps } from "../gateway/rpc-handlers.ts";
 import { createCoreRpcHandlers } from "../gateway/rpc-handlers.ts";
-import type { Logger } from "../logging/logger.ts";
 import type { InitializedModules } from "./types.ts";
 
 /**
@@ -16,23 +15,21 @@ import type { InitializedModules } from "./types.ts";
  * Should run after GatewayServer is initialized (step 19) and after
  * memory/health modules are available.
  */
-export function buildCoreRpcWiringStep(
-  modules: InitializedModules,
-): { name: string; fn: () => void } {
+export function buildCoreRpcWiringStep(modules: InitializedModules): { name: string; fn: () => void } {
   return {
     name: "GatewayCoreRpcWiring",
     fn: () => {
       const gateway = modules.gatewayServer;
       const logger = modules.logger;
 
-      if (!gateway || !logger) {
-        logger?.debug("daemon", "Core RPC wiring skipped: missing gateway or logger");
+      if (!gateway || !logger || !modules.eventBus) {
+        logger?.debug("daemon", "Core RPC wiring skipped: missing gateway, logger, or eventBus");
         return;
       }
 
       const deps: CoreRpcDeps = {
         logger,
-        eventBus: modules.eventBus!,
+        eventBus: modules.eventBus,
         operationalDb: modules.dbManager?.operational,
         memorySearch: modules.memorySearch,
         memoryStore: modules.memoryStore,

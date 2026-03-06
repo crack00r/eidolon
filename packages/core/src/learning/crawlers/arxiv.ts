@@ -5,9 +5,9 @@
  * Rate limit: arXiv asks for max 1 request per 3 seconds.
  */
 
+import type { Logger } from "../../logging/logger.ts";
 import type { SourceType } from "../discovery.ts";
 import { BaseCrawler, type CrawledItem, type CrawlerSourceConfig, type CrawlOptions } from "./base.ts";
-import type { Logger } from "../../logging/logger.ts";
 
 /** Default number of results. */
 const DEFAULT_LIMIT = 15;
@@ -20,13 +20,13 @@ export class ArxivCrawler extends BaseCrawler {
     super(logger.child("crawler:arxiv"), 3000);
   }
 
-  protected async crawlSource(
-    config: CrawlerSourceConfig,
-    options: CrawlOptions,
-  ): Promise<CrawledItem[]> {
-    const query = String(config.config["query"] ?? "");
-    const categories = String(config.config["categories"] ?? "").split(",").map((s) => s.trim()).filter(Boolean);
-    const limit = options.maxItems ?? Number(config.config["limit"] ?? DEFAULT_LIMIT);
+  protected async crawlSource(config: CrawlerSourceConfig, options: CrawlOptions): Promise<CrawledItem[]> {
+    const query = String(config.config.query ?? "");
+    const categories = String(config.config.categories ?? "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const limit = options.maxItems ?? Number(config.config.limit ?? DEFAULT_LIMIT);
 
     if (!query && categories.length === 0) {
       this.logger.warn("crawlSource", "No query or categories configured, skipping arXiv crawl");
@@ -107,20 +107,24 @@ function extractAuthors(entry: string): string[] {
   const authorMatches = entry.match(/<author>\s*<name>([^<]+)<\/name>\s*<\/author>/gi);
   if (!authorMatches) return [];
 
-  return authorMatches.map((m) => {
-    const nameMatch = m.match(/<name>([^<]+)<\/name>/i);
-    return nameMatch?.[1]?.trim() ?? "";
-  }).filter(Boolean);
+  return authorMatches
+    .map((m) => {
+      const nameMatch = m.match(/<name>([^<]+)<\/name>/i);
+      return nameMatch?.[1]?.trim() ?? "";
+    })
+    .filter(Boolean);
 }
 
 function extractCategories(entry: string): string[] {
   const catMatches = entry.match(/term="([^"]+)"/gi);
   if (!catMatches) return [];
 
-  return catMatches.map((m) => {
-    const termMatch = m.match(/term="([^"]+)"/i);
-    return termMatch?.[1] ?? "";
-  }).filter(Boolean);
+  return catMatches
+    .map((m) => {
+      const termMatch = m.match(/term="([^"]+)"/i);
+      return termMatch?.[1] ?? "";
+    })
+    .filter(Boolean);
 }
 
 function buildArxivContent(opts: {
@@ -132,9 +136,10 @@ function buildArxivContent(opts: {
   const parts: string[] = [];
 
   if (opts.authors.length > 0) {
-    const authorList = opts.authors.length > 5
-      ? opts.authors.slice(0, 5).join(", ") + ` et al. (${opts.authors.length} authors)`
-      : opts.authors.join(", ");
+    const authorList =
+      opts.authors.length > 5
+        ? `${opts.authors.slice(0, 5).join(", ")} et al. (${opts.authors.length} authors)`
+        : opts.authors.join(", ");
     parts.push(`Authors: ${authorList}`);
   }
 
@@ -147,9 +152,7 @@ function buildArxivContent(opts: {
   }
 
   if (opts.summary) {
-    const truncated = opts.summary.length > 3000
-      ? opts.summary.slice(0, 3000) + "..."
-      : opts.summary;
+    const truncated = opts.summary.length > 3000 ? `${opts.summary.slice(0, 3000)}...` : opts.summary;
     parts.push("", truncated);
   }
 

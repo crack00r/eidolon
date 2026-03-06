@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import type { BrainConfig, LLMConfig } from "@eidolon/protocol";
 import { FakeLLMProvider } from "@eidolon/test-utils";
-import type { Logger } from "../../logging/logger.ts";
 import { ModelRouter } from "../../llm/router.ts";
+import type { Logger } from "../../logging/logger.ts";
 import { handleOpenAIRequest, type OpenAICompatDeps } from "../openai-compat.ts";
 
 // ---------------------------------------------------------------------------

@@ -97,24 +97,17 @@ function createAuditDb(): Database {
 }
 
 /** Insert a session into the operational DB. */
-function insertSession(
-  db: Database,
-  id: string,
-  status: string,
-  startedAt: number,
-): void {
-  db.query(
-    "INSERT INTO sessions (id, type, status, started_at, last_activity_at) VALUES (?, 'task', ?, ?, ?)",
-  ).run(id, status, startedAt, startedAt);
+function insertSession(db: Database, id: string, status: string, startedAt: number): void {
+  db.query("INSERT INTO sessions (id, type, status, started_at, last_activity_at) VALUES (?, 'task', ?, ?, ?)").run(
+    id,
+    status,
+    startedAt,
+    startedAt,
+  );
 }
 
 /** Insert a processed event into the operational DB. */
-function insertEvent(
-  db: Database,
-  id: string,
-  timestamp: number,
-  processedAt: number | null,
-): void {
+function insertEvent(db: Database, id: string, timestamp: number, processedAt: number | null): void {
   db.query(
     "INSERT INTO events (id, type, priority, payload, source, timestamp, processed_at) VALUES (?, 'user:message', 'normal', '{}', 'test', ?, ?)",
   ).run(id, timestamp, processedAt);
@@ -128,12 +121,7 @@ function insertTokenUsage(db: Database, sessionId: string, timestamp: number): v
 }
 
 /** Insert a discovery record. */
-function insertDiscovery(
-  db: Database,
-  id: string,
-  status: string,
-  createdAt: number,
-): void {
+function insertDiscovery(db: Database, id: string, status: string, createdAt: number): void {
   db.query(
     "INSERT INTO discoveries (id, source_type, url, title, content, relevance_score, safety_level, status, created_at) VALUES (?, 'reddit', ?, 'test', 'content', 0.8, 'safe', ?, ?)",
   ).run(id, `https://example.com/${id}`, status, createdAt);

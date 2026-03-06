@@ -9,14 +9,7 @@
  * 6. Graceful degradation: all LLM steps are skipped if no provider is available.
  */
 
-import type {
-  EidolonError,
-  ILLMProvider,
-  IModelRouter,
-  KGCommunity,
-  Memory,
-  Result,
-} from "@eidolon/protocol";
+import type { EidolonError, ILLMProvider, IModelRouter, KGCommunity, Memory, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 import type { Logger } from "../../logging/logger.ts";
 import type { CommunityDetector } from "../knowledge-graph/communities.ts";
@@ -198,9 +191,7 @@ export class NremPhase {
    * Summarize each detected community using the LLM router.
    * Falls back to the CommunityDetector's built-in text summary if LLM unavailable.
    */
-  private async summarizeCommunities(
-    communities: readonly KGCommunity[],
-  ): Promise<{ count: number; tokens: number }> {
+  private async summarizeCommunities(communities: readonly KGCommunity[]): Promise<{ count: number; tokens: number }> {
     if (communities.length === 0) return { count: 0, tokens: 0 };
 
     const provider = await this.resolveProvider();
@@ -411,9 +402,7 @@ export class NremPhase {
         limit: 100,
       });
       if (existingSkills.ok) {
-        const alreadyExists = existingSkills.value.some(
-          (s) => s.tags.some((t) => tagKey.split(",").includes(t)),
-        );
+        const alreadyExists = existingSkills.value.some((s) => s.tags.some((t) => tagKey.split(",").includes(t)));
         if (alreadyExists) continue;
       }
 
@@ -443,7 +432,10 @@ export class NremPhase {
             content: skillContent,
             confidence: 0.75,
             source: "dreaming:nrem",
-            tags: tagKey.split(",").map((t) => t.trim()).filter((t) => t.length > 0),
+            tags: tagKey
+              .split(",")
+              .map((t) => t.trim())
+              .filter((t) => t.length > 0),
           });
 
           if (createResult.ok) {
@@ -542,7 +534,10 @@ function buildCommunitySummaryPrompt(communityName: string, structuralSummary: s
 }
 
 function buildRuleAbstractionPrompt(type: string, contents: readonly string[]): string {
-  const numbered = contents.slice(0, 10).map((c, i) => `${i + 1}. ${c}`).join("\n");
+  const numbered = contents
+    .slice(0, 10)
+    .map((c, i) => `${i + 1}. ${c}`)
+    .join("\n");
 
   return [
     `Given these ${contents.length} specific memories of type "${type}",`,
@@ -557,7 +552,10 @@ function buildRuleAbstractionPrompt(type: string, contents: readonly string[]): 
 }
 
 function buildSkillExtractionPrompt(tags: readonly string[], contents: readonly string[]): string {
-  const numbered = contents.slice(0, 8).map((c, i) => `${i + 1}. ${c}`).join("\n");
+  const numbered = contents
+    .slice(0, 8)
+    .map((c, i) => `${i + 1}. ${c}`)
+    .join("\n");
 
   return [
     `These ${contents.length} memories share the tags [${tags.join(", ")}]`,

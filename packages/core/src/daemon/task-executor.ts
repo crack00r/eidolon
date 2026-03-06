@@ -11,8 +11,8 @@
 
 import { randomUUID } from "node:crypto";
 import { loadWorkspaceTemplates } from "../claude/templates.ts";
-import type { EventHandlerResult } from "../loop/cognitive-loop.ts";
 import type { Logger } from "../logging/logger.ts";
+import type { EventHandlerResult } from "../loop/cognitive-loop.ts";
 import type { InitializedModules } from "./types.ts";
 
 // ---------------------------------------------------------------------------
@@ -40,9 +40,7 @@ function parseTaskDuePayload(raw: unknown): TaskDuePayload | null {
   const taskName = typeof obj.taskName === "string" ? obj.taskName : "unknown";
   const action = typeof obj.action === "string" ? obj.action : "";
   const payload =
-    typeof obj.payload === "object" && obj.payload !== null
-      ? (obj.payload as Record<string, unknown>)
-      : {};
+    typeof obj.payload === "object" && obj.payload !== null ? (obj.payload as Record<string, unknown>) : {};
   if (!action) return null;
   return { taskId, taskName, action, payload };
 }
@@ -201,10 +199,7 @@ interface ClaudeTaskParams {
   readonly logger: Logger;
 }
 
-async function executeClaudeTask(
-  modules: InitializedModules,
-  params: ClaudeTaskParams,
-): Promise<EventHandlerResult> {
+async function executeClaudeTask(modules: InitializedModules, params: ClaudeTaskParams): Promise<EventHandlerResult> {
   const { sessionLabel, prompt, deliverTo, taskName, taskId, logger } = params;
   const config = modules.config;
   const claudeManager = modules.claudeManager;
@@ -275,7 +270,10 @@ async function executeClaudeTask(
   });
 
   if (!prepareResult.ok) {
-    logger.error("task-executor", `Workspace preparation failed for task "${taskName}": ${prepareResult.error.message}`);
+    logger.error(
+      "task-executor",
+      `Workspace preparation failed for task "${taskName}": ${prepareResult.error.message}`,
+    );
     return { success: false, tokensUsed: 0, error: prepareResult.error.message };
   }
 

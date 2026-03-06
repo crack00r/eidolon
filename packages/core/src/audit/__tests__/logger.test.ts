@@ -140,7 +140,7 @@ describe("AuditLogger", () => {
       const queryResult = logger.query({ limit: 1 });
       expect(queryResult.ok).toBe(true);
       if (!queryResult.ok) return;
-      expect(queryResult.value[0]!.metadata).toEqual(details);
+      expect(queryResult.value[0]?.metadata).toEqual(details);
     });
 
     test("uses provided timestamp when given", () => {
@@ -287,8 +287,8 @@ describe("AuditLogger", () => {
       if (!result.ok) return;
       expect(result.value).toHaveLength(3);
       // Default order is timestamp DESC
-      expect(result.value[0]!.actor).toBe("a3");
-      expect(result.value[2]!.actor).toBe("a1");
+      expect(result.value[0]?.actor).toBe("a3");
+      expect(result.value[2]?.actor).toBe("a1");
     });
 
     test("filters by actor", () => {
@@ -312,7 +312,7 @@ describe("AuditLogger", () => {
       expect(result.ok).toBe(true);
       if (!result.ok) return;
       expect(result.value).toHaveLength(1);
-      expect(result.value[0]!.action).toBe("file_write");
+      expect(result.value[0]?.action).toBe("file_write");
     });
 
     test("filters by target", () => {
@@ -323,7 +323,7 @@ describe("AuditLogger", () => {
       expect(result.ok).toBe(true);
       if (!result.ok) return;
       expect(result.value).toHaveLength(1);
-      expect(result.value[0]!.target).toBe("/etc/passwd");
+      expect(result.value[0]?.target).toBe("/etc/passwd");
     });
 
     test("filters by result", () => {
@@ -361,8 +361,8 @@ describe("AuditLogger", () => {
       expect(result.ok).toBe(true);
       if (!result.ok) return;
       expect(result.value).toHaveLength(1);
-      expect(result.value[0]!.actor).toBe("user:alice");
-      expect(result.value[0]!.result).toBe("denied");
+      expect(result.value[0]?.actor).toBe("user:alice");
+      expect(result.value[0]?.result).toBe("denied");
     });
 
     test("respects the limit parameter", () => {
@@ -420,8 +420,8 @@ describe("AuditLogger", () => {
       const result = logger.query();
       expect(result.ok).toBe(true);
       if (!result.ok) return;
-      expect(result.value[0]!.integrityHash).toBeTruthy();
-      expect(result.value[0]!.integrityHash).toHaveLength(64);
+      expect(result.value[0]?.integrityHash).toBeTruthy();
+      expect(result.value[0]?.integrityHash).toHaveLength(64);
     });
   });
 
@@ -462,12 +462,12 @@ describe("AuditLogger", () => {
       const queried = logger.query({ limit: 1 });
       expect(queried.ok).toBe(true);
       if (!queried.ok) return;
-      expect(queried.value[0]!.metadata).toEqual(details);
+      expect(queried.value[0]?.metadata).toEqual(details);
     });
 
     test("handles metadata with special characters", () => {
       const details = {
-        message: "O'Brien said \"hello\" & <goodbye>",
+        message: 'O\'Brien said "hello" & <goodbye>',
         path: "/tmp/file with spaces/test.txt",
         unicode: "Hallo Welt \u{1F600}",
       };
@@ -477,7 +477,7 @@ describe("AuditLogger", () => {
       const queried = logger.query({ limit: 1 });
       expect(queried.ok).toBe(true);
       if (!queried.ok) return;
-      expect(queried.value[0]!.metadata).toEqual(details);
+      expect(queried.value[0]?.metadata).toEqual(details);
     });
   });
 
@@ -553,7 +553,8 @@ describe("AuditLogger", () => {
       expect(queryResult.ok).toBe(true);
       if (!queryResult.ok) return;
 
-      const entry = queryResult.value[0]!;
+      const entry = queryResult.value[0];
+      if (!entry) return;
       expect(entry.id).toBeTruthy();
       expect(entry.timestamp).toBe(1700000000000);
       expect(entry.actor).toBe("learning:session-42");
@@ -579,9 +580,9 @@ describe("AuditLogger", () => {
       expect(result.ok).toBe(true);
       if (!result.ok) return;
 
-      expect(result.value[0]!.timestamp).toBe(3000);
-      expect(result.value[1]!.timestamp).toBe(2000);
-      expect(result.value[2]!.timestamp).toBe(1000);
+      expect(result.value[0]?.timestamp).toBe(3000);
+      expect(result.value[1]?.timestamp).toBe(2000);
+      expect(result.value[2]?.timestamp).toBe(1000);
     });
   });
 });

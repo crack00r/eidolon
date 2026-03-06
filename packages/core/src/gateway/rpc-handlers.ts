@@ -6,9 +6,9 @@
  * and return structured results.
  */
 
-import { randomUUID } from "node:crypto";
 import type { Database } from "bun:sqlite";
-import type { MemoryType, MemoryLayer } from "@eidolon/protocol";
+import { randomUUID } from "node:crypto";
+import type { MemoryLayer, MemoryType } from "@eidolon/protocol";
 import { z } from "zod";
 import type { HealthChecker } from "../health/checker.ts";
 import type { Logger } from "../logging/logger.ts";
@@ -106,9 +106,7 @@ export function createChatSendHandler(deps: CoreRpcDeps): MethodHandler {
   return async (params, clientId) => {
     const parsed = ChatSendParamsSchema.safeParse(params);
     if (!parsed.success) {
-      throw new RpcValidationError(
-        `Invalid chat.send params: ${parsed.error.issues.map((i) => i.message).join(", ")}`,
-      );
+      throw new RpcValidationError(`Invalid chat.send params: ${parsed.error.issues.map((i) => i.message).join(", ")}`);
     }
 
     const { text, channelId } = parsed.data;
@@ -269,7 +267,8 @@ export function createSessionListHandler(deps: CoreRpcDeps): MethodHandler {
     const status = parsed.data.status ?? "all";
     const limit = parsed.data.limit ?? 50;
 
-    let sql = "SELECT id, type, status, claude_session_id, started_at, last_activity_at, completed_at, tokens_used, cost_usd, metadata FROM sessions";
+    let sql =
+      "SELECT id, type, status, claude_session_id, started_at, last_activity_at, completed_at, tokens_used, cost_usd, metadata FROM sessions";
     const queryParams: Array<string | number> = [];
 
     if (status !== "all") {
@@ -362,7 +361,8 @@ export function createLearningListHandler(deps: CoreRpcDeps): MethodHandler {
     const status = parsed.data.status ?? "all";
     const limit = parsed.data.limit ?? 50;
 
-    let sql = "SELECT id, source_type, url, title, content, relevance_score, safety_level, status, implementation_branch, created_at, evaluated_at, implemented_at FROM discoveries";
+    let sql =
+      "SELECT id, source_type, url, title, content, relevance_score, safety_level, status, implementation_branch, created_at, evaluated_at, implemented_at FROM discoveries";
     const queryParams: Array<string | number> = [];
 
     if (status !== "all") {
@@ -423,7 +423,9 @@ export function createLearningApproveHandler(deps: CoreRpcDeps): MethodHandler {
     }
 
     if (row.status !== "new" && row.status !== "evaluated") {
-      throw new RpcValidationError(`Discovery ${discoveryId} cannot be approved (current status: ${String(row.status)})`);
+      throw new RpcValidationError(
+        `Discovery ${discoveryId} cannot be approved (current status: ${String(row.status)})`,
+      );
     }
 
     // Update status
@@ -464,16 +466,19 @@ export function createLearningRejectHandler(deps: CoreRpcDeps): MethodHandler {
     const { discoveryId, reason } = parsed.data;
 
     // Check discovery exists
-    const row = deps.operationalDb
-      .query("SELECT id, status FROM discoveries WHERE id = ?")
-      .get(discoveryId) as Record<string, unknown> | null;
+    const row = deps.operationalDb.query("SELECT id, status FROM discoveries WHERE id = ?").get(discoveryId) as Record<
+      string,
+      unknown
+    > | null;
 
     if (!row) {
       throw new RpcValidationError(`Discovery not found: ${discoveryId}`);
     }
 
     if (row.status !== "new" && row.status !== "evaluated") {
-      throw new RpcValidationError(`Discovery ${discoveryId} cannot be rejected (current status: ${String(row.status)})`);
+      throw new RpcValidationError(
+        `Discovery ${discoveryId} cannot be rejected (current status: ${String(row.status)})`,
+      );
     }
 
     deps.operationalDb

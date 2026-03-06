@@ -15,8 +15,8 @@
 import { randomUUID } from "node:crypto";
 import type { BrainConfig, ILLMProvider, LLMMessage } from "@eidolon/protocol";
 import { z } from "zod";
-import type { Logger } from "../logging/logger.ts";
 import type { ModelRouter } from "../llm/router.ts";
+import type { Logger } from "../logging/logger.ts";
 
 // ---------------------------------------------------------------------------
 // Zod schemas for OpenAI request validation
@@ -207,7 +207,7 @@ function buildModelList(brainConfig?: BrainConfig, router?: ModelRouter): OpenAI
 // ---------------------------------------------------------------------------
 
 /** Find the first available provider from the router for a conversation task. */
-async function findProvider(router: ModelRouter | undefined, log: Logger): Promise<ILLMProvider | undefined> {
+async function findProvider(router: ModelRouter | undefined, _log: Logger): Promise<ILLMProvider | undefined> {
   if (!router) return undefined;
   return router.selectProvider({ type: "conversation" });
 }
@@ -229,7 +229,7 @@ async function executeCompletion(
       maxTokens: request.max_tokens,
     });
 
-    const finishReason = result.finishReason === "max_tokens" ? "length" as const : "stop" as const;
+    const finishReason = result.finishReason === "max_tokens" ? ("length" as const) : ("stop" as const);
 
     const response: OpenAIChatCompletionResponse = {
       id: `chatcmpl-${randomUUID()}`,
@@ -269,7 +269,7 @@ function executeStreamingCompletion(
   const stream = new ReadableStream({
     async start(controller): Promise<void> {
       try {
-        let totalText = "";
+        let _totalText = "";
         const streamIter = provider.stream(toLLMMessages(request.messages), {
           model: resolvedModel,
           temperature: request.temperature,
@@ -278,7 +278,7 @@ function executeStreamingCompletion(
 
         for await (const event of streamIter) {
           if (event.type === "text" && event.text) {
-            totalText += event.text;
+            _totalText += event.text;
             const chunk = {
               id: completionId,
               object: "chat.completion.chunk",

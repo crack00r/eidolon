@@ -6,9 +6,9 @@
  */
 
 import { z } from "zod";
+import type { Logger } from "../../logging/logger.ts";
 import type { SourceType } from "../discovery.ts";
 import { BaseCrawler, type CrawledItem, type CrawlerSourceConfig, type CrawlOptions } from "./base.ts";
-import type { Logger } from "../../logging/logger.ts";
 
 /** Zod schema for GitHub search API response. */
 const GitHubSearchSchema = z.object({
@@ -42,14 +42,17 @@ export class GitHubCrawler extends BaseCrawler {
     super(logger.child("crawler:github"), 6000);
   }
 
-  protected async crawlSource(
-    config: CrawlerSourceConfig,
-    options: CrawlOptions,
-  ): Promise<CrawledItem[]> {
-    const topics = String(config.config["topics"] ?? "").split(",").map((s) => s.trim()).filter(Boolean);
-    const languages = String(config.config["languages"] ?? "").split(",").map((s) => s.trim()).filter(Boolean);
-    const minStars = options.minScore ?? Number(config.config["minStars"] ?? DEFAULT_MIN_STARS);
-    const limit = options.maxItems ?? Number(config.config["limit"] ?? DEFAULT_LIMIT);
+  protected async crawlSource(config: CrawlerSourceConfig, options: CrawlOptions): Promise<CrawledItem[]> {
+    const topics = String(config.config.topics ?? "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const languages = String(config.config.languages ?? "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const minStars = options.minScore ?? Number(config.config.minStars ?? DEFAULT_MIN_STARS);
+    const limit = options.maxItems ?? Number(config.config.limit ?? DEFAULT_LIMIT);
 
     // Build search query
     const queryParts: string[] = [];

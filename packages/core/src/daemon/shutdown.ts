@@ -163,10 +163,7 @@ export async function performShutdown(
 // Public: teardown modules in reverse initialization order
 // ---------------------------------------------------------------------------
 
-export async function teardownModules(
-  modules: InitializedModules,
-  logger: Logger | undefined,
-): Promise<void> {
+export async function teardownModules(modules: InitializedModules, logger: Logger | undefined): Promise<void> {
   // Teardown in reverse initialization order.
   // Each step is wrapped in try/catch so a failure in one does not
   // prevent the remaining modules from being cleaned up.

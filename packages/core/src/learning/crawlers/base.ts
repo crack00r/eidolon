@@ -55,18 +55,12 @@ export abstract class BaseCrawler {
   abstract readonly sourceType: SourceType;
 
   /** Subclass-specific crawling logic. */
-  protected abstract crawlSource(
-    config: CrawlerSourceConfig,
-    options: CrawlOptions,
-  ): Promise<CrawledItem[]>;
+  protected abstract crawlSource(config: CrawlerSourceConfig, options: CrawlOptions): Promise<CrawledItem[]>;
 
   /**
    * Execute a crawl with rate limiting, sanitization, and error handling.
    */
-  async crawl(
-    config: CrawlerSourceConfig,
-    options: CrawlOptions = {},
-  ): Promise<Result<CrawledItem[], EidolonError>> {
+  async crawl(config: CrawlerSourceConfig, options: CrawlOptions = {}): Promise<Result<CrawledItem[], EidolonError>> {
     try {
       const items = await this.crawlSource(config, options);
 
@@ -86,19 +80,14 @@ export abstract class BaseCrawler {
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : String(cause);
       this.logger.error("crawl", `Crawl failed for ${config.type}: ${message}`, cause);
-      return Err(
-        createError(ErrorCode.DISCOVERY_FAILED, `Crawl failed for ${config.type}: ${message}`, cause),
-      );
+      return Err(createError(ErrorCode.DISCOVERY_FAILED, `Crawl failed for ${config.type}: ${message}`, cause));
     }
   }
 
   /**
    * Rate-limited fetch wrapper. Waits if called too quickly.
    */
-  protected async rateLimitedFetch(
-    url: string,
-    init?: RequestInit,
-  ): Promise<Response> {
+  protected async rateLimitedFetch(url: string, init?: RequestInit): Promise<Response> {
     const now = Date.now();
     const elapsed = now - this.lastRequestAt;
     if (elapsed < this.minIntervalMs) {

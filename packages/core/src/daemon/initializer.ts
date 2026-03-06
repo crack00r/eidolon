@@ -15,7 +15,6 @@ import { WorkspacePreparer } from "../claude/workspace.ts";
 import { loadConfig } from "../config/loader.ts";
 import { getCacheDir, getConfigPath, getDataDir } from "../config/paths.ts";
 import { ConfigWatcher } from "../config/watcher.ts";
-import { buildConfigReloadHandler } from "./config-reload.ts";
 import { DatabaseManager } from "../database/manager.ts";
 import { DigestBuilder } from "../digest/builder.ts";
 import { subscribeFeedbackConfidenceAdjustment } from "../feedback/confidence.ts";
@@ -63,12 +62,13 @@ import { PluginRegistry } from "../plugins/registry.ts";
 import type { SandboxDeps } from "../plugins/sandbox.ts";
 import { ResearchEngine } from "../research/engine.ts";
 import { AutomationEngine } from "../scheduler/automation.ts";
-import { ApprovalManager } from "../security/approval-manager.ts";
 import { TaskScheduler } from "../scheduler/scheduler.ts";
 import { getMasterKey } from "../secrets/master-key.ts";
 import { SecretStore } from "../secrets/store.ts";
+import { ApprovalManager } from "../security/approval-manager.ts";
 import { createMetricsBridge } from "../telemetry/metrics-bridge.ts";
 import { initTelemetry } from "../telemetry/provider.ts";
+import { buildConfigReloadHandler } from "./config-reload.ts";
 import { buildEventHandler } from "./event-handlers.ts";
 import { ensureDir } from "./lifecycle.ts";
 import type { DaemonOptions, InitializedModules } from "./types.ts";
@@ -390,11 +390,7 @@ export function buildCoreInitSteps(
       // confidence scores. The subscription returns an unsubscribe function
       // stored for teardown.
       if (eventBus) {
-        modules.feedbackConfidenceUnsub = subscribeFeedbackConfidenceAdjustment(
-          eventBus,
-          dbManager.memory,
-          logger,
-        );
+        modules.feedbackConfidenceUnsub = subscribeFeedbackConfidenceAdjustment(eventBus, dbManager.memory, logger);
         logger.info("daemon", "Feedback confidence adjustment wired to EventBus");
       }
     },
@@ -556,11 +552,7 @@ export function buildCoreInitSteps(
         return;
       }
       try {
-        modules.profileGenerator = new UserProfileGenerator(
-          dbManager.memory,
-          logger,
-          config.identity.ownerName,
-        );
+        modules.profileGenerator = new UserProfileGenerator(dbManager.memory, logger, config.identity.ownerName);
         logger.info("daemon", `UserProfileGenerator initialized for ${config.identity.ownerName}`);
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);
@@ -730,13 +722,7 @@ export function buildCoreInitSteps(
           messageRouter: modules.messageRouter,
         };
 
-        const lifecycle = new PluginLifecycleManager(
-          registry,
-          config.plugins,
-          sandboxDeps,
-          logger,
-          modules.eventBus,
-        );
+        const lifecycle = new PluginLifecycleManager(registry, config.plugins, sandboxDeps, logger, modules.eventBus);
         modules.pluginLifecycle = lifecycle;
 
         await lifecycle.initAll(loaded);
@@ -845,11 +831,7 @@ export function buildCoreInitSteps(
       // 16e. TaskScheduler + AutomationEngine
       if (dbManager) {
         modules.taskScheduler = new TaskScheduler(dbManager.operational, logger);
-        modules.automationEngine = new AutomationEngine(
-          modules.taskScheduler,
-          dbManager.operational,
-          logger,
-        );
+        modules.automationEngine = new AutomationEngine(modules.taskScheduler, dbManager.operational, logger);
         logger.info("daemon", "TaskScheduler and AutomationEngine initialized");
 
         // Wire scheduler to emit task events via EventBus.
@@ -959,8 +941,11 @@ export function buildCoreInitSteps(
           { contextProviders },
           modules.communityDetector ?? null,
         );
-        logger.info("daemon", "MemoryInjector initialized (KG: entities=%s, relations=%s, communities=%s)",
-          { entities: !!modules.kgEntityStore, relations: !!modules.kgRelationStore, communities: !!modules.communityDetector });
+        logger.info("daemon", "MemoryInjector initialized (KG: entities=%s, relations=%s, communities=%s)", {
+          entities: !!modules.kgEntityStore,
+          relations: !!modules.kgRelationStore,
+          communities: !!modules.communityDetector,
+        });
       } else {
         logger.warn("daemon", "MemoryInjector skipped: MemoryStore or MemorySearch not available");
       }

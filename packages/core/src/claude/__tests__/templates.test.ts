@@ -1,12 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
-import {
-  findTemplatesDir,
-  interpolateTemplate,
-  loadWorkspaceTemplates,
-} from "../templates.ts";
 import type { TemplateVariables } from "../templates.ts";
+import { findTemplatesDir, interpolateTemplate, loadWorkspaceTemplates } from "../templates.ts";
 
 const TEST_TEMPLATES_DIR = join(import.meta.dir, ".tmp-templates-test");
 
@@ -95,14 +91,8 @@ describe("loadWorkspaceTemplates", () => {
   });
 
   test("loads and interpolates CLAUDE.md and SOUL.md", async () => {
-    await Bun.write(
-      join(TEST_TEMPLATES_DIR, "CLAUDE.md"),
-      "Assistant for {{ownerName}}. Channel: {{channelId}}.",
-    );
-    await Bun.write(
-      join(TEST_TEMPLATES_DIR, "SOUL.md"),
-      "You serve {{ownerName}} with care.",
-    );
+    await Bun.write(join(TEST_TEMPLATES_DIR, "CLAUDE.md"), "Assistant for {{ownerName}}. Channel: {{channelId}}.");
+    await Bun.write(join(TEST_TEMPLATES_DIR, "SOUL.md"), "You serve {{ownerName}} with care.");
 
     const result = await loadWorkspaceTemplates(SAMPLE_VARIABLES, TEST_TEMPLATES_DIR);
     expect(result.ok).toBe(true);
@@ -113,10 +103,7 @@ describe("loadWorkspaceTemplates", () => {
   });
 
   test("works when SOUL.md is missing", async () => {
-    await Bun.write(
-      join(TEST_TEMPLATES_DIR, "CLAUDE.md"),
-      "Just CLAUDE for {{ownerName}}.",
-    );
+    await Bun.write(join(TEST_TEMPLATES_DIR, "CLAUDE.md"), "Just CLAUDE for {{ownerName}}.");
 
     const result = await loadWorkspaceTemplates(SAMPLE_VARIABLES, TEST_TEMPLATES_DIR);
     expect(result.ok).toBe(true);
@@ -127,10 +114,7 @@ describe("loadWorkspaceTemplates", () => {
   });
 
   test("returns error when templates dir not found", async () => {
-    const result = await loadWorkspaceTemplates(
-      SAMPLE_VARIABLES,
-      "/nonexistent/path/to/templates",
-    );
+    const result = await loadWorkspaceTemplates(SAMPLE_VARIABLES, "/nonexistent/path/to/templates");
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.error.code).toBe("CONFIG_NOT_FOUND");

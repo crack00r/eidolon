@@ -7,9 +7,9 @@
  */
 
 import { z } from "zod";
+import type { Logger } from "../../logging/logger.ts";
 import type { SourceType } from "../discovery.ts";
 import { BaseCrawler, type CrawledItem, type CrawlerSourceConfig, type CrawlOptions } from "./base.ts";
-import type { Logger } from "../../logging/logger.ts";
 
 /** Zod schema for validating Reddit API response shape. */
 const RedditListingSchema = z.object({
@@ -46,20 +46,20 @@ export class RedditCrawler extends BaseCrawler {
     super(logger.child("crawler:reddit"), 2000);
   }
 
-  protected async crawlSource(
-    config: CrawlerSourceConfig,
-    options: CrawlOptions,
-  ): Promise<CrawledItem[]> {
-    const subredditsRaw = String(config.config["subreddits"] ?? "");
+  protected async crawlSource(config: CrawlerSourceConfig, options: CrawlOptions): Promise<CrawledItem[]> {
+    const subredditsRaw = String(config.config.subreddits ?? "");
     if (!subredditsRaw) {
       this.logger.warn("crawlSource", "No subreddits configured, skipping Reddit crawl");
       return [];
     }
 
-    const subreddits = subredditsRaw.split(",").map((s) => s.trim()).filter(Boolean);
+    const subreddits = subredditsRaw
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
     const limit = options.maxItems ?? DEFAULT_LIMIT;
-    const minScore = options.minScore ?? Number(config.config["minScore"] ?? DEFAULT_MIN_SCORE);
-    const sortBy = String(config.config["sortBy"] ?? "hot");
+    const minScore = options.minScore ?? Number(config.config.minScore ?? DEFAULT_MIN_SCORE);
+    const sortBy = String(config.config.sortBy ?? "hot");
 
     const items: CrawledItem[] = [];
 
@@ -100,9 +100,7 @@ export class RedditCrawler extends BaseCrawler {
         continue;
       }
 
-      const postUrl = post.is_self
-        ? `https://www.reddit.com${post.permalink}`
-        : post.url;
+      const postUrl = post.is_self ? `https://www.reddit.com${post.permalink}` : post.url;
 
       const content = buildRedditContent(post);
 
@@ -126,16 +124,11 @@ function buildRedditContent(post: {
   num_comments: number;
   subreddit: string;
 }): string {
-  const parts: string[] = [
-    `Subreddit: r/${post.subreddit}`,
-    `Score: ${post.score} | Comments: ${post.num_comments}`,
-  ];
+  const parts: string[] = [`Subreddit: r/${post.subreddit}`, `Score: ${post.score} | Comments: ${post.num_comments}`];
 
   if (post.selftext) {
     // Truncate very long self-posts
-    const text = post.selftext.length > 5000
-      ? post.selftext.slice(0, 5000) + "..."
-      : post.selftext;
+    const text = post.selftext.length > 5000 ? `${post.selftext.slice(0, 5000)}...` : post.selftext;
     parts.push("", text);
   }
 
