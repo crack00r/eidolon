@@ -176,7 +176,7 @@ describe("FeedbackStore", () => {
       expect(result.ok).toBe(true);
       if (!result.ok) return;
       expect(result.value.comment).toBeTruthy();
-      expect(result.value.comment!.length).toBe(2000);
+      expect(result.value.comment?.length).toBe(2000);
     });
   });
 
@@ -199,7 +199,7 @@ describe("FeedbackStore", () => {
       expect(getResult.ok).toBe(true);
       if (!getResult.ok) return;
       expect(getResult.value).not.toBeNull();
-      expect(getResult.value!.rating).toBe(4);
+      expect(getResult.value?.rating).toBe(4);
     });
 
     test("returns null for non-existent id", () => {
@@ -227,7 +227,7 @@ describe("FeedbackStore", () => {
       if (!result.ok) return;
       expect(result.value.length).toBe(3);
       // Most recent first
-      expect(result.value[0]!.rating).toBe(1); // sess-2, created last
+      expect(result.value[0]?.rating).toBe(1); // sess-2, created last
     });
 
     test("filters by sessionId", () => {
@@ -239,7 +239,7 @@ describe("FeedbackStore", () => {
       expect(result.ok).toBe(true);
       if (!result.ok) return;
       expect(result.value.length).toBe(1);
-      expect(result.value[0]!.sessionId).toBe("sess-1");
+      expect(result.value[0]?.sessionId).toBe("sess-1");
     });
 
     test("respects limit parameter", () => {

@@ -203,9 +203,7 @@ describe("OTelTracer", () => {
       },
     };
 
-    const tracer = new OTelTracer(
-      mockTracer as unknown as import("@opentelemetry/api").Tracer,
-    );
+    const tracer = new OTelTracer(mockTracer as unknown as import("@opentelemetry/api").Tracer);
     return { tracer, spans };
   }
 

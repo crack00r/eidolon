@@ -68,7 +68,7 @@ export interface ImapConfig {
 // ---------------------------------------------------------------------------
 
 /** Extract the text between the first `(` and its matching `)` in an IMAP line. */
-function extractParenthesised(line: string): string | undefined {
+function _extractParenthesised(line: string): string | undefined {
   const start = line.indexOf("(");
   if (start === -1) return undefined;
   const end = line.lastIndexOf(")");
@@ -156,7 +156,7 @@ export class BunImapClient implements IImapClient {
 
   async connect(): Promise<Result<void, EidolonError>> {
     try {
-      const responseBuffer: string[] = [];
+      const _responseBuffer: string[] = [];
       let onGreeting: (() => void) | null = null;
       const greetingPromise = new Promise<void>((resolve) => {
         onGreeting = resolve;
@@ -207,7 +207,9 @@ export class BunImapClient implements IImapClient {
       await greetingPromise;
 
       // LOGIN
-      const loginResult = await this.sendCommand(`LOGIN "${this.escapeImapStr(this.config.user)}" "${this.escapeImapStr(this.config.password)}"`);
+      const loginResult = await this.sendCommand(
+        `LOGIN "${this.escapeImapStr(this.config.user)}" "${this.escapeImapStr(this.config.password)}"`,
+      );
       if (!loginResult.includes(" OK")) {
         socket.end();
         return Err(createError("CHANNEL_AUTH_FAILED" as EidolonError["code"], `IMAP LOGIN failed: ${loginResult}`));

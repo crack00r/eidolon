@@ -137,7 +137,7 @@ describe("ApprovalManager", () => {
         status: string;
       } | null;
       expect(row).not.toBeNull();
-      expect(row!.status).toBe("pending");
+      expect(row?.status).toBe("pending");
     });
 
     test("emits approval:requested event", () => {
@@ -292,8 +292,8 @@ describe("ApprovalManager", () => {
       const updated = manager.getById(req.value.id);
       expect(updated.ok).toBe(true);
       if (!updated.ok) return;
-      expect(updated.value!.status).toBe("timeout");
-      expect(updated.value!.respondedBy).toBe("auto:denied");
+      expect(updated.value?.status).toBe("timeout");
+      expect(updated.value?.respondedBy).toBe("auto:denied");
     });
 
     test("auto-approves timed-out safe requests with allow policy", () => {
@@ -316,8 +316,8 @@ describe("ApprovalManager", () => {
       const updated = manager.getById(req.value.id);
       expect(updated.ok).toBe(true);
       if (!updated.ok) return;
-      expect(updated.value!.status).toBe("timeout");
-      expect(updated.value!.respondedBy).toBe("auto:approved");
+      expect(updated.value?.status).toBe("timeout");
+      expect(updated.value?.respondedBy).toBe("auto:approved");
     });
 
     test("never auto-approves dangerous actions even with allow policy", () => {
@@ -339,9 +339,9 @@ describe("ApprovalManager", () => {
       const updated = manager.getById(req.value.id);
       expect(updated.ok).toBe(true);
       if (!updated.ok) return;
-      expect(updated.value!.status).toBe("timeout");
+      expect(updated.value?.status).toBe("timeout");
       // Should be auto:denied despite allow policy because action is dangerous
-      expect(updated.value!.respondedBy).toBe("auto:denied");
+      expect(updated.value?.respondedBy).toBe("auto:denied");
     });
 
     test("does not process requests that have not timed out", () => {
@@ -413,15 +413,15 @@ describe("ApprovalManager", () => {
       const original = manager.getById(req.value.id);
       expect(original.ok).toBe(true);
       if (!original.ok) return;
-      expect(original.value!.status).toBe("escalated");
+      expect(original.value?.status).toBe("escalated");
 
       // New request should exist at escalation level 1 with new channel
       const pending = manager.list({ status: "pending" });
       expect(pending.ok).toBe(true);
       if (!pending.ok) return;
       expect(pending.value.length).toBe(1);
-      expect(pending.value[0]!.channel).toBe("desktop");
-      expect(pending.value[0]!.escalationLevel).toBe(1);
+      expect(pending.value[0]?.channel).toBe("desktop");
+      expect(pending.value[0]?.escalationLevel).toBe(1);
     });
 
     test("emits approval:escalated event", () => {
@@ -473,6 +473,7 @@ describe("ApprovalManager", () => {
       expect(pending.ok).toBe(true);
       if (!pending.ok) return;
       expect(pending.value.length).toBe(1);
+      // biome-ignore lint/style/noNonNullAssertion: test assertion
       const escalatedReq = pending.value[0]!;
       expect(escalatedReq.escalationLevel).toBe(1);
 
@@ -486,8 +487,8 @@ describe("ApprovalManager", () => {
       const resolved = manager.getById(escalatedReq.id);
       expect(resolved.ok).toBe(true);
       if (!resolved.ok) return;
-      expect(resolved.value!.status).toBe("denied");
-      expect(resolved.value!.respondedBy).toContain("max_escalation");
+      expect(resolved.value?.status).toBe("denied");
+      expect(resolved.value?.respondedBy).toContain("max_escalation");
     });
   });
 

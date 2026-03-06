@@ -1,12 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { NoopTracer } from "../tracer.ts";
 import {
-  TRACEPARENT_HEADER,
-  TRACESTATE_HEADER,
   extractTraceContext,
   injectTraceContext,
   isValidTraceparent,
+  TRACEPARENT_HEADER,
+  TRACESTATE_HEADER,
 } from "../propagation.ts";
+import { NoopTracer } from "../tracer.ts";
 
 describe("propagation constants", () => {
   test("TRACEPARENT_HEADER is correct", () => {
@@ -59,15 +59,11 @@ describe("extractTraceContext", () => {
 
 describe("isValidTraceparent", () => {
   test("accepts valid traceparent", () => {
-    expect(isValidTraceparent("00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01")).toBe(
-      true,
-    );
+    expect(isValidTraceparent("00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01")).toBe(true);
   });
 
   test("accepts traceparent with all zeros trace flags", () => {
-    expect(isValidTraceparent("00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-00")).toBe(
-      true,
-    );
+    expect(isValidTraceparent("00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-00")).toBe(true);
   });
 
   test("rejects empty string", () => {
@@ -83,14 +79,10 @@ describe("isValidTraceparent", () => {
   });
 
   test("rejects traceparent with uppercase hex", () => {
-    expect(isValidTraceparent("00-4BF92F3577B34DA6A3CE929D0E0E4736-00f067aa0ba902b7-01")).toBe(
-      false,
-    );
+    expect(isValidTraceparent("00-4BF92F3577B34DA6A3CE929D0E0E4736-00f067aa0ba902b7-01")).toBe(false);
   });
 
   test("rejects traceparent with non-hex characters", () => {
-    expect(isValidTraceparent("00-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-00f067aa0ba902b7-01")).toBe(
-      false,
-    );
+    expect(isValidTraceparent("00-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-00f067aa0ba902b7-01")).toBe(false);
   });
 });

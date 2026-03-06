@@ -13,7 +13,7 @@
 
 import type { Database } from "bun:sqlite";
 import type { Logger } from "../logging/logger.ts";
-import { CONFIDENCE_ADJUSTMENT, FeedbackStore } from "./store.ts";
+import { FeedbackStore } from "./store.ts";
 
 // ---------------------------------------------------------------------------
 // Internal row shape for memory queries

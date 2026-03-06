@@ -11,8 +11,8 @@ import type { EidolonError, HASceneAction, HAServiceResult, Result } from "@eido
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 import type { Logger } from "../../logging/logger.ts";
 import type { EventBus } from "../../loop/event-bus.ts";
-import { HASceneEngine } from "../scenes.ts";
 import type { ExecuteServiceFn } from "../scenes.ts";
+import { HASceneEngine } from "../scenes.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers

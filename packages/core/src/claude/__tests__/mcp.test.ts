@@ -74,10 +74,10 @@ describe("generateMcpConfig", () => {
     const written = JSON.parse(await Bun.file(configPath).text()) as {
       mcpServers: Record<string, { command: string; args?: string[]; env?: Record<string, string> }>;
     };
-    expect(written.mcpServers.filesystem!.command).toBe("npx");
-    expect(written.mcpServers.filesystem!.args).toEqual(["-y", "@modelcontextprotocol/server-filesystem"]);
-    expect(written.mcpServers.filesystem!.env).toEqual({ HOME: "/tmp" });
-    expect(written.mcpServers.memory!.command).toBe("npx");
+    expect(written.mcpServers.filesystem?.command).toBe("npx");
+    expect(written.mcpServers.filesystem?.args).toEqual(["-y", "@modelcontextprotocol/server-filesystem"]);
+    expect(written.mcpServers.filesystem?.env).toEqual({ HOME: "/tmp" });
+    expect(written.mcpServers.memory?.command).toBe("npx");
   });
 
   test("returns file path on success", async () => {
@@ -115,9 +115,9 @@ describe("generateMcpConfig", () => {
       mcpServers: Record<string, { env?: Record<string, string> }>;
     };
     // Secret should be resolved
-    expect(written.mcpServers.ha!.env?.HA_TOKEN).toBe("my-secret-token-123");
+    expect(written.mcpServers.ha?.env?.HA_TOKEN).toBe("my-secret-token-123");
     // Non-secret env should pass through unchanged
-    expect(written.mcpServers.ha!.env?.HA_URL).toBe("http://homeassistant.local:8123");
+    expect(written.mcpServers.ha?.env?.HA_URL).toBe("http://homeassistant.local:8123");
   });
 
   test("returns error when secret resolver fails", async () => {
@@ -177,6 +177,6 @@ describe("generateMcpConfig", () => {
     const written = JSON.parse(await Bun.file(result.value.path).text()) as {
       mcpServers: Record<string, { env?: Record<string, string> }>;
     };
-    expect(written.mcpServers.ha!.env?.TOKEN).toBe("$secret:HA_TOKEN");
+    expect(written.mcpServers.ha?.env?.TOKEN).toBe("$secret:HA_TOKEN");
   });
 });

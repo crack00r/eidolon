@@ -4,21 +4,15 @@
 
 import { Database } from "bun:sqlite";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import type {
-  EidolonPlugin,
-  PluginConfig,
-  PluginContext,
-  PluginManifest,
-  PluginPermission,
-} from "@eidolon/protocol";
+import type { EidolonPlugin, PluginConfig, PluginContext, PluginManifest, PluginPermission } from "@eidolon/protocol";
 import { runMigrations } from "../database/migrations.ts";
 import { OPERATIONAL_MIGRATIONS } from "../database/schemas/operational.ts";
 import type { Logger } from "../logging/logger.ts";
 import { EventBus } from "../loop/event-bus.ts";
-import type { LoadedPlugin } from "../plugins/loader.ts";
 import { PluginLifecycleManager } from "../plugins/lifecycle.ts";
+import type { LoadedPlugin } from "../plugins/loader.ts";
 import { PluginRegistry } from "../plugins/registry.ts";
-import { type SandboxDeps, createPluginContext } from "../plugins/sandbox.ts";
+import { createPluginContext, type SandboxDeps } from "../plugins/sandbox.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -66,10 +60,7 @@ function makePlugin(overrides?: Partial<EidolonPlugin>): EidolonPlugin {
   };
 }
 
-function makeLoadedPlugin(
-  plugin: EidolonPlugin,
-  manifestOverrides?: Partial<PluginManifest>,
-): LoadedPlugin {
+function makeLoadedPlugin(plugin: EidolonPlugin, manifestOverrides?: Partial<PluginManifest>): LoadedPlugin {
   return {
     manifest: makeManifest(manifestOverrides),
     module: { default: plugin },
@@ -234,9 +225,7 @@ describe("createPluginContext", () => {
     const deps: SandboxDeps = { logger, config: {} as never, eventBus };
     const ctx = createPluginContext("no-listen", [], deps);
 
-    expect(() => ctx.onEvent("user:message", () => {})).toThrow(
-      /lacks permission.*events:listen/,
-    );
+    expect(() => ctx.onEvent("user:message", () => {})).toThrow(/lacks permission.*events:listen/);
   });
 
   test("onEvent succeeds with events:listen permission", () => {
@@ -252,9 +241,7 @@ describe("createPluginContext", () => {
     const deps: SandboxDeps = { logger, config: {} as never, eventBus };
     const ctx = createPluginContext("no-emit", ["events:listen"], deps);
 
-    expect(() => ctx.emitEvent("system:startup", {})).toThrow(
-      /lacks permission.*events:emit/,
-    );
+    expect(() => ctx.emitEvent("system:startup", {})).toThrow(/lacks permission.*events:emit/);
   });
 
   test("emitEvent succeeds with events:emit permission", () => {
@@ -292,18 +279,14 @@ describe("createPluginContext", () => {
     const deps: SandboxDeps = { logger, config: {} as never, eventBus };
     const ctx = createPluginContext("no-rpc", [], deps);
 
-    expect(() => ctx.registerRpcHandler("myMethod", async () => ({}))).toThrow(
-      /lacks permission.*gateway:register/,
-    );
+    expect(() => ctx.registerRpcHandler("myMethod", async () => ({}))).toThrow(/lacks permission.*gateway:register/);
   });
 
   test("registerChannel throws when channel:register permission not granted", () => {
     const deps: SandboxDeps = { logger, config: {} as never, eventBus };
     const ctx = createPluginContext("no-channel", [], deps);
 
-    expect(() => ctx.registerChannel({} as never)).toThrow(
-      /lacks permission.*channel:register/,
-    );
+    expect(() => ctx.registerChannel({} as never)).toThrow(/lacks permission.*channel:register/);
   });
 
   test("onEvent throws when EventBus is not available", () => {
@@ -353,13 +336,7 @@ describe("PluginLifecycleManager", () => {
     });
     const loaded = makeLoadedPlugin(plugin);
 
-    const manager = new PluginLifecycleManager(
-      registry,
-      DEFAULT_PLUGIN_CONFIG,
-      deps,
-      logger,
-      eventBus,
-    );
+    const manager = new PluginLifecycleManager(registry, DEFAULT_PLUGIN_CONFIG, deps, logger, eventBus);
     await manager.initAll([loaded]);
 
     expect(initCalls).toEqual(["test-plugin"]);
@@ -416,13 +393,7 @@ describe("PluginLifecycleManager", () => {
 
     const localDeps: SandboxDeps = { logger: trackingLogger, config: {} as never, eventBus };
     const localRegistry = new PluginRegistry(trackingLogger);
-    const manager = new PluginLifecycleManager(
-      localRegistry,
-      config,
-      localDeps,
-      trackingLogger,
-      eventBus,
-    );
+    const manager = new PluginLifecycleManager(localRegistry, config, localDeps, trackingLogger, eventBus);
     await manager.initAll([loaded]);
 
     expect(warnings.some((w) => w.includes("shell:execute"))).toBe(true);
@@ -436,13 +407,7 @@ describe("PluginLifecycleManager", () => {
     });
     const loaded = makeLoadedPlugin(plugin, { name: "fail-plugin" });
 
-    const manager = new PluginLifecycleManager(
-      registry,
-      DEFAULT_PLUGIN_CONFIG,
-      deps,
-      logger,
-      eventBus,
-    );
+    const manager = new PluginLifecycleManager(registry, DEFAULT_PLUGIN_CONFIG, deps, logger, eventBus);
 
     // Should not throw
     await manager.initAll([loaded]);
@@ -469,13 +434,7 @@ describe("PluginLifecycleManager", () => {
     const loadedA = makeLoadedPlugin(pluginA, { name: "alpha" });
     const loadedB = makeLoadedPlugin(pluginB, { name: "beta" });
 
-    const manager = new PluginLifecycleManager(
-      registry,
-      DEFAULT_PLUGIN_CONFIG,
-      deps,
-      logger,
-      eventBus,
-    );
+    const manager = new PluginLifecycleManager(registry, DEFAULT_PLUGIN_CONFIG, deps, logger, eventBus);
     await manager.initAll([loadedA, loadedB]);
 
     expect(initOrder).toEqual(["alpha", "beta"]);
@@ -490,13 +449,7 @@ describe("PluginLifecycleManager", () => {
     });
     const loaded = makeLoadedPlugin(plugin);
 
-    const manager = new PluginLifecycleManager(
-      registry,
-      DEFAULT_PLUGIN_CONFIG,
-      deps,
-      logger,
-      eventBus,
-    );
+    const manager = new PluginLifecycleManager(registry, DEFAULT_PLUGIN_CONFIG, deps, logger, eventBus);
     await manager.initAll([loaded]);
     await manager.startAll();
 
@@ -520,13 +473,7 @@ describe("PluginLifecycleManager", () => {
     const loadedA = makeLoadedPlugin(pluginA, { name: "alpha" });
     const loadedB = makeLoadedPlugin(pluginB, { name: "beta" });
 
-    const manager = new PluginLifecycleManager(
-      registry,
-      DEFAULT_PLUGIN_CONFIG,
-      deps,
-      logger,
-      eventBus,
-    );
+    const manager = new PluginLifecycleManager(registry, DEFAULT_PLUGIN_CONFIG, deps, logger, eventBus);
     await manager.initAll([loadedA, loadedB]);
     await manager.startAll();
     await manager.stopAll();
@@ -553,13 +500,7 @@ describe("PluginLifecycleManager", () => {
     const loadedA = makeLoadedPlugin(pluginA, { name: "alpha" });
     const loadedB = makeLoadedPlugin(pluginB, { name: "beta" });
 
-    const manager = new PluginLifecycleManager(
-      registry,
-      DEFAULT_PLUGIN_CONFIG,
-      deps,
-      logger,
-      eventBus,
-    );
+    const manager = new PluginLifecycleManager(registry, DEFAULT_PLUGIN_CONFIG, deps, logger, eventBus);
     await manager.initAll([loadedA, loadedB]);
     await manager.destroyAll();
 
@@ -567,13 +508,7 @@ describe("PluginLifecycleManager", () => {
 
     // After destroy, starting again should be a no-op (managed list cleared)
     const secondStartCalls: string[] = [];
-    const manager2 = new PluginLifecycleManager(
-      registry,
-      DEFAULT_PLUGIN_CONFIG,
-      deps,
-      logger,
-      eventBus,
-    );
+    const manager2 = new PluginLifecycleManager(registry, DEFAULT_PLUGIN_CONFIG, deps, logger, eventBus);
     await manager2.startAll();
     expect(secondStartCalls).toEqual([]);
   });
@@ -596,13 +531,7 @@ describe("PluginLifecycleManager", () => {
     });
     const loaded = makeLoadedPlugin(plugin);
 
-    const manager = new PluginLifecycleManager(
-      registry,
-      DEFAULT_PLUGIN_CONFIG,
-      deps,
-      logger,
-      eventBus,
-    );
+    const manager = new PluginLifecycleManager(registry, DEFAULT_PLUGIN_CONFIG, deps, logger, eventBus);
 
     await manager.initAll([loaded]);
     await manager.startAll();
@@ -620,13 +549,7 @@ describe("PluginLifecycleManager", () => {
     });
     const loaded = makeLoadedPlugin(plugin, { name: "fail-start" });
 
-    const manager = new PluginLifecycleManager(
-      registry,
-      DEFAULT_PLUGIN_CONFIG,
-      deps,
-      logger,
-      eventBus,
-    );
+    const manager = new PluginLifecycleManager(registry, DEFAULT_PLUGIN_CONFIG, deps, logger, eventBus);
 
     await manager.initAll([loaded]);
     // Should not throw
@@ -649,13 +572,7 @@ describe("PluginLifecycleManager", () => {
       directory: "/tmp/named-export",
     };
 
-    const manager = new PluginLifecycleManager(
-      registry,
-      DEFAULT_PLUGIN_CONFIG,
-      deps,
-      logger,
-      eventBus,
-    );
+    const manager = new PluginLifecycleManager(registry, DEFAULT_PLUGIN_CONFIG, deps, logger, eventBus);
     await manager.initAll([loaded]);
 
     expect(initCalls).toEqual(["named-export"]);
@@ -668,13 +585,7 @@ describe("PluginLifecycleManager", () => {
       directory: "/tmp/bad-export",
     };
 
-    const manager = new PluginLifecycleManager(
-      registry,
-      DEFAULT_PLUGIN_CONFIG,
-      deps,
-      logger,
-      eventBus,
-    );
+    const manager = new PluginLifecycleManager(registry, DEFAULT_PLUGIN_CONFIG, deps, logger, eventBus);
     await manager.initAll([loaded]);
 
     const info = registry.get("bad-export");

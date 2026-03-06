@@ -8,9 +8,9 @@
 import type { EidolonError, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 import type { Logger } from "../logging/logger.ts";
+import { injectTraceContext } from "../telemetry/propagation.ts";
 import type { ITracer } from "../telemetry/tracer.ts";
 import { NoopTracer } from "../telemetry/tracer.ts";
-import { injectTraceContext } from "../telemetry/propagation.ts";
 
 // ---------------------------------------------------------------------------
 // Types

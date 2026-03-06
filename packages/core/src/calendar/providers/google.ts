@@ -6,16 +6,9 @@
  * Supports incremental sync via syncToken.
  */
 
-import { randomUUID } from "node:crypto";
-import { z } from "zod";
-import type {
-  CalendarEvent,
-  CalendarProvider,
-  CalendarSyncResult,
-  EidolonError,
-  Result,
-} from "@eidolon/protocol";
+import type { CalendarEvent, CalendarProvider, CalendarSyncResult, EidolonError, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
+import { z } from "zod";
 import type { Logger } from "../../logging/logger.ts";
 
 // ---------------------------------------------------------------------------
@@ -131,19 +124,17 @@ export class GoogleCalendarProvider implements CalendarProvider {
 
     const parsed = GoogleEventsListSchema.safeParse(response.value);
     if (!parsed.success) {
-      return Err(createError(ErrorCode.CALENDAR_PROVIDER_ERROR, `Invalid Google API response: ${parsed.error.message}`));
+      return Err(
+        createError(ErrorCode.CALENDAR_PROVIDER_ERROR, `Invalid Google API response: ${parsed.error.message}`),
+      );
     }
 
-    const events = (parsed.data.items ?? [])
-      .filter((e) => e.status !== "cancelled")
-      .map((e) => this.mapGoogleEvent(e));
+    const events = (parsed.data.items ?? []).filter((e) => e.status !== "cancelled").map((e) => this.mapGoogleEvent(e));
 
     return Ok(events);
   }
 
-  async createEvent(
-    event: Omit<CalendarEvent, "id" | "syncedAt">,
-  ): Promise<Result<CalendarEvent, EidolonError>> {
+  async createEvent(event: Omit<CalendarEvent, "id" | "syncedAt">): Promise<Result<CalendarEvent, EidolonError>> {
     const body = {
       summary: event.title,
       description: event.description,
@@ -156,10 +147,7 @@ export class GoogleCalendarProvider implements CalendarProvider {
         : { dateTime: new Date(event.endTime).toISOString() },
     };
 
-    const response = await this.apiPost(
-      `/calendars/${encodeURIComponent(this.calendarId)}/events`,
-      body,
-    );
+    const response = await this.apiPost(`/calendars/${encodeURIComponent(this.calendarId)}/events`, body);
     if (!response.ok) return response;
 
     const parsed = GoogleEventSchema.safeParse(response.value);
@@ -247,7 +235,7 @@ export class GoogleCalendarProvider implements CalendarProvider {
     } while (nextPageToken);
 
     let added = 0;
-    let updated = 0;
+    const updated = 0;
     let deleted = 0;
 
     for (const item of allItems) {
@@ -274,15 +262,10 @@ export class GoogleCalendarProvider implements CalendarProvider {
 
   private mapGoogleEvent(ge: GoogleEvent): CalendarEvent {
     const allDay = !!ge.start.date;
-    const startTime = allDay
-      ? new Date(ge.start.date!).getTime()
-      : new Date(ge.start.dateTime!).getTime();
-    const endTime = allDay
-      ? new Date(ge.end.date!).getTime()
-      : new Date(ge.end.dateTime!).getTime();
+    const startTime = allDay ? new Date(ge.start.date ?? "").getTime() : new Date(ge.start.dateTime ?? "").getTime();
+    const endTime = allDay ? new Date(ge.end.date ?? "").getTime() : new Date(ge.end.dateTime ?? "").getTime();
 
-    const reminders: number[] =
-      ge.reminders?.overrides?.map((o) => o.minutes) ?? [];
+    const reminders: number[] = ge.reminders?.overrides?.map((o) => o.minutes) ?? [];
 
     return {
       id: ge.id,
@@ -355,7 +338,10 @@ export class GoogleCalendarProvider implements CalendarProvider {
       if (!response.ok) {
         const text = await response.text().catch(() => "");
         return Err(
-          createError(ErrorCode.CALENDAR_PROVIDER_ERROR, `Google API POST error ${response.status}: ${text.slice(0, 200)}`),
+          createError(
+            ErrorCode.CALENDAR_PROVIDER_ERROR,
+            `Google API POST error ${response.status}: ${text.slice(0, 200)}`,
+          ),
         );
       }
 
@@ -380,9 +366,7 @@ export class GoogleCalendarProvider implements CalendarProvider {
       });
 
       if (!response.ok) {
-        return Err(
-          createError(ErrorCode.CALENDAR_PROVIDER_ERROR, `Token refresh failed: ${response.status}`),
-        );
+        return Err(createError(ErrorCode.CALENDAR_PROVIDER_ERROR, `Token refresh failed: ${response.status}`));
       }
 
       const data: unknown = await response.json();

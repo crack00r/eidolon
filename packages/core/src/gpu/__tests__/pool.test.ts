@@ -34,7 +34,10 @@ function makeWorkerConfig(overrides?: Partial<GPUWorkerConfig>): GPUWorkerConfig
   };
 }
 
-function makePoolConfig(workers: GPUWorkerConfig[], overrides?: Partial<Omit<GPUWorkerPoolConfig, "workers">>): GPUWorkerPoolConfig {
+function makePoolConfig(
+  workers: GPUWorkerConfig[],
+  overrides?: Partial<Omit<GPUWorkerPoolConfig, "workers">>,
+): GPUWorkerPoolConfig {
   return {
     workers,
     healthCheckIntervalMs: 60_000, // long interval to avoid interference
@@ -72,10 +75,7 @@ afterEach(() => {
 describe("GPUWorkerPool", () => {
   test("creates pool with correct worker count", () => {
     const pool = new GPUWorkerPool(
-      makePoolConfig([
-        makeWorkerConfig({ name: "w1" }),
-        makeWorkerConfig({ name: "w2" }),
-      ]),
+      makePoolConfig([makeWorkerConfig({ name: "w1" }), makeWorkerConfig({ name: "w2" })]),
       logger,
     );
 
@@ -130,9 +130,7 @@ describe("GPUWorkerPool", () => {
 
   test("hasCapability returns correct values", () => {
     const pool = new GPUWorkerPool(
-      makePoolConfig([
-        makeWorkerConfig({ name: "tts-only", capabilities: ["tts"] }),
-      ]),
+      makePoolConfig([makeWorkerConfig({ name: "tts-only", capabilities: ["tts"] })]),
       logger,
     );
 
@@ -143,10 +141,7 @@ describe("GPUWorkerPool", () => {
   });
 
   test("tts validates empty text", async () => {
-    const pool = new GPUWorkerPool(
-      makePoolConfig([makeWorkerConfig()]),
-      logger,
-    );
+    const pool = new GPUWorkerPool(makePoolConfig([makeWorkerConfig()]), logger);
 
     const result = await pool.tts({ text: "" });
     expect(result.ok).toBe(false);
@@ -158,10 +153,7 @@ describe("GPUWorkerPool", () => {
   });
 
   test("tts validates text length", async () => {
-    const pool = new GPUWorkerPool(
-      makePoolConfig([makeWorkerConfig()]),
-      logger,
-    );
+    const pool = new GPUWorkerPool(makePoolConfig([makeWorkerConfig()]), logger);
 
     const result = await pool.tts({ text: "x".repeat(10_001) });
     expect(result.ok).toBe(false);
@@ -173,10 +165,7 @@ describe("GPUWorkerPool", () => {
   });
 
   test("tts validates speed range", async () => {
-    const pool = new GPUWorkerPool(
-      makePoolConfig([makeWorkerConfig()]),
-      logger,
-    );
+    const pool = new GPUWorkerPool(makePoolConfig([makeWorkerConfig()]), logger);
 
     const result = await pool.tts({ text: "hello", speed: 10 });
     expect(result.ok).toBe(false);
@@ -188,10 +177,7 @@ describe("GPUWorkerPool", () => {
   });
 
   test("stt validates empty audio", async () => {
-    const pool = new GPUWorkerPool(
-      makePoolConfig([makeWorkerConfig()]),
-      logger,
-    );
+    const pool = new GPUWorkerPool(makePoolConfig([makeWorkerConfig()]), logger);
 
     const result = await pool.stt(new Uint8Array(0));
     expect(result.ok).toBe(false);
@@ -203,10 +189,7 @@ describe("GPUWorkerPool", () => {
   });
 
   test("stt validates mime type", async () => {
-    const pool = new GPUWorkerPool(
-      makePoolConfig([makeWorkerConfig()]),
-      logger,
-    );
+    const pool = new GPUWorkerPool(makePoolConfig([makeWorkerConfig()]), logger);
 
     const result = await pool.stt(new Uint8Array([1, 2, 3]), "video/mp4");
     expect(result.ok).toBe(false);
@@ -218,7 +201,7 @@ describe("GPUWorkerPool", () => {
   });
 
   test("tts succeeds with mock GPU worker", async () => {
-    mockFetchWith(async (_url, init) => {
+    mockFetchWith(async (_url, _init) => {
       // Health check or TTS request
       const urlStr = typeof _url === "string" ? _url : "";
       if (urlStr.includes("/health")) {
@@ -238,10 +221,7 @@ describe("GPUWorkerPool", () => {
       });
     });
 
-    const pool = new GPUWorkerPool(
-      makePoolConfig([makeWorkerConfig({ name: "gpu-1" })]),
-      logger,
-    );
+    const pool = new GPUWorkerPool(makePoolConfig([makeWorkerConfig({ name: "gpu-1" })]), logger);
 
     const result = await pool.tts({ text: "Hello world" });
     expect(result.ok).toBe(true);
@@ -367,10 +347,7 @@ describe("GPUWorkerPool", () => {
   });
 
   test("tts returns GPU_UNAVAILABLE when no workers in pool", async () => {
-    const pool = new GPUWorkerPool(
-      makePoolConfig([], { maxRetries: 0 }),
-      logger,
-    );
+    const pool = new GPUWorkerPool(makePoolConfig([], { maxRetries: 0 }), logger);
 
     const result = await pool.tts({ text: "Hello" });
     expect(result.ok).toBe(false);
@@ -405,10 +382,7 @@ describe("GPUWorkerPool", () => {
       );
     });
 
-    const pool = new GPUWorkerPool(
-      makePoolConfig([makeWorkerConfig({ name: "gpu-1" })]),
-      logger,
-    );
+    const pool = new GPUWorkerPool(makePoolConfig([makeWorkerConfig({ name: "gpu-1" })]), logger);
 
     const audio = new Uint8Array([1, 2, 3, 4]);
     const result = await pool.stt(audio);
@@ -433,10 +407,7 @@ describe("GPUWorkerPool", () => {
       );
     });
 
-    const pool = new GPUWorkerPool(
-      makePoolConfig([makeWorkerConfig({ name: "gpu-1" })]),
-      logger,
-    );
+    const pool = new GPUWorkerPool(makePoolConfig([makeWorkerConfig({ name: "gpu-1" })]), logger);
 
     await pool.checkAllHealth();
 
@@ -456,10 +427,7 @@ describe("GPUWorkerPool", () => {
       return new Response("Service Unavailable", { status: 503 });
     });
 
-    const pool = new GPUWorkerPool(
-      makePoolConfig([makeWorkerConfig({ name: "gpu-1" })]),
-      logger,
-    );
+    const pool = new GPUWorkerPool(makePoolConfig([makeWorkerConfig({ name: "gpu-1" })]), logger);
 
     await pool.checkAllHealth();
 

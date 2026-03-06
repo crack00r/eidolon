@@ -18,10 +18,7 @@ export interface LoadedPlugin {
 /**
  * Scan `pluginDir` for valid Eidolon plugins and dynamically import them.
  */
-export async function discoverPlugins(
-  pluginDir: string,
-  logger: Logger,
-): Promise<readonly LoadedPlugin[]> {
+export async function discoverPlugins(pluginDir: string, logger: Logger): Promise<readonly LoadedPlugin[]> {
   if (!pluginDir || !existsSync(pluginDir)) {
     logger.debug("plugins:loader", "Plugin directory does not exist, skipping", { pluginDir });
     return [];
@@ -70,8 +67,8 @@ function readManifest(dir: string): PluginManifest | undefined {
   const pkgPath = join(dir, "package.json");
   if (existsSync(pkgPath)) {
     const pkg = JSON.parse(readFileSync(pkgPath, "utf-8")) as Record<string, unknown>;
-    if (pkg["eidolon"] && typeof pkg["eidolon"] === "object") {
-      return pkg["eidolon"] as PluginManifest;
+    if (pkg.eidolon && typeof pkg.eidolon === "object") {
+      return pkg.eidolon as PluginManifest;
     }
   }
 

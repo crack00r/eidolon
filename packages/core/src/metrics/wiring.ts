@@ -6,7 +6,7 @@
  * event queue depth).
  */
 
-import type { BusEvent, TokenUsage } from "@eidolon/protocol";
+import type { TokenUsage } from "@eidolon/protocol";
 import type { Logger } from "../logging/logger.ts";
 import type { EventBus } from "../loop/event-bus.ts";
 import type { SessionSupervisor } from "../loop/session-supervisor.ts";

@@ -64,6 +64,7 @@ describe("MCPHealthMonitor", () => {
     expect(result.status).toBe("healthy");
     expect(result.lastCheckedAt).toBeGreaterThan(0);
     expect(result.responseTimeMs).toBeDefined();
+    // biome-ignore lint/style/noNonNullAssertion: test assertion
     expect(result.responseTimeMs!).toBeGreaterThanOrEqual(0);
     monitor.dispose();
   });

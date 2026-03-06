@@ -11,18 +11,9 @@ import type {
   LLMCompletionResult,
   LLMMessage,
   LLMStreamEvent,
+  OllamaProviderConfig,
 } from "@eidolon/protocol";
-import type { OllamaProviderConfig } from "@eidolon/protocol";
 import type { Logger } from "../logging/logger.ts";
-
-interface OllamaGenerateResponse {
-  model: string;
-  response: string;
-  done: boolean;
-  total_duration?: number;
-  prompt_eval_count?: number;
-  eval_count?: number;
-}
 
 interface OllamaChatResponse {
   model: string;
@@ -42,7 +33,7 @@ export class OllamaProvider implements ILLMProvider {
 
   constructor(
     private readonly config: OllamaProviderConfig,
-    private readonly logger: Logger,
+    readonly _logger: Logger,
   ) {}
 
   async isAvailable(): Promise<boolean> {
@@ -65,10 +56,7 @@ export class OllamaProvider implements ILLMProvider {
     }
   }
 
-  async complete(
-    messages: readonly LLMMessage[],
-    options?: LLMCompletionOptions,
-  ): Promise<LLMCompletionResult> {
+  async complete(messages: readonly LLMMessage[], options?: LLMCompletionOptions): Promise<LLMCompletionResult> {
     const model = options?.model ?? this.config.defaultModel;
     const body = {
       model,
@@ -105,10 +93,7 @@ export class OllamaProvider implements ILLMProvider {
     };
   }
 
-  async *stream(
-    messages: readonly LLMMessage[],
-    options?: LLMCompletionOptions,
-  ): AsyncIterable<LLMStreamEvent> {
+  async *stream(messages: readonly LLMMessage[], options?: LLMCompletionOptions): AsyncIterable<LLMStreamEvent> {
     const model = options?.model ?? this.config.defaultModel;
     const body = {
       model,

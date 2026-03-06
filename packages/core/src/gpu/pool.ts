@@ -14,11 +14,10 @@
 import type { EidolonError, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 import type { Logger } from "../logging/logger.ts";
-import type { GpuHealth } from "./manager.ts";
-import type { SttResult } from "./stt-client.ts";
-import type { TtsRequest, TtsResult } from "./tts-client.ts";
 import type { BalancingStrategyName, LoadBalancerStrategy } from "./balancer.ts";
 import { createBalancer } from "./balancer.ts";
+import type { SttResult } from "./stt-client.ts";
+import type { TtsRequest, TtsResult } from "./tts-client.ts";
 import type { GPUWorkerConfig, GPUWorkerInfo } from "./worker.ts";
 import { GPUWorker } from "./worker.ts";
 
@@ -137,9 +136,7 @@ export class GPUWorkerPool {
 
   /** Run a health check on all workers. */
   async checkAllHealth(): Promise<void> {
-    const results = await Promise.allSettled(
-      this.workers.map((w) => w.checkHealth()),
-    );
+    const results = await Promise.allSettled(this.workers.map((w) => w.checkHealth()));
 
     let healthy = 0;
     let unhealthy = 0;
@@ -230,10 +227,7 @@ export class GPUWorkerPool {
       });
     }
 
-    return Err(
-      lastError ??
-        createError(ErrorCode.GPU_UNAVAILABLE, "No GPU workers available for TTS"),
-    );
+    return Err(lastError ?? createError(ErrorCode.GPU_UNAVAILABLE, "No GPU workers available for TTS"));
   }
 
   // -------------------------------------------------------------------------
@@ -294,10 +288,7 @@ export class GPUWorkerPool {
       });
     }
 
-    return Err(
-      lastError ??
-        createError(ErrorCode.GPU_UNAVAILABLE, "No GPU workers available for STT"),
-    );
+    return Err(lastError ?? createError(ErrorCode.GPU_UNAVAILABLE, "No GPU workers available for STT"));
   }
 
   // -------------------------------------------------------------------------

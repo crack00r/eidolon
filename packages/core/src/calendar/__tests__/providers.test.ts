@@ -7,8 +7,8 @@
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import type { Logger } from "../../logging/logger.ts";
-import { GoogleCalendarProvider } from "../providers/google.ts";
 import { CalDAVProvider, parseIcsEvent } from "../providers/caldav.ts";
+import { GoogleCalendarProvider } from "../providers/google.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -40,10 +40,7 @@ let fetchMocks: Array<{
 function setupFetchMock(): void {
   originalFetch = globalThis.fetch;
   fetchMocks = [];
-  globalThis.fetch = (async (
-    input: string | URL | Request,
-    init?: RequestInit,
-  ): Promise<Response> => {
+  globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
     const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
     for (const mock of fetchMocks) {
       if (mock.match(url, init)) {
@@ -171,6 +168,7 @@ describe("GoogleCalendarProvider", () => {
 
       expect(result.value.length).toBe(2);
 
+      // biome-ignore lint/style/noNonNullAssertion: test assertion
       const standup = result.value[0]!;
       expect(standup.id).toBe("evt-google-1");
       expect(standup.title).toBe("Team Standup");
@@ -180,6 +178,7 @@ describe("GoogleCalendarProvider", () => {
       expect(standup.reminders).toEqual([10]);
       expect(standup.source).toBe("google");
 
+      // biome-ignore lint/style/noNonNullAssertion: test assertion
       const workshop = result.value[1]!;
       expect(workshop.id).toBe("evt-google-2");
       expect(workshop.allDay).toBe(true);
@@ -216,7 +215,7 @@ describe("GoogleCalendarProvider", () => {
       expect(result.ok).toBe(true);
       if (!result.ok) return;
       expect(result.value.length).toBe(1);
-      expect(result.value[0]!.id).toBe("evt-ok");
+      expect(result.value[0]?.id).toBe("evt-ok");
     });
   });
 
@@ -354,7 +353,10 @@ describe("CalDAVProvider", () => {
 
   describe("connect", () => {
     test("succeeds when PROPFIND returns 207", async () => {
-      mockFetchFor("nextcloud.example.com", "PROPFIND", `<?xml version="1.0"?>
+      mockFetchFor(
+        "nextcloud.example.com",
+        "PROPFIND",
+        `<?xml version="1.0"?>
         <d:multistatus xmlns:d="DAV:">
           <d:response>
             <d:propstat>
@@ -362,7 +364,9 @@ describe("CalDAVProvider", () => {
               <d:status>HTTP/1.1 200 OK</d:status>
             </d:propstat>
           </d:response>
-        </d:multistatus>`, 207);
+        </d:multistatus>`,
+        207,
+      );
 
       const provider = makeCalDAVProvider();
       const result = await provider.connect();
@@ -554,7 +558,10 @@ describe("CalDAVProvider", () => {
   describe("sync", () => {
     test("performs sync using ctag", async () => {
       // PROPFIND for ctag
-      mockFetchFor("nextcloud.example.com", "PROPFIND", `<?xml version="1.0"?>
+      mockFetchFor(
+        "nextcloud.example.com",
+        "PROPFIND",
+        `<?xml version="1.0"?>
         <d:multistatus xmlns:d="DAV:" xmlns:cs="http://calendarserver.org/ns/">
           <d:response>
             <d:propstat>
@@ -562,7 +569,9 @@ describe("CalDAVProvider", () => {
               <d:status>HTTP/1.1 200 OK</d:status>
             </d:propstat>
           </d:response>
-        </d:multistatus>`, 207);
+        </d:multistatus>`,
+        207,
+      );
 
       // REPORT for events
       const icsData = [
@@ -576,14 +585,19 @@ describe("CalDAVProvider", () => {
         "END:VCALENDAR",
       ].join("\r\n");
 
-      mockFetchFor("nextcloud.example.com", "REPORT", `<?xml version="1.0"?>
+      mockFetchFor(
+        "nextcloud.example.com",
+        "REPORT",
+        `<?xml version="1.0"?>
         <d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">
           <d:response>
             <d:propstat>
               <d:prop><c:calendar-data>${icsData}</c:calendar-data></d:prop>
             </d:propstat>
           </d:response>
-        </d:multistatus>`, 207);
+        </d:multistatus>`,
+        207,
+      );
 
       const provider = makeCalDAVProvider();
       const result = await provider.sync();
@@ -595,7 +609,10 @@ describe("CalDAVProvider", () => {
     });
 
     test("returns no changes when ctag matches", async () => {
-      mockFetchFor("nextcloud.example.com", "PROPFIND", `<?xml version="1.0"?>
+      mockFetchFor(
+        "nextcloud.example.com",
+        "PROPFIND",
+        `<?xml version="1.0"?>
         <d:multistatus xmlns:d="DAV:" xmlns:cs="http://calendarserver.org/ns/">
           <d:response>
             <d:propstat>
@@ -603,7 +620,9 @@ describe("CalDAVProvider", () => {
               <d:status>HTTP/1.1 200 OK</d:status>
             </d:propstat>
           </d:response>
-        </d:multistatus>`, 207);
+        </d:multistatus>`,
+        207,
+      );
 
       const provider = makeCalDAVProvider();
       const result = await provider.sync("same-ctag");

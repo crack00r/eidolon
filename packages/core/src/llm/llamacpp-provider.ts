@@ -11,8 +11,8 @@ import type {
   LLMCompletionResult,
   LLMMessage,
   LLMStreamEvent,
+  LlamaCppProviderConfig,
 } from "@eidolon/protocol";
-import type { LlamaCppProviderConfig } from "@eidolon/protocol";
 import type { Logger } from "../logging/logger.ts";
 
 interface LlamaCppChatResponse {
@@ -39,7 +39,7 @@ export class LlamaCppProvider implements ILLMProvider {
 
   constructor(
     private readonly config: LlamaCppProviderConfig,
-    private readonly logger: Logger,
+    readonly _logger: Logger,
   ) {
     this.baseUrl = `http://127.0.0.1:${config.port}`;
   }
@@ -61,10 +61,7 @@ export class LlamaCppProvider implements ILLMProvider {
     return ["local-model"];
   }
 
-  async complete(
-    messages: readonly LLMMessage[],
-    options?: LLMCompletionOptions,
-  ): Promise<LLMCompletionResult> {
+  async complete(messages: readonly LLMMessage[], options?: LLMCompletionOptions): Promise<LLMCompletionResult> {
     const body = {
       messages: messages.map((m) => ({ role: m.role, content: m.content })),
       temperature: options?.temperature ?? 0.7,
@@ -98,10 +95,7 @@ export class LlamaCppProvider implements ILLMProvider {
     };
   }
 
-  async *stream(
-    messages: readonly LLMMessage[],
-    options?: LLMCompletionOptions,
-  ): AsyncIterable<LLMStreamEvent> {
+  async *stream(messages: readonly LLMMessage[], options?: LLMCompletionOptions): AsyncIterable<LLMStreamEvent> {
     const body = {
       messages: messages.map((m) => ({ role: m.role, content: m.content })),
       temperature: options?.temperature ?? 0.7,

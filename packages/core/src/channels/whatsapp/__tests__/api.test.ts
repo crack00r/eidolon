@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import type { Logger } from "../../../logging/logger.ts";
 import type { WhatsAppApiConfig } from "../api.ts";
 import { WhatsAppCloudApi } from "../api.ts";
-import type { Logger } from "../../../logging/logger.ts";
 
 // ---------------------------------------------------------------------------
 // Test helpers

@@ -7,10 +7,8 @@
 
 import { Database } from "bun:sqlite";
 import { afterEach, describe, expect, test } from "bun:test";
-import type { EidolonError, HAEntity, Result } from "@eidolon/protocol";
-import { Ok } from "@eidolon/protocol";
+import type { HAEntity } from "@eidolon/protocol";
 import type { Logger } from "../../logging/logger.ts";
-import type { EmbeddingModel } from "../../memory/embeddings.ts";
 import { HAEntityResolver } from "../resolver.ts";
 
 // ---------------------------------------------------------------------------

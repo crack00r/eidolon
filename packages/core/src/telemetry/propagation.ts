@@ -29,10 +29,7 @@ export const TRACESTATE_HEADER = "tracestate";
  * @param headers - Mutable headers object (will be modified in place).
  * @returns The headers object with trace context injected.
  */
-export function injectTraceContext(
-  tracer: ITracer,
-  headers: Record<string, string>,
-): Record<string, string> {
+export function injectTraceContext(tracer: ITracer, headers: Record<string, string>): Record<string, string> {
   const traceHeaders = tracer.getTraceHeaders();
   for (const [key, value] of Object.entries(traceHeaders)) {
     headers[key] = value;
@@ -53,10 +50,7 @@ export function injectTraceContext(
  * @param tracer  - The ITracer instance.
  * @param headers - Incoming headers (case-insensitive lookup performed).
  */
-export function extractTraceContext(
-  tracer: ITracer,
-  headers: Record<string, string>,
-): void {
+export function extractTraceContext(tracer: ITracer, headers: Record<string, string>): void {
   // Normalize header keys to lowercase for case-insensitive matching
   const normalized: Record<string, string> = {};
   for (const [key, value] of Object.entries(headers)) {

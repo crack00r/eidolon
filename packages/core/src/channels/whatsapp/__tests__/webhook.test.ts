@@ -87,9 +87,13 @@ describe("verifyWebhookSignature", () => {
 
     // Compute expected signature using Web Crypto API
     const encoder = new TextEncoder();
-    const key = await crypto.subtle.importKey("raw", encoder.encode(APP_SECRET), { name: "HMAC", hash: "SHA-256" }, false, [
-      "sign",
-    ]);
+    const key = await crypto.subtle.importKey(
+      "raw",
+      encoder.encode(APP_SECRET),
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["sign"],
+    );
     const sig = await crypto.subtle.sign("HMAC", key, encoder.encode(body));
     const hex = Array.from(new Uint8Array(sig))
       .map((b) => b.toString(16).padStart(2, "0"))
@@ -101,7 +105,11 @@ describe("verifyWebhookSignature", () => {
 
   test("returns false for invalid signature", async () => {
     const body = JSON.stringify({ test: "data" });
-    const result = await verifyWebhookSignature(body, "sha256=0000000000000000000000000000000000000000000000000000000000000000", APP_SECRET);
+    const result = await verifyWebhookSignature(
+      body,
+      "sha256=0000000000000000000000000000000000000000000000000000000000000000",
+      APP_SECRET,
+    );
     expect(result).toBe(false);
   });
 
@@ -341,7 +349,13 @@ describe("parseWebhookPayload", () => {
                 metadata: { phone_number_id: "123456789" },
                 messages: [
                   { from: "+491234567890", timestamp: "1700000000", type: "text", text: { body: "No id" } },
-                  { id: "wamid.valid", from: "+491234567890", timestamp: "1700000000", type: "text", text: { body: "Valid" } },
+                  {
+                    id: "wamid.valid",
+                    from: "+491234567890",
+                    timestamp: "1700000000",
+                    type: "text",
+                    text: { body: "Valid" },
+                  },
                 ],
               },
             },

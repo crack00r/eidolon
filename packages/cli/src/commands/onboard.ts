@@ -20,10 +20,9 @@
 
 import { chmodSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { createInterface } from "node:readline";
-import { getConfigDir, getConfigPath, getDataDir, loadConfig, zeroBuffer } from "@eidolon/core";
+import { getConfigDir, getConfigPath, getDataDir, zeroBuffer } from "@eidolon/core";
 import { SECRETS_DB_FILENAME, VERSION } from "@eidolon/protocol";
 import type { Command } from "commander";
-import { formatCheck } from "../utils/formatter.ts";
 import { deriveMasterKeyBuffer } from "./onboard-kdf.ts";
 import { installPlatformService } from "./onboard-service.ts";
 import type { AskFn, GpuSetupResult, TelegramSetupResult } from "./onboard-steps.ts";

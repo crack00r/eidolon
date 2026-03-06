@@ -170,80 +170,78 @@ export function registerLearningCommand(program: Command): void {
     .option("--since <duration>", "Filter by age (e.g. 7d, 24h, 2w)")
     .option("--status <status>", "Filter by status (new, evaluated, approved, rejected, implemented)")
     .option("--limit <n>", "Max results", String(DEFAULT_LIST_LIMIT))
-    .action(
-      async (options: { readonly since?: string; readonly status?: string; readonly limit: string }) => {
-        const sys = await initLearningSystem();
-        if (!sys) return;
-        try {
-          const limit = Number.parseInt(options.limit, 10);
-          if (!Number.isFinite(limit) || limit < 1 || limit > 1000) {
-            console.error("Error: --limit must be a positive integer between 1 and 1000.");
+    .action(async (options: { readonly since?: string; readonly status?: string; readonly limit: string }) => {
+      const sys = await initLearningSystem();
+      if (!sys) return;
+      try {
+        const limit = Number.parseInt(options.limit, 10);
+        if (!Number.isFinite(limit) || limit < 1 || limit > 1000) {
+          console.error("Error: --limit must be a positive integer between 1 and 1000.");
+          process.exitCode = 1;
+          return;
+        }
+
+        let sinceTs: number | null = null;
+        if (options.since) {
+          sinceTs = parseSince(options.since);
+          if (sinceTs === null) {
+            console.error("Error: --since must be a duration like 7d, 24h, 30m, or 2w.");
             process.exitCode = 1;
             return;
           }
-
-          let sinceTs: number | null = null;
-          if (options.since) {
-            sinceTs = parseSince(options.since);
-            if (sinceTs === null) {
-              console.error("Error: --since must be a duration like 7d, 24h, 30m, or 2w.");
-              process.exitCode = 1;
-              return;
-            }
-          }
-
-          // Query discoveries -- either by status or all statuses
-          const statuses: readonly string[] = options.status
-            ? [options.status]
-            : ["new", "evaluated", "approved", "rejected", "implemented"];
-
-          const allDiscoveries: Array<{
-            id: string;
-            sourceType: string;
-            title: string;
-            relevanceScore: number;
-            safetyLevel: string;
-            status: string;
-            createdAt: number;
-          }> = [];
-
-          for (const status of statuses) {
-            const result = sys.engine.listByStatus(
-              status as "new" | "evaluated" | "approved" | "rejected" | "implemented",
-              limit,
-            );
-            if (result.ok) {
-              for (const d of result.value) {
-                if (sinceTs !== null && d.createdAt < sinceTs) continue;
-                allDiscoveries.push(d);
-              }
-            }
-          }
-
-          // Sort by creation time descending, then take the limit
-          allDiscoveries.sort((a, b) => b.createdAt - a.createdAt);
-          const display = allDiscoveries.slice(0, limit);
-
-          if (display.length === 0) {
-            console.log("No discoveries found.");
-            return;
-          }
-
-          const rows = display.map((d) => ({
-            ID: shortId(d.id),
-            Source: d.sourceType,
-            Title: truncate(d.title.replace(/\n/g, " "), 50),
-            Score: d.relevanceScore.toFixed(2),
-            Safety: d.safetyLevel,
-            Status: d.status,
-            Date: formatDateOnly(d.createdAt),
-          }));
-          console.log(formatTable(rows, ["ID", "Source", "Title", "Score", "Safety", "Status", "Date"]));
-        } finally {
-          sys.db.close();
         }
-      },
-    );
+
+        // Query discoveries -- either by status or all statuses
+        const statuses: readonly string[] = options.status
+          ? [options.status]
+          : ["new", "evaluated", "approved", "rejected", "implemented"];
+
+        const allDiscoveries: Array<{
+          id: string;
+          sourceType: string;
+          title: string;
+          relevanceScore: number;
+          safetyLevel: string;
+          status: string;
+          createdAt: number;
+        }> = [];
+
+        for (const status of statuses) {
+          const result = sys.engine.listByStatus(
+            status as "new" | "evaluated" | "approved" | "rejected" | "implemented",
+            limit,
+          );
+          if (result.ok) {
+            for (const d of result.value) {
+              if (sinceTs !== null && d.createdAt < sinceTs) continue;
+              allDiscoveries.push(d);
+            }
+          }
+        }
+
+        // Sort by creation time descending, then take the limit
+        allDiscoveries.sort((a, b) => b.createdAt - a.createdAt);
+        const display = allDiscoveries.slice(0, limit);
+
+        if (display.length === 0) {
+          console.log("No discoveries found.");
+          return;
+        }
+
+        const rows = display.map((d) => ({
+          ID: shortId(d.id),
+          Source: d.sourceType,
+          Title: truncate(d.title.replace(/\n/g, " "), 50),
+          Score: d.relevanceScore.toFixed(2),
+          Safety: d.safetyLevel,
+          Status: d.status,
+          Date: formatDateOnly(d.createdAt),
+        }));
+        console.log(formatTable(rows, ["ID", "Source", "Title", "Score", "Safety", "Status", "Date"]));
+      } finally {
+        sys.db.close();
+      }
+    });
 
   // -- approve --------------------------------------------------------------
   cmd
@@ -267,9 +265,7 @@ export function registerLearningCommand(program: Command): void {
 
         const disc = discovery.value;
         if (disc.status !== "evaluated" && disc.status !== "new") {
-          console.error(
-            `Error: Discovery ${shortId(disc.id)} has status "${disc.status}" and cannot be approved.`,
-          );
+          console.error(`Error: Discovery ${shortId(disc.id)} has status "${disc.status}" and cannot be approved.`);
           console.error('Only discoveries with status "new" or "evaluated" can be approved.');
           process.exitCode = 1;
           return;
@@ -324,9 +320,7 @@ export function registerLearningCommand(program: Command): void {
           return;
         }
         if (disc.status === "implemented") {
-          console.error(
-            `Error: Discovery ${shortId(disc.id)} is already implemented and cannot be rejected.`,
-          );
+          console.error(`Error: Discovery ${shortId(disc.id)} is already implemented and cannot be rejected.`);
           process.exitCode = 1;
           return;
         }
@@ -349,75 +343,61 @@ export function registerLearningCommand(program: Command): void {
     .command("journal")
     .description("Show learning journal entries")
     .option("--date <date>", "Filter by date (YYYY-MM-DD)")
-    .option(
-      "--type <type>",
-      "Filter by entry type (discovery, evaluation, approval, rejection, implementation, error)",
-    )
+    .option("--type <type>", "Filter by entry type (discovery, evaluation, approval, rejection, implementation, error)")
     .option("--limit <n>", "Max entries", "20")
-    .action(
-      async (options: { readonly date?: string; readonly type?: string; readonly limit: string }) => {
-        const sys = await initLearningSystem();
-        if (!sys) return;
-        try {
-          const limit = Number.parseInt(options.limit, 10);
-          if (!Number.isFinite(limit) || limit < 1 || limit > 1000) {
-            console.error("Error: --limit must be a positive integer between 1 and 1000.");
+    .action(async (options: { readonly date?: string; readonly type?: string; readonly limit: string }) => {
+      const sys = await initLearningSystem();
+      if (!sys) return;
+      try {
+        const limit = Number.parseInt(options.limit, 10);
+        if (!Number.isFinite(limit) || limit < 1 || limit > 1000) {
+          console.error("Error: --limit must be a positive integer between 1 and 1000.");
+          process.exitCode = 1;
+          return;
+        }
+
+        let entries = [...sys.journal.getRecent(limit)];
+
+        // Filter by date if specified
+        if (options.date) {
+          const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+          if (!dateRegex.test(options.date)) {
+            console.error("Error: --date must be in YYYY-MM-DD format.");
             process.exitCode = 1;
             return;
           }
+          entries = entries.filter((e) => formatDateOnly(e.timestamp) === options.date);
+        }
 
-          let entries = [...sys.journal.getRecent(limit)];
-
-          // Filter by date if specified
-          if (options.date) {
-            const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-            if (!dateRegex.test(options.date)) {
-              console.error("Error: --date must be in YYYY-MM-DD format.");
-              process.exitCode = 1;
-              return;
-            }
-            entries = entries.filter((e) => formatDateOnly(e.timestamp) === options.date);
-          }
-
-          // Filter by type if specified
-          if (options.type) {
-            const validTypes = new Set([
-              "discovery",
-              "evaluation",
-              "approval",
-              "rejection",
-              "implementation",
-              "error",
-            ]);
-            if (!validTypes.has(options.type)) {
-              console.error(
-                `Error: invalid type "${options.type}". Valid: ${[...validTypes].join(", ")}`,
-              );
-              process.exitCode = 1;
-              return;
-            }
-            entries = entries.filter((e) => e.type === options.type);
-          }
-
-          if (entries.length === 0) {
-            console.log("No journal entries found.");
+        // Filter by type if specified
+        if (options.type) {
+          const validTypes = new Set(["discovery", "evaluation", "approval", "rejection", "implementation", "error"]);
+          if (!validTypes.has(options.type)) {
+            console.error(`Error: invalid type "${options.type}". Valid: ${[...validTypes].join(", ")}`);
+            process.exitCode = 1;
             return;
           }
-
-          const rows = entries.map((e) => ({
-            ID: shortId(e.id),
-            Type: e.type,
-            Title: truncate(e.title.replace(/\n/g, " "), 50),
-            Content: truncate(e.content.replace(/\n/g, " "), 40),
-            Date: formatDateTime(e.timestamp),
-          }));
-          console.log(formatTable(rows, ["ID", "Type", "Title", "Content", "Date"]));
-        } finally {
-          sys.journal.dispose();
-          sys.db.close();
+          entries = entries.filter((e) => e.type === options.type);
         }
-      },
-    );
+
+        if (entries.length === 0) {
+          console.log("No journal entries found.");
+          return;
+        }
+
+        const rows = entries.map((e) => ({
+          ID: shortId(e.id),
+          Type: e.type,
+          Title: truncate(e.title.replace(/\n/g, " "), 50),
+          Content: truncate(e.content.replace(/\n/g, " "), 40),
+          Date: formatDateTime(e.timestamp),
+        }));
+        console.log(formatTable(rows, ["ID", "Type", "Title", "Content", "Date"]));
+      } finally {
+        sys.journal.dispose();
+        sys.db.close();
+      }
+    });
 
   // -- sources --------------------------------------------------------------
   cmd
@@ -453,12 +433,8 @@ export function registerLearningCommand(program: Command): void {
 
       console.log("");
       console.log(`Relevance threshold: ${config.learning.relevance.minScore}`);
-      console.log(
-        `User interests: ${config.learning.relevance.userInterests.join(", ") || "(none)"}`,
-      );
-      console.log(
-        `Auto-implement: ${config.learning.autoImplement.enabled ? "enabled" : "disabled"}`,
-      );
+      console.log(`User interests: ${config.learning.relevance.userInterests.join(", ") || "(none)"}`);
+      console.log(`Auto-implement: ${config.learning.autoImplement.enabled ? "enabled" : "disabled"}`);
       console.log(
         `Daily budget: ${config.learning.budget.maxDiscoveriesPerDay} discoveries, ${config.learning.budget.maxTokensPerDay} tokens`,
       );
@@ -512,9 +488,7 @@ function resolveDiscoveryId(engine: DiscoveryEngine, idOrPrefix: string): Resolv
   }
 
   if (matches.length > 1) {
-    const ids = matches
-      .map((m) => `  ${shortId(m.id)} (${m.status}): ${truncate(m.title, 40)}`)
-      .join("\n");
+    const ids = matches.map((m) => `  ${shortId(m.id)} (${m.status}): ${truncate(m.title, 40)}`).join("\n");
     return {
       ok: false,
       error: `Error: Ambiguous ID prefix "${idOrPrefix}" matches ${matches.length} discoveries:\n${ids}\nPlease provide a longer ID prefix.`,

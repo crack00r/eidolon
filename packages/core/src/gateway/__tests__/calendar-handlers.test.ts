@@ -10,9 +10,9 @@
 import { Database } from "bun:sqlite";
 import { afterEach, describe, expect, test } from "bun:test";
 import type { GatewayConfig, GatewayResponse } from "@eidolon/protocol";
+import { CalendarManager } from "../../calendar/manager.ts";
 import type { Logger } from "../../logging/logger.ts";
 import { EventBus } from "../../loop/event-bus.ts";
-import { CalendarManager } from "../../calendar/manager.ts";
 import { GatewayServer } from "../server.ts";
 
 // ---------------------------------------------------------------------------
@@ -226,7 +226,7 @@ describe("calendar.listEvents", () => {
     const result = resp.result as { events: Array<{ title: string }> };
     expect(result.events).toBeArray();
     expect(result.events.length).toBe(1);
-    expect(result.events[0]!.title).toBe("Team Standup");
+    expect(result.events[0]?.title).toBe("Team Standup");
   });
 
   test("rejects invalid params (missing start)", async () => {
@@ -271,7 +271,7 @@ describe("calendar.getUpcoming", () => {
       calendarId: "cal-1",
       title: "Lunch Meeting",
       startTime: now + 3_600_000, // 1 hour from now
-      endTime: now + 7_200_000,   // 2 hours from now
+      endTime: now + 7_200_000, // 2 hours from now
       allDay: false,
       reminders: [],
       source: "manual",
@@ -295,7 +295,7 @@ describe("calendar.getUpcoming", () => {
     const result = resp.result as { events: Array<{ title: string }> };
     expect(result.events).toBeArray();
     expect(result.events.length).toBe(1);
-    expect(result.events[0]!.title).toBe("Lunch Meeting");
+    expect(result.events[0]?.title).toBe("Lunch Meeting");
   });
 
   test("respects custom hours parameter", async () => {
@@ -488,10 +488,10 @@ describe("calendar.conflicts", () => {
       conflicts: Array<{ titles: string[]; overlapStart: number; overlapEnd: number }>;
     };
     expect(result.conflicts.length).toBe(1);
-    expect(result.conflicts[0]!.titles).toContain("Meeting A");
-    expect(result.conflicts[0]!.titles).toContain("Meeting B");
-    expect(result.conflicts[0]!.overlapStart).toBe(10_500_000);
-    expect(result.conflicts[0]!.overlapEnd).toBe(11_000_000);
+    expect(result.conflicts[0]?.titles).toContain("Meeting A");
+    expect(result.conflicts[0]?.titles).toContain("Meeting B");
+    expect(result.conflicts[0]?.overlapStart).toBe(10_500_000);
+    expect(result.conflicts[0]?.overlapEnd).toBe(11_000_000);
   });
 
   test("returns empty array when no conflicts exist", async () => {

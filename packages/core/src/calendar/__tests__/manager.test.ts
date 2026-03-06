@@ -217,12 +217,8 @@ describe("CalendarManager", () => {
       const deps = makeDeps();
       const manager = new CalendarManager({ ...deps, logger });
 
-      manager.registerProvider(
-        createMockProvider("p1", "P1", [], { added: 3, updated: 1, deleted: 0 }),
-      );
-      manager.registerProvider(
-        createMockProvider("p2", "P2", [], { added: 2, updated: 0, deleted: 1 }),
-      );
+      manager.registerProvider(createMockProvider("p1", "P1", [], { added: 3, updated: 1, deleted: 0 }));
+      manager.registerProvider(createMockProvider("p2", "P2", [], { added: 2, updated: 0, deleted: 1 }));
 
       const result = await manager.sync();
       expect(result.ok).toBe(true);
@@ -279,8 +275,8 @@ describe("CalendarManager", () => {
       if (!result.ok) return;
 
       expect(result.value.length).toBe(2);
-      expect(result.value[0]!.id).toBe("e1");
-      expect(result.value[1]!.id).toBe("e2");
+      expect(result.value[0]?.id).toBe("e1");
+      expect(result.value[1]?.id).toBe("e2");
     });
 
     test("merges events from multiple providers in the cache", () => {
@@ -312,8 +308,8 @@ describe("CalendarManager", () => {
 
       expect(result.value.length).toBe(2);
       // Sorted by start_time ascending
-      expect(result.value[0]!.id).toBe("c1");
-      expect(result.value[1]!.id).toBe("g1");
+      expect(result.value[0]?.id).toBe("c1");
+      expect(result.value[1]?.id).toBe("g1");
     });
 
     test("returns empty array when no events match", () => {
@@ -375,9 +371,7 @@ describe("CalendarManager", () => {
         source: "manual",
       });
 
-      const createdEvents = deps.eventBus.published.filter(
-        (e) => e.type === "calendar:event_created",
-      );
+      const createdEvents = deps.eventBus.published.filter((e) => e.type === "calendar:event_created");
       expect(createdEvents.length).toBe(1);
     });
   });
@@ -454,8 +448,8 @@ describe("CalendarManager", () => {
 
       // Past event should not be included, future events sorted by start_time
       expect(result.value.length).toBe(2);
-      expect(result.value[0]!.title).toBe("Sooner");
-      expect(result.value[1]!.title).toBe("Later");
+      expect(result.value[0]?.title).toBe("Sooner");
+      expect(result.value[1]?.title).toBe("Later");
     });
   });
 
@@ -489,9 +483,7 @@ describe("CalendarManager", () => {
         source: "manual",
       });
 
-      const conflicts = deps.eventBus.published.filter(
-        (e) => e.type === "calendar:conflict_detected",
-      );
+      const conflicts = deps.eventBus.published.filter((e) => e.type === "calendar:conflict_detected");
       expect(conflicts.length).toBe(1);
     });
 
@@ -520,9 +512,7 @@ describe("CalendarManager", () => {
       });
 
       // The all-day event should be filtered out from conflicts
-      const conflicts = deps.eventBus.published.filter(
-        (e) => e.type === "calendar:conflict_detected",
-      );
+      const conflicts = deps.eventBus.published.filter((e) => e.type === "calendar:conflict_detected");
       expect(conflicts.length).toBe(0);
     });
   });
@@ -553,8 +543,8 @@ describe("CalendarManager", () => {
       expect(result.ok).toBe(true);
       if (!result.ok) return;
       expect(result.value.length).toBe(1);
-      expect(result.value[0]!.id).toBe("persist-1");
-      expect(result.value[0]!.title).toBe("Persistent Event");
+      expect(result.value[0]?.id).toBe("persist-1");
+      expect(result.value[0]?.title).toBe("Persistent Event");
     });
   });
 
@@ -577,8 +567,7 @@ describe("CalendarManager", () => {
         },
         disconnect: async () => {},
         listEvents: async () => Ok([]),
-        createEvent: async () =>
-          Err(createError(ErrorCode.CALENDAR_PROVIDER_ERROR, "not implemented")),
+        createEvent: async () => Err(createError(ErrorCode.CALENDAR_PROVIDER_ERROR, "not implemented")),
         deleteEvent: async () => Ok(undefined),
         sync: async () => Ok({ added: 0, updated: 0, deleted: 0 }),
       };
@@ -617,8 +606,7 @@ describe("CalendarManager", () => {
           disconnected = true;
         },
         listEvents: async () => Ok([]),
-        createEvent: async () =>
-          Err(createError(ErrorCode.CALENDAR_PROVIDER_ERROR, "not implemented")),
+        createEvent: async () => Err(createError(ErrorCode.CALENDAR_PROVIDER_ERROR, "not implemented")),
         deleteEvent: async () => Ok(undefined),
         sync: async () => Ok({ added: 0, updated: 0, deleted: 0 }),
       };

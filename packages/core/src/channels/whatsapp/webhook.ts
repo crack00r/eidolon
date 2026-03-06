@@ -76,11 +76,7 @@ export function handleVerificationChallenge(
  * Header format: sha256=<hex-encoded-hmac>
  * Uses Web Crypto API for HMAC computation and constant-time comparison.
  */
-export async function verifyWebhookSignature(
-  body: string,
-  signature: string,
-  appSecret: string,
-): Promise<boolean> {
+export async function verifyWebhookSignature(body: string, signature: string, appSecret: string): Promise<boolean> {
   if (!signature.startsWith("sha256=")) return false;
   const expectedHex = signature.slice(7);
 
@@ -205,7 +201,8 @@ function parseMessage(msg: unknown): WhatsAppWebhookMessage | null {
   switch (type) {
     case "text": {
       const textObj = m.text;
-      const text = typeof textObj === "object" && textObj !== null ? String((textObj as Record<string, unknown>).body ?? "") : "";
+      const text =
+        typeof textObj === "object" && textObj !== null ? String((textObj as Record<string, unknown>).body ?? "") : "";
       return { ...base, text };
     }
     case "image":

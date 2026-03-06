@@ -79,18 +79,12 @@ export class FakeLLMProvider implements ILLMProvider {
     return this.models;
   }
 
-  async complete(
-    messages: readonly LLMMessage[],
-    options?: LLMCompletionOptions,
-  ): Promise<LLMCompletionResult> {
+  async complete(messages: readonly LLMMessage[], options?: LLMCompletionOptions): Promise<LLMCompletionResult> {
     this.callLog.push({ messages, options });
     return this.completionResponse;
   }
 
-  async *stream(
-    messages: readonly LLMMessage[],
-    options?: LLMCompletionOptions,
-  ): AsyncIterable<LLMStreamEvent> {
+  async *stream(messages: readonly LLMMessage[], options?: LLMCompletionOptions): AsyncIterable<LLMStreamEvent> {
     this.callLog.push({ messages, options });
     if (this.streamEvents.length > 0) {
       for (const event of this.streamEvents) {

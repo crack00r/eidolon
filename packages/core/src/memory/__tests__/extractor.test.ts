@@ -656,7 +656,7 @@ describe("MemoryExtractor.extractAndConsolidate", () => {
     let receivedSessionId: string | undefined;
 
     const fakeConsolidator = createFakeConsolidator({
-      consolidateFn: async (extracted, sessionId) => {
+      consolidateFn: async (_extracted, sessionId) => {
         receivedSessionId = sessionId;
         return Ok({ decisions: [], added: 0, updated: 0, deleted: 0, noops: 0 });
       },

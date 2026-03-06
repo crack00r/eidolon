@@ -166,7 +166,7 @@ export function registerMcpCommand(program: Command): void {
 
       // Write back
       try {
-        writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n", "utf-8");
+        writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`, "utf-8");
       } catch {
         console.error(`Error: Could not write config file at ${configPath}`);
         process.exitCode = 1;

@@ -10,11 +10,11 @@
 import type {
   ILLMProvider,
   IModelRouter,
+  LLMConfig,
   LLMProviderType,
   TaskRequirement,
   TaskRequirementType,
 } from "@eidolon/protocol";
-import type { LLMConfig } from "@eidolon/protocol";
 import type { Logger } from "../logging/logger.ts";
 
 const DEFAULT_ROUTING: Record<TaskRequirementType, readonly LLMProviderType[]> = {
@@ -32,7 +32,7 @@ export class ModelRouter implements IModelRouter {
   private readonly routing: Record<string, readonly LLMProviderType[]>;
 
   constructor(
-    private readonly config: LLMConfig,
+    readonly config: LLMConfig,
     private readonly logger: Logger,
   ) {
     // Merge user routing overrides with defaults

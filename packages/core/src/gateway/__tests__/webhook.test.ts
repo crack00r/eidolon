@@ -387,10 +387,10 @@ describe("sanitizePayload", () => {
   });
 
   test("strips constructor and prototype keys", () => {
-    const obj = Object.create(null) as Record<string, unknown>;
+    const obj: Record<string, unknown> = Object.create(null);
     obj["constructor"] = "Foo";
     obj["prototype"] = {};
-    obj["safe"] = "value";
+    obj.safe = "value";
 
     const result = sanitizePayload(obj) as Record<string, unknown>;
     expect(Object.hasOwn(result, "constructor")).toBe(false);

@@ -304,7 +304,7 @@ export function formatPrometheus(registry: MetricsRegistry): string {
     formatHistogram(registry.loopCycleTime),
   ];
 
-  return sections.join("\n\n") + "\n";
+  return `${sections.join("\n\n")}\n`;
 }
 
 /** The Content-Type header value for Prometheus exposition format. */

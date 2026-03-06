@@ -74,7 +74,7 @@ export class HAPolicyChecker {
    *   2. Domain-level policy
    *   3. Fallback to "needs_approval" for unknown domains
    */
-  checkPolicy(domain: string, entityId?: string, service?: string): Result<PolicyCheckResult, never> {
+  checkPolicy(domain: string, entityId?: string, _service?: string): Result<PolicyCheckResult, never> {
     const policy = this.policies.get(domain);
 
     // Unknown domain -> conservative fallback

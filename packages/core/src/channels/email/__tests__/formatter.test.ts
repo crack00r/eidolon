@@ -1,10 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import {
-  buildEmailHtml,
-  buildReplySubject,
-  formatEmailResponse,
-  markdownToEmailHtml,
-} from "../formatter.ts";
+import { buildEmailHtml, buildReplySubject, formatEmailResponse, markdownToEmailHtml } from "../formatter.ts";
 
 // ---------------------------------------------------------------------------
 // markdownToEmailHtml

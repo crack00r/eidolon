@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
 import type { EidolonError, InboundMessage, Result } from "@eidolon/protocol";
 import { Ok } from "@eidolon/protocol";
 import type { Logger } from "../../../logging/logger.ts";
@@ -379,7 +379,7 @@ describe("WhatsAppChannel", () => {
       // Open 24h window
       await channel.handleWebhookEvents([createWebhookEvent()]);
 
-      const longText = "A".repeat(3000) + "\n\n" + "B".repeat(3000);
+      const longText = `${"A".repeat(3000)}\n\n${"B".repeat(3000)}`;
       const result = await channel.send({
         id: "out-2",
         channelId: "+491234567890",

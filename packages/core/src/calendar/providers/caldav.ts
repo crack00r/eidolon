@@ -8,13 +8,7 @@
  */
 
 import { randomUUID } from "node:crypto";
-import type {
-  CalendarEvent,
-  CalendarProvider,
-  CalendarSyncResult,
-  EidolonError,
-  Result,
-} from "@eidolon/protocol";
+import type { CalendarEvent, CalendarProvider, CalendarSyncResult, EidolonError, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 import type { Logger } from "../../logging/logger.ts";
 
@@ -97,9 +91,7 @@ export class CalDAVProvider implements CalendarProvider {
     return Ok(events);
   }
 
-  async createEvent(
-    event: Omit<CalendarEvent, "id" | "syncedAt">,
-  ): Promise<Result<CalendarEvent, EidolonError>> {
+  async createEvent(event: Omit<CalendarEvent, "id" | "syncedAt">): Promise<Result<CalendarEvent, EidolonError>> {
     const uid = randomUUID();
     const icsData = eventToIcs(event, uid);
     const eventUrl = `${this.calendarUrl()}/${uid}.ics`;
@@ -116,9 +108,7 @@ export class CalDAVProvider implements CalendarProvider {
       });
 
       if (!response.ok) {
-        return Err(
-          createError(ErrorCode.CALENDAR_PROVIDER_ERROR, `CalDAV PUT failed: ${response.status}`),
-        );
+        return Err(createError(ErrorCode.CALENDAR_PROVIDER_ERROR, `CalDAV PUT failed: ${response.status}`));
       }
 
       const created: CalendarEvent = {
@@ -143,9 +133,7 @@ export class CalDAVProvider implements CalendarProvider {
       });
 
       if (!response.ok && response.status !== 204 && response.status !== 404) {
-        return Err(
-          createError(ErrorCode.CALENDAR_PROVIDER_ERROR, `CalDAV DELETE failed: ${response.status}`),
-        );
+        return Err(createError(ErrorCode.CALENDAR_PROVIDER_ERROR, `CalDAV DELETE failed: ${response.status}`));
       }
 
       return Ok(undefined);
@@ -195,11 +183,7 @@ export class CalDAVProvider implements CalendarProvider {
     return { Authorization: `Basic ${encoded}` };
   }
 
-  private async propfind(
-    url: string,
-    depth: number,
-    props: string,
-  ): Promise<Result<string, EidolonError>> {
+  private async propfind(url: string, depth: number, props: string): Promise<Result<string, EidolonError>> {
     const body = `<?xml version="1.0" encoding="utf-8" ?>
       <d:propfind xmlns:d="DAV:" xmlns:cs="http://calendarserver.org/ns/">
         <d:prop>
@@ -219,9 +203,7 @@ export class CalDAVProvider implements CalendarProvider {
       });
 
       if (!response.ok && response.status !== 207) {
-        return Err(
-          createError(ErrorCode.CALENDAR_PROVIDER_ERROR, `PROPFIND failed: ${response.status}`),
-        );
+        return Err(createError(ErrorCode.CALENDAR_PROVIDER_ERROR, `PROPFIND failed: ${response.status}`));
       }
 
       const text = await response.text();
@@ -244,9 +226,7 @@ export class CalDAVProvider implements CalendarProvider {
       });
 
       if (!response.ok && response.status !== 207) {
-        return Err(
-          createError(ErrorCode.CALENDAR_PROVIDER_ERROR, `REPORT failed: ${response.status}`),
-        );
+        return Err(createError(ErrorCode.CALENDAR_PROVIDER_ERROR, `REPORT failed: ${response.status}`));
       }
 
       const text = await response.text();
@@ -257,11 +237,7 @@ export class CalDAVProvider implements CalendarProvider {
   }
 
   private async getCtag(): Promise<Result<string, EidolonError>> {
-    const result = await this.propfind(
-      this.calendarUrl(),
-      0,
-      "<cs:getctag xmlns:cs=\"http://calendarserver.org/ns/\"/>",
-    );
+    const result = await this.propfind(this.calendarUrl(), 0, '<cs:getctag xmlns:cs="http://calendarserver.org/ns/"/>');
     if (!result.ok) return result;
 
     const match = /<cs:getctag[^>]*>([^<]+)<\/cs:getctag>/i.exec(result.value);
@@ -278,7 +254,10 @@ export class CalDAVProvider implements CalendarProvider {
 // ---------------------------------------------------------------------------
 
 function toICalDate(timestamp: number): string {
-  return new Date(timestamp).toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+  return new Date(timestamp)
+    .toISOString()
+    .replace(/[-:]/g, "")
+    .replace(/\.\d{3}/, "");
 }
 
 /**
@@ -305,7 +284,7 @@ export function parseIcsEvent(icsData: string, calendarPath: string): CalendarEv
   const startTime = parseIcsDate(dtstart);
   const endTime = dtend ? parseIcsDate(dtend) : startTime + 3_600_000;
 
-  if (isNaN(startTime) || isNaN(endTime)) return null;
+  if (Number.isNaN(startTime) || Number.isNaN(endTime)) return null;
 
   return {
     id: uid,
@@ -365,14 +344,15 @@ function parseMultistatusResponse(xml: string, calendarPath: string): CalendarEv
 
   // Extract all calendar-data content blocks
   const calDataRegex = /<(?:cal|c):calendar-data[^>]*>([\s\S]*?)<\/(?:cal|c):calendar-data>/gi;
-  let match: RegExpExecArray | null;
+  let match: RegExpExecArray | null = calDataRegex.exec(xml);
 
-  while ((match = calDataRegex.exec(xml)) !== null) {
+  while (match !== null) {
     const icsData = decodeXmlEntities(match[1] ?? "");
     const event = parseIcsEvent(icsData, calendarPath);
     if (event) {
       events.push(event);
     }
+    match = calDataRegex.exec(xml);
   }
 
   return events;
@@ -434,7 +414,10 @@ function formatIcsDate(timestamp: number): string {
 }
 
 function formatIcsDateTime(timestamp: number): string {
-  return new Date(timestamp).toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+  return new Date(timestamp)
+    .toISOString()
+    .replace(/[-:]/g, "")
+    .replace(/\.\d{3}/, "");
 }
 
 function escapeIcsText(text: string): string {

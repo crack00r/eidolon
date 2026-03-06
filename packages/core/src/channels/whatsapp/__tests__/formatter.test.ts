@@ -103,7 +103,7 @@ describe("splitWhatsAppMessage", () => {
   });
 
   test("filters out empty chunks", () => {
-    const chunks = splitWhatsAppMessage("A".repeat(4000) + "\n\n" + "B".repeat(100));
+    const chunks = splitWhatsAppMessage(`${"A".repeat(4000)}\n\n${"B".repeat(100)}`);
     for (const chunk of chunks) {
       expect(chunk.length).toBeGreaterThan(0);
     }

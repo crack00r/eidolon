@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { ClaudeSessionOptions } from "@eidolon/protocol";
 import { FakeClaudeProcess } from "@eidolon/test-utils";
-import { z } from "zod";
 import type { Logger } from "../../logging/logger.ts";
 import { MemoryExtractor } from "../extractor.ts";
 import type { ExtractionResponse } from "../structured-extract.ts";

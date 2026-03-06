@@ -13,7 +13,6 @@ import {
   DatabaseManager,
   generateMasterKey,
   getConfigDir,
-  getConfigPath,
   getDataDir,
   getLogDir,
   loadConfig,

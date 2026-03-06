@@ -79,18 +79,14 @@ export class HAEntityResolver {
       }
 
       // 1. Exact match on entity_id
-      const exactIdMatch = entities.find(
-        (e) => e.entityId.toLowerCase() === normalizedText,
-      );
+      const exactIdMatch = entities.find((e) => e.entityId.toLowerCase() === normalizedText);
       if (exactIdMatch) {
         this.logger.debug("resolve", `Exact ID match: ${exactIdMatch.entityId}`);
         return Ok(exactIdMatch);
       }
 
       // 2. Exact match on friendly_name (case-insensitive)
-      const exactNameMatch = entities.find(
-        (e) => e.friendlyName.toLowerCase() === normalizedText,
-      );
+      const exactNameMatch = entities.find((e) => e.friendlyName.toLowerCase() === normalizedText);
       if (exactNameMatch) {
         this.logger.debug("resolve", `Exact name match: ${exactNameMatch.entityId}`);
         return Ok(exactNameMatch);
@@ -146,9 +142,7 @@ export class HAEntityResolver {
   // -----------------------------------------------------------------------
 
   private loadEntities(domain?: string): HAEntity[] {
-    const query = domain
-      ? "SELECT * FROM ha_entities WHERE domain = ?"
-      : "SELECT * FROM ha_entities";
+    const query = domain ? "SELECT * FROM ha_entities WHERE domain = ?" : "SELECT * FROM ha_entities";
 
     const rows = domain
       ? (this.db.query(query).all(domain) as HAEntityRow[])

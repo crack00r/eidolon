@@ -3,15 +3,11 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import type {
-  LLMProviderType,
-  LLMStreamEvent,
-  TaskRequirement,
-} from "@eidolon/protocol";
+import type { LLMProviderType, LLMStreamEvent, TaskRequirement } from "@eidolon/protocol";
 import { FakeLLMProvider } from "@eidolon/test-utils";
-import type { Logger } from "../logging/logger.ts";
 import { ModelRouter } from "../llm/router.ts";
 import { ToolExecutor } from "../llm/tool-executor.ts";
+import type { Logger } from "../logging/logger.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -73,9 +69,7 @@ describe("FakeLLMProvider", () => {
   test("stream yields text and done events by default", async () => {
     const provider = FakeLLMProvider.withResponse("Stream result");
 
-    const events = await collectStream(
-      provider.stream([{ role: "user", content: "Go" }]),
-    );
+    const events = await collectStream(provider.stream([{ role: "user", content: "Go" }]));
 
     expect(events.length).toBeGreaterThanOrEqual(2);
     expect(events[0]?.type).toBe("text");
@@ -96,9 +90,7 @@ describe("FakeLLMProvider", () => {
     ];
     provider.setStreamEvents(customEvents);
 
-    const events = await collectStream(
-      provider.stream([{ role: "user", content: "Multi-part" }]),
-    );
+    const events = await collectStream(provider.stream([{ role: "user", content: "Multi-part" }]));
 
     expect(events).toHaveLength(3);
     expect(events[0]?.text).toBe("Part 1 ");
@@ -351,13 +343,10 @@ describe("ToolExecutor", () => {
     const executor = new ToolExecutor(logger);
 
     executor.registerTool("greet", async (args) => {
-      return `Hello, ${String(args["name"])}!`;
+      return `Hello, ${String(args.name)}!`;
     });
 
-    const result = await executor.execute(
-      { id: "call-1", name: "greet", arguments: { name: "Manuel" } },
-      [],
-    );
+    const result = await executor.execute({ id: "call-1", name: "greet", arguments: { name: "Manuel" } }, []);
 
     expect(result.toolCallId).toBe("call-1");
     expect(result.content).toBe("Hello, Manuel!");
@@ -367,10 +356,7 @@ describe("ToolExecutor", () => {
   test("execute returns error for unknown tool", async () => {
     const executor = new ToolExecutor(logger);
 
-    const result = await executor.execute(
-      { id: "call-2", name: "nonexistent", arguments: {} },
-      [],
-    );
+    const result = await executor.execute({ id: "call-2", name: "nonexistent", arguments: {} }, []);
 
     expect(result.toolCallId).toBe("call-2");
     expect(result.isError).toBe(true);
@@ -384,10 +370,7 @@ describe("ToolExecutor", () => {
       throw new Error("Tool exploded");
     });
 
-    const result = await executor.execute(
-      { id: "call-3", name: "boom", arguments: {} },
-      [],
-    );
+    const result = await executor.execute({ id: "call-3", name: "boom", arguments: {} }, []);
 
     expect(result.toolCallId).toBe("call-3");
     expect(result.isError).toBe(true);
@@ -399,28 +382,22 @@ describe("ToolExecutor", () => {
     const executor = new ToolExecutor(logger);
 
     executor.registerTool("add", async (args) => {
-      const a = Number(args["a"]);
-      const b = Number(args["b"]);
+      const a = Number(args.a);
+      const b = Number(args.b);
       return String(a + b);
     });
 
     executor.registerTool("multiply", async (args) => {
-      const a = Number(args["a"]);
-      const b = Number(args["b"]);
+      const a = Number(args.a);
+      const b = Number(args.b);
       return String(a * b);
     });
 
-    const addResult = await executor.execute(
-      { id: "add-1", name: "add", arguments: { a: 3, b: 4 } },
-      [],
-    );
+    const addResult = await executor.execute({ id: "add-1", name: "add", arguments: { a: 3, b: 4 } }, []);
     expect(addResult.content).toBe("7");
     expect(addResult.isError).toBeUndefined();
 
-    const mulResult = await executor.execute(
-      { id: "mul-1", name: "multiply", arguments: { a: 5, b: 6 } },
-      [],
-    );
+    const mulResult = await executor.execute({ id: "mul-1", name: "multiply", arguments: { a: 5, b: 6 } }, []);
     expect(mulResult.content).toBe("30");
     expect(mulResult.isError).toBeUndefined();
   });
@@ -429,17 +406,11 @@ describe("ToolExecutor", () => {
     const executor = new ToolExecutor(logger);
 
     executor.registerTool("versioned", async () => "v1");
-    const result1 = await executor.execute(
-      { id: "v1", name: "versioned", arguments: {} },
-      [],
-    );
+    const result1 = await executor.execute({ id: "v1", name: "versioned", arguments: {} }, []);
     expect(result1.content).toBe("v1");
 
     executor.registerTool("versioned", async () => "v2");
-    const result2 = await executor.execute(
-      { id: "v2", name: "versioned", arguments: {} },
-      [],
-    );
+    const result2 = await executor.execute({ id: "v2", name: "versioned", arguments: {} }, []);
     expect(result2.content).toBe("v2");
   });
 
@@ -461,8 +432,8 @@ describe("ToolExecutor", () => {
       [],
     );
 
-    expect(receivedArgs["key"]).toBe("value");
-    expect(receivedArgs["num"]).toBe(42);
-    expect(receivedArgs["nested"]).toEqual({ a: 1 });
+    expect(receivedArgs.key).toBe("value");
+    expect(receivedArgs.num).toBe(42);
+    expect(receivedArgs.nested).toEqual({ a: 1 });
   });
 });

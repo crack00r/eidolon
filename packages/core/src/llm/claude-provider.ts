@@ -41,10 +41,7 @@ export class ClaudeProvider implements ILLMProvider {
     return ["claude-sonnet-4-20250514", "claude-opus-4-20250514", "claude-haiku-4-20250514"];
   }
 
-  async complete(
-    messages: readonly LLMMessage[],
-    options?: LLMCompletionOptions,
-  ): Promise<LLMCompletionResult> {
+  async complete(messages: readonly LLMMessage[], options?: LLMCompletionOptions): Promise<LLMCompletionResult> {
     // Claude completion is handled through ClaudeCodeManager sessions.
     // This provider is mainly used for routing decisions -- the actual
     // invocation goes through the existing session pipeline.
@@ -61,10 +58,7 @@ export class ClaudeProvider implements ILLMProvider {
     };
   }
 
-  async *stream(
-    messages: readonly LLMMessage[],
-    options?: LLMCompletionOptions,
-  ): AsyncIterable<LLMStreamEvent> {
+  async *stream(messages: readonly LLMMessage[], _options?: LLMCompletionOptions): AsyncIterable<LLMStreamEvent> {
     this.logger.debug("llm:claude", "stream() called -- delegate to session pipeline", {
       messageCount: messages.length,
     });

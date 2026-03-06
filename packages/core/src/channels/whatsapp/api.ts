@@ -134,7 +134,10 @@ export class WhatsAppCloudApi implements WhatsAppApiClient {
 
         if (!response.ok) {
           return Err(
-            createError(ErrorCode.WHATSAPP_MEDIA_ERROR, `Media download failed: ${response.status} ${response.statusText}`),
+            createError(
+              ErrorCode.WHATSAPP_MEDIA_ERROR,
+              `Media download failed: ${response.status} ${response.statusText}`,
+            ),
           );
         }
 
@@ -200,10 +203,14 @@ export class WhatsAppCloudApi implements WhatsAppApiClient {
       if (attempt === MAX_RETRIES) break;
 
       const delayMs = INITIAL_RETRY_DELAY_MS * 2 ** attempt;
-      this.logger.warn("whatsapp-api", `API request failed (attempt ${attempt + 1}/${MAX_RETRIES}), retrying in ${delayMs}ms`, {
-        error: result.error.message,
-        path,
-      });
+      this.logger.warn(
+        "whatsapp-api",
+        `API request failed (attempt ${attempt + 1}/${MAX_RETRIES}), retrying in ${delayMs}ms`,
+        {
+          error: result.error.message,
+          path,
+        },
+      );
       await sleep(delayMs);
     }
 

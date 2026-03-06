@@ -330,7 +330,7 @@ describe("HAManager", () => {
         "light",
         "turn_on",
         { brightness: 128 },
-        async (entityId, domain, service, data) => {
+        async (entityId, domain, service, _data) => {
           executorCalled = true;
           return Ok({ entityId, domain, service, success: true });
         },
@@ -545,9 +545,7 @@ describe("HAManager", () => {
       await manager.initialize();
 
       // Now sync with a state change -- should detect the change
-      manager.syncEntities([
-        makeEntity({ entityId: "light.existing", friendlyName: "Existing Light", state: "off" }),
-      ]);
+      manager.syncEntities([makeEntity({ entityId: "light.existing", friendlyName: "Existing Light", state: "off" })]);
 
       const stateChanges = deps.eventBus.published.filter((e) => e.type === "ha:state_changed");
       expect(stateChanges.length).toBe(1);
@@ -581,21 +579,15 @@ describe("HAManager", () => {
       const manager = new HAManager({ ...deps, logger });
 
       await manager.initialize();
-      manager.syncEntities([
-        makeEntity({ entityId: "light.a", state: "on", friendlyName: "A" }),
-      ]);
+      manager.syncEntities([makeEntity({ entityId: "light.a", state: "on", friendlyName: "A" })]);
 
       await manager.dispose();
 
       // After dispose, syncing the same entity should not detect a change
       // because previousStates was cleared (acts as a first-time sync)
-      manager.syncEntities([
-        makeEntity({ entityId: "light.a", state: "off", friendlyName: "A" }),
-      ]);
+      manager.syncEntities([makeEntity({ entityId: "light.a", state: "off", friendlyName: "A" })]);
 
-      const stateChanges = deps.eventBus.published.filter(
-        (e) => e.type === "ha:state_changed",
-      );
+      const stateChanges = deps.eventBus.published.filter((e) => e.type === "ha:state_changed");
       expect(stateChanges.length).toBe(0);
     });
   });

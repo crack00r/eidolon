@@ -17,7 +17,6 @@ import type { Database } from "bun:sqlite";
 import type {
   EidolonError,
   HAAnomaly,
-  HAAnomalyRule,
   HAEntity,
   HAServiceResult,
   HAStateChange,
@@ -27,10 +26,10 @@ import type {
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 import type { Logger } from "../logging/logger.ts";
 import type { EventBus } from "../loop/event-bus.ts";
+import type { EmbeddingModel } from "../memory/embeddings.ts";
 import { HAPolicyChecker } from "./policies.ts";
 import { HAEntityResolver } from "./resolver.ts";
 import { HASceneEngine } from "./scenes.ts";
-import type { EmbeddingModel } from "../memory/embeddings.ts";
 
 // ---------------------------------------------------------------------------
 // DB row type
@@ -135,9 +134,7 @@ export class HAManager {
   /** Get a single entity by ID from the cache. */
   getEntity(entityId: string): Result<HAEntity | null, EidolonError> {
     try {
-      const row = this.db
-        .query("SELECT * FROM ha_entities WHERE entity_id = ?")
-        .get(entityId) as HAEntityRow | null;
+      const row = this.db.query("SELECT * FROM ha_entities WHERE entity_id = ?").get(entityId) as HAEntityRow | null;
 
       if (!row) return Ok(null);
       return Ok(rowToEntity(row));
@@ -239,12 +236,7 @@ export class HAManager {
 
     const policy = policyResult.value;
     if (policy.level === "dangerous") {
-      return Err(
-        createError(
-          ErrorCode.HA_POLICY_DENIED,
-          `Action denied by policy: ${policy.reason}`,
-        ),
-      );
+      return Err(createError(ErrorCode.HA_POLICY_DENIED, `Action denied by policy: ${policy.reason}`));
     }
 
     if (!executorFn) {
@@ -282,9 +274,7 @@ export class HAManager {
     const anomalies: HAAnomaly[] = [];
 
     for (const rule of rules) {
-      const matchingEntities = entities.filter((e) =>
-        matchesPattern(e.entityId, rule.entityPattern),
-      );
+      const matchingEntities = entities.filter((e) => matchesPattern(e.entityId, rule.entityPattern));
 
       for (const entity of matchingEntities) {
         if (evaluateCondition(entity, rule.condition)) {
@@ -398,9 +388,7 @@ function rowToEntity(row: HAEntityRow): HAEntity {
 function matchesPattern(entityId: string, pattern: string): boolean {
   if (pattern === "*") return true;
   // Convert glob pattern to regex
-  const escapedPattern = pattern
-    .replace(/[.+?^${}()|[\]\\]/g, "\\$&")
-    .replace(/\*/g, ".*");
+  const escapedPattern = pattern.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*");
   const regex = new RegExp(`^${escapedPattern}$`);
   return regex.test(entityId);
 }

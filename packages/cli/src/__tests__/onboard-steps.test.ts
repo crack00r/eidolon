@@ -5,7 +5,7 @@
  * Individual step functions are tested in isolation.
  */
 
-import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import type { AskFn } from "../commands/onboard-steps.ts";
 
 // Mock console.log to capture output

@@ -12,18 +12,19 @@ import type { EidolonConfig } from "@eidolon/protocol";
 import { SECRETS_DB_FILENAME, VERSION } from "@eidolon/protocol";
 import { AuditLogger } from "../audit/logger.ts";
 import { BackupManager } from "../backup/manager.ts";
-import type { DiscordChannel, DiscordConfig, IDiscordClient } from "../channels/discord/channel.ts";
-import { MessageRouter } from "../channels/router.ts";
-import type { TelegramConfig } from "../channels/telegram/channel.ts";
-import { TelegramChannel } from "../channels/telegram/channel.ts";
+import { CalendarManager } from "../calendar/manager.ts";
+import type { DiscordChannel } from "../channels/discord/channel.ts";
 import type { EmailChannelConfig } from "../channels/email/channel.ts";
 import { EmailChannel } from "../channels/email/channel.ts";
 import { BunImapClient } from "../channels/email/imap.ts";
 import { BunSmtpClient } from "../channels/email/smtp.ts";
-import type { WhatsAppChannelConfig } from "../channels/whatsapp/channel.ts";
-import { WhatsAppChannel } from "../channels/whatsapp/channel.ts";
+import { MessageRouter } from "../channels/router.ts";
+import type { TelegramConfig } from "../channels/telegram/channel.ts";
+import { TelegramChannel } from "../channels/telegram/channel.ts";
 import type { WhatsAppApiConfig } from "../channels/whatsapp/api.ts";
 import { WhatsAppCloudApi } from "../channels/whatsapp/api.ts";
+import type { WhatsAppChannelConfig } from "../channels/whatsapp/channel.ts";
+import { WhatsAppChannel } from "../channels/whatsapp/channel.ts";
 import { ClaudeCodeManager } from "../claude/manager.ts";
 import { loadConfig } from "../config/loader.ts";
 import { getConfigPath, getDataDir, getPidFilePath } from "../config/paths.ts";
@@ -45,6 +46,11 @@ import {
   createDiskCheck,
 } from "../health/checks/index.ts";
 import { createHealthServer } from "../health/server.ts";
+import { HAManager } from "../home-automation/manager.ts";
+import { ClaudeProvider } from "../llm/claude-provider.ts";
+import { LlamaCppProvider } from "../llm/llamacpp-provider.ts";
+import { OllamaProvider } from "../llm/ollama-provider.ts";
+import { ModelRouter } from "../llm/router.ts";
 import type { Logger } from "../logging/logger.ts";
 import { createLogger } from "../logging/logger.ts";
 import { LogRotator } from "../logging/rotation.ts";
@@ -66,24 +72,18 @@ import { MemoryStore } from "../memory/store.ts";
 import { MetricsRegistry } from "../metrics/prometheus.ts";
 import { TokenTracker } from "../metrics/token-tracker.ts";
 import { type MetricsWiringHandle, wireMetrics } from "../metrics/wiring.ts";
-import type { TelemetryProvider } from "../telemetry/provider.ts";
-import { initTelemetry } from "../telemetry/provider.ts";
-import { createMetricsBridge } from "../telemetry/metrics-bridge.ts";
-import type { MetricsBridgeHandle } from "../telemetry/metrics-bridge.ts";
-import { CalendarManager } from "../calendar/manager.ts";
-import { HAManager } from "../home-automation/manager.ts";
-import { AutomationEngine } from "../scheduler/automation.ts";
-import { TaskScheduler } from "../scheduler/scheduler.ts";
-import { ClaudeProvider } from "../llm/claude-provider.ts";
-import { LlamaCppProvider } from "../llm/llamacpp-provider.ts";
-import { ModelRouter } from "../llm/router.ts";
-import { OllamaProvider } from "../llm/ollama-provider.ts";
-import { discoverPlugins } from "../plugins/loader.ts";
 import { PluginLifecycleManager } from "../plugins/lifecycle.ts";
+import { discoverPlugins } from "../plugins/loader.ts";
 import { PluginRegistry } from "../plugins/registry.ts";
 import type { SandboxDeps } from "../plugins/sandbox.ts";
+import { AutomationEngine } from "../scheduler/automation.ts";
+import { TaskScheduler } from "../scheduler/scheduler.ts";
 import { getMasterKey } from "../secrets/master-key.ts";
 import { SecretStore } from "../secrets/store.ts";
+import type { MetricsBridgeHandle } from "../telemetry/metrics-bridge.ts";
+import { createMetricsBridge } from "../telemetry/metrics-bridge.ts";
+import type { TelemetryProvider } from "../telemetry/provider.ts";
+import { initTelemetry } from "../telemetry/provider.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -1272,7 +1272,10 @@ export class EidolonDaemon {
             this.modules.gpuWorkerPool = new GPUWorkerPool(poolConfig, logger);
             this.modules.gpuWorkerPool.startHealthChecks();
 
-            logger.info("daemon", `GPUManager initialized (${workers.length} worker(s) in pool, strategy: ${config.gpu.pool.loadBalancing})`);
+            logger.info(
+              "daemon",
+              `GPUManager initialized (${workers.length} worker(s) in pool, strategy: ${config.gpu.pool.loadBalancing})`,
+            );
           } catch (err: unknown) {
             const message = err instanceof Error ? err.message : String(err);
             logger.warn("daemon", `GPUManager skipped: ${message}`);
@@ -1502,9 +1505,10 @@ export class EidolonDaemon {
             const entityId = typeof params.entityId === "string" ? params.entityId : "";
             const domain = typeof params.domain === "string" ? params.domain : "";
             const service = typeof params.service === "string" ? params.service : "";
-            const data = typeof params.data === "object" && params.data !== null
-              ? params.data as Record<string, unknown>
-              : undefined;
+            const data =
+              typeof params.data === "object" && params.data !== null
+                ? (params.data as Record<string, unknown>)
+                : undefined;
             const result = await haManager.executeService(entityId, domain, service, data);
             if (!result.ok) throw new Error(result.error.message);
             return result.value;

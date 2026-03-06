@@ -143,7 +143,11 @@ export class GPUWorker {
    * Execute an authenticated request through the circuit breaker.
    * Tracks active requests and latency for load balancing.
    */
-  async executeRequest<T>(path: string, options?: RequestInit, timeoutOverrideMs?: number): Promise<Result<T, EidolonError>> {
+  async executeRequest<T>(
+    path: string,
+    options?: RequestInit,
+    timeoutOverrideMs?: number,
+  ): Promise<Result<T, EidolonError>> {
     if (!this.hasCapacity) {
       return Err(
         createError(
@@ -183,7 +187,11 @@ export class GPUWorker {
   // Private helpers
   // -------------------------------------------------------------------------
 
-  private async rawRequest<T>(path: string, options?: RequestInit, timeoutOverrideMs?: number): Promise<Result<T, EidolonError>> {
+  private async rawRequest<T>(
+    path: string,
+    options?: RequestInit,
+    timeoutOverrideMs?: number,
+  ): Promise<Result<T, EidolonError>> {
     const url = `${this.config.url}${path}`;
     const timeoutMs = timeoutOverrideMs ?? this.config.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
@@ -254,9 +262,7 @@ export class GPUWorker {
     if (contentLength !== null) {
       const size = Number(contentLength);
       if (!Number.isNaN(size) && size > maxBytes) {
-        return Err(
-          createError(ErrorCode.GPU_UNAVAILABLE, `GPU response too large: ${size} bytes (max ${maxBytes})`),
-        );
+        return Err(createError(ErrorCode.GPU_UNAVAILABLE, `GPU response too large: ${size} bytes (max ${maxBytes})`));
       }
     }
 

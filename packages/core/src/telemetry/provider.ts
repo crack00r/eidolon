@@ -42,10 +42,7 @@ const NOOP_PROVIDER: TelemetryProvider = {
  * Dynamically imports the OTel SDK packages so they are not loaded
  * at all when telemetry is disabled.
  */
-export async function initTelemetry(
-  config: TelemetryConfig,
-  logger: Logger,
-): Promise<TelemetryProvider> {
+export async function initTelemetry(config: TelemetryConfig, logger: Logger): Promise<TelemetryProvider> {
   if (!config.enabled) {
     logger.info("telemetry", "Telemetry disabled (config.telemetry.enabled = false)");
     return NOOP_PROVIDER;
@@ -57,10 +54,7 @@ export async function initTelemetry(
     const { OTLPTraceExporter } = await import("@opentelemetry/exporter-trace-otlp-http");
     const { OTLPMetricExporter } = await import("@opentelemetry/exporter-metrics-otlp-http");
     const { resourceFromAttributes } = await import("@opentelemetry/resources");
-    const {
-      ATTR_SERVICE_NAME,
-      ATTR_SERVICE_VERSION,
-    } = await import("@opentelemetry/semantic-conventions");
+    const { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } = await import("@opentelemetry/semantic-conventions");
     const { PeriodicExportingMetricReader } = await import("@opentelemetry/sdk-metrics");
     const { BatchSpanProcessor } = await import("@opentelemetry/sdk-trace-base");
     const { TraceIdRatioBasedSampler } = await import("@opentelemetry/sdk-trace-base");

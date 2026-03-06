@@ -256,12 +256,10 @@ function deriveName(actionText: string): string {
 
 export class AutomationEngine {
   private readonly scheduler: TaskScheduler;
-  private readonly db: Database;
   private readonly logger: Logger;
 
-  constructor(scheduler: TaskScheduler, db: Database, logger: Logger) {
+  constructor(scheduler: TaskScheduler, _db: Database, logger: Logger) {
     this.scheduler = scheduler;
-    this.db = db;
     this.logger = logger.child("automation");
   }
 

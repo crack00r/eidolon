@@ -65,13 +65,9 @@ describe("initTelemetry", () => {
       logger,
     );
 
-    const result = await provider.tracer.withSpan(
-      "test-span",
-      { "test.attr": "value" },
-      async () => {
-        return 123;
-      },
-    );
+    const result = await provider.tracer.withSpan("test-span", { "test.attr": "value" }, async () => {
+      return 123;
+    });
 
     expect(result).toBe(123);
 

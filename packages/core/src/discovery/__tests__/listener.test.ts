@@ -243,12 +243,12 @@ describe("DiscoveryBroadcaster + DiscoveryListener integration", () => {
     if (foundServers.length > 0) {
       const server = foundServers[0];
       expect(server).toBeDefined();
-      expect(server!.port).toBe(8419);
-      expect(server!.tls).toBe(false);
-      expect(typeof server!.hostname).toBe("string");
-      expect(typeof server!.host).toBe("string");
-      expect(typeof server!.version).toBe("string");
-      expect(server!.verified).toBe(false); // No key configured
+      expect(server?.port).toBe(8419);
+      expect(server?.tls).toBe(false);
+      expect(typeof server?.hostname).toBe("string");
+      expect(typeof server?.host).toBe("string");
+      expect(typeof server?.version).toBe("string");
+      expect(server?.verified).toBe(false); // No key configured
     }
   });
 
@@ -283,9 +283,9 @@ describe("DiscoveryBroadcaster + DiscoveryListener integration", () => {
 
     if (foundServers.length > 0) {
       const server = foundServers[0];
-      expect(server!.port).toBe(9999);
-      expect(server!.tls).toBe(true);
-      expect(server!.verified).toBe(true);
+      expect(server?.port).toBe(9999);
+      expect(server?.tls).toBe(true);
+      expect(server?.verified).toBe(true);
     }
   });
 });

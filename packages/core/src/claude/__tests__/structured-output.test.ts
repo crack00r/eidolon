@@ -335,7 +335,7 @@ describe("StructuredOutputParser.parse", () => {
 
   test("retries on validation failure and succeeds", async () => {
     const fake = new FakeClaudeProcess();
-    const callCount = 0;
+    const _callCount = 0;
 
     // Use a regex-based rule that checks call count via the prompt content.
     // First call has the original prompt, retry has "Your previous response" at the start.

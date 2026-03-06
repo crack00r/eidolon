@@ -23,12 +23,19 @@ import type {
   GatewayPushType,
 } from "@eidolon/protocol";
 import { z } from "zod";
+import type { CalendarManager } from "../calendar/index.ts";
+import type { WhatsAppChannel } from "../channels/whatsapp/channel.ts";
+import {
+  handleVerificationChallenge,
+  parseWebhookPayload,
+  verifyWebhookSignature,
+} from "../channels/whatsapp/webhook.ts";
 import type { Logger } from "../logging/logger.ts";
 import type { EventBus } from "../loop/event-bus.ts";
 import { formatPrometheus, type MetricsRegistry, PROMETHEUS_CONTENT_TYPE } from "../metrics/prometheus.ts";
+import type { RateLimitTracker } from "../metrics/rate-limits.ts";
 import type { ITracer } from "../telemetry/tracer.ts";
 import { NoopTracer } from "../telemetry/tracer.ts";
-import type { RateLimitTracker } from "../metrics/rate-limits.ts";
 import {
   createJsonRpcError,
   createJsonRpcResponse,
@@ -38,15 +45,8 @@ import {
   JSON_RPC_METHOD_NOT_FOUND,
   parseJsonRpcRequest,
 } from "./protocol.ts";
-import type { CalendarManager } from "../calendar/index.ts";
 import { AuthRateLimiter } from "./rate-limiter.ts";
 import { extractWebhookResult, handleWebhookRequest, type WebhookDeps } from "./webhook.ts";
-import type { WhatsAppChannel } from "../channels/whatsapp/channel.ts";
-import {
-  handleVerificationChallenge,
-  parseWebhookPayload,
-  verifyWebhookSignature,
-} from "../channels/whatsapp/webhook.ts";
 
 // ---------------------------------------------------------------------------
 // Zod schemas for RPC method parameters
@@ -261,10 +261,10 @@ const AUTH_TIMEOUT_MS = 10_000;
  * SEC-M4: Per-message rate limiting for authenticated clients.
  * Maximum RPC messages per second per client to prevent flooding.
  */
-const MAX_MESSAGES_PER_SECOND = 50;
+const _MAX_MESSAGES_PER_SECOND = 50;
 
 /** Sliding window duration in ms for per-message rate limiting. */
-const MESSAGE_RATE_WINDOW_MS = 1_000;
+const _MESSAGE_RATE_WINDOW_MS = 1_000;
 
 /** WebSocket idle timeout in seconds (Bun uses seconds for this). */
 const WS_IDLE_TIMEOUT_SECONDS = 120;

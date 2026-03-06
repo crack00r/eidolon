@@ -96,8 +96,9 @@ describe("handleOpenAIRequest", () => {
       const req = makeRequest("/v1/unknown");
       const resp = await handleOpenAIRequest(req, makeDeps());
       expect(resp).not.toBeNull();
-      expect(resp!.status).toBe(404);
+      expect(resp?.status).toBe(404);
 
+      // biome-ignore lint/style/noNonNullAssertion: test assertion
       const body = (await parseJsonBody(resp!)) as Record<string, unknown>;
       const error = body.error as Record<string, unknown>;
       expect(error.type).toBe("invalid_request_error");
@@ -114,22 +115,23 @@ describe("handleOpenAIRequest", () => {
       const req = makeRequest("/v1/models");
       const resp = await handleOpenAIRequest(req, makeDeps());
       expect(resp).not.toBeNull();
-      expect(resp!.status).toBe(200);
+      expect(resp?.status).toBe(200);
     });
 
     test("allows requests with valid Bearer token", async () => {
       const req = makeAuthRequest("/v1/models", "my-secret");
       const resp = await handleOpenAIRequest(req, makeDeps({ authToken: "my-secret" }));
       expect(resp).not.toBeNull();
-      expect(resp!.status).toBe(200);
+      expect(resp?.status).toBe(200);
     });
 
     test("rejects requests with missing Authorization header", async () => {
       const req = makeRequest("/v1/models");
       const resp = await handleOpenAIRequest(req, makeDeps({ authToken: "my-secret" }));
       expect(resp).not.toBeNull();
-      expect(resp!.status).toBe(401);
+      expect(resp?.status).toBe(401);
 
+      // biome-ignore lint/style/noNonNullAssertion: test assertion
       const body = (await parseJsonBody(resp!)) as Record<string, unknown>;
       const error = body.error as Record<string, unknown>;
       expect(error.type).toBe("authentication_error");
@@ -140,7 +142,7 @@ describe("handleOpenAIRequest", () => {
       const req = makeAuthRequest("/v1/models", "wrong-token");
       const resp = await handleOpenAIRequest(req, makeDeps({ authToken: "correct-token" }));
       expect(resp).not.toBeNull();
-      expect(resp!.status).toBe(401);
+      expect(resp?.status).toBe(401);
     });
 
     test("rejects requests with malformed Authorization header", async () => {
@@ -149,7 +151,7 @@ describe("handleOpenAIRequest", () => {
       });
       const resp = await handleOpenAIRequest(req, makeDeps({ authToken: "my-secret" }));
       expect(resp).not.toBeNull();
-      expect(resp!.status).toBe(401);
+      expect(resp?.status).toBe(401);
     });
   });
 
@@ -162,17 +164,18 @@ describe("handleOpenAIRequest", () => {
       const req = makeRequest("/v1/models");
       const resp = await handleOpenAIRequest(req, makeDeps());
       expect(resp).not.toBeNull();
-      expect(resp!.status).toBe(200);
+      expect(resp?.status).toBe(200);
 
+      // biome-ignore lint/style/noNonNullAssertion: test assertion
       const body = (await parseJsonBody(resp!)) as Record<string, unknown>;
       expect(body.object).toBe("list");
 
       const data = body.data as Array<Record<string, unknown>>;
       expect(data.length).toBeGreaterThanOrEqual(1);
-      expect(data[0]!.id).toBe("eidolon-default");
-      expect(data[0]!.object).toBe("model");
-      expect(typeof data[0]!.created).toBe("number");
-      expect(data[0]!.owned_by).toBe("eidolon");
+      expect(data[0]?.id).toBe("eidolon-default");
+      expect(data[0]?.object).toBe("model");
+      expect(typeof data[0]?.created).toBe("number");
+      expect(data[0]?.owned_by).toBe("eidolon");
     });
 
     test("includes brain config models when provided", async () => {
@@ -181,6 +184,7 @@ describe("handleOpenAIRequest", () => {
       const resp = await handleOpenAIRequest(req, makeDeps({ brainConfig }));
       expect(resp).not.toBeNull();
 
+      // biome-ignore lint/style/noNonNullAssertion: test assertion
       const body = (await parseJsonBody(resp!)) as Record<string, unknown>;
       const data = body.data as Array<Record<string, unknown>>;
 
@@ -203,6 +207,7 @@ describe("handleOpenAIRequest", () => {
       const req = makeRequest("/v1/models");
       const resp = await handleOpenAIRequest(req, makeDeps({ brainConfig }));
 
+      // biome-ignore lint/style/noNonNullAssertion: test assertion
       const body = (await parseJsonBody(resp!)) as Record<string, unknown>;
       const data = body.data as Array<Record<string, unknown>>;
 
@@ -215,6 +220,7 @@ describe("handleOpenAIRequest", () => {
       const req = makeRequest("/v1/models");
       const resp = await handleOpenAIRequest(req, makeDeps({ brainConfig }));
 
+      // biome-ignore lint/style/noNonNullAssertion: test assertion
       const body = (await parseJsonBody(resp!)) as Record<string, unknown>;
       const data = body.data as Array<Record<string, unknown>>;
       const anthropicModels = data.filter((m) => m.id !== "eidolon-default");
@@ -227,9 +233,9 @@ describe("handleOpenAIRequest", () => {
       const req = makeRequest("/v1/models");
       const resp = await handleOpenAIRequest(req, makeDeps());
       expect(resp).not.toBeNull();
-      expect(resp!.headers.get("X-Content-Type-Options")).toBe("nosniff");
-      expect(resp!.headers.get("X-Frame-Options")).toBe("DENY");
-      expect(resp!.headers.get("Content-Type")).toBe("application/json");
+      expect(resp?.headers.get("X-Content-Type-Options")).toBe("nosniff");
+      expect(resp?.headers.get("X-Frame-Options")).toBe("DENY");
+      expect(resp?.headers.get("Content-Type")).toBe("application/json");
     });
   });
 
@@ -246,8 +252,9 @@ describe("handleOpenAIRequest", () => {
       });
       const resp = await handleOpenAIRequest(req, makeDeps());
       expect(resp).not.toBeNull();
-      expect(resp!.status).toBe(200);
+      expect(resp?.status).toBe(200);
 
+      // biome-ignore lint/style/noNonNullAssertion: test assertion
       const body = (await parseJsonBody(resp!)) as Record<string, unknown>;
       expect(body.object).toBe("chat.completion");
       expect(typeof body.id).toBe("string");
@@ -257,10 +264,10 @@ describe("handleOpenAIRequest", () => {
 
       const choices = body.choices as Array<Record<string, unknown>>;
       expect(choices.length).toBe(1);
-      expect(choices[0]!.index).toBe(0);
-      expect(choices[0]!.finish_reason).toBe("stop");
+      expect(choices[0]?.index).toBe(0);
+      expect(choices[0]?.finish_reason).toBe("stop");
 
-      const message = choices[0]!.message as Record<string, unknown>;
+      const message = choices[0]?.message as Record<string, unknown>;
       expect(message.role).toBe("assistant");
       expect(typeof message.content).toBe("string");
       expect((message.content as string).length).toBeGreaterThan(0);
@@ -279,9 +286,10 @@ describe("handleOpenAIRequest", () => {
         body: makeChatBody({ messages: [{ role: "user", content: "Test message" }] }),
       });
       const resp = await handleOpenAIRequest(req, makeDeps());
+      // biome-ignore lint/style/noNonNullAssertion: test assertion
       const body = (await parseJsonBody(resp!)) as Record<string, unknown>;
       const choices = body.choices as Array<Record<string, unknown>>;
-      const message = choices[0]!.message as Record<string, unknown>;
+      const message = choices[0]?.message as Record<string, unknown>;
       expect(message.content as string).toContain("12 chars");
     });
 
@@ -292,6 +300,7 @@ describe("handleOpenAIRequest", () => {
         body: makeChatBody({ model: "claude-opus-4-20250514" }),
       });
       const resp = await handleOpenAIRequest(req, makeDeps());
+      // biome-ignore lint/style/noNonNullAssertion: test assertion
       const body = (await parseJsonBody(resp!)) as Record<string, unknown>;
       expect(body.model).toBe("claude-opus-4-20250514");
     });
@@ -304,8 +313,9 @@ describe("handleOpenAIRequest", () => {
       });
       const resp = await handleOpenAIRequest(req, makeDeps());
       expect(resp).not.toBeNull();
-      expect(resp!.status).toBe(400);
+      expect(resp?.status).toBe(400);
 
+      // biome-ignore lint/style/noNonNullAssertion: test assertion
       const body = (await parseJsonBody(resp!)) as Record<string, unknown>;
       const error = body.error as Record<string, unknown>;
       expect(error.type).toBe("invalid_request_error");
@@ -320,8 +330,9 @@ describe("handleOpenAIRequest", () => {
       });
       const resp = await handleOpenAIRequest(req, makeDeps());
       expect(resp).not.toBeNull();
-      expect(resp!.status).toBe(400);
+      expect(resp?.status).toBe(400);
 
+      // biome-ignore lint/style/noNonNullAssertion: test assertion
       const body = (await parseJsonBody(resp!)) as Record<string, unknown>;
       const error = body.error as Record<string, unknown>;
       expect(error.code).toBe("invalid_params");
@@ -336,8 +347,9 @@ describe("handleOpenAIRequest", () => {
       });
       const resp = await handleOpenAIRequest(req, makeDeps());
       expect(resp).not.toBeNull();
-      expect(resp!.status).toBe(400);
+      expect(resp?.status).toBe(400);
 
+      // biome-ignore lint/style/noNonNullAssertion: test assertion
       const body = (await parseJsonBody(resp!)) as Record<string, unknown>;
       const error = body.error as Record<string, unknown>;
       expect(error.code).toBe("invalid_params");
@@ -353,7 +365,7 @@ describe("handleOpenAIRequest", () => {
         }),
       });
       const resp = await handleOpenAIRequest(req, makeDeps());
-      expect(resp!.status).toBe(400);
+      expect(resp?.status).toBe(400);
     });
 
     test("returns validation error for temperature out of range", async () => {
@@ -363,7 +375,7 @@ describe("handleOpenAIRequest", () => {
         body: makeChatBody({ temperature: 3.0 }),
       });
       const resp = await handleOpenAIRequest(req, makeDeps());
-      expect(resp!.status).toBe(400);
+      expect(resp?.status).toBe(400);
     });
   });
 
@@ -380,8 +392,8 @@ describe("handleOpenAIRequest", () => {
       });
       const resp = await handleOpenAIRequest(req, makeDeps());
       expect(resp).not.toBeNull();
-      expect(resp!.status).toBe(200);
-      expect(resp!.headers.get("Content-Type")).toBe("text/event-stream");
+      expect(resp?.status).toBe(200);
+      expect(resp?.headers.get("Content-Type")).toBe("text/event-stream");
     });
 
     test("streams valid SSE chunks ending with [DONE]", async () => {
@@ -393,7 +405,7 @@ describe("handleOpenAIRequest", () => {
       const resp = await handleOpenAIRequest(req, makeDeps());
       expect(resp).not.toBeNull();
 
-      const text = await resp!.text();
+      const text = (await resp?.text()) ?? "";
       const lines = text.split("\n").filter((l) => l.startsWith("data: "));
 
       expect(lines.length).toBeGreaterThan(2);
@@ -412,7 +424,7 @@ describe("handleOpenAIRequest", () => {
 
         const choices = payload.choices as Array<Record<string, unknown>>;
         expect(choices.length).toBe(1);
-        expect(choices[0]!.index).toBe(0);
+        expect(choices[0]?.index).toBe(0);
       }
     });
 
@@ -423,13 +435,13 @@ describe("handleOpenAIRequest", () => {
         body: makeChatBody({ stream: true }),
       });
       const resp = await handleOpenAIRequest(req, makeDeps());
-      const text = await resp!.text();
+      const text = (await resp?.text()) ?? "";
       const lines = text.split("\n").filter((l) => l.startsWith("data: ") && l !== "data: [DONE]");
 
       // Last JSON chunk should have finish_reason: "stop"
-      const lastChunk = JSON.parse(lines[lines.length - 1]!.slice("data: ".length)) as Record<string, unknown>;
+      const lastChunk = JSON.parse(lines[lines.length - 1]?.slice("data: ".length) ?? "{}") as Record<string, unknown>;
       const choices = lastChunk.choices as Array<Record<string, unknown>>;
-      expect(choices[0]!.finish_reason).toBe("stop");
+      expect(choices[0]?.finish_reason).toBe("stop");
     });
 
     test("content chunks have delta.content with text", async () => {
@@ -439,7 +451,7 @@ describe("handleOpenAIRequest", () => {
         body: makeChatBody({ stream: true }),
       });
       const resp = await handleOpenAIRequest(req, makeDeps());
-      const text = await resp!.text();
+      const text = (await resp?.text()) ?? "";
       const lines = text.split("\n").filter((l) => l.startsWith("data: ") && l !== "data: [DONE]");
 
       // All but last should have content in delta
@@ -448,7 +460,7 @@ describe("handleOpenAIRequest", () => {
       for (const line of contentChunks) {
         const payload = JSON.parse(line.slice("data: ".length)) as Record<string, unknown>;
         const choices = payload.choices as Array<Record<string, unknown>>;
-        const delta = choices[0]!.delta as Record<string, unknown>;
+        const delta = choices[0]?.delta as Record<string, unknown>;
         expect(typeof delta.content).toBe("string");
         concatenated += delta.content as string;
       }
@@ -465,7 +477,7 @@ describe("handleOpenAIRequest", () => {
         body: makeChatBody({ stream: true }),
       });
       const resp = await handleOpenAIRequest(req, makeDeps());
-      const text = await resp!.text();
+      const text = (await resp?.text()) ?? "";
       const lines = text.split("\n").filter((l) => l.startsWith("data: ") && l !== "data: [DONE]");
 
       const ids = new Set<string>();
@@ -487,9 +499,9 @@ describe("handleOpenAIRequest", () => {
       const req = makeRequest("/v1/unknown");
       const resp = await handleOpenAIRequest(req, makeDeps());
       expect(resp).not.toBeNull();
-      expect(resp!.headers.get("X-Content-Type-Options")).toBe("nosniff");
-      expect(resp!.headers.get("X-Frame-Options")).toBe("DENY");
-      expect(resp!.headers.get("Cache-Control")).toBe("no-store");
+      expect(resp?.headers.get("X-Content-Type-Options")).toBe("nosniff");
+      expect(resp?.headers.get("X-Frame-Options")).toBe("DENY");
+      expect(resp?.headers.get("Cache-Control")).toBe("no-store");
     });
 
     test("streaming response includes security headers", async () => {
@@ -500,8 +512,8 @@ describe("handleOpenAIRequest", () => {
       });
       const resp = await handleOpenAIRequest(req, makeDeps());
       expect(resp).not.toBeNull();
-      expect(resp!.headers.get("X-Content-Type-Options")).toBe("nosniff");
-      expect(resp!.headers.get("X-Frame-Options")).toBe("DENY");
+      expect(resp?.headers.get("X-Content-Type-Options")).toBe("nosniff");
+      expect(resp?.headers.get("X-Frame-Options")).toBe("DENY");
     });
   });
 });

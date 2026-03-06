@@ -7,7 +7,7 @@
  */
 
 import type { Span, Tracer } from "@opentelemetry/api";
-import { SpanStatusCode, context, propagation, trace } from "@opentelemetry/api";
+import { context, propagation, SpanStatusCode, trace } from "@opentelemetry/api";
 
 // ---------------------------------------------------------------------------
 // Attribute value type
@@ -37,11 +37,7 @@ export interface ISpan {
 
 export interface ITracer {
   /** Create a span, run `fn` within it, and end the span when done. */
-  withSpan<T>(
-    name: string,
-    attributes: Record<string, SpanAttributeValue>,
-    fn: () => Promise<T>,
-  ): Promise<T>;
+  withSpan<T>(name: string, attributes: Record<string, SpanAttributeValue>, fn: () => Promise<T>): Promise<T>;
 
   /** Create a span manually. Caller MUST call `span.end()`. */
   startSpan(name: string, attributes?: Record<string, SpanAttributeValue>): ISpan;
@@ -81,11 +77,7 @@ export class NoopSpan implements ISpan {
 
 /** No-op tracer returned when telemetry is disabled. Zero overhead. */
 export class NoopTracer implements ITracer {
-  async withSpan<T>(
-    _name: string,
-    _attributes: Record<string, SpanAttributeValue>,
-    fn: () => Promise<T>,
-  ): Promise<T> {
+  async withSpan<T>(_name: string, _attributes: Record<string, SpanAttributeValue>, fn: () => Promise<T>): Promise<T> {
     return fn();
   }
 
@@ -145,11 +137,7 @@ export class OTelTracer implements ITracer {
     this.tracer = tracer;
   }
 
-  async withSpan<T>(
-    name: string,
-    attributes: Record<string, SpanAttributeValue>,
-    fn: () => Promise<T>,
-  ): Promise<T> {
+  async withSpan<T>(name: string, attributes: Record<string, SpanAttributeValue>, fn: () => Promise<T>): Promise<T> {
     const span = this.tracer.startSpan(name, { attributes });
     const ctx = trace.setSpan(context.active(), span);
 

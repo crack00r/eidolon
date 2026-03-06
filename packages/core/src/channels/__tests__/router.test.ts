@@ -960,10 +960,7 @@ describe("MessageRouter timezone-aware DND integration", () => {
     const nycChannel = createMockChannel("telegram");
     nycRouter.registerChannel(nycChannel);
 
-    const nycResult = await nycRouter.sendNotification(
-      { id: "tz-4b", channelId: "telegram", text: "Test" },
-      "normal",
-    );
+    const nycResult = await nycRouter.sendNotification({ id: "tz-4b", channelId: "telegram", text: "Test" }, "normal");
     expect(nycResult.ok).toBe(true);
     if (nycResult.ok) expect(nycResult.value).toBe(true); // sent
     expect(nycChannel.sentMessages).toHaveLength(1);

@@ -1,11 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { createBalancer, LatencyWeightedBalancer, LeastConnectionsBalancer, RoundRobinBalancer } from "../balancer.ts";
 import type { GPUWorkerInfo } from "../worker.ts";
-import {
-  createBalancer,
-  LatencyWeightedBalancer,
-  LeastConnectionsBalancer,
-  RoundRobinBalancer,
-} from "../balancer.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -79,9 +74,7 @@ describe("RoundRobinBalancer", () => {
 
   test("allows half_open workers", () => {
     const balancer = new RoundRobinBalancer();
-    const workers = [
-      makeWorker({ name: "worker-1", circuitState: "half_open" }),
-    ];
+    const workers = [makeWorker({ name: "worker-1", circuitState: "half_open" })];
 
     const result = balancer.select(workers, "tts");
     expect(result?.name).toBe("worker-1");
@@ -89,9 +82,7 @@ describe("RoundRobinBalancer", () => {
 
   test("returns null when no workers support capability", () => {
     const balancer = new RoundRobinBalancer();
-    const workers = [
-      makeWorker({ name: "tts-only", capabilities: ["tts"] }),
-    ];
+    const workers = [makeWorker({ name: "tts-only", capabilities: ["tts"] })];
 
     const result = balancer.select(workers, "stt");
     expect(result).toBeNull();

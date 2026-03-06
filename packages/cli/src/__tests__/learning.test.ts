@@ -122,7 +122,7 @@ describe("learning CLI: DiscoveryEngine operations", () => {
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.value.total).toBe(2);
-      expect(result.value.byStatus["new"]).toBe(2);
+      expect(result.value.byStatus.new).toBe(2);
     }
   });
 
@@ -470,7 +470,7 @@ describe("learning CLI: end-to-end workflow", () => {
     expect(stats.ok).toBe(true);
     if (stats.ok) {
       expect(stats.value.total).toBe(1);
-      expect(stats.value.byStatus["implemented"]).toBe(1);
+      expect(stats.value.byStatus.implemented).toBe(1);
     }
   });
 
@@ -480,12 +480,7 @@ describe("learning CLI: end-to-end workflow", () => {
     const engine = new DiscoveryEngine(db, logger);
 
     // Create several discoveries in different states
-    const urls = [
-      "https://example.com/1",
-      "https://example.com/2",
-      "https://example.com/3",
-      "https://example.com/4",
-    ];
+    const urls = ["https://example.com/1", "https://example.com/2", "https://example.com/3", "https://example.com/4"];
 
     for (let i = 0; i < urls.length; i++) {
       const url = urls[i];
@@ -523,9 +518,9 @@ describe("learning CLI: end-to-end workflow", () => {
     expect(stats.ok).toBe(true);
     if (stats.ok) {
       expect(stats.value.total).toBe(4);
-      expect(stats.value.byStatus["new"]).toBe(1);
-      expect(stats.value.byStatus["evaluated"]).toBe(2);
-      expect(stats.value.byStatus["rejected"]).toBe(1);
+      expect(stats.value.byStatus.new).toBe(1);
+      expect(stats.value.byStatus.evaluated).toBe(2);
+      expect(stats.value.byStatus.rejected).toBe(1);
     }
   });
 });

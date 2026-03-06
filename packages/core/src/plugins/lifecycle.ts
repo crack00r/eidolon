@@ -2,13 +2,12 @@
  * Plugin lifecycle manager -- initializes, starts, stops, and destroys plugins.
  */
 
-import type { EidolonPlugin, EventType, PluginPermission } from "@eidolon/protocol";
-import type { PluginConfig } from "@eidolon/protocol";
+import type { EidolonPlugin, EventType, PluginConfig, PluginPermission } from "@eidolon/protocol";
 import type { Logger } from "../logging/logger.ts";
 import type { EventBus } from "../loop/event-bus.ts";
 import type { LoadedPlugin } from "./loader.ts";
 import type { PluginRegistry } from "./registry.ts";
-import { type SandboxDeps, createPluginContext } from "./sandbox.ts";
+import { createPluginContext, type SandboxDeps } from "./sandbox.ts";
 
 interface ManagedPlugin {
   readonly loaded: LoadedPlugin;
@@ -59,7 +58,11 @@ export class PluginLifecycleManager {
         this.registry.register(loaded, "error");
         this.registry.updateState(name, "error", String(err));
         this.logger.error("plugins:lifecycle", `Plugin ${name} init failed`, err);
-        this.eventBus?.publish("plugin:error" as EventType, { plugin: name, error: String(err) }, { source: "plugin:lifecycle" });
+        this.eventBus?.publish(
+          "plugin:error" as EventType,
+          { plugin: name, error: String(err) },
+          { source: "plugin:lifecycle" },
+        );
       }
     }
   }
@@ -74,7 +77,11 @@ export class PluginLifecycleManager {
       } catch (err) {
         this.registry.updateState(name, "error", String(err));
         this.logger.error("plugins:lifecycle", `Plugin ${name} start failed`, err);
-        this.eventBus?.publish("plugin:error" as EventType, { plugin: name, error: String(err) }, { source: "plugin:lifecycle" });
+        this.eventBus?.publish(
+          "plugin:error" as EventType,
+          { plugin: name, error: String(err) },
+          { source: "plugin:lifecycle" },
+        );
       }
     }
   }
@@ -111,11 +118,11 @@ export class PluginLifecycleManager {
   private resolveInstance(loaded: LoadedPlugin): EidolonPlugin {
     const mod = loaded.module;
     // Support both default export and named `plugin` export
-    if (mod["default"] && typeof (mod["default"] as EidolonPlugin).init === "function") {
-      return mod["default"] as EidolonPlugin;
+    if (mod.default && typeof (mod.default as EidolonPlugin).init === "function") {
+      return mod.default as EidolonPlugin;
     }
-    if (mod["plugin"] && typeof (mod["plugin"] as EidolonPlugin).init === "function") {
-      return mod["plugin"] as EidolonPlugin;
+    if (mod.plugin && typeof (mod.plugin as EidolonPlugin).init === "function") {
+      return mod.plugin as EidolonPlugin;
     }
     throw new Error(`Plugin ${loaded.manifest.name} must export 'default' or 'plugin' with an init() method`);
   }

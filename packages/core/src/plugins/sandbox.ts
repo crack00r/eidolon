@@ -2,12 +2,11 @@
  * Plugin sandbox -- creates a permission-gated PluginContext for each plugin.
  */
 
-import type { EidolonPlugin, EventType, PluginContext, PluginLogger, PluginPermission } from "@eidolon/protocol";
-import type { EidolonConfig } from "@eidolon/protocol";
+import type { EidolonConfig, EventType, PluginContext, PluginLogger, PluginPermission } from "@eidolon/protocol";
+import type { MessageRouter } from "../channels/router.ts";
+import type { GatewayServer } from "../gateway/server.ts";
 import type { Logger } from "../logging/logger.ts";
 import type { EventBus } from "../loop/event-bus.ts";
-import type { GatewayServer } from "../gateway/server.ts";
-import type { MessageRouter } from "../channels/router.ts";
 
 export interface SandboxDeps {
   readonly logger: Logger;
@@ -58,7 +57,10 @@ export function createPluginContext(
     emitEvent(type, payload, priority) {
       requirePermission(permissions, "events:emit", "emit events");
       if (!deps.eventBus) throw new Error("EventBus not available");
-      deps.eventBus.publish(type as EventType, payload, { source: `plugin:${pluginName}`, priority: priority as "normal" | "critical" | "high" | "low" | undefined });
+      deps.eventBus.publish(type as EventType, payload, {
+        source: `plugin:${pluginName}`,
+        priority: priority as "normal" | "critical" | "high" | "low" | undefined,
+      });
     },
 
     getConfig() {

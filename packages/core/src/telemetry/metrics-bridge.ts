@@ -9,8 +9,8 @@
  * When telemetry is disabled, `createMetricsBridge()` returns a no-op handle.
  */
 
-import type { MetricsRegistry } from "../metrics/prometheus.ts";
 import type { Logger } from "../logging/logger.ts";
+import type { MetricsRegistry } from "../metrics/prometheus.ts";
 
 // ---------------------------------------------------------------------------
 // Bridge handle

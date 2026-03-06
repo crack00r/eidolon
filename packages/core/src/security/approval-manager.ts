@@ -14,7 +14,6 @@ import type {
   ApprovalRequest,
   ApprovalStatus,
   EidolonError,
-  EscalationPolicy,
   Result,
   SecurityConfig,
   TimeoutAction,
@@ -467,7 +466,7 @@ export class ApprovalManager {
   private getTimeoutForLevel(level: number): number {
     const chain = this.config.approval.escalation;
     if (chain.length > 0 && level < chain.length) {
-      return chain[level]!.timeoutMs;
+      return chain[level]?.timeoutMs ?? this.config.approval.timeout;
     }
     return this.config.approval.timeout;
   }
@@ -476,14 +475,15 @@ export class ApprovalManager {
   private getTimeoutAction(level: number): TimeoutAction {
     const chain = this.config.approval.escalation;
     if (chain.length > 0 && level < chain.length) {
-      return chain[level]!.action;
+      return chain[level]?.action ?? (this.config.approval.defaultAction === "allow" ? "approve" : "deny");
     }
     // When level is beyond the chain, check if the last chain entry was an
     // escalation policy.  If so, we still return "escalate" so that the
     // escalate() method can evaluate the maxEscalations guard and apply the
     // default action when the limit has been reached.
     if (chain.length > 0) {
-      const lastEntry = chain[chain.length - 1]!;
+      const lastEntry = chain[chain.length - 1];
+      if (!lastEntry) return this.config.approval.defaultAction === "allow" ? "approve" : "deny";
       if (lastEntry.action === "escalate") {
         return "escalate";
       }
@@ -495,7 +495,7 @@ export class ApprovalManager {
   private getEscalateToChannel(level: number): string | undefined {
     const chain = this.config.approval.escalation;
     if (chain.length > 0 && level < chain.length) {
-      return chain[level]!.escalateTo;
+      return chain[level]?.escalateTo;
     }
     return undefined;
   }
@@ -504,11 +504,11 @@ export class ApprovalManager {
   private getMaxEscalations(level: number): number {
     const chain = this.config.approval.escalation;
     if (chain.length > 0 && level < chain.length) {
-      return chain[level]!.maxEscalations ?? DEFAULT_MAX_ESCALATIONS;
+      return chain[level]?.maxEscalations ?? DEFAULT_MAX_ESCALATIONS;
     }
     // When level is beyond the chain, inherit maxEscalations from the last entry
     if (chain.length > 0) {
-      return chain[chain.length - 1]!.maxEscalations ?? DEFAULT_MAX_ESCALATIONS;
+      return chain[chain.length - 1]?.maxEscalations ?? DEFAULT_MAX_ESCALATIONS;
     }
     return DEFAULT_MAX_ESCALATIONS;
   }

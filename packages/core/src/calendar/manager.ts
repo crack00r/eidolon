@@ -151,9 +151,7 @@ export class CalendarManager {
   private async syncProvider(providerId: string): Promise<Result<CalendarSyncResult, EidolonError>> {
     const provider = this.providers.get(providerId);
     if (!provider) {
-      return Err(
-        createError(ErrorCode.CALENDAR_PROVIDER_ERROR, `Provider not found: ${providerId}`),
-      );
+      return Err(createError(ErrorCode.CALENDAR_PROVIDER_ERROR, `Provider not found: ${providerId}`));
     }
 
     // Get the last sync token for this provider
@@ -165,7 +163,10 @@ export class CalendarManager {
       return syncResult;
     }
 
-    this.logger.info("calendar", `Synced ${providerId}: +${syncResult.value.added} ~${syncResult.value.updated} -${syncResult.value.deleted}`);
+    this.logger.info(
+      "calendar",
+      `Synced ${providerId}: +${syncResult.value.added} ~${syncResult.value.updated} -${syncResult.value.deleted}`,
+    );
 
     // Store the new sync token if provided
     if (syncResult.value.syncToken) {
@@ -200,9 +201,7 @@ export class CalendarManager {
   }
 
   /** Create a manual event (not from a provider sync). */
-  createEvent(
-    event: Omit<CalendarEvent, "id" | "syncedAt">,
-  ): Result<CalendarEvent, EidolonError> {
+  createEvent(event: Omit<CalendarEvent, "id" | "syncedAt">): Result<CalendarEvent, EidolonError> {
     const id = randomUUID();
     const syncedAt = Date.now();
     const fullEvent: CalendarEvent = { ...event, id, syncedAt };
@@ -232,9 +231,9 @@ export class CalendarManager {
   /** Delete an event from the local cache. */
   deleteEvent(eventId: string): Result<void, EidolonError> {
     try {
-      const existing = this.db
-        .query("SELECT id FROM calendar_events WHERE id = ?")
-        .get(eventId) as { id: string } | null;
+      const existing = this.db.query("SELECT id FROM calendar_events WHERE id = ?").get(eventId) as {
+        id: string;
+      } | null;
 
       if (!existing) {
         return Err(createError(ErrorCode.CALENDAR_EVENT_NOT_FOUND, `Event not found: ${eventId}`));
@@ -346,9 +345,7 @@ export class CalendarManager {
             minute: "2-digit",
             hour12: false,
           });
-          lines.push(
-            `- ${startStr}-${endStr} ${event.title}${event.location ? ` @ ${event.location}` : ""}`,
-          );
+          lines.push(`- ${startStr}-${endStr} ${event.title}${event.location ? ` @ ${event.location}` : ""}`);
         }
       }
     }
@@ -394,10 +391,7 @@ export class CalendarManager {
    * Find all scheduling conflicts (overlapping non-all-day events) within a
    * time range.  Returns an array of conflict descriptors.
    */
-  findConflicts(
-    start: number,
-    end: number,
-  ): Result<ConflictInfo[], EidolonError> {
+  findConflicts(start: number, end: number): Result<ConflictInfo[], EidolonError> {
     const eventsResult = this.listEvents(start, end);
     if (!eventsResult.ok) return eventsResult;
 
@@ -407,8 +401,9 @@ export class CalendarManager {
 
     for (let i = 0; i < events.length; i++) {
       for (let j = i + 1; j < events.length; j++) {
-        const a = events[i]!;
-        const b = events[j]!;
+        const a = events[i];
+        const b = events[j];
+        if (!a || !b) continue;
         // Two events overlap when a.start < b.end AND b.start < a.end
         if (a.startTime < b.endTime && b.startTime < a.endTime) {
           const key = [a.id, b.id].sort().join(":");
@@ -436,9 +431,7 @@ export class CalendarManager {
     if (!overlapping.ok) return;
 
     // Filter out the event itself and all-day events
-    const conflicts = overlapping.value.filter(
-      (e) => e.id !== newEvent.id && !e.allDay,
-    );
+    const conflicts = overlapping.value.filter((e) => e.id !== newEvent.id && !e.allDay);
 
     if (conflicts.length > 0) {
       const allEvents = [newEvent, ...conflicts];

@@ -25,7 +25,14 @@ import type { ITracer } from "../../telemetry/tracer.ts";
 import { NoopTracer } from "../../telemetry/tracer.ts";
 import { buildReplySubject, formatEmailResponse } from "./formatter.ts";
 import type { IImapClient, ImapMessage } from "./imap.ts";
-import { extractThreadInfo, isValidEmail, parseEmailBody, sanitizeEmailContent, stripQuotedReply, stripSignature } from "./parser.ts";
+import {
+  extractThreadInfo,
+  isValidEmail,
+  parseEmailBody,
+  sanitizeEmailContent,
+  stripQuotedReply,
+  stripSignature,
+} from "./parser.ts";
 import type { ISmtpClient, SmtpAttachment } from "./smtp.ts";
 
 // ---------------------------------------------------------------------------
@@ -148,7 +155,11 @@ export class EmailChannel implements Channel {
     const imapResult = await this.imapClient.connect();
     if (!imapResult.ok) {
       return Err(
-        createError("CHANNEL_AUTH_FAILED", `Email IMAP connection failed: ${imapResult.error.message}`, imapResult.error),
+        createError(
+          "CHANNEL_AUTH_FAILED",
+          `Email IMAP connection failed: ${imapResult.error.message}`,
+          imapResult.error,
+        ),
       );
     }
 
@@ -157,7 +168,11 @@ export class EmailChannel implements Channel {
     if (!smtpResult.ok) {
       await this.imapClient.disconnect();
       return Err(
-        createError("CHANNEL_AUTH_FAILED", `Email SMTP connection failed: ${smtpResult.error.message}`, smtpResult.error),
+        createError(
+          "CHANNEL_AUTH_FAILED",
+          `Email SMTP connection failed: ${smtpResult.error.message}`,
+          smtpResult.error,
+        ),
       );
     }
 
@@ -209,9 +224,7 @@ export class EmailChannel implements Channel {
       const { subject, html, text } = formatEmailResponse(message.text, this.config.subjectPrefix);
 
       // Build the email subject
-      const finalSubject = thread
-        ? buildReplySubject(thread.originalSubject, this.config.subjectPrefix)
-        : subject;
+      const finalSubject = thread ? buildReplySubject(thread.originalSubject, this.config.subjectPrefix) : subject;
 
       // Determine recipient: from the thread context or fall back to channelId
       const to = thread ? thread.originalSender : message.channelId;
@@ -375,9 +388,8 @@ export class EmailChannel implements Channel {
     }
 
     // Truncate excessively long content
-    const safeText = sanitized.length > MAX_INBOUND_TEXT_LENGTH
-      ? sanitized.slice(0, MAX_INBOUND_TEXT_LENGTH)
-      : sanitized;
+    const safeText =
+      sanitized.length > MAX_INBOUND_TEXT_LENGTH ? sanitized.slice(0, MAX_INBOUND_TEXT_LENGTH) : sanitized;
 
     // Extract thread info
     const threadInfo = extractThreadInfo(email);
@@ -506,9 +518,7 @@ export class EmailChannel implements Channel {
   }
 
   /** Convert outbound message attachments to SMTP format. */
-  private convertAttachments(
-    attachments?: readonly MessageAttachment[],
-  ): readonly SmtpAttachment[] {
+  private convertAttachments(attachments?: readonly MessageAttachment[]): readonly SmtpAttachment[] {
     if (!attachments || attachments.length === 0) return [];
 
     return attachments
@@ -533,10 +543,7 @@ export class EmailChannel implements Channel {
   // -----------------------------------------------------------------------
 
   private async attemptReconnect(): Promise<void> {
-    const delay = Math.min(
-      RECONNECT_DELAY_MS * 2 ** this.reconnectAttempts,
-      MAX_RECONNECT_DELAY_MS,
-    );
+    const delay = Math.min(RECONNECT_DELAY_MS * 2 ** this.reconnectAttempts, MAX_RECONNECT_DELAY_MS);
     this.reconnectAttempts++;
 
     this.logger.info("email", `Attempting IMAP reconnect in ${delay}ms (attempt ${this.reconnectAttempts})`);

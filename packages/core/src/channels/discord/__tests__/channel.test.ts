@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
 import type { InboundMessage } from "@eidolon/protocol";
 import type { Logger } from "../../../logging/logger.ts";
 import type {
@@ -406,7 +406,7 @@ describe("DiscordChannel", () => {
       const channel = new DiscordChannel(createTestConfig(), client, logger);
       await channel.connect();
 
-      const longText = "A".repeat(1500) + "\n\n" + "B".repeat(1500);
+      const longText = `${"A".repeat(1500)}\n\n${"B".repeat(1500)}`;
       const result = await channel.send({
         id: "out-2",
         channelId: "dm-channel-1",

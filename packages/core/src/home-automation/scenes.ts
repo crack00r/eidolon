@@ -65,9 +65,9 @@ export class HASceneEngine {
       }
 
       // Check for duplicate name
-      const existing = this.db
-        .query("SELECT id FROM ha_scenes WHERE name = ?")
-        .get(trimmedName) as { id: string } | null;
+      const existing = this.db.query("SELECT id FROM ha_scenes WHERE name = ?").get(trimmedName) as {
+        id: string;
+      } | null;
       if (existing) {
         return Err(createError(ErrorCode.HA_SCENE_NOT_FOUND, `Scene with name "${trimmedName}" already exists`));
       }
@@ -100,9 +100,7 @@ export class HASceneEngine {
   /** Get a scene by ID. */
   getScene(id: string): Result<HAScene | null, EidolonError> {
     try {
-      const row = this.db
-        .query("SELECT * FROM ha_scenes WHERE id = ?")
-        .get(id) as HASceneRow | null;
+      const row = this.db.query("SELECT * FROM ha_scenes WHERE id = ?").get(id) as HASceneRow | null;
 
       if (!row) return Ok(null);
       return Ok(rowToScene(row));
@@ -114,9 +112,7 @@ export class HASceneEngine {
   /** List all scenes. */
   listScenes(): Result<HAScene[], EidolonError> {
     try {
-      const rows = this.db
-        .query("SELECT * FROM ha_scenes ORDER BY name ASC")
-        .all() as HASceneRow[];
+      const rows = this.db.query("SELECT * FROM ha_scenes ORDER BY name ASC").all() as HASceneRow[];
 
       return Ok(rows.map(rowToScene));
     } catch (cause) {
@@ -129,10 +125,7 @@ export class HASceneEngine {
    * Calls the executeService function for each action in order.
    * Publishes a "ha:scene_executed" event on completion.
    */
-  async executeScene(
-    id: string,
-    executeService: ExecuteServiceFn,
-  ): Promise<Result<HAServiceResult[], EidolonError>> {
+  async executeScene(id: string, executeService: ExecuteServiceFn): Promise<Result<HAServiceResult[], EidolonError>> {
     const sceneResult = this.getScene(id);
     if (!sceneResult.ok) return sceneResult;
 
@@ -143,12 +136,7 @@ export class HASceneEngine {
 
     const results: HAServiceResult[] = [];
     for (const action of scene.actions) {
-      const result = await executeService(
-        action.entityId,
-        action.domain,
-        action.service,
-        action.data,
-      );
+      const result = await executeService(action.entityId, action.domain, action.service, action.data);
       if (!result.ok) {
         this.logger.warn("executeScene", `Action failed in scene "${scene.name}": ${result.error.message}`);
         return result;
@@ -159,9 +147,7 @@ export class HASceneEngine {
     // Update last_executed_at
     try {
       const now = Date.now();
-      this.db
-        .query("UPDATE ha_scenes SET last_executed_at = ? WHERE id = ?")
-        .run(now, id);
+      this.db.query("UPDATE ha_scenes SET last_executed_at = ? WHERE id = ?").run(now, id);
     } catch {
       // Non-fatal: the execution itself succeeded
       this.logger.warn("executeScene", `Failed to update last_executed_at for scene: ${id}`);
@@ -185,9 +171,7 @@ export class HASceneEngine {
   /** Delete a scene by ID. */
   deleteScene(id: string): Result<void, EidolonError> {
     try {
-      const existing = this.db
-        .query("SELECT id FROM ha_scenes WHERE id = ?")
-        .get(id) as { id: string } | null;
+      const existing = this.db.query("SELECT id FROM ha_scenes WHERE id = ?").get(id) as { id: string } | null;
 
       if (!existing) {
         return Err(createError(ErrorCode.HA_SCENE_NOT_FOUND, `Scene not found: ${id}`));
@@ -207,9 +191,7 @@ export class HASceneEngine {
     updates: { name?: string; actions?: readonly HASceneAction[] },
   ): Result<HAScene, EidolonError> {
     try {
-      const existing = this.db
-        .query("SELECT * FROM ha_scenes WHERE id = ?")
-        .get(id) as HASceneRow | null;
+      const existing = this.db.query("SELECT * FROM ha_scenes WHERE id = ?").get(id) as HASceneRow | null;
 
       if (!existing) {
         return Err(createError(ErrorCode.HA_SCENE_NOT_FOUND, `Scene not found: ${id}`));
@@ -220,18 +202,16 @@ export class HASceneEngine {
 
       // Check name uniqueness if changing name
       if (newName !== existing.name) {
-        const duplicate = this.db
-          .query("SELECT id FROM ha_scenes WHERE name = ? AND id != ?")
-          .get(newName, id) as { id: string } | null;
+        const duplicate = this.db.query("SELECT id FROM ha_scenes WHERE name = ? AND id != ?").get(newName, id) as {
+          id: string;
+        } | null;
         if (duplicate) {
           return Err(createError(ErrorCode.HA_SCENE_NOT_FOUND, `Scene with name "${newName}" already exists`));
         }
       }
 
       const actionsJson = JSON.stringify(newActions);
-      this.db
-        .query("UPDATE ha_scenes SET name = ?, actions = ? WHERE id = ?")
-        .run(newName, actionsJson, id);
+      this.db.query("UPDATE ha_scenes SET name = ?, actions = ? WHERE id = ?").run(newName, actionsJson, id);
 
       const updated: HAScene = {
         id,

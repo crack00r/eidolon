@@ -22,10 +22,7 @@ export class ToolExecutor implements IToolExecutor {
     this.tools.set(name, impl);
   }
 
-  async execute(
-    call: LLMToolCall,
-    _definitions: readonly LLMToolDefinition[],
-  ): Promise<LLMToolResult> {
+  async execute(call: LLMToolCall, _definitions: readonly LLMToolDefinition[]): Promise<LLMToolResult> {
     const impl = this.tools.get(call.name);
     if (!impl) {
       return {

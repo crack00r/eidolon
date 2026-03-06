@@ -252,6 +252,7 @@ export function sanitizeEmailContent(content: string): string {
   let sanitized = content;
 
   // Strip control characters except \n \r \t
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: intentional control character matching for email parsing
   sanitized = sanitized.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "");
 
   // Remove potential injection patterns (replace with harmless placeholder)

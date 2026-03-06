@@ -18,7 +18,6 @@ import type {
   ConsolidationDecision,
   ConsolidationResult,
   EidolonError,
-  Memory,
   MemoryConsolidationAction,
   Result,
 } from "@eidolon/protocol";
