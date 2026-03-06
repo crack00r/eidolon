@@ -1743,7 +1743,10 @@ export class EidolonDaemon {
       const messageRouter = this.modules.messageRouter;
 
       if (!config || !claudeManager || !workspacePreparer || !messageRouter) {
-        logger.warn("loop-handler", "Cannot process message: missing modules (config, claudeManager, workspacePreparer, or messageRouter)");
+        logger.warn(
+          "loop-handler",
+          "Cannot process message: missing modules (config, claudeManager, workspacePreparer, or messageRouter)",
+        );
         return { success: false, tokensUsed: 0, error: "Required modules not initialized" };
       }
 
@@ -1871,7 +1874,10 @@ export class EidolonDaemon {
               }
             })
             .catch((err: unknown) => {
-              logger.warn("loop-handler", `Memory extraction threw: ${err instanceof Error ? err.message : String(err)}`);
+              logger.warn(
+                "loop-handler",
+                `Memory extraction threw: ${err instanceof Error ? err.message : String(err)}`,
+              );
             });
         }
 
@@ -1958,10 +1964,7 @@ export class EidolonDaemon {
         text,
       };
 
-      return this.handleUserMessage(
-        { id: event.id, payload: syntheticPayload },
-        logger,
-      );
+      return this.handleUserMessage({ id: event.id, payload: syntheticPayload }, logger);
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);
       logger.error("loop-handler", `user:voice handler failed: ${errMsg}`);
