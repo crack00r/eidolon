@@ -275,7 +275,7 @@ v2.0: Extensibility          (~6 weeks)    Plugin system, local LLM support     
 - [x] Error recovery: graceful handling of all failure modes
 - [x] README update: screenshots, GIFs, getting-started guide
 - [x] GitHub Release: v1.0.0 with pre-built binaries
-- [x] npm publish: `@eidolon-ai/cli` package
+- [ ] npm publish: `@eidolon-ai/cli` package
 - [x] **GDPR compliance:** `eidolon privacy forget`, `eidolon privacy export`
 - [x] **Glossary and troubleshooting docs**
 

@@ -9,6 +9,7 @@ import { Database } from "bun:sqlite";
 import { describe, expect, test } from "bun:test";
 import type { MemorySearchResult } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
+import type { GPUWorkerPool } from "../../gpu/pool.ts";
 import type { HealthChecker } from "../../health/checker.ts";
 import type { Logger } from "../../logging/logger.ts";
 import { EventBus } from "../../loop/event-bus.ts";
@@ -16,6 +17,7 @@ import type { MemorySearch } from "../../memory/search.ts";
 import type { MemoryStore } from "../../memory/store.ts";
 import {
   type CoreRpcDeps,
+  clearActiveVoiceSessions,
   createChatSendHandler,
   createChatStreamHandler,
   createCoreRpcHandlers,
@@ -30,6 +32,7 @@ import {
   createSystemStatusHandler,
   createVoiceStartHandler,
   createVoiceStopHandler,
+  getActiveVoiceSessionCount,
 } from "../rpc-handlers.ts";
 
 // ---------------------------------------------------------------------------
@@ -147,6 +150,34 @@ function createMockHealthChecker(status = "healthy"): HealthChecker {
   } as unknown as HealthChecker;
 }
 
+function createMockGpuPool(opts?: {
+  hasTts?: boolean;
+  hasStt?: boolean;
+  totalWorkers?: number;
+  healthyWorkers?: number;
+}): GPUWorkerPool {
+  const hasTts = opts?.hasTts ?? true;
+  const hasStt = opts?.hasStt ?? true;
+  const totalWorkers = opts?.totalWorkers ?? 1;
+  const healthyWorkers = opts?.healthyWorkers ?? 1;
+
+  return {
+    hasCapability: (cap: string) => {
+      if (cap === "tts") return hasTts;
+      if (cap === "stt") return hasStt;
+      return false;
+    },
+    getPoolStatus: () => ({
+      totalWorkers,
+      healthyWorkers,
+      degradedWorkers: 0,
+      unhealthyWorkers: totalWorkers - healthyWorkers,
+      totalActiveRequests: 0,
+      workers: [],
+    }),
+  } as unknown as GPUWorkerPool;
+}
+
 function makeDeps(overrides?: Partial<CoreRpcDeps>): CoreRpcDeps {
   return {
     logger,
@@ -155,6 +186,7 @@ function makeDeps(overrides?: Partial<CoreRpcDeps>): CoreRpcDeps {
     memorySearch: createMockMemorySearch(),
     memoryStore: createMockMemoryStore(),
     healthChecker: createMockHealthChecker(),
+    gpuPool: createMockGpuPool(),
     startTime: Date.now() - 60_000,
     ...overrides,
   };
@@ -700,7 +732,9 @@ describe("createSystemHealthHandler", () => {
 // ---------------------------------------------------------------------------
 
 describe("createVoiceStartHandler", () => {
-  test("returns voice session config with defaults", async () => {
+  // Clean up active sessions between tests to avoid cross-test contamination
+  test("returns voice session config with defaults when GPU is available", async () => {
+    clearActiveVoiceSessions();
     const handler = createVoiceStartHandler(makeDeps());
 
     const result = (await handler({}, "c1")) as Record<string, unknown>;
@@ -712,9 +746,22 @@ describe("createVoiceStartHandler", () => {
     expect(config.codec).toBe("opus");
     expect(config.sampleRate).toBe(24_000);
     expect(config.channels).toBe(1);
+
+    // Should include capability info
+    const capabilities = result.capabilities as Record<string, unknown>;
+    expect(capabilities.tts).toBe(true);
+    expect(capabilities.stt).toBe(true);
+
+    // Should include GPU pool status
+    const gpu = result.gpu as Record<string, unknown>;
+    expect(gpu.totalWorkers).toBe(1);
+    expect(gpu.healthyWorkers).toBe(1);
+
+    clearActiveVoiceSessions();
   });
 
   test("respects provided codec and sampleRate", async () => {
+    clearActiveVoiceSessions();
     const handler = createVoiceStartHandler(makeDeps());
 
     const result = (await handler({ codec: "pcm", sampleRate: 48_000 }, "c1")) as Record<string, unknown>;
@@ -722,11 +769,67 @@ describe("createVoiceStartHandler", () => {
     const config = result.config as Record<string, unknown>;
     expect(config.codec).toBe("pcm");
     expect(config.sampleRate).toBe(48_000);
+
+    clearActiveVoiceSessions();
   });
 
   test("rejects invalid codec", async () => {
+    clearActiveVoiceSessions();
     const handler = createVoiceStartHandler(makeDeps());
     await expect(handler({ codec: "mp3" }, "c1")).rejects.toThrow();
+  });
+
+  test("throws when no GPU pool is configured", async () => {
+    clearActiveVoiceSessions();
+    const handler = createVoiceStartHandler(makeDeps({ gpuPool: undefined }));
+    await expect(handler({}, "c1")).rejects.toThrow("No GPU workers available");
+  });
+
+  test("throws when GPU pool has no capable workers", async () => {
+    clearActiveVoiceSessions();
+    const handler = createVoiceStartHandler(makeDeps({ gpuPool: createMockGpuPool({ hasTts: false, hasStt: false }) }));
+    await expect(handler({}, "c1")).rejects.toThrow("No GPU workers available");
+  });
+
+  test("throws when client already has active voice session", async () => {
+    clearActiveVoiceSessions();
+    const deps = makeDeps();
+    const handler = createVoiceStartHandler(deps);
+
+    // Start a first session
+    await handler({}, "client-dup");
+
+    // Second start should fail
+    await expect(handler({}, "client-dup")).rejects.toThrow("already has an active voice session");
+
+    clearActiveVoiceSessions();
+  });
+
+  test("publishes session:started event", async () => {
+    clearActiveVoiceSessions();
+    const eventBus = createTestEventBus();
+    let receivedEvent = false;
+    eventBus.subscribe("session:started", () => {
+      receivedEvent = true;
+    });
+
+    const handler = createVoiceStartHandler(makeDeps({ eventBus }));
+    await handler({}, "c-event");
+
+    expect(receivedEvent).toBe(true);
+
+    clearActiveVoiceSessions();
+  });
+
+  test("tracks active session count", async () => {
+    clearActiveVoiceSessions();
+    const handler = createVoiceStartHandler(makeDeps());
+
+    expect(getActiveVoiceSessionCount()).toBe(0);
+    await handler({}, "c-track");
+    expect(getActiveVoiceSessionCount()).toBe(1);
+
+    clearActiveVoiceSessions();
   });
 });
 
@@ -735,12 +838,68 @@ describe("createVoiceStartHandler", () => {
 // ---------------------------------------------------------------------------
 
 describe("createVoiceStopHandler", () => {
-  test("returns stopped confirmation", async () => {
-    const handler = createVoiceStopHandler(makeDeps());
+  test("stops an active voice session", async () => {
+    clearActiveVoiceSessions();
+    const deps = makeDeps();
+    const startHandler = createVoiceStartHandler(deps);
+    const stopHandler = createVoiceStopHandler(deps);
 
-    const result = (await handler({}, "c1")) as Record<string, unknown>;
+    // Start a session first
+    const startResult = (await startHandler({}, "c-stop")) as Record<string, unknown>;
+    const sessionId = startResult.sessionId as string;
+
+    // Stop it
+    const result = (await stopHandler({ sessionId }, "c-stop")) as Record<string, unknown>;
 
     expect(result.stopped).toBe(true);
+    expect(result.sessionId).toBe(sessionId);
+    expect(typeof result.durationMs).toBe("number");
+    expect(getActiveVoiceSessionCount()).toBe(0);
+  });
+
+  test("throws when no active session exists for client", async () => {
+    clearActiveVoiceSessions();
+    const handler = createVoiceStopHandler(makeDeps());
+    await expect(handler({ sessionId: "nonexistent" }, "c-none")).rejects.toThrow("No active voice session found");
+  });
+
+  test("throws on session ID mismatch", async () => {
+    clearActiveVoiceSessions();
+    const deps = makeDeps();
+    const startHandler = createVoiceStartHandler(deps);
+    const stopHandler = createVoiceStopHandler(deps);
+
+    await startHandler({}, "c-mismatch");
+
+    await expect(stopHandler({ sessionId: "wrong-id" }, "c-mismatch")).rejects.toThrow("Session ID mismatch");
+
+    clearActiveVoiceSessions();
+  });
+
+  test("throws when sessionId param is missing", async () => {
+    clearActiveVoiceSessions();
+    const handler = createVoiceStopHandler(makeDeps());
+    await expect(handler({}, "c1")).rejects.toThrow();
+  });
+
+  test("publishes session:completed event", async () => {
+    clearActiveVoiceSessions();
+    const eventBus = createTestEventBus();
+    let receivedEvent = false;
+    eventBus.subscribe("session:completed", () => {
+      receivedEvent = true;
+    });
+
+    const deps = makeDeps({ eventBus });
+    const startHandler = createVoiceStartHandler(deps);
+    const stopHandler = createVoiceStopHandler(deps);
+
+    const startResult = (await startHandler({}, "c-evt-stop")) as Record<string, unknown>;
+    const sessionId = startResult.sessionId as string;
+
+    await stopHandler({ sessionId }, "c-evt-stop");
+
+    expect(receivedEvent).toBe(true);
   });
 });
 

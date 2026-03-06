@@ -367,7 +367,7 @@ async function searchWithGraph(query: string, depth: number = 1): Promise<Memory
 
 ## Knowledge Graph (Entity-Relation Model)
 
-The graph memory edges above link existing memories. The Knowledge Graph goes further: it extracts **named entities** and **typed relations** (subject-predicate-object triples) from memories, stores them as first-class objects, and uses **TransE embeddings** for link prediction and analogical reasoning. Inspired by [Mem0](https://github.com/mem0ai/mem0)'s graph memory and academic knowledge graph embedding research.
+The graph memory edges above link existing memories. The Knowledge Graph goes further: it extracts **named entities** and **typed relations** (subject-predicate-object triples) from memories, stores them as first-class objects, and uses **ComplEx embeddings** for link prediction and analogical reasoning. Inspired by [Mem0](https://github.com/mem0ai/mem0)'s graph memory and academic knowledge graph embedding research.
 
 ### Why a Knowledge Graph?
 
@@ -377,7 +377,7 @@ Example: From conversations, the KG might learn:
 - `(Manuel, owns, RTX 5080)` — extracted from "my RTX 5080"
 - `(RTX 5080, has_vram, 16GB)` — extracted from specs discussion
 - `(Qwen3-TTS, requires_vram, 3.4GB)` — extracted from GPU planning
-- `(Qwen3-TTS, runs_on, RTX 5080)` — **predicted** by TransE from the above triples
+- `(Qwen3-TTS, runs_on, RTX 5080)` — **predicted** by ComplEx from the above triples
 
 ### Schema
 

@@ -232,13 +232,13 @@
       "language": "en",
       "category": "preference",
       "input": {
-        "user": "I want to use AES-256-GCM with Argon2id for the secret store encryption.",
-        "assistant": "That's a strong combination. AES-256-GCM provides authenticated encryption and Argon2id is the recommended KDF for password hashing."
+        "user": "I want to use AES-256-GCM with scrypt for the secret store encryption.",
+        "assistant": "That's a strong combination. AES-256-GCM provides authenticated encryption and scrypt is a solid KDF for key derivation."
       },
       "expected": {
         "facts": [],
         "decisions": [],
-        "preferences": ["use AES-256-GCM with Argon2id for the secret store encryption"],
+        "preferences": ["use AES-256-GCM with scrypt for the secret store encryption"],
         "corrections": [],
         "todos": []
       }

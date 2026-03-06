@@ -167,7 +167,11 @@ describe("buildConfigReloadHandler", () => {
     const { logger } = createCapturingLogger();
     const oldConfig = createTestConfig();
 
-    const restCalculator = new RestCalculator(oldConfig.loop.rest, logger);
+    // Use a fixed time at noon (12:00 Europe/Berlin) so the test is
+    // deterministic regardless of when it runs. This avoids the night-mode
+    // multiplier (23:00-07:00) changing the expected rest duration.
+    const noonMs = new Date("2026-06-15T12:00:00+02:00").getTime();
+    const restCalculator = new RestCalculator(oldConfig.loop.rest, logger, undefined, () => noonMs);
     const modules: InitializedModules = {
       logger,
       config: oldConfig,
@@ -192,7 +196,7 @@ describe("buildConfigReloadHandler", () => {
 
     // Verify RestCalculator uses new config
     const duration = restCalculator.calculate({
-      lastUserActivityAt: Date.now() - 1000, // very recent
+      lastUserActivityAt: noonMs - 1000, // very recent (relative to injected clock)
       hasPendingEvents: false,
       hasPendingLearning: false,
       isBusinessHours: false,

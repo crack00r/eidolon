@@ -41,12 +41,21 @@
 - Extraction golden dataset: `packages/core/test/fixtures/golden/extraction/conversations.json` (105 turns, 9 categories)
 - Search golden dataset: `packages/core/test/fixtures/golden/search/queries.json` (35 queries, 6 categories)
 - Extraction test: `packages/core/src/memory/__tests__/extraction-golden.test.ts` (7 tests)
-- Search test: `packages/core/src/memory/__tests__/search-golden.test.ts` (13 tests)
+- Search structure test: `packages/core/src/memory/__tests__/search-golden.test.ts` (13 tests, validates dataset structure only)
+- Search relevance test: `packages/core/src/memory/__tests__/search-relevance.test.ts` (14 tests, validates actual search against golden entries)
 - Rule-based precision: ~79.5%, recall: ~30.1% (facts low at 5.7%, corrections high at 88.9%)
 - `contentMatches()` helper uses case-insensitive substring + 60% word overlap for fuzzy matching
 - `categoryMatches()` maps extractor types/tags to golden dataset categories (corrections=fact+tag:correction)
 - Thresholds set conservatively: precision>=40%, recall>=25% for rule-based (no LLM)
 - Golden dataset `_note` field in expected explains edge-case reasoning
+
+## MemorySearch BM25 Behavior (CRITICAL)
+- `MemoryStore.searchText()` wraps query in double quotes for FTS5: `"${query}"` (exact phrase match)
+- This means natural language questions will NOT match unless the exact word sequence appears in content
+- To test BM25 search, use phrase queries that are consecutive word subsequences of memory content
+- Example: query "package manager" matches content "pnpm workspaces is the package manager"
+- Example: query "What is the package manager?" does NOT match (no content has that exact phrase)
+- StubEmbeddingModel with `isInitialized=false` forces BM25-only mode (no vector search)
 
 ## Audit Logger Testing
 - Schema: apply all 3 migrations with db.run() (table, indexes, integrity hash + triggers)

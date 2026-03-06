@@ -46,7 +46,7 @@
       "id": "exact-005",
       "query": "What is the encryption algorithm for secrets?",
       "expectedTopResults": [
-        "AES-256-GCM encryption with Argon2id key derivation",
+        "AES-256-GCM encryption with scrypt key derivation",
         "Secrets are encrypted at rest in secrets.db"
       ],
       "tags": ["exact-match"],
@@ -130,7 +130,7 @@
       "id": "german-002",
       "query": "Wie werden Geheimnisse gespeichert?",
       "expectedTopResults": [
-        "AES-256-GCM Verschluesselung mit Argon2id Schluesselableitung",
+        "AES-256-GCM Verschluesselung mit scrypt Schluesselableitung",
         "Secrets are encrypted at rest in secrets.db"
       ],
       "tags": ["german"],
@@ -246,7 +246,7 @@
       "id": "multi-002",
       "query": "security policies and secret management",
       "expectedTopResults": [
-        "AES-256-GCM encrypted secrets with Argon2id",
+        "AES-256-GCM encrypted secrets with scrypt",
         "Action classification: safe, needs_approval, dangerous",
         "API keys isolated per subprocess environment"
       ],

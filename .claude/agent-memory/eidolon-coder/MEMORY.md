@@ -51,6 +51,13 @@
 - `Bun.serve()` Server type requires generic parameter: `Server<unknown>`
 - Pre-existing type errors in `audit/__tests__/logger.test.ts` (22 errors, all TS2532/TS18048) -- not from crawlers
 
+## Doc-vs-Code Truth Table
+- Key derivation: **scrypt** (N=2^17, r=8, p=1) -- NOT Argon2id. File: `packages/core/src/secrets/crypto.ts`
+- Community detection: **Louvain** -- NOT Leiden. File: `packages/core/src/memory/knowledge-graph/communities.ts`
+- Embedding model: **multilingual-e5-small** (Xenova/multilingual-e5-small) -- NOT all-MiniLM-L6-v2. File: `packages/core/src/memory/embeddings.ts`
+- Vector search: **brute-force cosine similarity scan** with batching -- NOT sqlite-vec ANN. File: `packages/core/src/memory/search.ts`
+- sqlite-vec: referenced in code comments as future optimization, `Vec0KnnRow` and `VEC0_TABLE_NAME` exist but are unused dead code
+
 ## Desktop App (Tauri)
 - Tauri CLI available via `cargo tauri` (cargo-tauri crate)
 - Updater signing keys: `cargo tauri signer generate -w ~/.tauri/eidolon.key --ci -p ""`

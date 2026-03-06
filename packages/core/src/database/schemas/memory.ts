@@ -187,4 +187,17 @@ export const MEMORY_MIGRATIONS: ReadonlyArray<Migration> = [
       -- SQLite cannot drop columns in older versions; sensitive column remains.
     `,
   },
+  {
+    version: 5,
+    name: "add_kg_entity_importance",
+    database: "memory",
+    up: `
+      -- Add importance column for PageRank scores on KG entities.
+      -- Updated during housekeeping dreaming phase.
+      ALTER TABLE kg_entities ADD COLUMN importance REAL NOT NULL DEFAULT 0.0;
+    `,
+    down: `
+      -- SQLite cannot drop columns in older versions; importance column remains.
+    `,
+  },
 ];
