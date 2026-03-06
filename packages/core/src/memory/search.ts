@@ -5,9 +5,14 @@
  *
  * Search pipeline:
  *   1. BM25 search via FTS5 -> ranked list
- *   2. Vector search via cosine similarity -> ranked list
+ *   2. Vector search via sqlite-vec ANN (with brute-force fallback) -> ranked list
  *   3. Graph expansion from top results -> ranked list
  *   4. Fuse all lists with weighted RRF -> final ranked results
+ *
+ * Vector search strategy:
+ *   - Primary: sqlite-vec vec0 virtual table with native KNN via MATCH operator
+ *   - Fallback: brute-force cosine similarity scan (used when sqlite-vec extension
+ *     is not loaded or the vec0 table cannot be created)
  */
 
 import type { Database } from "bun:sqlite";
@@ -40,6 +45,18 @@ interface EmbeddingRow {
   readonly embedding: Uint8Array;
 }
 
+/** Row returned from sqlite-vec KNN query. */
+interface Vec0KnnRow {
+  readonly rowid: number;
+  readonly distance: number;
+}
+
+/** Mapping row for rowid -> memory id lookup. */
+interface RowIdMapping {
+  readonly rowid: number;
+  readonly id: string;
+}
+
 // ---------------------------------------------------------------------------
 // Defaults
 // ---------------------------------------------------------------------------
@@ -56,14 +73,16 @@ const MIN_WEIGHT = 0;
 /** Maximum weight value for search weights. */
 const MAX_WEIGHT = 1.0;
 /**
- * Batch size for vector similarity scan. Rows are processed in chunks of
- * this size rather than loading all into memory at once. At 384 dims x 4
- * bytes x 2000 rows = ~3 MB per batch, a manageable working set.
+ * Batch size for vector similarity scan (brute-force fallback). Rows are
+ * processed in chunks of this size rather than loading all into memory at
+ * once. At 384 dims x 4 bytes x 2000 rows = ~3 MB per batch, a manageable
+ * working set.
  */
 const VECTOR_SCAN_BATCH_SIZE = 2000;
 /**
- * Maximum total rows scanned during vector similarity search.
- * Beyond this threshold, an ANN index (sqlite-vec) should be used.
+ * Maximum total rows scanned during brute-force vector similarity search.
+ * When sqlite-vec is available, this limit does not apply (ANN handles
+ * arbitrarily large datasets).
  */
 const MAX_VECTOR_SCAN_ROWS = 100_000;
 /** Expected embedding dimension (must match EmbeddingModel output). */
@@ -72,6 +91,8 @@ const EXPECTED_DIMENSIONS = 384;
 const GRAPH_EXPANSION_SEED_COUNT = 5;
 /** Default graph walk depth for search expansion. */
 const DEFAULT_GRAPH_WALK_DEPTH = 1;
+/** Name of the sqlite-vec virtual table for memory embeddings. */
+const VEC0_TABLE_NAME = "memory_embeddings";
 
 // ---------------------------------------------------------------------------
 // MemorySearch
@@ -88,6 +109,8 @@ export class MemorySearch {
   private readonly rrfK: number;
   private readonly db: Database;
   private readonly graph: GraphMemory | null;
+  /** Whether the sqlite-vec vec0 virtual table is available for ANN search. */
+  private vec0Available = false;
 
   constructor(
     store: MemoryStore,
@@ -108,6 +131,95 @@ export class MemorySearch {
     this.graphWeight = Math.max(MIN_WEIGHT, Math.min(MAX_WEIGHT, options?.graphWeight ?? DEFAULT_GRAPH_WEIGHT));
     this.rrfK = Math.max(1, options?.rrfK ?? DEFAULT_RRF_K);
     this.graph = graph ?? null;
+
+    // Attempt to initialise the sqlite-vec vec0 table on construction
+    this.initVec0Table();
+  }
+
+  // -----------------------------------------------------------------------
+  // Private: sqlite-vec initialisation
+  // -----------------------------------------------------------------------
+
+  /**
+   * Attempt to create the sqlite-vec vec0 virtual table for ANN search.
+   *
+   * If the sqlite-vec extension is not loaded, the CREATE VIRTUAL TABLE
+   * statement will throw and we silently fall back to brute-force scanning.
+   * This makes sqlite-vec an optional performance optimisation rather than
+   * a hard dependency.
+   */
+  private initVec0Table(): void {
+    try {
+      // Check if table already exists
+      const existing = this.db
+        .query("SELECT name FROM sqlite_master WHERE type='table' AND name=?")
+        .get(VEC0_TABLE_NAME) as { name: string } | null;
+
+      if (existing) {
+        // Table exists -- verify we can query it (extension might have been
+        // loaded when the table was created but not in this session)
+        try {
+          this.db.query(`SELECT rowid FROM ${VEC0_TABLE_NAME} LIMIT 0`).all();
+          this.vec0Available = true;
+          this.logger.info("initVec0", "sqlite-vec vec0 table available for ANN search");
+          return;
+        } catch {
+          // Table exists but cannot be queried (extension not loaded)
+          this.logger.warn(
+            "initVec0",
+            `${VEC0_TABLE_NAME} table exists but sqlite-vec extension not loaded; falling back to brute-force`,
+          );
+          this.vec0Available = false;
+          return;
+        }
+      }
+
+      // Try to create the vec0 table (requires sqlite-vec extension)
+      this.db.run(`CREATE VIRTUAL TABLE ${VEC0_TABLE_NAME} USING vec0(embedding float[${EXPECTED_DIMENSIONS}])`);
+      this.vec0Available = true;
+      this.logger.info("initVec0", "Created sqlite-vec vec0 table for ANN search");
+
+      // Backfill existing embeddings from the memories table
+      this.backfillVec0Table();
+    } catch {
+      // sqlite-vec extension not available -- use brute-force fallback
+      this.vec0Available = false;
+      this.logger.info("initVec0", "sqlite-vec extension not available; using brute-force vector search fallback");
+    }
+  }
+
+  /**
+   * Backfill the vec0 table from existing embeddings in the memories table.
+   * Called once when the vec0 table is first created on an existing database.
+   */
+  private backfillVec0Table(): void {
+    try {
+      const rows = this.db.query("SELECT rowid, embedding FROM memories WHERE embedding IS NOT NULL").all() as Array<{
+        rowid: number;
+        embedding: Uint8Array;
+      }>;
+
+      if (rows.length === 0) return;
+
+      const insertStmt = this.db.prepare(`INSERT OR REPLACE INTO ${VEC0_TABLE_NAME}(rowid, embedding) VALUES (?, ?)`);
+      const transaction = this.db.transaction(() => {
+        for (const row of rows) {
+          insertStmt.run(row.rowid, row.embedding);
+        }
+      });
+      transaction();
+
+      this.logger.info("backfillVec0", `Backfilled ${rows.length} embeddings into vec0 table`);
+    } catch (cause) {
+      this.logger.warn("backfillVec0", "Failed to backfill vec0 table", {
+        error: cause instanceof Error ? cause.message : String(cause),
+      });
+    }
+  }
+
+  /** Whether sqlite-vec ANN search is available. */
+  get isVec0Available(): boolean {
+    return this.vec0Available;
   }
 
   // -----------------------------------------------------------------------
@@ -284,25 +396,111 @@ export class MemorySearch {
   // -----------------------------------------------------------------------
 
   /**
-   * Vector similarity search using batched scanning.
+   * Vector similarity search. Uses sqlite-vec ANN indexing when the vec0
+   * virtual table is available, otherwise falls back to brute-force cosine
+   * similarity scanning.
    *
-   * Processes embeddings in batches of VECTOR_SCAN_BATCH_SIZE to limit peak
-   * memory usage. Maintains a bounded top-K candidate list throughout the scan,
-   * so only `limit` results are kept in memory at any time (plus the current batch).
+   * sqlite-vec path (preferred):
+   *   Uses the `memory_embeddings` vec0 virtual table with the MATCH operator
+   *   for efficient KNN search. The query vector is passed as a Float32Array
+   *   blob and results are ordered by L2 distance.
    *
-   * Scalability note: This is a brute-force scan bounded by MAX_VECTOR_SCAN_ROWS.
-   * For memory stores exceeding this threshold, sqlite-vec should be used for
-   * true ANN (approximate nearest neighbor) indexing. To migrate:
-   *   1. Install sqlite-vec and load the extension
-   *   2. Create a virtual table: CREATE VIRTUAL TABLE memory_vec USING vec0(embedding float[384])
-   *   3. Replace this scan with: SELECT rowid, distance FROM memory_vec
-   *      WHERE embedding MATCH ? ORDER BY distance LIMIT ?
-   *   4. sqlite-vec handles indexing and KNN search natively
+   * Brute-force fallback:
+   *   Processes embeddings in batches of VECTOR_SCAN_BATCH_SIZE to limit peak
+   *   memory usage. Bounded by MAX_VECTOR_SCAN_ROWS.
    */
   async searchVector(
     queryEmbedding: Float32Array,
     limit: number,
   ): Promise<Result<Array<{ memoryId: string; similarity: number }>, EidolonError>> {
+    if (this.vec0Available) {
+      return this.searchVectorVec0(queryEmbedding, limit);
+    }
+    return this.searchVectorBruteForce(queryEmbedding, limit);
+  }
+
+  // -----------------------------------------------------------------------
+  // Private: sqlite-vec ANN search
+  // -----------------------------------------------------------------------
+
+  /**
+   * Vector similarity search using sqlite-vec's native KNN via the MATCH
+   * operator on the vec0 virtual table.
+   *
+   * sqlite-vec returns results ordered by L2 distance. We convert distance
+   * to a similarity score using `1 / (1 + distance)` which maps distance=0
+   * to similarity=1 and larger distances to values approaching 0.
+   */
+  private searchVectorVec0(
+    queryEmbedding: Float32Array,
+    limit: number,
+  ): Result<Array<{ memoryId: string; similarity: number }>, EidolonError> {
+    try {
+      // sqlite-vec expects the query vector as a raw byte buffer
+      const queryBlob = new Uint8Array(queryEmbedding.buffer, queryEmbedding.byteOffset, queryEmbedding.byteLength);
+
+      // KNN query via sqlite-vec MATCH operator
+      // Returns rowid + distance ordered by distance ascending (closest first)
+      const rows = this.db
+        .query(`SELECT rowid, distance FROM ${VEC0_TABLE_NAME} WHERE embedding MATCH ? AND k = ?`)
+        .all(queryBlob, limit) as Vec0KnnRow[];
+
+      if (rows.length === 0) {
+        return Ok([]);
+      }
+
+      // Map rowids back to memory IDs via the memories table
+      const rowids = rows.map((r) => r.rowid);
+      const placeholders = rowids.map(() => "?").join(",");
+      const idRows = this.db
+        .query(`SELECT rowid, id FROM memories WHERE rowid IN (${placeholders})`)
+        .all(...rowids) as RowIdMapping[];
+
+      const rowidToId = new Map<number, string>();
+      for (const row of idRows) {
+        rowidToId.set(row.rowid, row.id);
+      }
+
+      // Build results with similarity scores
+      const results: Array<{ memoryId: string; similarity: number }> = [];
+      for (const row of rows) {
+        const memoryId = rowidToId.get(row.rowid);
+        if (!memoryId) continue;
+
+        // Convert L2 distance to similarity: 1/(1+distance)
+        // distance=0 -> similarity=1, larger distance -> lower similarity
+        const similarity = 1 / (1 + row.distance);
+        results.push({ memoryId, similarity });
+      }
+
+      this.logger.debug("searchVectorVec0", `ANN search returned ${results.length} results`, {
+        limit,
+        returnedCount: results.length,
+      });
+
+      return Ok(results);
+    } catch (cause) {
+      // If vec0 query fails at runtime (e.g. extension unloaded), fall back
+      this.logger.warn("searchVectorVec0", "sqlite-vec ANN query failed; falling back to brute-force", {
+        error: cause instanceof Error ? cause.message : String(cause),
+      });
+      this.vec0Available = false;
+      return this.searchVectorBruteForce(queryEmbedding, limit);
+    }
+  }
+
+  // -----------------------------------------------------------------------
+  // Private: brute-force vector search (fallback)
+  // -----------------------------------------------------------------------
+
+  /**
+   * Brute-force vector similarity search via batched cosine similarity
+   * scanning. Used as fallback when sqlite-vec is not available.
+   */
+  private searchVectorBruteForce(
+    queryEmbedding: Float32Array,
+    limit: number,
+  ): Result<Array<{ memoryId: string; similarity: number }>, EidolonError> {
     try {
       // Count total rows to scan (for logging and progress tracking)
       const countRow = this.db.query("SELECT COUNT(*) as count FROM memories WHERE embedding IS NOT NULL").get() as {
@@ -333,7 +531,7 @@ export class MemorySearch {
           const embedding = new Float32Array(new Uint8Array(row.embedding).buffer);
           if (embedding.length !== EXPECTED_DIMENSIONS) {
             this.logger.warn(
-              "searchVector",
+              "searchVectorBruteForce",
               `Skipping row ${row.id}: embedding dimension ${embedding.length} !== ${EXPECTED_DIMENSIONS}`,
             );
             continue;
@@ -366,7 +564,7 @@ export class MemorySearch {
 
       if (scannedCount >= MAX_VECTOR_SCAN_ROWS) {
         this.logger.warn(
-          "searchVector",
+          "searchVectorBruteForce",
           `Scanned maximum ${MAX_VECTOR_SCAN_ROWS} rows; results may be incomplete. ` +
             `Consider installing sqlite-vec for ANN indexing.`,
         );
@@ -494,11 +692,34 @@ export class MemorySearch {
   // Public: embedding storage
   // -----------------------------------------------------------------------
 
-  /** Store an embedding for a memory. */
+  /** Store an embedding for a memory. Also updates the vec0 table if available. */
   storeEmbedding(memoryId: string, embedding: Float32Array): Result<void, EidolonError> {
     try {
       const bytes = new Uint8Array(embedding.buffer, embedding.byteOffset, embedding.byteLength);
       this.db.query("UPDATE memories SET embedding = ? WHERE id = ?").run(bytes, memoryId);
+
+      // Also insert into the vec0 table for ANN search (if available)
+      if (this.vec0Available) {
+        try {
+          // Get the rowid for this memory
+          const row = this.db.query("SELECT rowid FROM memories WHERE id = ?").get(memoryId) as {
+            rowid: number;
+          } | null;
+
+          if (row) {
+            this.db
+              .query(`INSERT OR REPLACE INTO ${VEC0_TABLE_NAME}(rowid, embedding) VALUES (?, ?)`)
+              .run(row.rowid, bytes);
+          }
+        } catch (cause) {
+          // Non-fatal: vec0 sync failure should not block embedding storage
+          this.logger.warn("storeEmbedding", "Failed to sync embedding to vec0 table", {
+            memoryId,
+            error: cause instanceof Error ? cause.message : String(cause),
+          });
+        }
+      }
+
       return Ok(undefined);
     } catch (cause) {
       return Err(createError(ErrorCode.DB_QUERY_FAILED, `Failed to store embedding for memory ${memoryId}`, cause));

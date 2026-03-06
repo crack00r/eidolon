@@ -4,20 +4,17 @@
  * Desktop/iOS clients connect here to communicate with the Eidolon core
  * via JSON-RPC 2.0 over WebSocket.
  *
- * Client connection management (auth, messaging, lifecycle) is delegated
- * to ClientManager (client-manager.ts) to keep this file focused on
- * HTTP routing, server lifecycle, and handler registration.
+ * Responsibilities split across sub-modules to stay under 300 lines:
+ *   - client-manager.ts      Client connection lifecycle, auth, messaging
+ *   - webhook-routing.ts     WhatsApp and generic webhook HTTP handlers
+ *   - server-helpers.ts      Constants, types, utility functions
+ *   - builtin-handlers.ts    Built-in RPC handler registration
  */
 
 import { randomUUID } from "node:crypto";
 import type { BrainConfig, GatewayConfig, GatewayMethod, GatewayPushEvent, GatewayPushType } from "@eidolon/protocol";
 import type { CalendarManager } from "../calendar/index.ts";
 import type { WhatsAppChannel } from "../channels/whatsapp/channel.ts";
-import {
-  handleVerificationChallenge,
-  parseWebhookPayload,
-  verifyWebhookSignature,
-} from "../channels/whatsapp/webhook.ts";
 import type { ModelRouter } from "../llm/router.ts";
 import type { Logger } from "../logging/logger.ts";
 import type { EventBus } from "../loop/event-bus.ts";
@@ -39,7 +36,7 @@ import {
   WS_IDLE_TIMEOUT_SECONDS,
   type WSData,
 } from "./server-helpers.ts";
-import { extractWebhookResult, handleWebhookRequest, type WebhookDeps } from "./webhook.ts";
+import { handleWebhookRoute, handleWhatsAppWebhook, type WhatsAppWebhookState } from "./webhook-routing.ts";
 
 export type { MethodHandler } from "./server-helpers.ts";
 // Re-export for backward compatibility
@@ -60,13 +57,13 @@ export class GatewayServer {
   private readonly handlers: Map<GatewayMethod, MethodHandler> = new Map();
   private readonly clientManager: ClientManager;
   private readonly rateLimiter: AuthRateLimiter;
+  private readonly whatsAppState: WhatsAppWebhookState = {
+    channel: undefined,
+    verifyToken: undefined,
+    appSecret: undefined,
+  };
   private startTime = 0;
   private server: ReturnType<typeof Bun.serve> | undefined;
-
-  /** WhatsApp channel reference for webhook routing. Set via setWhatsAppChannel(). */
-  private whatsAppChannel: WhatsAppChannel | undefined;
-  private whatsAppVerifyToken: string | undefined;
-  private whatsAppAppSecret: string | undefined;
 
   constructor(deps: {
     config: GatewayConfig;
@@ -120,7 +117,6 @@ export class GatewayServer {
   // Lifecycle
   // -------------------------------------------------------------------------
 
-  /** Start listening on the configured host:port. */
   async start(): Promise<void> {
     if (this.server) {
       this.logger.warn("start", "Gateway server already running");
@@ -182,7 +178,6 @@ export class GatewayServer {
     }
   }
 
-  /** Graceful shutdown: close all connections and stop the server. */
   async stop(): Promise<void> {
     if (!this.server) return;
 
@@ -197,45 +192,33 @@ export class GatewayServer {
   // HTTP fetch handler
   // -------------------------------------------------------------------------
 
-  private async handleFetch(req: Request, server: { requestIP(req: Request): { address: string } | null; upgrade(req: Request, options: { data: WSData }): boolean }): Promise<Response | undefined> {
+  private async handleFetch(
+    req: Request,
+    server: {
+      requestIP(req: Request): { address: string } | null;
+      upgrade(req: Request, options: { data: WSData }): boolean;
+    },
+  ): Promise<Response | undefined> {
     const url = new URL(req.url);
     const isTls = this.config.tls.enabled;
 
-    // GET /health
     if (url.pathname === "/health" && req.method === "GET") {
-      const uptimeMs = this.startTime > 0 ? Date.now() - this.startTime : 0;
-      const body = JSON.stringify({
-        status: "healthy",
-        uptime: uptimeMs,
-        connectedClients: this.clientManager.size,
-        timestamp: Date.now(),
-      });
-      const headers: Record<string, string> = { ...SECURITY_HEADERS, "Content-Type": "application/json" };
-      if (isTls) headers["Strict-Transport-Security"] = "max-age=31536000";
-      return new Response(body, { status: 200, headers });
+      return this.handleHealthRequest(isTls);
     }
 
-    // GET /metrics
     if (url.pathname === "/metrics" && req.method === "GET") {
-      if (!this.metricsRegistry) return secureResponse("Metrics not configured", 404, isTls);
-      const body = formatPrometheus(this.metricsRegistry);
-      const headers: Record<string, string> = { ...SECURITY_HEADERS, "Content-Type": PROMETHEUS_CONTENT_TYPE };
-      if (isTls) headers["Strict-Transport-Security"] = "max-age=31536000";
-      return new Response(body, { status: 200, headers });
+      return this.handleMetricsRequest(isTls);
     }
 
-    // WhatsApp webhook
     if (url.pathname === "/webhooks/whatsapp" && (req.method === "GET" || req.method === "POST")) {
-      return this.handleWhatsAppWebhook(req, isTls);
+      return handleWhatsAppWebhook(req, this.whatsAppState, this.logger, isTls);
     }
 
-    // Generic webhook
     if (url.pathname.startsWith("/webhooks/") && req.method === "POST") {
       const endpointId = url.pathname.slice("/webhooks/".length);
-      return this.handleWebhookRoute(req, endpointId, isTls);
+      return handleWebhookRoute(req, endpointId, this.config, this.logger, this.eventBus, isTls);
     }
 
-    // OpenAI-compatible REST API
     if (url.pathname.startsWith("/v1/")) {
       const openAIDeps: OpenAICompatDeps = {
         logger: this.logger,
@@ -249,7 +232,38 @@ export class GatewayServer {
 
     if (url.pathname !== "/ws") return secureResponse("Not found", 404, isTls);
 
-    // WebSocket upgrade
+    return this.handleWsUpgrade(req, server, isTls);
+  }
+
+  private handleHealthRequest(isTls: boolean): Response {
+    const uptimeMs = this.startTime > 0 ? Date.now() - this.startTime : 0;
+    const body = JSON.stringify({
+      status: "healthy",
+      uptime: uptimeMs,
+      connectedClients: this.clientManager.size,
+      timestamp: Date.now(),
+    });
+    const headers: Record<string, string> = { ...SECURITY_HEADERS, "Content-Type": "application/json" };
+    if (isTls) headers["Strict-Transport-Security"] = "max-age=31536000";
+    return new Response(body, { status: 200, headers });
+  }
+
+  private handleMetricsRequest(isTls: boolean): Response {
+    if (!this.metricsRegistry) return secureResponse("Metrics not configured", 404, isTls);
+    const body = formatPrometheus(this.metricsRegistry);
+    const headers: Record<string, string> = { ...SECURITY_HEADERS, "Content-Type": PROMETHEUS_CONTENT_TYPE };
+    if (isTls) headers["Strict-Transport-Security"] = "max-age=31536000";
+    return new Response(body, { status: 200, headers });
+  }
+
+  private handleWsUpgrade(
+    req: Request,
+    server: {
+      requestIP(req: Request): { address: string } | null;
+      upgrade(req: Request, options: { data: WSData }): boolean;
+    },
+    isTls: boolean,
+  ): Response | undefined {
     const ip = normalizeIp(server.requestIP(req)?.address ?? "unknown");
     const anonIp = anonymizeIp(ip);
 
@@ -279,121 +293,14 @@ export class GatewayServer {
   }
 
   // -------------------------------------------------------------------------
-  // Webhook routing
-  // -------------------------------------------------------------------------
-
-  private async handleWebhookRoute(req: Request, endpointId: string, isTls: boolean): Promise<Response> {
-    const endpoints = this.config.webhooks?.endpoints ?? [];
-    const endpointConfig = endpoints.find((ep) => ep.id === endpointId);
-
-    if (endpointConfig && !endpointConfig.enabled) return secureResponse("Not found", 404, isTls);
-
-    let resolvedToken: string | undefined;
-    if (endpointConfig) {
-      resolvedToken = typeof endpointConfig.token === "string" ? endpointConfig.token : undefined;
-    } else {
-      resolvedToken = typeof this.config.auth.token === "string" ? this.config.auth.token : undefined;
-    }
-
-    const deps: WebhookDeps = { logger: this.logger, gatewayToken: resolvedToken };
-    const response = await handleWebhookRequest(req, deps);
-
-    const result = extractWebhookResult(response);
-    if (result) {
-      const priority = endpointConfig?.priority ?? "normal";
-      const eventType = (endpointConfig?.eventType ?? "webhook:received") as "webhook:received";
-
-      this.eventBus.publish(
-        eventType,
-        {
-          webhookId: result.id,
-          endpointId,
-          source: result.payload.source,
-          event: result.payload.event,
-          data: result.payload.data,
-        },
-        { priority, source: `webhook:${endpointId}` },
-      );
-
-      this.logger.info("webhook", `Published ${eventType} from endpoint "${endpointId}"`, {
-        webhookId: result.id,
-        source: result.payload.source,
-        event: result.payload.event,
-        priority,
-      });
-    }
-
-    return response;
-  }
-
-  // -------------------------------------------------------------------------
-  // WhatsApp webhook integration
+  // WhatsApp webhook setup
   // -------------------------------------------------------------------------
 
   setWhatsAppChannel(channel: WhatsAppChannel, verifyToken: string, appSecret: string): void {
-    this.whatsAppChannel = channel;
-    this.whatsAppVerifyToken = verifyToken;
-    this.whatsAppAppSecret = appSecret;
+    this.whatsAppState.channel = channel;
+    this.whatsAppState.verifyToken = verifyToken;
+    this.whatsAppState.appSecret = appSecret;
     this.logger.info("whatsapp-webhook", "WhatsApp webhook handler registered");
-  }
-
-  private async handleWhatsAppWebhook(req: Request, isTls: boolean): Promise<Response> {
-    if (req.method === "GET") {
-      const url = new URL(req.url);
-      if (!this.whatsAppVerifyToken) return secureResponse("WhatsApp webhook not configured", 503, isTls);
-      const result = handleVerificationChallenge(url.searchParams, this.whatsAppVerifyToken);
-      if (result.ok) {
-        this.logger.info("whatsapp-webhook", "Verification challenge accepted");
-        return new Response(result.value, { status: 200, headers: { "Content-Type": "text/plain" } });
-      }
-      this.logger.warn("whatsapp-webhook", `Verification failed: ${result.error.message}`);
-      return secureResponse("Verification failed", 403, isTls);
-    }
-
-    if (req.method === "POST") {
-      if (!this.whatsAppChannel || !this.whatsAppAppSecret) {
-        return secureResponse("WhatsApp webhook not configured", 503, isTls);
-      }
-
-      let bodyText: string;
-      try {
-        bodyText = await req.text();
-      } catch {
-        // Intentional: body read failure returns 400
-        return secureResponse("Failed to read body", 400, isTls);
-      }
-
-      const signature = req.headers.get("X-Hub-Signature-256") ?? "";
-      const signatureValid = await verifyWebhookSignature(bodyText, signature, this.whatsAppAppSecret);
-      if (!signatureValid) {
-        this.logger.warn("whatsapp-webhook", "Invalid webhook signature");
-        return secureResponse("Invalid signature", 401, isTls);
-      }
-
-      let body: unknown;
-      try {
-        body = JSON.parse(bodyText);
-      } catch {
-        // Intentional: malformed JSON returns 400
-        return secureResponse("Invalid JSON", 400, isTls);
-      }
-
-      const parseResult = parseWebhookPayload(body);
-      if (!parseResult.ok) {
-        this.logger.warn("whatsapp-webhook", `Payload parse error: ${parseResult.error.message}`);
-        return new Response("OK", { status: 200 });
-      }
-
-      if (parseResult.value.length > 0) {
-        this.whatsAppChannel.handleWebhookEvents(parseResult.value).catch((err: unknown) => {
-          this.logger.error("whatsapp-webhook", "Error handling webhook events", err);
-        });
-      }
-
-      return new Response("OK", { status: 200 });
-    }
-
-    return secureResponse("Method not allowed", 405, isTls);
   }
 
   // -------------------------------------------------------------------------

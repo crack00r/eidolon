@@ -16,7 +16,7 @@ import {
   JSON_RPC_METHOD_NOT_FOUND,
   parseJsonRpcRequest,
 } from "./protocol.ts";
-import { AuthRateLimiter } from "./rate-limiter.ts";
+import type { AuthRateLimiter } from "./rate-limiter.ts";
 import { RpcValidationError } from "./rpc-schemas.ts";
 import {
   AUTH_TIMEOUT_MS,

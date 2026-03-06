@@ -59,7 +59,7 @@ Memory in Eidolon operates on five layers, with automatic extraction as the foun
 │  ┌────────────────────────────────────────────────────┐  │
 │  │ LONG-TERM MEMORY (SQLite + Markdown export)        │  │
 │  │ Consolidated facts, rules, skills                   │  │
-│  │ Vector-indexed (sqlite-vec)                         │  │
+│  │ Vector-searchable (cosine similarity)                │  │
 │  │ Automatically injected into system prompt           │  │
 │  └────────────────────────────────────────────────────┘  │
 │                                                           │
@@ -311,12 +311,12 @@ Before each Claude Code session, relevant memories are injected into the workspa
 ### Semantic Retrieval
 
 For each incoming message, the Memory Engine:
-1. Computes an embedding of the message
-2. Queries sqlite-vec for the top 10 most relevant memories
+1. Computes an embedding of the message using `multilingual-e5-small`
+2. Queries the sqlite-vec `memory_embeddings` table via ANN search for the top 10 most relevant memories
 3. Formats them into MEMORY.md
 4. Injects into the Claude Code workspace before the session starts
 
-> **Implementation note:** Vector search currently performs a full table scan (capped at 10,000 rows) rather than using sqlite-vec ANN indexing. This is sufficient for the expected memory sizes (~10K memories) but may need optimization if the memory store grows significantly beyond that threshold.
+> **Implementation note:** Vector search uses sqlite-vec's native ANN indexing via the `memory_embeddings` vec0 virtual table and `MATCH` operator for fast KNN queries. When the sqlite-vec extension is not available, the system gracefully falls back to brute-force cosine similarity scanning in batches.
 
 ## Graph Memory (Relationships Between Concepts)
 

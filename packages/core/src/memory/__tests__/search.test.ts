@@ -531,4 +531,55 @@ describe("MemorySearch", () => {
     const m2Match = result.value.find((r) => r.memory.id === m2.value.id);
     expect(m2Match).toBeUndefined();
   });
+
+  // -----------------------------------------------------------------------
+  // sqlite-vec vec0 integration
+  // -----------------------------------------------------------------------
+
+  test("isVec0Available returns false when sqlite-vec extension is not loaded", () => {
+    // In-memory SQLite without sqlite-vec extension loaded -- vec0 not available
+    expect(search.isVec0Available).toBe(false);
+  });
+
+  test("searchVector uses brute-force fallback when vec0 is not available", async () => {
+    // Create memories with embeddings
+    const m1 = store.create(makeInput({ content: "TypeScript programming" }));
+    const m2 = store.create(makeInput({ content: "JavaScript web dev" }));
+    expect(m1.ok && m2.ok).toBe(true);
+    if (!m1.ok || !m2.ok) return;
+
+    search.storeEmbedding(m1.value.id, MockEmbeddingModel.deterministicEmbedding("TypeScript programming"));
+    search.storeEmbedding(m2.value.id, MockEmbeddingModel.deterministicEmbedding("JavaScript web dev"));
+
+    // Confirm vec0 is not available (no sqlite-vec extension in test env)
+    expect(search.isVec0Available).toBe(false);
+
+    // searchVector should still work via brute-force fallback
+    const queryEmb = MockEmbeddingModel.deterministicEmbedding("TypeScript programming");
+    const result = await search.searchVector(queryEmb, 10);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.value.length).toBe(2);
+    // Exact match should be first
+    expect(result.value[0]?.memoryId).toBe(m1.value.id);
+    expect(result.value[0]?.similarity).toBeCloseTo(1.0, 3);
+  });
+
+  test("storeEmbedding works correctly without vec0 table", () => {
+    const m = store.create(makeInput({ content: "test embedding storage" }));
+    expect(m.ok).toBe(true);
+    if (!m.ok) return;
+
+    // vec0 not available, but storeEmbedding should not fail
+    const embedding = MockEmbeddingModel.deterministicEmbedding("test embedding storage");
+    const result = search.storeEmbedding(m.value.id, embedding);
+    expect(result.ok).toBe(true);
+
+    // Embedding should be stored in memories table
+    const getResult = search.getEmbedding(m.value.id);
+    expect(getResult.ok).toBe(true);
+    if (!getResult.ok) return;
+    expect(getResult.value).not.toBeNull();
+  });
 });

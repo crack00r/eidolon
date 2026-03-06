@@ -1,0 +1,79 @@
+name: Publish CLI to npm
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run (skip actual publish)"
+        required: false
+        default: "false"
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Publish @eidolon-ai/cli
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Only publish from main branch (releases are always on main)
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - name: Determine checkout ref
+        id: ref
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          DEFAULT_REF: ${{ github.ref }}
+        run: |
+          if [ -n "$RELEASE_TAG" ]; then
+            echo "checkout_ref=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+          else
+            echo "checkout_ref=$DEFAULT_REF" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: ${{ steps.ref.outputs.checkout_ref }}
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@3d267786b128fe76c2f16a390aa2448b815359f3 # v2
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061 # v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: pnpm
+          registry-url: "https://registry.npmjs.org/"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build all packages
+        run: pnpm -r build
+
+      - name: Verify CLI build output
+        run: |
+          if [ ! -f packages/cli/dist/eidolon ]; then
+            echo "ERROR: CLI build output not found at packages/cli/dist/eidolon"
+            exit 1
+          fi
+          echo "CLI build output verified."
+
+      - name: Publish to npm (dry run)
+        if: inputs.dry_run == 'true'
+        run: pnpm publish --filter @eidolon-ai/cli --no-git-checks --dry-run
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish to npm
+        if: inputs.dry_run != 'true'
+        run: pnpm publish --filter @eidolon-ai/cli --no-git-checks
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

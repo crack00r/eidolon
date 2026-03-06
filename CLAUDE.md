@@ -12,7 +12,7 @@ See @docs/ROADMAP.md for full plan and completion status.
 
 - **Core**: TypeScript + Bun (runtime, test runner, bundler)
 - **Package manager**: pnpm workspaces
-- **Database**: bun:sqlite + sqlite-vec
+- **Database**: bun:sqlite + sqlite-vec (ANN vector search with brute-force fallback)
 - **Embeddings**: multilingual-e5-small via @huggingface/transformers (ONNX, 384-dim)
 - **GPU worker**: Python/FastAPI (faster-whisper STT, Qwen3-TTS 1.7B)
 - **Desktop**: Tauri 2.0

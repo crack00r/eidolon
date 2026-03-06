@@ -1809,7 +1809,7 @@ packages/core/src/memory/
 //
 // Search pipeline:
 // 1. BM25 search via FTS5 -> ranked list
-// 2. Vector search via sqlite-vec -> ranked list
+// 2. Vector search via sqlite-vec ANN (with brute-force cosine similarity fallback) -> ranked list
 // 3. Graph expansion (optional) -> bonus scores
 // 4. Fuse with RRF -> final ranked results
 ```
@@ -2172,9 +2172,9 @@ CREATE TRIGGER memories_au AFTER UPDATE ON memories BEGIN
   INSERT INTO memories_fts(rowid, content, tags) VALUES (new.rowid, new.content, new.tags);
 END;
 
--- Vector embeddings (sqlite-vec)
--- Created programmatically: db.exec("CREATE VIRTUAL TABLE memory_embeddings USING vec0(embedding float[384])")
--- Linked to memories by rowid
+-- Vector embeddings stored as BLOB in the memories table (embedding column).
+-- sqlite-vec ANN search via vec0 virtual table with brute-force cosine similarity fallback.
+-- Dual-write: embeddings stored in both memories.embedding BLOB and memory_embeddings vec0 table.
 
 -- Memory graph edges
 CREATE TABLE memory_edges (
@@ -2202,8 +2202,8 @@ CREATE TABLE kg_entities (
 CREATE INDEX idx_kg_entities_type ON kg_entities(type);
 CREATE INDEX idx_kg_entities_name ON kg_entities(name);
 
--- KG entity embeddings (sqlite-vec)
--- Created programmatically: CREATE VIRTUAL TABLE kg_entity_embeddings USING vec0(embedding float[384])
+-- KG entity embeddings stored inline in kg_entities or via a separate table.
+-- Uses sqlite-vec ANN search when available; brute-force cosine similarity as fallback.
 
 -- Knowledge Graph relations
 CREATE TABLE kg_relations (

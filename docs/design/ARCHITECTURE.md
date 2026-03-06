@@ -792,7 +792,7 @@ The most impactful architectural decision. See [Claude Integration](CLAUDE_INTEG
 
 - Single file, zero configuration, zero dependencies
 - Bun has native SQLite bindings (no native modules)
-- sqlite-vec extension for vector search
+- sqlite-vec extension for ANN vector search (brute-force fallback when unavailable)
 - Full-text search (FTS5) built in
 - WAL mode for concurrent reads
 - Used by nanoclaw, SafePilot, and others successfully
@@ -811,21 +811,21 @@ The most impactful architectural decision. See [Claude Integration](CLAUDE_INTEG
 
 Vector search requires text embeddings. Rather than depending on an external API (adding cost, latency, and another API key), Eidolon uses a local embedding model by default.
 
-**Default: `all-MiniLM-L6-v2` via `@huggingface/transformers`**
+**Default: `multilingual-e5-small` via `@huggingface/transformers`**
 
 | Aspect | Local (default) | Voyage AI | OpenAI |
 |---|---|---|---|
-| Model | all-MiniLM-L6-v2 (22M params) | voyage-3-lite | text-embedding-3-small |
+| Model | multilingual-e5-small (118M params) | voyage-3-lite | text-embedding-3-small |
 | Dimensions | 384 | 512 | 1536 |
 | Speed | ~5ms per embedding (CPU) | ~100ms (network) | ~100ms (network) |
 | Cost | Free | ~$0.02/1M tokens | ~$0.02/1M tokens |
 | Dependency | `@huggingface/transformers` (ONNX) | API key required | API key required |
 | Offline | Yes | No | No |
-| Quality | Good (sufficient for memory search) | Excellent | Excellent |
+| Quality | Good (multilingual, including German) | Excellent | Excellent |
 
-**Rationale:** For personal memory search (~10K memories), local embedding quality is sufficient. The model is ~23MB, loads once at startup, and produces embeddings in single-digit milliseconds. If higher quality is needed, Voyage AI or OpenAI can be configured as alternatives.
+**Rationale:** For personal memory search (~10K memories), local embedding quality is sufficient. The model loads once at startup and produces embeddings in single-digit milliseconds. `multilingual-e5-small` was chosen over `all-MiniLM-L6-v2` because the user speaks German and MiniLM is English-centric. If higher quality is needed, Voyage AI or OpenAI can be configured as alternatives.
 
-**Implementation:** The embedding provider is pluggable via config (`memory.search.embedding.provider`). The `MemorySearch` module calls the configured provider and stores the resulting vectors in sqlite-vec.
+**Implementation:** The embedding provider is configurable via `memory.embedding.model`. The `MemorySearch` module calls the configured provider and dual-writes vectors to both a BLOB column on the `memories` table and a `memory_embeddings` vec0 virtual table. When the sqlite-vec extension is available, KNN queries use the native `MATCH` operator for fast approximate nearest neighbor search. When unavailable, the system falls back to brute-force cosine similarity scanning.
 
 ### Why Tailscale (not direct connections, not SSH tunnels)
 

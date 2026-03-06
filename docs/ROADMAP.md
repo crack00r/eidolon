@@ -88,7 +88,7 @@ v2.0: Extensibility          (~6 weeks)    Plugin system, local LLM support     
 **Deliverables:**
 - [x] `MemoryExtractor`: analyze conversation turns, extract facts/decisions/preferences (with few-shot examples in prompts)
 - [x] `MemoryStore`: CRUD operations on the memories table, confidence management
-- [x] `MemorySearch`: hybrid BM25 + vector search using sqlite-vec and FTS5, with **Reciprocal Rank Fusion (RRF)**
+- [x] `MemorySearch`: hybrid BM25 + vector search using FTS5 and sqlite-vec ANN, with **Reciprocal Rank Fusion (RRF)**
 - [x] Graph memory: relationship edges between memories, graph-walk search expansion
 - [x] Local embeddings: **`multilingual-e5-small`** via `@huggingface/transformers` (ONNX, 384-dim, proper German support)
 - [x] `MemoryInjector`: select relevant memories and write MEMORY.md before each session
