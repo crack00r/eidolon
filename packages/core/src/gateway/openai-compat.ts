@@ -404,6 +404,7 @@ async function handleChatCompletions(req: Request, log: Logger, deps: OpenAIComp
   try {
     body = await req.json();
   } catch {
+    // Intentional: malformed JSON returns OpenAI-compatible error
     return openAIError("Invalid JSON in request body", "invalid_request_error", "invalid_json", 400);
   }
 

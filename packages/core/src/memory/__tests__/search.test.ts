@@ -6,6 +6,7 @@ import { runMigrations } from "../../database/migrations.ts";
 import { MEMORY_MIGRATIONS } from "../../database/schemas/memory.ts";
 import type { Logger } from "../../logging/logger.ts";
 import type { EmbeddingModel, EmbeddingPrefix } from "../embeddings.ts";
+import { GraphMemory } from "../graph.ts";
 import { MemorySearch } from "../search.ts";
 import type { CreateMemoryInput } from "../store.ts";
 import { MemoryStore } from "../store.ts";
@@ -262,6 +263,42 @@ describe("MemorySearch", () => {
     expect(result.value[0]?.memoryId).toBe(m1.value.id);
   });
 
+  test("searchVector returns empty for no embeddings", async () => {
+    store.create(makeInput({ content: "No embedding here" }));
+    const queryEmb = MockEmbeddingModel.deterministicEmbedding("test");
+    const result = await search.searchVector(queryEmb, 10);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.length).toBe(0);
+  });
+
+  test("searchVector respects limit with top-K selection", async () => {
+    // Create many memories with embeddings
+    for (let i = 0; i < 10; i++) {
+      const content = `Memory content number ${i}`;
+      const m = store.create(makeInput({ content }));
+      if (m.ok) {
+        search.storeEmbedding(m.value.id, MockEmbeddingModel.deterministicEmbedding(content));
+      }
+    }
+
+    const queryEmb = MockEmbeddingModel.deterministicEmbedding("Memory content number 5");
+    const result = await search.searchVector(queryEmb, 3);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    // Should return exactly 3 results (the limit)
+    expect(result.value.length).toBe(3);
+    // Results should be sorted by similarity descending
+    for (let i = 1; i < result.value.length; i++) {
+      const prev = result.value[i - 1];
+      const curr = result.value[i];
+      if (prev && curr) {
+        expect(prev.similarity).toBeGreaterThanOrEqual(curr.similarity);
+      }
+    }
+  });
+
   // -----------------------------------------------------------------------
   // search() -- full hybrid
   // -----------------------------------------------------------------------
@@ -365,5 +402,133 @@ describe("MemorySearch", () => {
     for (const r of result.value) {
       expect(r.matchReason).toBe("bm25");
     }
+  });
+
+  // -----------------------------------------------------------------------
+  // search() -- graph expansion
+  // -----------------------------------------------------------------------
+
+  test("search() includes graph-connected memories in results", async () => {
+    const logger = createSilentLogger();
+    const graph = new GraphMemory(db, logger);
+
+    // Create memories
+    const m1 = store.create(makeInput({ content: "Tailscale VPN networking" }));
+    const m2 = store.create(makeInput({ content: "Rust programming language" }));
+    const m3 = store.create(makeInput({ content: "GPU worker setup via Docker" }));
+    expect(m1.ok && m2.ok && m3.ok).toBe(true);
+    if (!m1.ok || !m2.ok || !m3.ok) return;
+
+    // Create edge: m1 (Tailscale) -> m3 (GPU worker) related_to
+    // m3 is NOT directly matched by "Tailscale" search but is graph-connected
+    graph.createEdge({ sourceId: m1.value.id, targetId: m3.value.id, relation: "related_to", weight: 0.9 });
+
+    // Create search with graph
+    const searchWithGraph = new MemorySearch(
+      store,
+      mockModel as unknown as EmbeddingModel,
+      db,
+      logger,
+      undefined,
+      undefined,
+      graph,
+    );
+
+    const result = await searchWithGraph.search({ text: "Tailscale" });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    // m1 (Tailscale) should be a direct match
+    const directMatch = result.value.find((r) => r.memory.id === m1.value.id);
+    expect(directMatch).toBeDefined();
+
+    // m3 (GPU worker) should appear via graph expansion
+    const graphMatch = result.value.find((r) => r.memory.id === m3.value.id);
+    expect(graphMatch).toBeDefined();
+    if (graphMatch) {
+      expect(graphMatch.matchReason).toContain("graph");
+      expect(graphMatch.graphScore).toBeDefined();
+    }
+  });
+
+  test("search() graph expansion excludes direct matches from graph list", async () => {
+    const logger = createSilentLogger();
+    const graph = new GraphMemory(db, logger);
+
+    // Create two memories that both match "JavaScript"
+    const m1 = store.create(makeInput({ content: "JavaScript runtime Bun" }));
+    const m2 = store.create(makeInput({ content: "JavaScript frameworks React" }));
+    expect(m1.ok && m2.ok).toBe(true);
+    if (!m1.ok || !m2.ok) return;
+
+    // Connect them via edge
+    graph.createEdge({ sourceId: m1.value.id, targetId: m2.value.id, relation: "related_to", weight: 0.8 });
+
+    const searchWithGraph = new MemorySearch(
+      store,
+      mockModel as unknown as EmbeddingModel,
+      db,
+      logger,
+      undefined,
+      undefined,
+      graph,
+    );
+
+    const result = await searchWithGraph.search({ text: "JavaScript" });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    // Both should appear, but matched via bm25 (not graph), since both are direct hits
+    for (const r of result.value) {
+      // Direct matches should have bm25 in their reason, not purely graph
+      expect(r.matchReason).toContain("bm25");
+    }
+  });
+
+  test("search() works without graph (backward compatibility)", async () => {
+    // MemorySearch without graph parameter should work as before
+    const searchNoGraph = new MemorySearch(store, mockModel as unknown as EmbeddingModel, db, createSilentLogger());
+
+    store.create(makeInput({ content: "JavaScript is everywhere" }));
+
+    const result = await searchNoGraph.search({ text: "JavaScript" });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.value.length).toBeGreaterThanOrEqual(1);
+    // No graphScore should be present
+    for (const r of result.value) {
+      expect(r.graphScore).toBeUndefined();
+    }
+  });
+
+  test("search() with includeGraph=false skips graph expansion", async () => {
+    const logger = createSilentLogger();
+    const graph = new GraphMemory(db, logger);
+
+    const m1 = store.create(makeInput({ content: "Tailscale VPN networking" }));
+    const m2 = store.create(makeInput({ content: "GPU worker Docker setup" }));
+    expect(m1.ok && m2.ok).toBe(true);
+    if (!m1.ok || !m2.ok) return;
+
+    graph.createEdge({ sourceId: m1.value.id, targetId: m2.value.id, relation: "related_to", weight: 0.9 });
+
+    const searchWithGraph = new MemorySearch(
+      store,
+      mockModel as unknown as EmbeddingModel,
+      db,
+      logger,
+      undefined,
+      undefined,
+      graph,
+    );
+
+    const result = await searchWithGraph.search({ text: "Tailscale", includeGraph: false });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    // m2 should NOT appear because graph expansion is disabled
+    const m2Match = result.value.find((r) => r.memory.id === m2.value.id);
+    expect(m2Match).toBeUndefined();
   });
 });

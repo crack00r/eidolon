@@ -63,7 +63,9 @@ function createMockPool(sttText = "Hello world"): GPUWorkerPool {
     stopHealthChecks: () => {},
     checkAllHealth: async () => {},
     dispose: () => {},
-    get size() { return 1; },
+    get size() {
+      return 1;
+    },
   } as unknown as GPUWorkerPool;
 }
 
@@ -178,9 +180,7 @@ describe("VoiceWsHandler", () => {
     const audio = new Uint8Array([10, 20, 30]);
     handler.sendAudio(audio);
 
-    const binaryMsgs = ws.messages.filter(
-      (m) => m instanceof Uint8Array || m instanceof ArrayBuffer,
-    );
+    const binaryMsgs = ws.messages.filter((m) => m instanceof Uint8Array || m instanceof ArrayBuffer);
     expect(binaryMsgs).toHaveLength(1);
   });
 

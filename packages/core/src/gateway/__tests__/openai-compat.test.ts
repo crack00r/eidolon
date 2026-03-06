@@ -121,7 +121,6 @@ describe("handleOpenAIRequest", () => {
       expect(resp).not.toBeNull();
       expect(resp?.status).toBe(404);
 
-      // biome-ignore lint/style/noNonNullAssertion: test assertion
       const body = (await parseJsonBody(resp!)) as Record<string, unknown>;
       const error = body.error as Record<string, unknown>;
       expect(error.type).toBe("invalid_request_error");
@@ -154,7 +153,6 @@ describe("handleOpenAIRequest", () => {
       expect(resp).not.toBeNull();
       expect(resp?.status).toBe(401);
 
-      // biome-ignore lint/style/noNonNullAssertion: test assertion
       const body = (await parseJsonBody(resp!)) as Record<string, unknown>;
       const error = body.error as Record<string, unknown>;
       expect(error.type).toBe("authentication_error");
@@ -189,7 +187,6 @@ describe("handleOpenAIRequest", () => {
       expect(resp).not.toBeNull();
       expect(resp?.status).toBe(200);
 
-      // biome-ignore lint/style/noNonNullAssertion: test assertion
       const body = (await parseJsonBody(resp!)) as Record<string, unknown>;
       expect(body.object).toBe("list");
 
@@ -207,7 +204,6 @@ describe("handleOpenAIRequest", () => {
       const resp = await handleOpenAIRequest(req, makeDeps({ brainConfig }));
       expect(resp).not.toBeNull();
 
-      // biome-ignore lint/style/noNonNullAssertion: test assertion
       const body = (await parseJsonBody(resp!)) as Record<string, unknown>;
       const data = body.data as Array<Record<string, unknown>>;
 
@@ -228,7 +224,6 @@ describe("handleOpenAIRequest", () => {
       // Use no-router deps to get a predictable count
       const resp = await handleOpenAIRequest(req, makeDeps({ brainConfig, router: makeRouter() }));
 
-      // biome-ignore lint/style/noNonNullAssertion: test assertion
       const body = (await parseJsonBody(resp!)) as Record<string, unknown>;
       const data = body.data as Array<Record<string, unknown>>;
 
@@ -241,7 +236,6 @@ describe("handleOpenAIRequest", () => {
       const req = makeRequest("/v1/models");
       const resp = await handleOpenAIRequest(req, makeDeps({ brainConfig }));
 
-      // biome-ignore lint/style/noNonNullAssertion: test assertion
       const body = (await parseJsonBody(resp!)) as Record<string, unknown>;
       const data = body.data as Array<Record<string, unknown>>;
       const anthropicModels = data.filter((m) => m.id !== "eidolon-default" && m.owned_by === "anthropic");
@@ -266,7 +260,6 @@ describe("handleOpenAIRequest", () => {
       const req = makeRequest("/v1/models");
       const resp = await handleOpenAIRequest(req, makeDeps({ router }));
 
-      // biome-ignore lint/style/noNonNullAssertion: test assertion
       const body = (await parseJsonBody(resp!)) as Record<string, unknown>;
       const data = body.data as Array<Record<string, unknown>>;
       const ids = data.map((m) => m.id);
@@ -292,7 +285,6 @@ describe("handleOpenAIRequest", () => {
       expect(resp).not.toBeNull();
       expect(resp?.status).toBe(200);
 
-      // biome-ignore lint/style/noNonNullAssertion: test assertion
       const body = (await parseJsonBody(resp!)) as Record<string, unknown>;
       expect(body.object).toBe("chat.completion");
       expect(typeof body.id).toBe("string");
@@ -344,7 +336,6 @@ describe("handleOpenAIRequest", () => {
       });
       const resp = await handleOpenAIRequest(req, deps);
 
-      // biome-ignore lint/style/noNonNullAssertion: test assertion
       const body = (await parseJsonBody(resp!)) as Record<string, unknown>;
       expect(body.model).toBe("claude-sonnet-4-20250514");
     });
@@ -360,7 +351,6 @@ describe("handleOpenAIRequest", () => {
       });
       const resp = await handleOpenAIRequest(req, deps);
 
-      // biome-ignore lint/style/noNonNullAssertion: test assertion
       const body = (await parseJsonBody(resp!)) as Record<string, unknown>;
       expect(body.model).toBe("claude-sonnet-4-20250514");
     });
@@ -376,7 +366,6 @@ describe("handleOpenAIRequest", () => {
       });
       const resp = await handleOpenAIRequest(req, deps);
 
-      // biome-ignore lint/style/noNonNullAssertion: test assertion
       const body = (await parseJsonBody(resp!)) as Record<string, unknown>;
       expect(body.model).toBe("my-custom-model");
     });
@@ -391,7 +380,6 @@ describe("handleOpenAIRequest", () => {
       expect(resp).not.toBeNull();
       expect(resp?.status).toBe(400);
 
-      // biome-ignore lint/style/noNonNullAssertion: test assertion
       const body = (await parseJsonBody(resp!)) as Record<string, unknown>;
       const error = body.error as Record<string, unknown>;
       expect(error.type).toBe("invalid_request_error");
@@ -408,7 +396,6 @@ describe("handleOpenAIRequest", () => {
       expect(resp).not.toBeNull();
       expect(resp?.status).toBe(400);
 
-      // biome-ignore lint/style/noNonNullAssertion: test assertion
       const body = (await parseJsonBody(resp!)) as Record<string, unknown>;
       const error = body.error as Record<string, unknown>;
       expect(error.code).toBe("invalid_params");
@@ -425,7 +412,6 @@ describe("handleOpenAIRequest", () => {
       expect(resp).not.toBeNull();
       expect(resp?.status).toBe(400);
 
-      // biome-ignore lint/style/noNonNullAssertion: test assertion
       const body = (await parseJsonBody(resp!)) as Record<string, unknown>;
       const error = body.error as Record<string, unknown>;
       expect(error.code).toBe("invalid_params");
@@ -466,7 +452,6 @@ describe("handleOpenAIRequest", () => {
       expect(resp).not.toBeNull();
       expect(resp?.status).toBe(503);
 
-      // biome-ignore lint/style/noNonNullAssertion: test assertion
       const body = (await parseJsonBody(resp!)) as Record<string, unknown>;
       const error = body.error as Record<string, unknown>;
       expect(error.code).toBe("no_provider");
@@ -496,7 +481,6 @@ describe("handleOpenAIRequest", () => {
       });
       const resp = await handleOpenAIRequest(req, deps);
 
-      // biome-ignore lint/style/noNonNullAssertion: test assertion
       const body = (await parseJsonBody(resp!)) as Record<string, unknown>;
       const usage = body.usage as Record<string, unknown>;
       expect(usage.prompt_tokens).toBe(10);
@@ -713,7 +697,6 @@ describe("handleOpenAIRequest", () => {
         body: makeChatBody({ model: "gpt-4" }),
       });
       const resp = await handleOpenAIRequest(req, deps);
-      // biome-ignore lint/style/noNonNullAssertion: test assertion
       const body = (await parseJsonBody(resp!)) as Record<string, unknown>;
       expect(body.model).toBe("claude-opus-4-20250514");
     });
@@ -728,7 +711,6 @@ describe("handleOpenAIRequest", () => {
         body: makeChatBody({ model: "gpt-3.5-turbo" }),
       });
       const resp = await handleOpenAIRequest(req, deps);
-      // biome-ignore lint/style/noNonNullAssertion: test assertion
       const body = (await parseJsonBody(resp!)) as Record<string, unknown>;
       expect(body.model).toBe("claude-haiku-3-20250414");
     });

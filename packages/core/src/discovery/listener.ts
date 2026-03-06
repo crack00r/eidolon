@@ -162,6 +162,7 @@ export class DiscoveryListener {
     try {
       text = buf.toString("utf-8");
     } catch {
+      // Intentional: non-UTF8 beacon data is silently dropped
       return;
     }
 
@@ -169,6 +170,7 @@ export class DiscoveryListener {
     try {
       parsed = JSON.parse(text);
     } catch {
+      // Intentional: non-JSON beacon data is silently dropped
       return;
     }
 

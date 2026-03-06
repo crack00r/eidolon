@@ -104,7 +104,15 @@ describe("buildChannelStatuses", () => {
     const config = makeConfig({
       email: {
         enabled: false,
-        imap: { host: "imap.example.com", port: 993, user: "u", password: "p", tls: true, pollIntervalMs: 30000, folder: "INBOX" },
+        imap: {
+          host: "imap.example.com",
+          port: 993,
+          user: "u",
+          password: "p",
+          tls: true,
+          pollIntervalMs: 30000,
+          folder: "INBOX",
+        },
         smtp: { host: "smtp.example.com", port: 587, user: "u", password: "p", tls: true, from: "eidolon@example.com" },
         allowedSenders: [],
         subjectPrefix: "[Eidolon]",

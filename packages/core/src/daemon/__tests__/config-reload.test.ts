@@ -310,6 +310,132 @@ describe("buildConfigReloadHandler", () => {
     expect(infoLogs[0]?.message).toContain("info -> debug");
   });
 
+  test("reconfigures GPU worker pool when gpu.workers changes", () => {
+    const { logger, logs } = createCapturingLogger();
+    const oldConfig = createTestConfig({
+      gpu: {
+        workers: [
+          {
+            name: "worker-1",
+            host: "10.0.0.1",
+            port: 8420,
+            token: "tok-1",
+            capabilities: ["tts", "stt"] as const,
+            priority: 50,
+          },
+        ],
+        pool: { loadBalancing: "round-robin" as const, healthCheckIntervalMs: 30_000, maxRetriesPerRequest: 2 },
+        tts: { model: "Qwen/Qwen3-TTS-1.7B", defaultSpeaker: "Chelsie", sampleRate: 24_000 },
+        stt: { model: "large-v3", language: "auto" },
+        fallback: { cpuTts: true, systemTts: true },
+      },
+    } as Partial<EidolonConfig>);
+
+    // Create a mock GPU worker pool that records reconfigure calls
+    let reconfigureCalled = false;
+    let receivedConfig: unknown = null;
+    const fakePool = {
+      reconfigure(config: unknown): void {
+        reconfigureCalled = true;
+        receivedConfig = config;
+      },
+    };
+
+    const modules: InitializedModules = {
+      logger,
+      config: oldConfig,
+      gpuWorkerPool: fakePool as InitializedModules["gpuWorkerPool"],
+    };
+
+    const handler = buildConfigReloadHandler(modules, logger);
+
+    // Change workers list
+    const newConfig = createTestConfig({
+      gpu: {
+        workers: [
+          {
+            name: "worker-1",
+            host: "10.0.0.1",
+            port: 8420,
+            token: "tok-1",
+            capabilities: ["tts", "stt"] as const,
+            priority: 50,
+          },
+          {
+            name: "worker-2",
+            host: "10.0.0.2",
+            port: 8420,
+            token: "tok-2",
+            capabilities: ["tts"] as const,
+            priority: 30,
+          },
+        ],
+        pool: { loadBalancing: "round-robin" as const, healthCheckIntervalMs: 30_000, maxRetriesPerRequest: 2 },
+        tts: { model: "Qwen/Qwen3-TTS-1.7B", defaultSpeaker: "Chelsie", sampleRate: 24_000 },
+        stt: { model: "large-v3", language: "auto" },
+        fallback: { cpuTts: true, systemTts: true },
+      },
+    } as Partial<EidolonConfig>);
+
+    handler(newConfig);
+
+    expect(reconfigureCalled).toBe(true);
+    // Verify the pool config has the expected shape
+    const poolConfig = receivedConfig as Record<string, unknown>;
+    const poolWorkers = poolConfig.workers as Array<Record<string, unknown>>;
+    expect(poolWorkers).toHaveLength(2);
+    expect(poolWorkers[0]?.url).toBe("http://10.0.0.1:8420");
+    expect(poolWorkers[1]?.url).toBe("http://10.0.0.2:8420");
+    expect(poolConfig.loadBalancing).toBe("round-robin");
+    expect(poolConfig.maxRetries).toBe(2);
+
+    // Verify info log about reconfiguration
+    const infoLogs = logs.filter(
+      (l) => l.level === "info" && l.module === "config-reload" && l.message.includes("GPU worker pool reconfigured"),
+    );
+    expect(infoLogs.length).toBe(1);
+    expect(infoLogs[0]?.message).toContain("2 worker(s)");
+  });
+
+  test("skips GPU worker pool reconfiguration when pool is not initialized", () => {
+    const { logger, logs } = createCapturingLogger();
+    const oldConfig = createTestConfig();
+    const modules: InitializedModules = {
+      logger,
+      config: oldConfig,
+      // gpuWorkerPool is undefined
+    };
+
+    const handler = buildConfigReloadHandler(modules, logger);
+
+    const newConfig = createTestConfig({
+      gpu: {
+        workers: [
+          {
+            name: "worker-1",
+            host: "10.0.0.1",
+            port: 8420,
+            token: "tok-1",
+            capabilities: ["tts", "stt"] as const,
+            priority: 50,
+          },
+        ],
+        pool: { loadBalancing: "round-robin" as const, healthCheckIntervalMs: 30_000, maxRetriesPerRequest: 2 },
+        tts: { model: "Qwen/Qwen3-TTS-1.7B", defaultSpeaker: "Chelsie", sampleRate: 24_000 },
+        stt: { model: "large-v3", language: "auto" },
+        fallback: { cpuTts: true, systemTts: true },
+      },
+    } as Partial<EidolonConfig>);
+
+    handler(newConfig);
+
+    // Should NOT have a GPU reconfiguration log
+    const gpuLogs = logs.filter(
+      (l) => l.module === "config-reload" && l.message.includes("GPU worker pool reconfigured"),
+    );
+    expect(gpuLogs.length).toBe(0);
+  });
+
   test("falls back gracefully when logger has no setLevel", () => {
     const { logger, logs } = createCapturingLogger();
     // Ensure no setLevel method

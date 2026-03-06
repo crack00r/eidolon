@@ -161,6 +161,7 @@ export async function handleWebhookRequest(req: Request, deps: WebhookDeps): Pro
     }
     bodyText = new TextDecoder().decode(bodyBuffer);
   } catch {
+    // Intentional: body read failure returns 400
     return jsonResponse({ ok: false, error: "Failed to read request body" }, 400);
   }
 
@@ -169,6 +170,7 @@ export async function handleWebhookRequest(req: Request, deps: WebhookDeps): Pro
   try {
     rawBody = JSON.parse(bodyText);
   } catch {
+    // Intentional: malformed JSON returns 400
     return jsonResponse({ ok: false, error: "Invalid JSON" }, 400);
   }
 

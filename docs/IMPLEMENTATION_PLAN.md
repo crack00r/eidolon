@@ -1198,7 +1198,7 @@ packages/test-utils/tsconfig.json
 | Package | Dependencies | Dev Dependencies |
 |---|---|---|
 | `protocol` | `zod` | `bun-types`, `typescript` |
-| `core` | `@eidolon/protocol`, `argon2` (Argon2id) | `bun-types`, `typescript`, `@eidolon/test-utils` |
+| `core` | `@eidolon/protocol` | `bun-types`, `typescript`, `@eidolon/test-utils` |
 | `cli` | `@eidolon/core`, `@eidolon/protocol`, `commander` | `bun-types`, `typescript` |
 | `test-utils` | `@eidolon/protocol` | `bun-types`, `typescript` |
 
@@ -1344,7 +1344,7 @@ export function createLogger(config: LoggingConfig): Logger;
 packages/core/src/secrets/
   index.ts                   # export { SecretStore }
   store.ts                   # SecretStore class -- CRUD + encryption
-  crypto.ts                  # encrypt(), decrypt(), deriveKey() -- AES-256-GCM + Argon2id
+  crypto.ts                  # encrypt(), decrypt(), deriveKey() -- AES-256-GCM + scrypt
   master-key.ts              # getMasterKey(), setMasterKey() -- platform keychain or env
 ```
 
@@ -1374,7 +1374,7 @@ CREATE TABLE secrets (
   encrypted_value BLOB NOT NULL,     -- AES-256-GCM ciphertext
   iv BLOB NOT NULL,                  -- 12-byte initialization vector
   auth_tag BLOB NOT NULL,            -- 16-byte authentication tag
-  salt BLOB NOT NULL,                -- Argon2id salt
+  salt BLOB NOT NULL,                -- scrypt salt
   description TEXT,
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL,
@@ -1383,7 +1383,7 @@ CREATE TABLE secrets (
 ```
 
 **Crypto details:**
-- Key derivation: Argon2id (memory: 64MB, iterations: 3, parallelism: 4) from master key
+- Key derivation: scrypt (N=2^17, r=8, p=1) from master key
 - Encryption: AES-256-GCM with random 12-byte IV per secret
 - Master key: from `EIDOLON_MASTER_KEY` env var or platform keychain
 
@@ -1790,7 +1790,7 @@ packages/core/src/memory/
     entities.ts              # KG entity CRUD, entity resolution
     relations.ts             # KG relation CRUD, extraction from text
     complex.ts               # ComplEx embedding training & scoring
-    communities.ts           # Leiden community detection, PageRank
+    communities.ts           # Louvain community detection, PageRank
   document-indexer.ts        # Index markdown, text, PDF, code files
   dreaming/
     index.ts
@@ -2220,7 +2220,7 @@ CREATE INDEX idx_kg_relations_source ON kg_relations(source_id);
 CREATE INDEX idx_kg_relations_target ON kg_relations(target_id);
 CREATE INDEX idx_kg_relations_type ON kg_relations(type);
 
--- KG communities (Leiden algorithm output)
+-- KG communities (Louvain algorithm output)
 CREATE TABLE kg_communities (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
@@ -2538,7 +2538,7 @@ DreamScheduler checks time (02:00 default)
      -> Create memory_edges for discoveries
      -> ComplEx training batch
   -> Phase 3 NREM:
-     -> Leiden community detection on KG
+     -> Louvain community detection on KG
      -> LLM abstracts rules from clusters
      -> Create "schema" memories
      -> Extract "skill" memories from patterns

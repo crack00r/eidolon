@@ -8,7 +8,7 @@
  *   info <name>     -- show plugin details
  */
 
-import { createLogger, DatabaseManager, discoverPlugins, loadConfig, PluginRegistry } from "@eidolon/core";
+import { createLogger, discoverPlugins, loadConfig, PluginRegistry } from "@eidolon/core";
 import type { PluginInfo } from "@eidolon/protocol";
 import type { Command } from "commander";
 import { formatTable } from "../utils/formatter.ts";
@@ -34,9 +34,7 @@ function formatPermissions(permissions: readonly string[]): string {
   return permissions.join(", ");
 }
 
-function formatExtensionPoints(
-  points: readonly { readonly type: string; readonly name: string }[],
-): string {
+function formatExtensionPoints(points: readonly { readonly type: string; readonly name: string }[]): string {
   if (points.length === 0) return "(none)";
   return points.map((p) => `${p.type}: ${p.name}`).join(", ");
 }

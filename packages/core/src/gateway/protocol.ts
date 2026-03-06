@@ -109,6 +109,7 @@ export function parseJsonRpcRequest(data: string): Result<GatewayRequest, Gatewa
   try {
     parsed = JSON.parse(data);
   } catch {
+    // Intentional: malformed JSON returns JSON-RPC parse error
     return Err(createJsonRpcError("null", JSON_RPC_PARSE_ERROR, "Parse error: invalid JSON"));
   }
 

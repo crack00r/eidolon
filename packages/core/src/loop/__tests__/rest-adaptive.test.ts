@@ -5,7 +5,7 @@
 import { describe, expect, test } from "bun:test";
 import type { Logger } from "../../logging/logger.ts";
 import type { BusinessHoursConfig } from "../rest.ts";
-import { DEFAULT_BUSINESS_HOURS, DEFAULT_REST_CONFIG, RestCalculator } from "../rest.ts";
+import { DEFAULT_REST_CONFIG, RestCalculator } from "../rest.ts";
 
 function createSilentLogger(): Logger {
   const noop = (): void => {};
@@ -241,20 +241,14 @@ describe("RestCalculator edge cases", () => {
       timezone: "UTC",
     };
     // 23:00 UTC -- within cross-midnight window
-    const calc = new RestCalculator(
-      DEFAULT_REST_CONFIG,
-      logger,
-      businessHours,
-      () => new Date("2025-06-15T23:00:00Z").getTime(),
+    const calc = new RestCalculator(DEFAULT_REST_CONFIG, logger, businessHours, () =>
+      new Date("2025-06-15T23:00:00Z").getTime(),
     );
     expect(calc.checkBusinessHours()).toBe(true);
 
     // 12:00 UTC -- outside cross-midnight window
-    const calcMidday = new RestCalculator(
-      DEFAULT_REST_CONFIG,
-      logger,
-      businessHours,
-      () => new Date("2025-06-15T12:00:00Z").getTime(),
+    const calcMidday = new RestCalculator(DEFAULT_REST_CONFIG, logger, businessHours, () =>
+      new Date("2025-06-15T12:00:00Z").getTime(),
     );
     expect(calcMidday.checkBusinessHours()).toBe(false);
   });

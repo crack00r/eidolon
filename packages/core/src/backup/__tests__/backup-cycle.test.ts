@@ -16,7 +16,7 @@
 import { Database } from "bun:sqlite";
 import { afterEach, describe, expect, test } from "bun:test";
 import { randomBytes } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, renameSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, renameSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DatabaseConfig } from "@eidolon/protocol";
@@ -126,9 +126,9 @@ describe("BackupManager -- full backup cycle", () => {
 
     // Open the backed-up memory.db and verify it has the expected tables
     const memDb = new Database(join(backupPath, "memory.db"), { readonly: true });
-    const tables = memDb
-      .query("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
-      .all() as Array<{ name: string }>;
+    const tables = memDb.query("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name").all() as Array<{
+      name: string;
+    }>;
     const tableNames = tables.map((t) => t.name);
 
     expect(tableNames).toContain("memories");
@@ -138,9 +138,9 @@ describe("BackupManager -- full backup cycle", () => {
 
     // Open the backed-up operational.db
     const opDb = new Database(join(backupPath, "operational.db"), { readonly: true });
-    const opTables = opDb
-      .query("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
-      .all() as Array<{ name: string }>;
+    const opTables = opDb.query("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name").all() as Array<{
+      name: string;
+    }>;
     const opTableNames = opTables.map((t) => t.name);
 
     expect(opTableNames).toContain("sessions");
@@ -153,9 +153,11 @@ describe("BackupManager -- full backup cycle", () => {
 
     // Insert data into the live database
     const now = Date.now();
-    dbManager.memory.query(
-      "INSERT INTO memories (id, type, layer, content, confidence, source, created_at, updated_at, accessed_at) VALUES (?, 'fact', 'long_term', ?, 0.9, 'test', ?, ?, ?)",
-    ).run("test-mem-1", "backup cycle test data", now, now, now);
+    dbManager.memory
+      .query(
+        "INSERT INTO memories (id, type, layer, content, confidence, source, created_at, updated_at, accessed_at) VALUES (?, 'fact', 'long_term', ?, 0.9, 'test', ?, ?, ?)",
+      )
+      .run("test-mem-1", "backup cycle test data", now, now, now);
 
     // Create backup
     const result = backupMgr.runBackup();
@@ -417,9 +419,11 @@ describe("BackupManager -- encrypted backups", () => {
 
     // Insert test data
     const now = Date.now();
-    dbManager.memory.query(
-      "INSERT INTO memories (id, type, layer, content, confidence, source, created_at, updated_at, accessed_at) VALUES (?, 'fact', 'long_term', ?, 0.9, 'test', ?, ?, ?)",
-    ).run("enc-test-1", "encrypted backup roundtrip", now, now, now);
+    dbManager.memory
+      .query(
+        "INSERT INTO memories (id, type, layer, content, confidence, source, created_at, updated_at, accessed_at) VALUES (?, 'fact', 'long_term', ?, 0.9, 'test', ?, ?, ?)",
+      )
+      .run("enc-test-1", "encrypted backup roundtrip", now, now, now);
 
     // Create encrypted backup
     const result = backupMgr.runBackup();
@@ -497,9 +501,11 @@ describe("BackupManager -- end-to-end cycle", () => {
     const now = Date.now();
 
     // Step 1: Insert initial data and back up
-    dbManager.memory.query(
-      "INSERT INTO memories (id, type, layer, content, confidence, source, created_at, updated_at, accessed_at) VALUES (?, 'fact', 'long_term', ?, 0.9, 'test', ?, ?, ?)",
-    ).run("cycle-1", "first backup data", now, now, now);
+    dbManager.memory
+      .query(
+        "INSERT INTO memories (id, type, layer, content, confidence, source, created_at, updated_at, accessed_at) VALUES (?, 'fact', 'long_term', ?, 0.9, 'test', ?, ?, ?)",
+      )
+      .run("cycle-1", "first backup data", now, now, now);
 
     const first = backupMgr.runBackup();
     expect(first.ok).toBe(true);
@@ -515,9 +521,11 @@ describe("BackupManager -- end-to-end cycle", () => {
     }
 
     // Step 3: Insert more data and back up again
-    dbManager.memory.query(
-      "INSERT INTO memories (id, type, layer, content, confidence, source, created_at, updated_at, accessed_at) VALUES (?, 'fact', 'long_term', ?, 0.9, 'test', ?, ?, ?)",
-    ).run("cycle-2", "second backup data", now, now, now);
+    dbManager.memory
+      .query(
+        "INSERT INTO memories (id, type, layer, content, confidence, source, created_at, updated_at, accessed_at) VALUES (?, 'fact', 'long_term', ?, 0.9, 'test', ?, ?, ?)",
+      )
+      .run("cycle-2", "second backup data", now, now, now);
 
     const second = backupMgr.runBackup();
     expect(second.ok).toBe(true);

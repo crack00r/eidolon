@@ -136,6 +136,7 @@ export function rowToMemory(row: MemoryRow): Memory {
     const parsed: unknown = JSON.parse(row.tags);
     tags = Array.isArray(parsed) ? (parsed as string[]) : [];
   } catch {
+    // Intentional: malformed JSON tags default to empty array
     tags = [];
   }
 
@@ -147,6 +148,7 @@ export function rowToMemory(row: MemoryRow): Memory {
         ? (parsed as Record<string, unknown>)
         : {};
   } catch {
+    // Intentional: malformed JSON metadata defaults to empty object
     metadata = {};
   }
 

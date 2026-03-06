@@ -6,18 +6,12 @@
  */
 
 import { randomUUID } from "node:crypto";
-import type { InboundMessage, MessageAttachment } from "@eidolon/protocol";
+import type { InboundMessage } from "@eidolon/protocol";
 import type { Logger } from "../../logging/logger.ts";
 import type { ITracer } from "../../telemetry/tracer.ts";
+import { filterAttachments } from "./attachments.ts";
 import type { IImapClient, ImapMessage } from "./imap.ts";
-import {
-  extractThreadInfo,
-  parseEmailBody,
-  sanitizeEmailContent,
-  stripQuotedReply,
-  stripSignature,
-} from "./parser.ts";
-import { classifyAttachmentType, filterAttachments } from "./attachments.ts";
+import { extractThreadInfo, parseEmailBody, sanitizeEmailContent, stripQuotedReply, stripSignature } from "./parser.ts";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -159,8 +153,7 @@ export async function processInboundEmail(email: ImapMessage, deps: ProcessEmail
   }
 
   // Truncate excessively long content
-  const safeText =
-    sanitized.length > MAX_INBOUND_TEXT_LENGTH ? sanitized.slice(0, MAX_INBOUND_TEXT_LENGTH) : sanitized;
+  const safeText = sanitized.length > MAX_INBOUND_TEXT_LENGTH ? sanitized.slice(0, MAX_INBOUND_TEXT_LENGTH) : sanitized;
 
   // Extract thread info
   const threadInfo = extractThreadInfo(email);

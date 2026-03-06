@@ -168,7 +168,6 @@ describe("GoogleCalendarProvider", () => {
 
       expect(result.value.length).toBe(2);
 
-      // biome-ignore lint/style/noNonNullAssertion: test assertion
       const standup = result.value[0]!;
       expect(standup.id).toBe("evt-google-1");
       expect(standup.title).toBe("Team Standup");
@@ -178,7 +177,6 @@ describe("GoogleCalendarProvider", () => {
       expect(standup.reminders).toEqual([10]);
       expect(standup.source).toBe("google");
 
-      // biome-ignore lint/style/noNonNullAssertion: test assertion
       const workshop = result.value[1]!;
       expect(workshop.id).toBe("evt-google-2");
       expect(workshop.allDay).toBe(true);

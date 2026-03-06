@@ -239,6 +239,7 @@ function parseActions(json: string): HASceneAction[] {
     if (!Array.isArray(parsed)) return [];
     return parsed as HASceneAction[];
   } catch {
+    // Intentional: malformed JSON actions default to empty array
     return [];
   }
 }

@@ -51,7 +51,7 @@ Wire all existing-but-disconnected modules into the daemon.
 |---|---|---|---|
 | P0-07 | Implement ~20 gateway methods (chat.send, memory.search, etc.) | eidolon-coder | worktree |
 | P0-18 | Wire ComplEx training to KG data | eidolon-coder | worktree |
-| P0-19 | Wire Leiden community detection | eidolon-coder | worktree |
+| P0-19 | Wire Louvain community detection | eidolon-coder | worktree |
 | P1-12 | Relevance filter with real LLM scoring | eidolon-coder | worktree |
 | P1-13 | Safety classifier verification | eidolon-coder | worktree |
 | P1-14 | Git worktree implementation pipeline | eidolon-coder | worktree |

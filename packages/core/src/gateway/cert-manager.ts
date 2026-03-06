@@ -79,6 +79,7 @@ export function generateSelfSignedCert(certsDir: string, options?: CertOptions):
   try {
     chmodSync(keyPath, 0o600);
   } catch {
+    // Intentional: chmod failure is reported but not fatal to cert generation
     return Err(`Certificate generated but failed to set key permissions on ${keyPath}`);
   }
 

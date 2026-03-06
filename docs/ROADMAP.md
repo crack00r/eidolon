@@ -37,7 +37,7 @@ v2.0: Extensibility          (~6 weeks)    Plugin system, local LLM support     
 - [x] TypeScript + Bun configuration (tsconfig, biome for linting/formatting)
 - [x] **Compatibility verification:** `bun:sqlite` + `sqlite-vec`, `@huggingface/transformers` on Bun (document fallbacks: `better-sqlite3`, native ONNX runtime)
 - [x] Config system: load `eidolon.json`, validate with Zod, env variable overrides
-- [x] Secret store: AES-256-GCM encryption, Argon2id key derivation, CLI commands
+- [x] Secret store: AES-256-GCM encryption, scrypt key derivation, CLI commands
 - [x] SQLite databases (3-database split):
   - `memory.db`: memories, embeddings, KG tables
   - `operational.db`: sessions, events, state, discoveries, token_usage
@@ -95,7 +95,7 @@ v2.0: Extensibility          (~6 weeks)    Plugin system, local LLM support     
 - [x] Document indexing: index personal files (markdown, text, PDF, code) from configured paths
 - [x] Dreaming Phase 1 (Housekeeping): deduplication, contradiction resolution, decay
 - [x] Dreaming Phase 2 (REM): associative discovery, graph edge creation, **ComplEx** embedding training
-- [x] Dreaming Phase 3 (NREM): schema abstraction, skill extraction, Leiden community detection
+- [x] Dreaming Phase 3 (NREM): schema abstraction, skill extraction, Louvain community detection
 - [x] `eidolon memory search <query>`: CLI memory search
 - [x] `eidolon memory dream`: manually trigger dreaming
 - [x] **Entity resolution:** configurable similarity thresholds per entity type (persons 0.95, technology 0.90, concepts 0.85)

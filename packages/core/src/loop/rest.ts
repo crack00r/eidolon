@@ -127,6 +127,7 @@ function getHourInTimezone(date: Date, timezone: string): number {
     }
     return date.getHours();
   } catch {
+    // Intentional: invalid timezone falls back to local time
     return date.getHours();
   }
 }
@@ -138,12 +139,7 @@ export class RestCalculator {
   /** Injectable clock for testing. Defaults to Date.now. */
   private readonly nowFn: () => number;
 
-  constructor(
-    config: RestConfig,
-    logger: Logger,
-    businessHours?: BusinessHoursConfig,
-    nowFn?: () => number,
-  ) {
+  constructor(config: RestConfig, logger: Logger, businessHours?: BusinessHoursConfig, nowFn?: () => number) {
     this.config = config;
     this.logger = logger;
     this.businessHours = businessHours ?? DEFAULT_BUSINESS_HOURS;

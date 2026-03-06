@@ -103,7 +103,7 @@ OpenClaw's size isn't just about reading comprehension. Every line is attack sur
 - No audit trail
 
 **Eidolon:**
-- AES-256-GCM encrypted secrets at rest (Argon2id key derivation)
+- AES-256-GCM encrypted secrets at rest (scrypt key derivation)
 - Config references secrets by key (`{ "$secret": "KEY" }`), never by value
 - Only Anthropic OAuth (documented, sanctioned, safe)
 - Every action classified: `safe`, `needs_approval`, `dangerous`

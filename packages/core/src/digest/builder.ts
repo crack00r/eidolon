@@ -417,6 +417,7 @@ export class DigestBuilder {
       });
       return formatter.format(new Date(timestamp));
     } catch {
+      // Intentional: timezone-aware formatting failure falls back to local time
       const d = new Date(timestamp);
       return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
     }

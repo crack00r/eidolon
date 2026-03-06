@@ -1,13 +1,13 @@
 /**
  * MemorySearch -- hybrid search combining BM25 full-text search (FTS5),
- * vector similarity search, and Reciprocal Rank Fusion (RRF) to produce
- * a single ranked result list.
+ * vector similarity search, graph expansion, and Reciprocal Rank Fusion
+ * (RRF) to produce a single ranked result list.
  *
  * Search pipeline:
  *   1. BM25 search via FTS5 -> ranked list
  *   2. Vector search via cosine similarity -> ranked list
- *   3. Graph expansion (Step 2.5, placeholder) -> bonus scores
- *   4. Fuse with RRF -> final ranked results
+ *   3. Graph expansion from top results -> ranked list
+ *   4. Fuse all lists with weighted RRF -> final ranked results
  */
 
 import type { Database } from "bun:sqlite";
@@ -17,6 +17,7 @@ import type { Logger } from "../logging/logger.ts";
 import type { ITracer } from "../telemetry/tracer.ts";
 import { NoopTracer } from "../telemetry/tracer.ts";
 import { EmbeddingModel } from "./embeddings.ts";
+import type { GraphMemory } from "./graph.ts";
 import type { MemoryStore } from "./store.ts";
 
 // ---------------------------------------------------------------------------
@@ -55,12 +56,22 @@ const MIN_WEIGHT = 0;
 /** Maximum weight value for search weights. */
 const MAX_WEIGHT = 1.0;
 /**
- * Upper bound on rows scanned during vector similarity search to prevent OOM.
- * Set to 10,000 as a balance between recall quality and memory usage.
- * For stores larger than this, migrate to sqlite-vec for ANN indexing.
- * At 384 dimensions × 4 bytes × 10,000 rows ≈ 15 MB peak memory.
+ * Batch size for vector similarity scan. Rows are processed in chunks of
+ * this size rather than loading all into memory at once. At 384 dims x 4
+ * bytes x 2000 rows = ~3 MB per batch, a manageable working set.
  */
-const MAX_VECTOR_SCAN_ROWS = 10_000;
+const VECTOR_SCAN_BATCH_SIZE = 2000;
+/**
+ * Maximum total rows scanned during vector similarity search.
+ * Beyond this threshold, an ANN index (sqlite-vec) should be used.
+ */
+const MAX_VECTOR_SCAN_ROWS = 100_000;
+/** Expected embedding dimension (must match EmbeddingModel output). */
+const EXPECTED_DIMENSIONS = 384;
+/** Number of top direct results to use as seeds for graph expansion. */
+const GRAPH_EXPANSION_SEED_COUNT = 5;
+/** Default graph walk depth for search expansion. */
+const DEFAULT_GRAPH_WALK_DEPTH = 1;
 
 // ---------------------------------------------------------------------------
 // MemorySearch
@@ -76,6 +87,7 @@ export class MemorySearch {
   private readonly graphWeight: number;
   private readonly rrfK: number;
   private readonly db: Database;
+  private readonly graph: GraphMemory | null;
 
   constructor(
     store: MemoryStore,
@@ -84,6 +96,7 @@ export class MemorySearch {
     logger: Logger,
     options?: MemorySearchOptions,
     tracer?: ITracer,
+    graph?: GraphMemory,
   ) {
     this.store = store;
     this.embeddingModel = embeddingModel;
@@ -94,13 +107,14 @@ export class MemorySearch {
     this.vectorWeight = Math.max(MIN_WEIGHT, Math.min(MAX_WEIGHT, options?.vectorWeight ?? DEFAULT_VECTOR_WEIGHT));
     this.graphWeight = Math.max(MIN_WEIGHT, Math.min(MAX_WEIGHT, options?.graphWeight ?? DEFAULT_GRAPH_WEIGHT));
     this.rrfK = Math.max(1, options?.rrfK ?? DEFAULT_RRF_K);
+    this.graph = graph ?? null;
   }
 
   // -----------------------------------------------------------------------
   // Public: full hybrid search
   // -----------------------------------------------------------------------
 
-  /** Full hybrid search: BM25 + vector + RRF fusion. */
+  /** Full hybrid search: BM25 + vector + graph expansion + RRF fusion. */
   async search(query: MemorySearchQuery): Promise<Result<MemorySearchResult[], EidolonError>> {
     if (!query.text || query.text.trim().length === 0) {
       return Ok([]);
@@ -162,6 +176,19 @@ export class MemorySearch {
       weights.push(this.vectorWeight);
     }
 
+    // Graph expansion: walk edges from top direct results to find related memories
+    const graphScoreMap = new Map<string, number>();
+    if (this.graph !== null && this.graphWeight > 0 && query.includeGraph !== false) {
+      const graphResult = this.expandViaGraph(bm25Ranked, vectorRanked, limit);
+      if (graphResult.ok && graphResult.value.length > 0) {
+        rankedLists.push(graphResult.value);
+        weights.push(this.graphWeight);
+        for (const item of graphResult.value) {
+          graphScoreMap.set(item.id, item.rank);
+        }
+      }
+    }
+
     // Fuse
     const fused = MemorySearch.fuseRRF(rankedLists, weights, this.rrfK);
 
@@ -205,12 +232,14 @@ export class MemorySearch {
       const reasons: string[] = [];
       if (bm25ScoreMap.has(entry.id)) reasons.push("bm25");
       if (vectorScoreMap.has(entry.id)) reasons.push("vector");
+      if (graphScoreMap.has(entry.id)) reasons.push("graph");
 
       results.push({
         memory,
         score: entry.score,
         bm25Score: bm25ScoreMap.get(entry.id),
         vectorScore: vectorScoreMap.get(entry.id),
+        graphScore: graphScoreMap.has(entry.id) ? 1 / (this.rrfK + (graphScoreMap.get(entry.id) ?? 1)) : undefined,
         matchReason: reasons.join("+") || "unknown",
       });
     }
@@ -218,12 +247,14 @@ export class MemorySearch {
     this.logger.debug("search", `Hybrid search completed`, {
       bm25Count: bm25Ranked.length,
       vectorCount: vectorRanked.length,
+      graphCount: graphScoreMap.size,
       fusedCount: fused.length,
       returnedCount: results.length,
     });
 
     searchSpan.setAttribute("results.bm25_count", bm25Ranked.length);
     searchSpan.setAttribute("results.vector_count", vectorRanked.length);
+    searchSpan.setAttribute("results.graph_count", graphScoreMap.size);
     searchSpan.setAttribute("results.total", results.length);
     searchSpan.setStatus("ok");
     searchSpan.end();
@@ -253,51 +284,174 @@ export class MemorySearch {
   // -----------------------------------------------------------------------
 
   /**
-   * Vector similarity search.
+   * Vector similarity search using batched scanning.
    *
-   * Performance note: This performs a full table scan of all embeddings and
-   * computes cosine similarity in application code. For large memory stores
-   * (>100k memories), consider migrating to sqlite-vec for ANN indexing.
-   * The scan is bounded by MAX_VECTOR_SCAN_ROWS to prevent excessive memory use.
+   * Processes embeddings in batches of VECTOR_SCAN_BATCH_SIZE to limit peak
+   * memory usage. Maintains a bounded top-K candidate list throughout the scan,
+   * so only `limit` results are kept in memory at any time (plus the current batch).
+   *
+   * Scalability note: This is a brute-force scan bounded by MAX_VECTOR_SCAN_ROWS.
+   * For memory stores exceeding this threshold, sqlite-vec should be used for
+   * true ANN (approximate nearest neighbor) indexing. To migrate:
+   *   1. Install sqlite-vec and load the extension
+   *   2. Create a virtual table: CREATE VIRTUAL TABLE memory_vec USING vec0(embedding float[384])
+   *   3. Replace this scan with: SELECT rowid, distance FROM memory_vec
+   *      WHERE embedding MATCH ? ORDER BY distance LIMIT ?
+   *   4. sqlite-vec handles indexing and KNN search natively
    */
   async searchVector(
     queryEmbedding: Float32Array,
     limit: number,
   ): Promise<Result<Array<{ memoryId: string; similarity: number }>, EidolonError>> {
     try {
-      // Cap the number of rows scanned to prevent unbounded memory usage.
-      // This is a reasonable upper bound; if the memory store grows beyond this,
-      // an ANN index (sqlite-vec) should be used instead.
-      const rows = this.db
-        .query("SELECT id, embedding FROM memories WHERE embedding IS NOT NULL LIMIT ?")
-        .all(MAX_VECTOR_SCAN_ROWS) as EmbeddingRow[];
+      // Count total rows to scan (for logging and progress tracking)
+      const countRow = this.db.query("SELECT COUNT(*) as count FROM memories WHERE embedding IS NOT NULL").get() as {
+        count: number;
+      };
+      const totalRows = Math.min(countRow.count, MAX_VECTOR_SCAN_ROWS);
 
-      const scored: Array<{ memoryId: string; similarity: number }> = [];
-
-      /** Expected embedding dimension (must match EmbeddingModel output). */
-      const EXPECTED_DIMENSIONS = 384;
-
-      for (const row of rows) {
-        const embedding = new Float32Array(new Uint8Array(row.embedding).buffer);
-        // Skip rows with wrong embedding dimensions (corrupted or schema-mismatched data)
-        if (embedding.length !== EXPECTED_DIMENSIONS) {
-          this.logger.warn(
-            "searchVector",
-            `Skipping row ${row.id}: embedding dimension ${embedding.length} !== ${EXPECTED_DIMENSIONS}`,
-          );
-          continue;
-        }
-        const similarity = EmbeddingModel.cosineSimilarity(queryEmbedding, embedding);
-        scored.push({ memoryId: row.id, similarity });
+      if (totalRows === 0) {
+        return Ok([]);
       }
 
-      // Sort descending by similarity
-      scored.sort((a, b) => b.similarity - a.similarity);
+      // Use a bounded candidate list: only keep top `limit` results
+      const topK: Array<{ memoryId: string; similarity: number }> = [];
+      let minTopKSimilarity = -Infinity;
+      let scannedCount = 0;
 
-      return Ok(scored.slice(0, limit));
+      // Process in batches using LIMIT/OFFSET for cursor-based pagination.
+      // Using rowid ordering ensures stable pagination even under concurrent writes.
+      for (let offset = 0; offset < totalRows; offset += VECTOR_SCAN_BATCH_SIZE) {
+        const batchLimit = Math.min(VECTOR_SCAN_BATCH_SIZE, totalRows - offset);
+        const rows = this.db
+          .query("SELECT id, embedding FROM memories WHERE embedding IS NOT NULL ORDER BY rowid LIMIT ? OFFSET ?")
+          .all(batchLimit, offset) as EmbeddingRow[];
+
+        if (rows.length === 0) break;
+
+        for (const row of rows) {
+          const embedding = new Float32Array(new Uint8Array(row.embedding).buffer);
+          if (embedding.length !== EXPECTED_DIMENSIONS) {
+            this.logger.warn(
+              "searchVector",
+              `Skipping row ${row.id}: embedding dimension ${embedding.length} !== ${EXPECTED_DIMENSIONS}`,
+            );
+            continue;
+          }
+
+          const similarity = EmbeddingModel.cosineSimilarity(queryEmbedding, embedding);
+          scannedCount++;
+
+          // Only insert if this candidate beats the current minimum in our top-K
+          if (topK.length < limit) {
+            topK.push({ memoryId: row.id, similarity });
+            if (topK.length === limit) {
+              // Sort and establish the min threshold
+              topK.sort((a, b) => b.similarity - a.similarity);
+              const last = topK[topK.length - 1];
+              minTopKSimilarity = last ? last.similarity : -Infinity;
+            }
+          } else if (similarity > minTopKSimilarity) {
+            // Replace the worst candidate
+            topK[topK.length - 1] = { memoryId: row.id, similarity };
+            topK.sort((a, b) => b.similarity - a.similarity);
+            const last = topK[topK.length - 1];
+            minTopKSimilarity = last ? last.similarity : -Infinity;
+          }
+        }
+      }
+
+      // Final sort (may already be sorted but ensure correctness)
+      topK.sort((a, b) => b.similarity - a.similarity);
+
+      if (scannedCount >= MAX_VECTOR_SCAN_ROWS) {
+        this.logger.warn(
+          "searchVector",
+          `Scanned maximum ${MAX_VECTOR_SCAN_ROWS} rows; results may be incomplete. ` +
+            `Consider installing sqlite-vec for ANN indexing.`,
+        );
+      }
+
+      return Ok(topK);
     } catch (cause) {
       return Err(createError(ErrorCode.DB_QUERY_FAILED, "Vector similarity search failed", cause));
     }
+  }
+
+  // -----------------------------------------------------------------------
+  // Private: graph expansion
+  // -----------------------------------------------------------------------
+
+  /**
+   * Expand search results via graph edges. Takes the top-N results from
+   * BM25 and vector search as seeds, walks memory_edges to find connected
+   * memories (1-hop by default), and returns them as a ranked list for
+   * RRF fusion.
+   *
+   * Connected memories that already appear in direct results are excluded
+   * from the graph ranked list (they already contribute via BM25/vector).
+   * The graph walk weights (closer = higher) are used to rank the expanded
+   * results.
+   */
+  private expandViaGraph(
+    bm25Ranked: ReadonlyArray<{ id: string; rank: number }>,
+    vectorRanked: ReadonlyArray<{ id: string; rank: number }>,
+    limit: number,
+  ): Result<Array<{ id: string; rank: number }>, EidolonError> {
+    if (this.graph === null) {
+      return Ok([]);
+    }
+
+    // Collect unique seed IDs from top-N of each direct result list
+    const seedSet = new Set<string>();
+    for (const item of bm25Ranked.slice(0, GRAPH_EXPANSION_SEED_COUNT)) {
+      seedSet.add(item.id);
+    }
+    for (const item of vectorRanked.slice(0, GRAPH_EXPANSION_SEED_COUNT)) {
+      seedSet.add(item.id);
+    }
+
+    if (seedSet.size === 0) {
+      return Ok([]);
+    }
+
+    const seedIds = [...seedSet];
+
+    // Walk the graph from seed nodes
+    const walkResult = this.graph.graphWalk(seedIds, DEFAULT_GRAPH_WALK_DEPTH);
+    if (!walkResult.ok) {
+      this.logger.warn("expandViaGraph", "Graph walk failed; skipping graph expansion", {
+        error: walkResult.error.message,
+      });
+      return Ok([]);
+    }
+
+    const walkResults = walkResult.value;
+    if (walkResults.length === 0) {
+      return Ok([]);
+    }
+
+    // Exclude IDs that already appear in direct results (they'll score via BM25/vector)
+    const directIds = new Set<string>();
+    for (const item of bm25Ranked) directIds.add(item.id);
+    for (const item of vectorRanked) directIds.add(item.id);
+
+    const graphOnly = walkResults.filter((r) => !directIds.has(r.memoryId));
+
+    // The walkResults are already sorted by weight descending.
+    // Convert to ranked list format for RRF (rank 1 = best).
+    const ranked = graphOnly.slice(0, limit).map((item, idx) => ({
+      id: item.memoryId,
+      rank: idx + 1,
+    }));
+
+    this.logger.debug("expandViaGraph", `Graph expansion found ${ranked.length} additional memories`, {
+      seeds: seedIds.length,
+      walkTotal: walkResults.length,
+      afterFilter: ranked.length,
+    });
+
+    return Ok(ranked);
   }
 
   // -----------------------------------------------------------------------

@@ -17,7 +17,7 @@
  * mock config and verify the public interface behavior.
  */
 
-import { beforeEach, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import type { InboundMessage } from "@eidolon/protocol";
 import type { Logger } from "../../../logging/logger.ts";
 import type { TelegramConfig } from "../channel.ts";

@@ -473,7 +473,6 @@ describe("ApprovalManager", () => {
       expect(pending.ok).toBe(true);
       if (!pending.ok) return;
       expect(pending.value.length).toBe(1);
-      // biome-ignore lint/style/noNonNullAssertion: test assertion
       const escalatedReq = pending.value[0]!;
       expect(escalatedReq.escalationLevel).toBe(1);
 

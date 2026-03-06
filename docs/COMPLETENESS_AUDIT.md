@@ -119,7 +119,7 @@ The implementation exceeds the plan in several areas:
   - Platform-aware paths (Linux, macOS, Windows)
   - Hot-reload via file watcher
 - [x] **Secret store** (`packages/core/src/secrets/`): store.ts (347 lines), crypto.ts, master-key.ts
-  - AES-256-GCM encryption with Argon2id key derivation
+  - AES-256-GCM encryption with scrypt key derivation
   - CRUD operations (set, get, delete, list, has, rotate)
   - resolveSecretRefs() for config integration
   - Master key from env var or platform keychain

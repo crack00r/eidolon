@@ -5,14 +5,7 @@
  * Extracted from manager.ts to keep CalendarManager under 300 lines.
  */
 
-import type {
-  CalendarConfig,
-  CalendarEvent,
-  CalendarProviderType,
-  EidolonError,
-  Result,
-} from "@eidolon/protocol";
-import { Ok } from "@eidolon/protocol";
+import type { CalendarConfig, CalendarEvent, CalendarProviderType } from "@eidolon/protocol";
 import type { EventBus } from "../loop/event-bus.ts";
 
 // ---------------------------------------------------------------------------
@@ -87,9 +80,7 @@ export function rowToCalendarEvent(row: CalendarEventRow): CalendarEvent {
  * Generate schedule context for injection into MEMORY.md.
  * Returns a formatted string of today's and upcoming events.
  */
-export function buildScheduleContext(
-  events: readonly CalendarEvent[],
-): string {
+export function buildScheduleContext(events: readonly CalendarEvent[]): string {
   if (events.length === 0) return "";
 
   const lines: string[] = ["## Schedule"];
@@ -139,11 +130,7 @@ export function buildScheduleContext(
  * Check upcoming events and publish reminder events.
  * Called periodically by the daemon.
  */
-export function checkReminders(
-  events: readonly CalendarEvent[],
-  config: CalendarConfig,
-  eventBus: EventBus,
-): void {
+export function checkReminders(events: readonly CalendarEvent[], config: CalendarConfig, eventBus: EventBus): void {
   const now = Date.now();
   const reminderMinutes = config.reminders.defaultMinutesBefore ?? [15, 60];
 

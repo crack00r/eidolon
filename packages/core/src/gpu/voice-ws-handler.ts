@@ -35,13 +35,6 @@ export interface VoiceWebSocket {
 /** WebSocket readyState constants. */
 const WS_OPEN = 1;
 
-/** Parsed client JSON message. */
-interface ClientControlMessage {
-  readonly type: "control";
-  readonly action: "start" | "stop" | "interrupt" | "config";
-  readonly config?: Record<string, unknown>;
-}
-
 /** Server JSON messages. */
 interface ServerTranscriptMessage {
   readonly type: "transcript";

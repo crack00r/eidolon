@@ -118,7 +118,12 @@ function setupHandlers(overrides?: Partial<BuiltinHandlerDeps>): TestContext {
   return { handlers, eventBus, subscriberIds, pushEvents, clients, sentMessages };
 }
 
-function invoke(ctx: TestContext, method: string, params: Record<string, unknown>, clientId = "client-1"): Promise<unknown> {
+function invoke(
+  ctx: TestContext,
+  method: string,
+  params: Record<string, unknown>,
+  clientId = "client-1",
+): Promise<unknown> {
   const handler = ctx.handlers.get(method);
   if (!handler) throw new Error(`Handler not registered for ${method}`);
   return handler(params, clientId);
@@ -456,10 +461,15 @@ describe("client.execute", () => {
   });
 
   test("sends command to target client and returns commandId", async () => {
-    const result = (await invoke(ctx, "client.execute", {
-      targetClientId: "target",
-      command: "screenshot",
-    }, "sender")) as Record<string, unknown>;
+    const result = (await invoke(
+      ctx,
+      "client.execute",
+      {
+        targetClientId: "target",
+        command: "screenshot",
+      },
+      "sender",
+    )) as Record<string, unknown>;
 
     expect(result.sent).toBe(true);
     expect(typeof result.commandId).toBe("string");
@@ -469,11 +479,16 @@ describe("client.execute", () => {
   });
 
   test("passes args to target", async () => {
-    await invoke(ctx, "client.execute", {
-      targetClientId: "target",
-      command: "run",
-      args: { cmd: "ls" },
-    }, "sender");
+    await invoke(
+      ctx,
+      "client.execute",
+      {
+        targetClientId: "target",
+        command: "run",
+        args: { cmd: "ls" },
+      },
+      "sender",
+    );
 
     const pushed = JSON.parse(ctx.sentMessages[0]!.data);
     expect(pushed.params.command).toBe("run");
@@ -482,10 +497,15 @@ describe("client.execute", () => {
 
   test("rejects self-targeting", async () => {
     try {
-      await invoke(ctx, "client.execute", {
-        targetClientId: "sender",
-        command: "test",
-      }, "sender");
+      await invoke(
+        ctx,
+        "client.execute",
+        {
+          targetClientId: "sender",
+          command: "test",
+        },
+        "sender",
+      );
       expect.unreachable("should have thrown");
     } catch (err) {
       expect(err).toBeInstanceOf(RpcValidationError);
@@ -496,10 +516,15 @@ describe("client.execute", () => {
   test("rejects when sender is not authenticated", async () => {
     ctx.clients.set("unauth-sender", createMockClient("unauth-sender", false));
     try {
-      await invoke(ctx, "client.execute", {
-        targetClientId: "target",
-        command: "test",
-      }, "unauth-sender");
+      await invoke(
+        ctx,
+        "client.execute",
+        {
+          targetClientId: "target",
+          command: "test",
+        },
+        "unauth-sender",
+      );
       expect.unreachable("should have thrown");
     } catch (err) {
       expect(err).toBeInstanceOf(RpcValidationError);
@@ -509,10 +534,15 @@ describe("client.execute", () => {
 
   test("rejects when target is not found", async () => {
     try {
-      await invoke(ctx, "client.execute", {
-        targetClientId: "nonexistent",
-        command: "test",
-      }, "sender");
+      await invoke(
+        ctx,
+        "client.execute",
+        {
+          targetClientId: "nonexistent",
+          command: "test",
+        },
+        "sender",
+      );
       expect.unreachable("should have thrown");
     } catch (err) {
       expect(err).toBeInstanceOf(RpcValidationError);
@@ -523,10 +553,15 @@ describe("client.execute", () => {
   test("rejects when target is not authenticated", async () => {
     ctx.clients.set("unauth-target", createMockClient("unauth-target", false));
     try {
-      await invoke(ctx, "client.execute", {
-        targetClientId: "unauth-target",
-        command: "test",
-      }, "sender");
+      await invoke(
+        ctx,
+        "client.execute",
+        {
+          targetClientId: "unauth-target",
+          command: "test",
+        },
+        "sender",
+      );
       expect.unreachable("should have thrown");
     } catch (err) {
       expect(err).toBeInstanceOf(RpcValidationError);
@@ -551,10 +586,15 @@ describe("client.execute", () => {
     failCtx.clients.set("target", createMockClient("target"));
 
     try {
-      await invoke(failCtx, "client.execute", {
-        targetClientId: "target",
-        command: "test",
-      }, "sender");
+      await invoke(
+        failCtx,
+        "client.execute",
+        {
+          targetClientId: "target",
+          command: "test",
+        },
+        "sender",
+      );
       expect.unreachable("should have thrown");
     } catch (err) {
       expect(err).toBeInstanceOf(RpcValidationError);
@@ -813,11 +853,16 @@ describe("approval.respond", () => {
   });
 
   test("publishes approval event to EventBus", async () => {
-    await invoke(ctx, "approval.respond", {
-      approvalId: "appr-3",
-      action: "approve",
-      reason: "looks good",
-    }, "reviewer");
+    await invoke(
+      ctx,
+      "approval.respond",
+      {
+        approvalId: "appr-3",
+        action: "approve",
+        reason: "looks good",
+      },
+      "reviewer",
+    );
 
     expect(ctx.eventBus.events).toHaveLength(1);
     expect(ctx.eventBus.events[0]!.type).toBe("user:approval");
@@ -865,9 +910,14 @@ describe("approval.respond", () => {
 describe("automation.create", () => {
   test("creates automation and publishes event", async () => {
     const ctx = setupHandlers();
-    const result = (await invoke(ctx, "automation.create", {
-      input: "Turn on porch lights at sunset",
-    }, "user-1")) as Record<string, unknown>;
+    const result = (await invoke(
+      ctx,
+      "automation.create",
+      {
+        input: "Turn on porch lights at sunset",
+      },
+      "user-1",
+    )) as Record<string, unknown>;
 
     expect(result.created).toBe(true);
     expect(typeof result.automationId).toBe("string");
@@ -935,9 +985,14 @@ describe("automation.list", () => {
 describe("automation.delete", () => {
   test("deletes automation and publishes event", async () => {
     const ctx = setupHandlers();
-    const result = (await invoke(ctx, "automation.delete", {
-      automationId: "auto-xyz",
-    }, "user-1")) as Record<string, unknown>;
+    const result = (await invoke(
+      ctx,
+      "automation.delete",
+      {
+        automationId: "auto-xyz",
+      },
+      "user-1",
+    )) as Record<string, unknown>;
 
     expect(result.deleted).toBe(true);
     expect(result.automationId).toBe("auto-xyz");

@@ -166,7 +166,7 @@ describe("PluginLifecycleManager integration with EventBus", () => {
     await manager.startAll();
 
     // Drain events from init/start
-    const preCount = eventBus.pendingCount();
+    const _preCount = eventBus.pendingCount();
 
     await manager.stopAll();
 
@@ -242,9 +242,9 @@ describe("createPluginContext sandbox enforcement", () => {
     const deps: SandboxDeps = { logger, config: {} as never, eventBus };
     const ctx = createPluginContext("listener", ["events:listen"], deps);
 
-    let received = false;
+    let _received = false;
     const unsub = ctx.onEvent("system:startup", () => {
-      received = true;
+      _received = true;
     });
 
     expect(typeof unsub).toBe("function");

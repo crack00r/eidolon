@@ -523,11 +523,7 @@ describe("HAManager service execution with policy enforcement", () => {
     });
 
     // Alarm panel is dangerous -- should be denied
-    const result = await manager.executeService(
-      "alarm_control_panel.home",
-      "alarm_control_panel",
-      "arm_away",
-    );
+    const result = await manager.executeService("alarm_control_panel.home", "alarm_control_panel", "arm_away");
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.error.code).toBe(ErrorCode.HA_POLICY_DENIED);
@@ -567,11 +563,7 @@ describe("HAManager service execution with policy enforcement", () => {
     });
 
     let executorCalled = false;
-    const mockExecutor = async (
-      entityId: string,
-      domain: string,
-      service: string,
-    ) => {
+    const mockExecutor = async (entityId: string, domain: string, service: string) => {
       executorCalled = true;
       return Ok({
         entityId,
@@ -581,13 +573,7 @@ describe("HAManager service execution with policy enforcement", () => {
       });
     };
 
-    const result = await manager.executeService(
-      "light.kitchen",
-      "light",
-      "turn_off",
-      undefined,
-      mockExecutor,
-    );
+    const result = await manager.executeService("light.kitchen", "light", "turn_off", undefined, mockExecutor);
 
     expect(result.ok).toBe(true);
     expect(executorCalled).toBe(true);
@@ -604,11 +590,7 @@ describe("HAManager service execution with policy enforcement", () => {
     });
 
     let executorCalled = false;
-    const mockExecutor = async (
-      entityId: string,
-      domain: string,
-      service: string,
-    ) => {
+    const mockExecutor = async (entityId: string, domain: string, service: string) => {
       executorCalled = true;
       return Ok({
         entityId,

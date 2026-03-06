@@ -5,11 +5,8 @@ Public repo: `crack00r/eidolon`. Owner: Manuel Guttmann (German speaker, English
 
 ## Current Phase
 
-**Phase 0: Foundation** -- first code implementation phase.
-See @docs/ROADMAP.md for full plan (~22 weeks, Phases 0-9).
-
-Phase 0 deliverables: pnpm monorepo, TypeScript+Bun, config system (Zod), secret store (AES-256-GCM, Argon2id),
-3-database split (memory.db, operational.db, audit.db), CLI skeleton, structured logging, CI pipeline, tests, systemd.
+**All phases implemented (0-9 + v1.1/v1.2/v2.0).** ~122k lines of code, 2610 tests, 0 typecheck errors.
+See @docs/ROADMAP.md for full plan and completion status.
 
 ## Tech Stack
 
@@ -73,7 +70,7 @@ enable parallel execution, and produce better results through focused system pro
 5. **Event Bus persisted to SQLite** -- crash recovery for Cognitive Loop
 6. **Circuit breakers + graceful degradation** on all external service calls
 7. **All code changes from self-learning require user approval**
-8. **AES-256-GCM encrypted secrets** with Argon2id key derivation, API keys isolated per subprocess
+8. **AES-256-GCM encrypted secrets** with scrypt key derivation, API keys isolated per subprocess
 
 ## MASTER IMPLEMENTATION PLAN (BINDING)
 

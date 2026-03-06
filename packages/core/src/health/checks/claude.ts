@@ -26,6 +26,7 @@ export function createClaudeCheck(): () => Promise<HealthCheck> {
         message: "Claude CLI returned non-zero exit code",
       };
     } catch {
+      // Intentional: spawn failure means Claude CLI is not installed
       return {
         name: "claude",
         status: "warn",

@@ -29,11 +29,11 @@ import { buildReplySubject, formatEmailResponse } from "./formatter.ts";
 import type { IImapClient } from "./imap.ts";
 import { isValidEmail } from "./parser.ts";
 import {
+  attemptReconnect,
   type ProcessEmailDeps,
+  processInboundEmail,
   type RateWindow,
   type ThreadState,
-  attemptReconnect,
-  processInboundEmail,
 } from "./polling.ts";
 import type { ISmtpClient } from "./smtp.ts";
 

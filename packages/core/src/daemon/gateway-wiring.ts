@@ -431,6 +431,7 @@ export function buildGatewayInitSteps(
               const models = await p.listModels();
               result.push({ provider: p.type, models });
             } catch {
+              // Intentional: provider model listing failure returns empty list
               result.push({ provider: p.type, models: [] });
             }
           }

@@ -16,11 +16,7 @@ import type {
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 import type { Logger } from "../logging/logger.ts";
 import type { EventBus } from "../loop/event-bus.ts";
-import {
-  escalateRequest,
-  getTimeoutAction,
-  getTimeoutForLevel,
-} from "./approval-escalation.ts";
+import { escalateRequest, getTimeoutAction, getTimeoutForLevel } from "./approval-escalation.ts";
 
 // ---------------------------------------------------------------------------
 // Database row type
@@ -94,7 +90,9 @@ export class ApprovalManager {
   /** Start periodic timeout checking. */
   start(): void {
     const intervalMs = this.config.approval.checkIntervalMs;
-    this.checkTimer = setInterval(() => { this.checkTimeouts(); }, intervalMs);
+    this.checkTimer = setInterval(() => {
+      this.checkTimeouts();
+    }, intervalMs);
     this.logger.info("start", `Approval timeout checker started (interval: ${intervalMs}ms)`);
   }
 
@@ -126,8 +124,16 @@ export class ApprovalManager {
           `INSERT INTO approval_requests (id, action, level, description, requested_at, timeout_at, channel, status, escalation_level, metadata)
            VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', 0, ?)`,
         )
-        .run(id, params.action, params.level, params.description, now, timeoutAt, params.channel,
-          JSON.stringify(params.metadata ?? {}));
+        .run(
+          id,
+          params.action,
+          params.level,
+          params.description,
+          now,
+          timeoutAt,
+          params.channel,
+          JSON.stringify(params.metadata ?? {}),
+        );
     } catch (cause) {
       return Err(createError(ErrorCode.DB_QUERY_FAILED, `Failed to create approval request: ${params.action}`, cause));
     }
@@ -147,14 +153,22 @@ export class ApprovalManager {
 
     this.eventBus.publish(
       "approval:requested",
-      { requestId: id, action: params.action, level: params.level,
-        description: params.description, channel: params.channel, timeoutAt },
+      {
+        requestId: id,
+        action: params.action,
+        level: params.level,
+        description: params.description,
+        channel: params.channel,
+        timeoutAt,
+      },
       { priority: "high", source: "approval-manager" },
     );
 
-    this.logger.info("request",
+    this.logger.info(
+      "request",
       `Approval requested: ${params.action} (level=${params.level}, timeout=${timeoutMs}ms)`,
-      { id, channel: params.channel });
+      { id, channel: params.channel },
+    );
 
     return Ok(request);
   }
@@ -171,8 +185,12 @@ export class ApprovalManager {
       return Err(createError(ErrorCode.APPROVAL_NOT_FOUND, `Approval request not found: ${params.requestId}`));
     }
     if (existing.value.status !== "pending") {
-      return Err(createError(ErrorCode.APPROVAL_ALREADY_RESOLVED,
-        `Approval request ${params.requestId} already resolved (status: ${existing.value.status})`));
+      return Err(
+        createError(
+          ErrorCode.APPROVAL_ALREADY_RESOLVED,
+          `Approval request ${params.requestId} already resolved (status: ${existing.value.status})`,
+        ),
+      );
     }
 
     const newStatus: ApprovalStatus = params.approved ? "approved" : "denied";
@@ -274,12 +292,18 @@ export class ApprovalManager {
 
     this.eventBus.publish(
       "approval:timeout",
-      { requestId: request.id, action: request.action, timeoutAction: finalStatus,
-        escalationLevel: request.escalationLevel },
+      {
+        requestId: request.id,
+        action: request.action,
+        timeoutAction: finalStatus,
+        escalationLevel: request.escalationLevel,
+      },
       { priority: "normal", source: "approval-manager" },
     );
-    this.logger.info("timeout", `Approval ${request.id} timed out, action: ${finalStatus}`,
-      { action: request.action, escalationLevel: request.escalationLevel });
+    this.logger.info("timeout", `Approval ${request.id} timed out, action: ${finalStatus}`, {
+      action: request.action,
+      escalationLevel: request.escalationLevel,
+    });
     return 1;
   }
 }

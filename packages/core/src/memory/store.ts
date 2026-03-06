@@ -21,6 +21,7 @@ import { randomUUID } from "node:crypto";
 import type { EidolonError, Memory, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 import type { Logger } from "../logging/logger.ts";
+import type { CreateMemoryInput, MemoryListOptions, MemoryRow, UpdateMemoryInput } from "./store-helpers.ts";
 import {
   cosineSimilarity,
   DEFAULT_LIST_LIMIT,
@@ -31,7 +32,6 @@ import {
   MAX_SEARCH_LIMIT,
   rowToMemory,
 } from "./store-helpers.ts";
-import type { CreateMemoryInput, MemoryListOptions, MemoryRow, UpdateMemoryInput } from "./store-helpers.ts";
 
 // Re-export types for backward compatibility
 export type { CreateMemoryInput, MemoryListOptions, UpdateMemoryInput } from "./store-helpers.ts";

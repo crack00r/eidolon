@@ -110,6 +110,7 @@ function parseTags(tagsJson: string): string[] {
     }
     return [];
   } catch {
+    // Intentional: malformed JSON tags default to empty array
     return [];
   }
 }

@@ -51,7 +51,7 @@ interface SecretStore {
   version: 1;
   encryption: {
     algorithm: 'aes-256-gcm';
-    kdf: 'argon2id';          // Key derivation function
+    kdf: 'scrypt';             // Key derivation function (N=2^17, r=8, p=1)
     salt: string;              // Base64
     iv: string;                // Base64, per-entry
   };
@@ -116,7 +116,7 @@ eidolon secrets import --input backup.enc
 | macOS | Keychain (via `security` CLI) |
 | Linux | libsecret / GNOME Keyring / KDE Wallet |
 | Windows | Windows Credential Manager |
-| Fallback | Argon2id-derived from master password |
+| Fallback | scrypt-derived from master password |
 
 ## Action Classification
 

@@ -4,6 +4,8 @@ export type { ConsolidationConfig, ConsolidatorOptions, ContradictionDetectorFn 
 export { MemoryConsolidator } from "./consolidation.ts";
 export type { DocumentChunk, IndexingOptions } from "./document-indexer.ts";
 export { DocumentIndexer } from "./document-indexer.ts";
+export type { DocumentWatcherOptions } from "./document-watcher.ts";
+export { DocumentWatcher } from "./document-watcher.ts";
 export * from "./dreaming/index.ts";
 export type { EmbeddingModelOptions, EmbeddingPrefix } from "./embeddings.ts";
 export { EmbeddingModel } from "./embeddings.ts";

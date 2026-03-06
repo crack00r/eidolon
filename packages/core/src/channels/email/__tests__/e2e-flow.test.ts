@@ -577,9 +577,7 @@ describe("classifyAttachmentType", () => {
 describe("filterAttachments", () => {
   test("passes attachments under the size limit", () => {
     const email = createTestEmail({
-      attachments: [
-        { filename: "small.txt", mimeType: "text/plain", size: 100, content: new Uint8Array(100) },
-      ],
+      attachments: [{ filename: "small.txt", mimeType: "text/plain", size: 100, content: new Uint8Array(100) }],
     });
     const result = filterAttachments(email, 10, createSilentLogger());
     expect(result).toHaveLength(1);
@@ -590,7 +588,12 @@ describe("filterAttachments", () => {
   test("filters out oversized attachments", () => {
     const email = createTestEmail({
       attachments: [
-        { filename: "huge.bin", mimeType: "application/octet-stream", size: 11 * 1024 * 1024, content: new Uint8Array(0) },
+        {
+          filename: "huge.bin",
+          mimeType: "application/octet-stream",
+          size: 11 * 1024 * 1024,
+          content: new Uint8Array(0),
+        },
       ],
     });
     const result = filterAttachments(email, 10, createSilentLogger());
@@ -631,9 +634,7 @@ describe("convertAttachments", () => {
   });
 
   test("uses default filename when none provided", () => {
-    const result = convertAttachments([
-      { type: "image", mimeType: "image/png", data: new Uint8Array([1]) },
-    ]);
+    const result = convertAttachments([{ type: "image", mimeType: "image/png", data: new Uint8Array([1]) }]);
     expect(result[0]?.filename).toBe("attachment");
   });
 
@@ -751,13 +752,7 @@ describe("buildMimeMessage", () => {
   });
 
   test("builds a multipart message with HTML", () => {
-    const { raw } = buildMimeMessage(
-      "from@example.com",
-      ["to@example.com"],
-      "Test",
-      "Plain text",
-      "<p>HTML text</p>",
-    );
+    const { raw } = buildMimeMessage("from@example.com", ["to@example.com"], "Test", "Plain text", "<p>HTML text</p>");
     expect(raw).toContain("multipart/alternative");
     expect(raw).toContain("text/plain");
     expect(raw).toContain("text/html");

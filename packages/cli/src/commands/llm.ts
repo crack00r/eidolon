@@ -114,10 +114,7 @@ function buildRoutingTable(config: LLMConfig): readonly RoutingRow[] {
  * For llamacpp: tries to reach the /health endpoint.
  * For claude: reports that it's managed via Claude Code CLI.
  */
-async function testProvider(
-  providerType: string,
-  config: LLMConfig,
-): Promise<{ ok: boolean; message: string }> {
+async function testProvider(providerType: string, config: LLMConfig): Promise<{ ok: boolean; message: string }> {
   if (providerType === "claude") {
     return {
       ok: true,
@@ -198,7 +195,12 @@ export function registerLlmCommand(program: Command): void {
 
       console.log(`LLM Providers: ${configuredCount} configured`);
       console.log("");
-      console.log(formatTable(providers.map((p) => ({ ...p })), ["Provider", "Type", "Status", "Details"]));
+      console.log(
+        formatTable(
+          providers.map((p) => ({ ...p })),
+          ["Provider", "Type", "Status", "Details"],
+        ),
+      );
     });
 
   // -- status -------------------------------------------------------------
@@ -218,13 +220,23 @@ export function registerLlmCommand(program: Command): void {
       // Show providers
       const providers = buildProviderList(config.llm);
       console.log("Providers:");
-      console.log(formatTable(providers.map((p) => ({ ...p })), ["Provider", "Type", "Status", "Details"]));
+      console.log(
+        formatTable(
+          providers.map((p) => ({ ...p })),
+          ["Provider", "Type", "Status", "Details"],
+        ),
+      );
       console.log("");
 
       // Show routing table
       const routing = buildRoutingTable(config.llm);
       console.log("Routing Table (task -> provider chain):");
-      console.log(formatTable(routing.map((r) => ({ ...r })), ["Task", "Chain"]));
+      console.log(
+        formatTable(
+          routing.map((r) => ({ ...r })),
+          ["Task", "Chain"],
+        ),
+      );
 
       // Show model preferences
       console.log("");

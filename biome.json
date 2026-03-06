@@ -37,6 +37,21 @@
       "trailingCommas": "all"
     }
   },
+  "overrides": [
+    {
+      "includes": ["**/__tests__/**", "**/*.test.ts"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noExplicitAny": "off"
+          },
+          "style": {
+            "noNonNullAssertion": "off"
+          }
+        }
+      }
+    }
+  ],
   "files": {
     "includes": ["**", "!**/dist/", "!**/node_modules/", "!**/.git/", "!**/*.json"]
   }

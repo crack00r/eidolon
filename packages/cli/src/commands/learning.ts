@@ -9,9 +9,9 @@ import type { Command } from "commander";
 import { formatTable } from "../utils/formatter.ts";
 import {
   DEFAULT_LIST_LIMIT,
-  MAX_ID_LENGTH,
   formatDateOnly,
   initLearningSystem,
+  MAX_ID_LENGTH,
   parseSince,
   registerJournalSubcommand,
   registerSourcesSubcommand,
@@ -105,8 +105,13 @@ export function registerLearningCommand(program: Command): void {
           : ["new", "evaluated", "approved", "rejected", "implemented"];
 
         const allDiscoveries: Array<{
-          id: string; sourceType: string; title: string;
-          relevanceScore: number; safetyLevel: string; status: string; createdAt: number;
+          id: string;
+          sourceType: string;
+          title: string;
+          relevanceScore: number;
+          safetyLevel: string;
+          status: string;
+          createdAt: number;
         }> = [];
 
         for (const status of statuses) {
@@ -190,7 +195,8 @@ export function registerLearningCommand(program: Command): void {
         }
 
         sys.journal.addEntry("approval", disc.title, `Discovery ${shortId(disc.id)} approved via CLI`, {
-          discoveryId: disc.id, status: disc.status,
+          discoveryId: disc.id,
+          status: disc.status,
         });
         console.log(`Discovery ${shortId(disc.id)} approved: "${truncate(disc.title, 60)}"`);
       } finally {
@@ -238,7 +244,8 @@ export function registerLearningCommand(program: Command): void {
         }
 
         sys.journal.addEntry("rejection", disc.title, `Discovery ${shortId(disc.id)} rejected via CLI`, {
-          discoveryId: disc.id, status: disc.status,
+          discoveryId: disc.id,
+          status: disc.status,
         });
         console.log(`Discovery ${shortId(disc.id)} rejected: "${truncate(disc.title, 60)}"`);
       } finally {

@@ -32,11 +32,13 @@ function createMockPool(overrides?: {
   hasTtsCapability?: boolean;
 }): GPUWorkerPool {
   const hasTts = overrides?.hasTtsCapability ?? true;
-  const ttsResult: Result<TtsResult, EidolonError> = overrides?.ttsResult ?? Ok({
-    audio: new Uint8Array([1, 2, 3, 4]),
-    format: "opus",
-    durationMs: 100,
-  });
+  const ttsResult: Result<TtsResult, EidolonError> =
+    overrides?.ttsResult ??
+    Ok({
+      audio: new Uint8Array([1, 2, 3, 4]),
+      format: "opus",
+      durationMs: 100,
+    });
 
   return {
     hasCapability: (cap: string) => cap === "tts" && hasTts,
@@ -55,7 +57,9 @@ function createMockPool(overrides?: {
     stopHealthChecks: () => {},
     checkAllHealth: async () => {},
     dispose: () => {},
-    get size() { return 1; },
+    get size() {
+      return 1;
+    },
   } as unknown as GPUWorkerPool;
 }
 

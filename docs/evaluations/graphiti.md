@@ -1,6 +1,6 @@
 # Graphiti Evaluation (P2-07)
 
-> Evaluated: 2026-03-06. Context: Eidolon uses a custom Knowledge Graph with ComplEx embeddings and Leiden community detection.
+> Evaluated: 2026-03-06. Context: Eidolon uses a custom Knowledge Graph with ComplEx embeddings and Louvain community detection.
 
 ## What is Graphiti?
 
@@ -19,7 +19,7 @@
 | **Entity extraction** | Hybrid (regex + LLM) | LLM-only (OpenAI/Anthropic) |
 | **Relation types** | Typed predicates (uses, owns, runs_on, etc.) | Free-form edges with temporal metadata |
 | **Embeddings** | ComplEx (real + imaginary, link prediction) | OpenAI embeddings (similarity only) |
-| **Community detection** | Leiden algorithm (local implementation) | Leiden via Neo4j GDS plugin |
+| **Community detection** | Louvain algorithm (local implementation) | Leiden via Neo4j GDS plugin |
 | **Temporal tracking** | Created/updated timestamps on relations | First-class temporal intervals (valid_from, valid_to) |
 | **Link prediction** | Yes (ComplEx scoring) | No (similarity search only) |
 | **Deduplication** | Configurable similarity thresholds per entity type | LLM-based entity resolution |
@@ -50,7 +50,7 @@ Adopting Graphiti would require:
 3. Building a TypeScript client to communicate with the sidecar.
 4. Migrating existing kg_entities, kg_relations, and kg_communities tables to Neo4j.
 5. Removing the ComplEx embedding system (no equivalent in Graphiti).
-6. Removing the local Leiden implementation (replaced by Neo4j GDS).
+6. Removing the local Louvain implementation (replaced by Neo4j GDS).
 7. Rewriting graph-enhanced search to query Neo4j instead of SQLite.
 
 Estimated effort: 2-3 weeks of development plus ongoing operational overhead.

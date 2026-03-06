@@ -36,12 +36,7 @@ export class GpuTtsProvider implements TtsFallbackProvider {
   private readonly config: GpuTtsProviderConfig;
   private readonly logger: Logger;
 
-  constructor(
-    pool: GPUWorkerPool,
-    logger: Logger,
-    config?: GpuTtsProviderConfig,
-    circuitBreaker?: CircuitBreaker,
-  ) {
+  constructor(pool: GPUWorkerPool, logger: Logger, config?: GpuTtsProviderConfig, circuitBreaker?: CircuitBreaker) {
     this.pool = pool;
     this.logger = logger.child("gpu-tts-provider");
     this.config = config ?? {};
@@ -144,6 +139,7 @@ export class SystemTtsProvider implements TtsFallbackProvider {
       const exitCode = await proc.exited;
       this.cachedAvailable = exitCode === 0;
     } catch {
+      // Intentional: command lookup failure means TTS is not available
       this.cachedAvailable = false;
     }
 
@@ -166,9 +162,7 @@ export class SystemTtsProvider implements TtsFallbackProvider {
       const exitCode = await proc.exited;
       if (exitCode !== 0) {
         const stderr = await new Response(proc.stderr).text();
-        return Err(
-          createError(ErrorCode.TTS_FAILED, `System TTS failed (exit ${exitCode}): ${stderr.slice(0, 200)}`),
-        );
+        return Err(createError(ErrorCode.TTS_FAILED, `System TTS failed (exit ${exitCode}): ${stderr.slice(0, 200)}`));
       }
 
       const audioData = await new Response(proc.stdout).arrayBuffer();

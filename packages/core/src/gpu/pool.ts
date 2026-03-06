@@ -84,10 +84,10 @@ const ALLOWED_STT_MIME_TYPES: ReadonlySet<string> = new Set([
 // ---------------------------------------------------------------------------
 
 export class GPUWorkerPool {
-  private readonly workers: GPUWorker[];
-  private readonly balancer: LoadBalancerStrategy;
-  private readonly maxRetries: number;
-  private readonly healthCheckIntervalMs: number;
+  private workers: GPUWorker[];
+  private balancer: LoadBalancerStrategy;
+  private maxRetries: number;
+  private healthCheckIntervalMs: number;
   private readonly logger: Logger;
   private healthCheckTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -103,6 +103,32 @@ export class GPUWorkerPool {
       strategy: config.loadBalancing,
       healthCheckInterval: config.healthCheckIntervalMs,
     });
+  }
+
+  /**
+   * Reconfigure the worker pool with new settings.
+   * Replaces workers, balancer, and restarts health checks if they were running.
+   */
+  reconfigure(config: GPUWorkerPoolConfig): void {
+    const wasChecking = this.healthCheckTimer !== null;
+
+    // Stop current health checks before swapping workers
+    this.stopHealthChecks();
+
+    this.workers = config.workers.map((wc) => new GPUWorker(wc, this.logger));
+    this.maxRetries = config.maxRetries;
+    this.healthCheckIntervalMs = config.healthCheckIntervalMs;
+    this.balancer = createBalancer(config.loadBalancing);
+
+    this.logger.info("reconfigure", `GPU worker pool reconfigured with ${this.workers.length} worker(s)`, {
+      strategy: config.loadBalancing,
+      healthCheckInterval: config.healthCheckIntervalMs,
+    });
+
+    // Restart health checks if they were running before
+    if (wasChecking) {
+      this.startHealthChecks();
+    }
   }
 
   // -------------------------------------------------------------------------

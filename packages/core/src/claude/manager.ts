@@ -206,6 +206,7 @@ export class ClaudeCodeManager implements IClaudeProcess {
       });
       return result.exitCode === 0;
     } catch {
+      // Intentional: spawn failure means Claude CLI is not available
       return false;
     }
   }

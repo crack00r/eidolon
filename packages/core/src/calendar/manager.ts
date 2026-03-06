@@ -8,6 +8,7 @@ import { randomUUID } from "node:crypto";
 import type {
   CalendarConfig,
   CalendarEvent,
+  CalendarProvider,
   CalendarSyncResult,
   EidolonError,
   Result,
@@ -15,11 +16,10 @@ import type {
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 import type { Logger } from "../logging/logger.ts";
 import type { EventBus } from "../loop/event-bus.ts";
-import type { CalendarProvider } from "@eidolon/protocol";
 import {
+  buildScheduleContext,
   type CalendarEventRow,
   type ConflictInfo,
-  buildScheduleContext,
   checkConflictsForEvent,
   checkReminders as checkRemindersFn,
   findConflicts as findConflictsFn,
@@ -186,10 +186,21 @@ export class CalendarManager {
              all_day=excluded.all_day,recurrence=excluded.recurrence,reminders=excluded.reminders,
              synced_at=excluded.synced_at`,
         )
-        .run(event.id, event.calendarId, event.source, event.title,
-          event.description ?? null, event.location ?? null, event.startTime, event.endTime,
-          event.allDay ? 1 : 0, event.recurrence ?? null, JSON.stringify(event.reminders),
-          event.syncedAt, Date.now());
+        .run(
+          event.id,
+          event.calendarId,
+          event.source,
+          event.title,
+          event.description ?? null,
+          event.location ?? null,
+          event.startTime,
+          event.endTime,
+          event.allDay ? 1 : 0,
+          event.recurrence ?? null,
+          JSON.stringify(event.reminders),
+          event.syncedAt,
+          Date.now(),
+        );
       return Ok(event);
     } catch (cause) {
       return Err(createError(ErrorCode.DB_QUERY_FAILED, "Failed to upsert calendar event", cause));
@@ -228,7 +239,7 @@ export class CalendarManager {
 
   /** Stop all sync intervals and disconnect providers. */
   async dispose(): Promise<void> {
-    for (const [name, interval] of this.syncIntervals) clearInterval(interval);
+    for (const [_name, interval] of this.syncIntervals) clearInterval(interval);
     this.syncIntervals.clear();
     for (const provider of this.providers.values()) await provider.disconnect();
     this.providers.clear();
@@ -243,8 +254,10 @@ export class CalendarManager {
       this.logger.warn("calendar", `Sync failed for ${providerId}: ${syncResult.error.message}`);
       return syncResult;
     }
-    this.logger.info("calendar",
-      `Synced ${providerId}: +${syncResult.value.added} ~${syncResult.value.updated} -${syncResult.value.deleted}`);
+    this.logger.info(
+      "calendar",
+      `Synced ${providerId}: +${syncResult.value.added} ~${syncResult.value.updated} -${syncResult.value.deleted}`,
+    );
     if (syncResult.value.syncToken) this.storeSyncToken(providerId, syncResult.value.syncToken);
     return syncResult;
   }
@@ -256,16 +269,19 @@ export class CalendarManager {
         .get(`calendar_sync_token:${providerId}`) as { value: string } | null;
       return row?.value ?? null;
     } catch {
+      // Intentional: DB failure returns null sync token, triggering full sync
       return null;
     }
   }
 
   private storeSyncToken(providerId: string, token: string): void {
     try {
-      this.db.query(
-        `INSERT INTO loop_state (key,value,updated_at) VALUES (?,?,?)
+      this.db
+        .query(
+          `INSERT INTO loop_state (key,value,updated_at) VALUES (?,?,?)
          ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at`,
-      ).run(`calendar_sync_token:${providerId}`, token, Date.now());
+        )
+        .run(`calendar_sync_token:${providerId}`, token, Date.now());
     } catch (err) {
       this.logger.warn("calendar", `Failed to store sync token for ${providerId}`, { error: String(err) });
     }

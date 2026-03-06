@@ -87,10 +87,7 @@ export interface EscalateDeps {
  * Escalate a request to the next channel in the escalation chain.
  * If max escalations reached, applies the default action.
  */
-export function escalateRequest(
-  request: ApprovalRequest,
-  deps: EscalateDeps,
-): Result<ApprovalRequest, EidolonError> {
+export function escalateRequest(request: ApprovalRequest, deps: EscalateDeps): Result<ApprovalRequest, EidolonError> {
   const nextLevel = request.escalationLevel + 1;
   const maxEsc = getMaxEscalations(deps.config, request.escalationLevel);
 
@@ -105,10 +102,7 @@ export function escalateRequest(
 // Internal helpers
 // ---------------------------------------------------------------------------
 
-function resolveMaxEscalation(
-  request: ApprovalRequest,
-  deps: EscalateDeps,
-): Result<ApprovalRequest, EidolonError> {
+function resolveMaxEscalation(request: ApprovalRequest, deps: EscalateDeps): Result<ApprovalRequest, EidolonError> {
   const defaultAction = deps.config.approval.defaultAction;
   const finalStatus: ApprovalStatus = defaultAction === "allow" ? "approved" : "denied";
   const now = Date.now();
@@ -118,16 +112,11 @@ function resolveMaxEscalation(
       .query("UPDATE approval_requests SET status = ?, responded_by = ?, responded_at = ? WHERE id = ?")
       .run(finalStatus, `auto:max_escalation:${finalStatus}`, now, request.id);
   } catch (cause) {
-    return Err(
-      createError(ErrorCode.DB_QUERY_FAILED, `Failed to resolve max-escalated request ${request.id}`, cause),
-    );
+    return Err(createError(ErrorCode.DB_QUERY_FAILED, `Failed to resolve max-escalated request ${request.id}`, cause));
   }
 
   const maxEsc = getMaxEscalations(deps.config, request.escalationLevel);
-  deps.logger.warn(
-    "escalate",
-    `Approval ${request.id} reached max escalations (${maxEsc}), auto-${finalStatus}`,
-  );
+  deps.logger.warn("escalate", `Approval ${request.id} reached max escalations (${maxEsc}), auto-${finalStatus}`);
 
   return Ok({
     ...request,
@@ -169,7 +158,17 @@ function createEscalatedRequest(
         `INSERT INTO approval_requests (id, action, level, description, requested_at, timeout_at, channel, status, escalation_level, metadata)
          VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)`,
       )
-      .run(newId, request.action, request.level, request.description, now, newTimeoutAt, newChannel, nextLevel, metadataJson);
+      .run(
+        newId,
+        request.action,
+        request.level,
+        request.description,
+        now,
+        newTimeoutAt,
+        newChannel,
+        nextLevel,
+        metadataJson,
+      );
   } catch (cause) {
     return Err(createError(ErrorCode.DB_QUERY_FAILED, `Failed to create escalated request for ${request.id}`, cause));
   }

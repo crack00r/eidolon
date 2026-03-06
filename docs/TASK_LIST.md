@@ -112,9 +112,9 @@ These are the tasks that make the daemon actually work end-to-end as a real syst
 - ComplEx embeddings module (396 lines) is fully implemented and tested, but never receives real KG triples from the daemon. Training only happens if explicitly called.
 - **Dependencies**: KG entities/relations wired (P0-02).
 
-### P0-19: Wire Leiden community detection in daemon
+### P0-19: Wire Louvain community detection in daemon
 - **Priority**: P1 | **Effort**: M
-- `knowledge-graph/communities.ts` (518 lines) has full Leiden algorithm and community summarization, but is never called from the dreaming pipeline or daemon.
+- `knowledge-graph/communities.ts` (518 lines) has full Louvain algorithm and community summarization, but is never called from the dreaming pipeline or daemon.
 - **Dependencies**: KG entities/relations, LLM for summaries.
 
 ### P1-01: Create search relevance golden dataset
@@ -323,7 +323,7 @@ These are the tasks that make the daemon actually work end-to-end as a real syst
 
 ### P1-33: Split knowledge-graph/communities.ts (518 lines)
 - **Priority**: P2 | **Effort**: S
-- 1.7x over limit. Separate Leiden algorithm from community summarization and PageRank.
+- 1.7x over limit. Separate Louvain algorithm from community summarization and PageRank.
 - **Dependencies**: None.
 
 ### P1-34: Split security/approval-manager.ts (515 lines)

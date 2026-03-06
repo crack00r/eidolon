@@ -155,6 +155,7 @@ export class TailscaleDetector {
       const stdout = await new Response(proc.stdout).text();
       return stdout.trim() || null;
     } catch {
+      // Intentional: command failure means Tailscale is not available
       return null;
     }
   }

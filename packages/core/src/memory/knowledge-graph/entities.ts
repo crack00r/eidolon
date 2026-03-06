@@ -96,6 +96,7 @@ function rowToEntity(row: EntityRow): KGEntity {
         ? (parsed as Record<string, unknown>)
         : {};
   } catch {
+    // Intentional: malformed JSON attributes default to empty object
     attributes = {};
   }
 

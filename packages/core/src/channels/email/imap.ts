@@ -379,6 +379,7 @@ export class BunImapClient implements IImapClient {
         attachments: [], // Basic impl does not parse MIME attachments
       };
     } catch {
+      // Intentional: malformed email message is skipped
       return null;
     }
   }

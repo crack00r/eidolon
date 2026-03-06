@@ -39,6 +39,7 @@ import type { MCPHealthMonitor } from "../mcp/health.ts";
 import type { MemoryCompressor } from "../memory/compression.ts";
 import type { MemoryConsolidator } from "../memory/consolidation.ts";
 import type { DocumentIndexer } from "../memory/document-indexer.ts";
+import type { DocumentWatcher } from "../memory/document-watcher.ts";
 import type { EmbeddingModel } from "../memory/embeddings.ts";
 import type { MemoryExtractor } from "../memory/extractor.ts";
 import type { MemoryInjector } from "../memory/injector.ts";
@@ -123,6 +124,7 @@ export interface InitializedModules {
   feedbackConfidenceUnsub?: () => void;
   documentIndexer?: DocumentIndexer;
   documentIndexerInterval?: ReturnType<typeof setInterval>;
+  documentWatcher?: DocumentWatcher;
   researchEngine?: ResearchEngine;
   modelRouter?: ModelRouter;
   gatewayServer?: GatewayServer;

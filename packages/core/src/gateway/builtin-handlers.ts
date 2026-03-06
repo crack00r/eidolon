@@ -12,6 +12,7 @@ import type { CalendarManager } from "../calendar/index.ts";
 import type { Logger } from "../logging/logger.ts";
 import type { EventBus } from "../loop/event-bus.ts";
 import type { RateLimitTracker } from "../metrics/rate-limits.ts";
+import { createPushEvent } from "./protocol.ts";
 import {
   ApprovalListParamsSchema,
   ApprovalRespondParamsSchema,
@@ -34,7 +35,6 @@ import {
   SystemHealthParamsSchema,
 } from "./rpc-schemas.ts";
 import type { ClientState, MethodHandler } from "./server-helpers.ts";
-import { createPushEvent } from "./protocol.ts";
 
 // ---------------------------------------------------------------------------
 // Types for the registration context

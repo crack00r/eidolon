@@ -49,6 +49,7 @@ export class LlamaCppProvider implements ILLMProvider {
       const res = await fetch(`${this.baseUrl}/health`, { signal: AbortSignal.timeout(3000) });
       return res.ok;
     } catch {
+      // Intentional: network error means llama.cpp server is unreachable
       return false;
     }
   }

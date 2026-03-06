@@ -13,10 +13,10 @@ import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 import type { Logger } from "../logging/logger.ts";
 import {
   DEFAULT_MAX_PENDING_EVENTS,
+  type EventRow,
   MAX_PAYLOAD_SIZE,
   MAX_REPLAY_BATCH_SIZE,
   MAX_RETRIES,
-  type EventRow,
   rowToEvent,
 } from "./event-utils.ts";
 

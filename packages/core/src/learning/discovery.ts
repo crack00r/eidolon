@@ -108,6 +108,7 @@ function normalizeUrl(url: string): string {
     }
     return normalized;
   } catch {
+    // Intentional: invalid URL falls back to simple lowercase normalization
     return url.toLowerCase().replace(/\/$/, "");
   }
 }

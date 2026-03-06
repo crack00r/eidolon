@@ -6,6 +6,8 @@
  */
 
 import type { EidolonConfig } from "@eidolon/protocol";
+import type { GPUWorkerPoolConfig } from "../gpu/pool.ts";
+import type { GPUWorkerConfig } from "../gpu/worker.ts";
 import type { Logger } from "../logging/logger.ts";
 import type { InitializedModules } from "./types.ts";
 
@@ -171,8 +173,28 @@ export function buildConfigReloadHandler(
     // 7. learning.sources, learning.relevance -- stored on modules.config
     // DiscoveryEngine reads sources from config on each crawl cycle
 
-    // 8. gpu.workers -- stored on modules.config
-    // GPUManager reads workers list from config on health check
+    // 8. gpu.workers -- reconfigure the worker pool with new workers/settings
+    if (sectionChanged(oldRecord, newRecord, "gpu.workers") && modules.gpuWorkerPool) {
+      const workers = newConfig.gpu.workers;
+      const poolWorkers: GPUWorkerConfig[] = workers.map((w) => ({
+        name: w.name,
+        url: `http://${w.host}:${w.port}`,
+        apiKey: typeof w.token === "string" ? w.token : undefined,
+        capabilities: w.capabilities as readonly ("tts" | "stt" | "realtime")[],
+        priority: w.priority,
+        maxConcurrent: w.maxConcurrent,
+      }));
+
+      const poolConfig: GPUWorkerPoolConfig = {
+        workers: poolWorkers,
+        healthCheckIntervalMs: newConfig.gpu.pool.healthCheckIntervalMs,
+        loadBalancing: newConfig.gpu.pool.loadBalancing,
+        maxRetries: newConfig.gpu.pool.maxRetriesPerRequest,
+      };
+
+      modules.gpuWorkerPool.reconfigure(poolConfig);
+      logger.info("config-reload", `GPU worker pool reconfigured with ${workers.length} worker(s)`);
+    }
 
     // 9. security.policies -- stored on modules.config
     // ApprovalManager reads policies from config on each classification

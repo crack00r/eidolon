@@ -41,6 +41,7 @@ export class OllamaProvider implements ILLMProvider {
       const res = await fetch(`${this.config.host}/api/tags`, { signal: AbortSignal.timeout(3000) });
       return res.ok;
     } catch {
+      // Intentional: network error means Ollama server is unreachable
       return false;
     }
   }
@@ -52,6 +53,7 @@ export class OllamaProvider implements ILLMProvider {
       const data = (await res.json()) as OllamaTagsResponse;
       return data.models.map((m) => m.name);
     } catch {
+      // Intentional: network/parse error returns empty model list
       return [];
     }
   }

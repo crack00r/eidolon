@@ -6,7 +6,7 @@
  * channel properties, lifecycle, formatter, splitMessage, media utils.
  */
 
-import { beforeEach, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { GrammyError, HttpError } from "grammy";
 import type { Logger } from "../../../logging/logger.ts";
 import type { TelegramConfig } from "../channel.ts";
@@ -56,11 +56,11 @@ function createGrammyError(code: number, description: string): GrammyError {
   return new GrammyError(`Telegram API error (${code})`, payload, "sendMessage", {});
 }
 
-function createGrammyError429(retryAfter: number): GrammyError & { parameters?: { retry_after?: number } } {
+function _createGrammyError429(retryAfter: number): GrammyError & { parameters?: { retry_after?: number } } {
   const payload = {
     ok: false as const,
     error_code: 429,
-    description: "Too Many Requests: retry after " + retryAfter,
+    description: `Too Many Requests: retry after ${retryAfter}`,
     parameters: { retry_after: retryAfter },
   };
   const err = new GrammyError("Telegram API error (429)", payload, "sendMessage", {});

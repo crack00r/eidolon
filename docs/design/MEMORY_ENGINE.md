@@ -316,6 +316,8 @@ For each incoming message, the Memory Engine:
 3. Formats them into MEMORY.md
 4. Injects into the Claude Code workspace before the session starts
 
+> **Implementation note:** Vector search currently performs a full table scan (capped at 10,000 rows) rather than using sqlite-vec ANN indexing. This is sufficient for the expected memory sizes (~10K memories) but may need optimization if the memory store grows significantly beyond that threshold.
+
 ## Graph Memory (Relationships Between Concepts)
 
 Inspired by [Mem0](https://github.com/mem0ai/mem0)'s graph memory. Beyond flat facts, Eidolon tracks relationships between concepts.
@@ -607,11 +609,11 @@ async function predictLinks(
 
 ### Community Detection
 
-During NREM dreaming, the Leiden algorithm groups densely connected entities into communities. This provides hierarchical understanding of the knowledge graph.
+During NREM dreaming, the Louvain algorithm groups densely connected entities into communities. This provides hierarchical understanding of the knowledge graph.
 
 **Process:**
 1. Build adjacency graph from `kg_relations`
-2. Run Leiden algorithm (modularity optimization) to find communities
+2. Run Louvain algorithm (modularity optimization) to find communities
 3. For each community, generate a summary using Claude (cheap model)
 4. Store communities hierarchically (communities of communities)
 
@@ -623,8 +625,8 @@ async function detectCommunities(): Promise<void> {
     FROM kg_relations WHERE confidence > 0.5
   `);
 
-  // 2. Run Leiden algorithm (simplified: greedy modularity)
-  const communities = leidenClustering(edges, { resolution: 1.0 });
+  // 2. Run Louvain algorithm (simplified: greedy modularity)
+  const communities = louvainClustering(edges, { resolution: 1.0 });
 
   // 3. Summarize each community
   for (const community of communities) {
@@ -748,13 +750,13 @@ Cross-platform compatibility is the primary criterion.
 |---|---|
 | **Housekeeping** | Merge duplicate entities (embedding similarity >0.92), update PageRank, prune orphaned entities with 0 relations |
 | **REM** | Train ComplEx on all triples (100 epochs), predict new links (score >0.7 → add with source='prediction'), find cross-community connections |
-| **NREM** | Run Leiden community detection, generate community summaries, create hierarchical community structure |
+| **NREM** | Run Louvain community detection, generate community summaries, create hierarchical community structure |
 
 ### Cost & Performance
 
 - Entity/relation extraction adds ~100 tokens to the hybrid extraction prompt per turn
 - ComplEx training on 1000 triples: <2 seconds (pure math, no LLM, 2x params vs TransE)
-- Leiden community detection: <100ms for graphs with <10,000 edges
+- Louvain community detection: <100ms for graphs with <10,000 edges
 - Community summarization: ~200 tokens per community (cheap model)
 - Total KG overhead during dreaming: ~2,000 tokens + <5 seconds compute
 

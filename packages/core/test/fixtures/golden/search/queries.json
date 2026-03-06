@@ -1,0 +1,371 @@
+{
+  "description": "Golden dataset for memory search relevance evaluation. 35 queries across 6 categories covering exact match, semantic similarity, German language, graph-connected, multi-topic, and negation/absence patterns. Each query includes expected top results that should appear in the search output when the memory store is populated with the project's knowledge base.",
+  "version": 1,
+  "queries": [
+    {
+      "id": "exact-001",
+      "query": "What programming language does the project use?",
+      "expectedTopResults": [
+        "TypeScript is the main language for all core packages",
+        "Bun is the runtime used instead of Node.js"
+      ],
+      "tags": ["exact-match"],
+      "language": "en"
+    },
+    {
+      "id": "exact-002",
+      "query": "What database does Eidolon use?",
+      "expectedTopResults": [
+        "SQLite via bun:sqlite is the database engine",
+        "Three-database split: memory.db, operational.db, audit.db"
+      ],
+      "tags": ["exact-match"],
+      "language": "en"
+    },
+    {
+      "id": "exact-003",
+      "query": "What is the GPU model?",
+      "expectedTopResults": [
+        "RTX 5080 with 16GB VRAM",
+        "GPU worker runs on Windows PC"
+      ],
+      "tags": ["exact-match"],
+      "language": "en"
+    },
+    {
+      "id": "exact-004",
+      "query": "What TTS model is used?",
+      "expectedTopResults": [
+        "Qwen3-TTS 1.7B is the primary TTS model",
+        "Kitten TTS is the CPU fallback for text-to-speech"
+      ],
+      "tags": ["exact-match"],
+      "language": "en"
+    },
+    {
+      "id": "exact-005",
+      "query": "What is the encryption algorithm for secrets?",
+      "expectedTopResults": [
+        "AES-256-GCM encryption with Argon2id key derivation",
+        "Secrets are encrypted at rest in secrets.db"
+      ],
+      "tags": ["exact-match"],
+      "language": "en"
+    },
+    {
+      "id": "exact-006",
+      "query": "What is the package manager?",
+      "expectedTopResults": [
+        "pnpm workspaces is the package manager"
+      ],
+      "tags": ["exact-match"],
+      "language": "en"
+    },
+    {
+      "id": "semantic-001",
+      "query": "How does the assistant remember things between conversations?",
+      "expectedTopResults": [
+        "Memory engine auto-extracts facts from conversations",
+        "MEMORY.md is injected into Claude Code sessions with relevant memories",
+        "Dreaming phases consolidate short-term memories into long-term"
+      ],
+      "tags": ["semantic"],
+      "language": "en"
+    },
+    {
+      "id": "semantic-002",
+      "query": "How are API costs kept under control?",
+      "expectedTopResults": [
+        "Energy budget limits tokens per hour with category allocation",
+        "Sub-agent routing uses cheaper models for simple tasks",
+        "Token usage is tracked per session with cost calculation"
+      ],
+      "tags": ["semantic"],
+      "language": "en"
+    },
+    {
+      "id": "semantic-003",
+      "query": "What happens when the main server goes down?",
+      "expectedTopResults": [
+        "Circuit breakers prevent cascading failures",
+        "Event bus persists events to SQLite for crash recovery",
+        "Graceful degradation: TTS falls back from GPU to CPU to system to text-only"
+      ],
+      "tags": ["semantic"],
+      "language": "en"
+    },
+    {
+      "id": "semantic-004",
+      "query": "How does the assistant learn new things on its own?",
+      "expectedTopResults": [
+        "Self-learning discovery engine crawls Reddit, HN, GitHub, and RSS",
+        "Relevance filter scores content against user interests",
+        "Code changes from self-learning always require user approval"
+      ],
+      "tags": ["semantic"],
+      "language": "en"
+    },
+    {
+      "id": "semantic-005",
+      "query": "How are dangerous actions prevented?",
+      "expectedTopResults": [
+        "Action classification: safe, needs_approval, dangerous",
+        "All code changes require user approval before merging",
+        "Audit trail logs every action with timestamp and classification"
+      ],
+      "tags": ["semantic"],
+      "language": "en"
+    },
+    {
+      "id": "german-001",
+      "query": "Welche Programmiersprache wird verwendet?",
+      "expectedTopResults": [
+        "TypeScript ist die Hauptsprache fuer alle Kernpakete",
+        "TypeScript is the main language for all core packages"
+      ],
+      "tags": ["german"],
+      "language": "de"
+    },
+    {
+      "id": "german-002",
+      "query": "Wie werden Geheimnisse gespeichert?",
+      "expectedTopResults": [
+        "AES-256-GCM Verschluesselung mit Argon2id Schluesselableitung",
+        "Secrets are encrypted at rest in secrets.db"
+      ],
+      "tags": ["german"],
+      "language": "de"
+    },
+    {
+      "id": "german-003",
+      "query": "Welche Geraete sind verbunden?",
+      "expectedTopResults": [
+        "Ubuntu Server, Windows PC mit RTX 5080, MacBook, iPhone",
+        "All devices connected via Tailscale mesh VPN"
+      ],
+      "tags": ["german"],
+      "language": "de"
+    },
+    {
+      "id": "german-004",
+      "query": "Wie funktioniert die Sprachsteuerung?",
+      "expectedTopResults": [
+        "Qwen3-TTS fuer Sprachausgabe, faster-whisper fuer Spracherkennung",
+        "Voice pipeline: STT -> Claude -> TTS with sentence-level chunking"
+      ],
+      "tags": ["german"],
+      "language": "de"
+    },
+    {
+      "id": "german-005",
+      "query": "Was passiert beim Traeumen?",
+      "expectedTopResults": [
+        "Dreaming has three phases: housekeeping, REM, and NREM",
+        "Housekeeping removes duplicates, REM discovers associations, NREM abstracts schemas"
+      ],
+      "tags": ["german"],
+      "language": "de"
+    },
+    {
+      "id": "german-006",
+      "query": "Welcher Telegram-Bot wird genutzt?",
+      "expectedTopResults": [
+        "grammY framework fuer den Telegram Bot",
+        "Telegram is the primary messaging channel"
+      ],
+      "tags": ["german"],
+      "language": "de"
+    },
+    {
+      "id": "graph-001",
+      "query": "Tailscale",
+      "expectedTopResults": [
+        "All devices connected via Tailscale mesh VPN",
+        "GPU worker accessible via Tailscale network",
+        "Desktop and iOS clients connect to Core over Tailscale"
+      ],
+      "tags": ["graph-connected"],
+      "language": "en"
+    },
+    {
+      "id": "graph-002",
+      "query": "RTX 5080",
+      "expectedTopResults": [
+        "RTX 5080 with 16GB VRAM on Windows PC",
+        "Qwen3-TTS runs on the GPU worker",
+        "faster-whisper STT runs on the GPU"
+      ],
+      "tags": ["graph-connected"],
+      "language": "en"
+    },
+    {
+      "id": "graph-003",
+      "query": "Claude Code CLI",
+      "expectedTopResults": [
+        "Claude Code CLI is the execution engine managed as subprocess",
+        "IClaudeProcess abstraction enables testing with FakeClaudeProcess",
+        "Sessions use --allowedTools for tool restriction by session type"
+      ],
+      "tags": ["graph-connected"],
+      "language": "en"
+    },
+    {
+      "id": "graph-004",
+      "query": "memory.db",
+      "expectedTopResults": [
+        "memory.db stores memories, embeddings, and knowledge graph tables",
+        "FTS5 virtual table for BM25 keyword search",
+        "sqlite-vec for vector similarity search"
+      ],
+      "tags": ["graph-connected"],
+      "language": "en"
+    },
+    {
+      "id": "graph-005",
+      "query": "Cognitive Loop",
+      "expectedTopResults": [
+        "PEAR cycle: Perceive, Evaluate, Act, Reflect",
+        "Event bus feeds events to the cognitive loop",
+        "Energy budget controls token allocation per category"
+      ],
+      "tags": ["graph-connected"],
+      "language": "en"
+    },
+    {
+      "id": "multi-001",
+      "query": "voice and GPU setup for TTS",
+      "expectedTopResults": [
+        "Qwen3-TTS 1.7B on RTX 5080 via GPU worker",
+        "Sentence-level TTS chunking with Intl.Segmenter",
+        "Opus codec for audio transport over WebSocket"
+      ],
+      "tags": ["multi-topic"],
+      "language": "en"
+    },
+    {
+      "id": "multi-002",
+      "query": "security policies and secret management",
+      "expectedTopResults": [
+        "AES-256-GCM encrypted secrets with Argon2id",
+        "Action classification: safe, needs_approval, dangerous",
+        "API keys isolated per subprocess environment"
+      ],
+      "tags": ["multi-topic"],
+      "language": "en"
+    },
+    {
+      "id": "multi-003",
+      "query": "memory search and knowledge graph",
+      "expectedTopResults": [
+        "Hybrid search: BM25 + vector + graph with RRF fusion",
+        "ComplEx embeddings for knowledge graph link prediction",
+        "Leiden community detection during NREM dreaming"
+      ],
+      "tags": ["multi-topic"],
+      "language": "en"
+    },
+    {
+      "id": "multi-004",
+      "query": "Telegram bot and channel configuration",
+      "expectedTopResults": [
+        "grammY framework with long polling mode",
+        "User allowlist with Telegram user IDs",
+        "DND schedule for notification suppression"
+      ],
+      "tags": ["multi-topic"],
+      "language": "en"
+    },
+    {
+      "id": "multi-005",
+      "query": "desktop app and iOS networking",
+      "expectedTopResults": [
+        "Tauri 2.0 for desktop with Svelte frontend",
+        "SwiftUI for iOS with dual networking: Tailscale and Cloudflare Tunnel",
+        "WebSocket JSON-RPC 2.0 for client-Core communication"
+      ],
+      "tags": ["multi-topic"],
+      "language": "en"
+    },
+    {
+      "id": "multi-006",
+      "query": "self-learning implementation pipeline",
+      "expectedTopResults": [
+        "Git worktree for isolated feature branches",
+        "Auto-lint and test gate before merge",
+        "Code changes always require user approval"
+      ],
+      "tags": ["multi-topic"],
+      "language": "en"
+    },
+    {
+      "id": "negation-001",
+      "query": "Does Eidolon use OpenAI models?",
+      "expectedTopResults": [
+        "Claude (Anthropic) is the only LLM provider, not OpenAI",
+        "Local embeddings use multilingual-e5-small, not OpenAI embeddings"
+      ],
+      "tags": ["negation"],
+      "language": "en"
+    },
+    {
+      "id": "negation-002",
+      "query": "Is Node.js used as the runtime?",
+      "expectedTopResults": [
+        "Bun is the runtime, not Node.js",
+        "bun:sqlite is used instead of better-sqlite3"
+      ],
+      "tags": ["negation"],
+      "language": "en"
+    },
+    {
+      "id": "negation-003",
+      "query": "Does the project use Electron for the desktop app?",
+      "expectedTopResults": [
+        "Tauri 2.0 is used instead of Electron",
+        "Tauri binary is ~5MB vs ~150MB for Electron"
+      ],
+      "tags": ["negation"],
+      "language": "en"
+    },
+    {
+      "id": "negation-004",
+      "query": "Are secrets stored in plaintext?",
+      "expectedTopResults": [
+        "Secrets are never stored in plaintext",
+        "AES-256-GCM encryption for all secrets at rest"
+      ],
+      "tags": ["negation"],
+      "language": "en"
+    },
+    {
+      "id": "negation-005",
+      "query": "Can the assistant modify code without approval?",
+      "expectedTopResults": [
+        "Code changes from self-learning always require user approval",
+        "Implementation is never auto-classified as safe"
+      ],
+      "tags": ["negation"],
+      "language": "en"
+    },
+    {
+      "id": "negation-006",
+      "query": "Is PostgreSQL used for storage?",
+      "expectedTopResults": [
+        "SQLite is the database, not PostgreSQL",
+        "Three SQLite databases: memory.db, operational.db, audit.db"
+      ],
+      "tags": ["negation"],
+      "language": "en"
+    },
+    {
+      "id": "negation-007",
+      "query": "Does the project use cron for scheduling?",
+      "expectedTopResults": [
+        "Built-in scheduler replaces cron",
+        "Tasks feed into the Event Bus and compete with other priorities"
+      ],
+      "tags": ["negation"],
+      "language": "en"
+    }
+  ]
+}

@@ -11,7 +11,7 @@ paths:
 
 ## Secrets Management
 
-- All secrets encrypted at rest with AES-256-GCM. Key derived via Argon2id.
+- All secrets encrypted at rest with AES-256-GCM. Key derived via scrypt (N=2^17, r=8, p=1).
 - Never log secrets, API keys, or tokens -- even partially. Mask in debug output.
 - Never commit `.env`, `secrets.enc`, `*.pem`, or `*.key` files.
 - API keys isolated per subprocess via environment injection, never shared across sessions.

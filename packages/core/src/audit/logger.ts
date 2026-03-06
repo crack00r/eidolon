@@ -69,6 +69,7 @@ function rowToAuditEntry(row: AuditRow): AuditEntry {
         ? (parsed as Record<string, unknown>)
         : {};
   } catch {
+    // Intentional: malformed JSON metadata defaults to empty object
     metadata = {};
   }
 

@@ -55,6 +55,7 @@ function rowToCommunity(row: CommunityRow): KGCommunity {
     const parsed: unknown = JSON.parse(row.entity_ids);
     entityIds = Array.isArray(parsed) ? (parsed as string[]) : [];
   } catch {
+    // Intentional: malformed JSON entity_ids default to empty array
     entityIds = [];
   }
 

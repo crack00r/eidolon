@@ -254,6 +254,7 @@ export class RateLimitTracker {
         tokens: row.tokens_used,
       }));
     } catch {
+      // Intentional: DB query failure returns empty history rather than crashing
       return [];
     }
   }

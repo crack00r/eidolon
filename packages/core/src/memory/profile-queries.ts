@@ -51,6 +51,7 @@ export function queryTimezone(db: Database): string | undefined {
     const match = row.content.match(/[A-Z][a-z]+\/[A-Z][a-z_]+/);
     return match ? match[0] : undefined;
   } catch {
+    // Intentional: DB query failure returns no timezone
     return undefined;
   }
 }
@@ -82,6 +83,7 @@ export function queryLanguages(db: Database): ReadonlyArray<string> {
     }
     return [...langs];
   } catch {
+    // Intentional: DB query failure returns no languages
     return [];
   }
 }
@@ -122,6 +124,7 @@ export function queryDevices(db: Database): ReadonlyArray<string> {
     }
     return [...devices].slice(0, MAX_DEVICES);
   } catch {
+    // Intentional: DB query failure returns no devices
     return [];
   }
 }
@@ -172,6 +175,7 @@ export function queryRelationships(db: Database, ownerName: string): ReadonlyArr
 
     return results.slice(0, MAX_RELATIONSHIPS);
   } catch {
+    // Intentional: DB query failure returns no relationships
     return [];
   }
 }

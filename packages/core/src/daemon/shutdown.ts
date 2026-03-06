@@ -335,6 +335,16 @@ export async function teardownModules(modules: InitializedModules, logger: Logge
     }
   }
 
+  // 12c -> DocumentWatcher: stop file watching
+  if (modules.documentWatcher?.isWatching) {
+    try {
+      modules.documentWatcher.stopWatching();
+      logger?.info("daemon", "DocumentWatcher stopped");
+    } catch (err: unknown) {
+      logger?.error("daemon", "Error stopping DocumentWatcher", err);
+    }
+  }
+
   // 15 -> SessionSupervisor: unregister any remaining sessions.
   //    Claude subprocesses were aborted in performShutdown step 2,
   //    but during startup-failure teardown performShutdown is not called.
