@@ -3,5 +3,6 @@
   "packages/protocol": "0.1.6",
   "packages/core": "0.1.6",
   "packages/cli": "0.1.6",
-  "packages/test-utils": "0.1.6"
+  "packages/test-utils": "0.1.6",
+  "apps/desktop": "0.1.7"
 }

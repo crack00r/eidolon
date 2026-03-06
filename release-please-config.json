@@ -37,6 +37,10 @@
     "packages/test-utils": {
       "component": "test-utils",
       "changelog-path": "packages/test-utils/CHANGELOG.md"
+    },
+    "apps/desktop": {
+      "component": "desktop",
+      "changelog-path": "apps/desktop/CHANGELOG.md"
     }
   }
 }
