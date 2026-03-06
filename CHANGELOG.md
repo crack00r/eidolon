@@ -9,6 +9,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > [release-please](https://github.com/googleapis/release-please).
 > Do not edit manually.
 
+## [0.1.6](https://github.com/crack00r/eidolon/compare/v0.1.5...v0.1.6) (2026-03-06)
+
+
+### Features
+
+* **core:** add MCP secret resolution, entity dedup, gateway rate limiting, and client logging ([da0b88a](https://github.com/crack00r/eidolon/commit/da0b88a8a8ddc25749295ce6e038ece21556d6bf))
+* **core:** add OpenAI-compatible REST API, webhook ingestion, and user profile generation ([a5cb3b2](https://github.com/crack00r/eidolon/commit/a5cb3b2b2df4ff61fd42ad60a9ad8224850e6286))
+* **core:** add OpenTelemetry distributed tracing integration ([9fb1ec8](https://github.com/crack00r/eidolon/commit/9fb1ec828beb6dfbb1978598631f5d54edd6a77a))
+* **core:** add WhatsApp and Email channel implementations ([18807e7](https://github.com/crack00r/eidolon/commit/18807e7518e191755df7bdd39a50cc15ac555e58))
+* **core:** implement Integration Plan Tier 1 (Sprints 1-3) ([a5a95c1](https://github.com/crack00r/eidolon/commit/a5a95c18cac8562c409003f3237efcf09cc081c0))
+* **core:** implement Integration Plan Tier 2 (Sprints 4-8) ([60f2436](https://github.com/crack00r/eidolon/commit/60f2436dc16f252f094417c024e8a1ac3ed48202))
+* **core:** implement Integration Plan Tier 3 (Sprints 9-12) ([3e65366](https://github.com/crack00r/eidolon/commit/3e6536600edf2d84e09cc9459c1e92838444b790))
+* **core:** implement plugin system and local LLM provider support ([3b146f9](https://github.com/crack00r/eidolon/commit/3b146f9aab556f987becb527b2180a7b4c539e50))
+* **core:** implement post-v1.0 Sprint 1 - Calendar Integration and Multi-GPU Worker Pool ([6cda4e5](https://github.com/crack00r/eidolon/commit/6cda4e5882d6310da575cb76b34592a84bed03ab))
+* **core:** implement post-v1.0 Sprint 2 - Advanced Home Automation and Web Dashboard ([0592770](https://github.com/crack00r/eidolon/commit/0592770b410d661af6778e5eb86648a4c92442cf))
+* **core:** wire CognitiveLoop and full PEAR pipeline in daemon initialization ([f18ca0d](https://github.com/crack00r/eidolon/commit/f18ca0ddcc36347a01c5988c2ae7e804400eab9c))
+* **core:** wire Prometheus metrics, Telegram channel, and graceful shutdown ([bfed16d](https://github.com/crack00r/eidolon/commit/bfed16dff9c50569aa33d124ddffd34ae7bab580))
+* cross-platform daemon, setup guides, client logging, and onboard wizard ([eb69200](https://github.com/crack00r/eidolon/commit/eb69200483e304a909b8ff45e472432c143847e4))
+* **ios:** add Dashboard and Learning views with MVVM architecture ([cc44526](https://github.com/crack00r/eidolon/commit/cc44526f5bd4373466a08aaa6c7f15e1dfe79a76))
+* network discovery, setup guides, and cross-platform deployment ([87651bd](https://github.com/crack00r/eidolon/commit/87651bdcabbc4ff7374990927f295668566321df))
+* unified design system, iOS voice mode, Prometheus metrics, and completeness gaps ([b918d13](https://github.com/crack00r/eidolon/commit/b918d133add734583412c7b4800d11bd039890b9))
+* **web:** implement Sprint 3 - calendar dashboard route and gateway handlers ([8a12b30](https://github.com/crack00r/eidolon/commit/8a12b30e490738fe8c01e2106bfd3e56c01d5c10))
+
+
+### Bug Fixes
+
+* **cli:** refactor onboard wizard into modular steps and fix phone-home logging ([9d15914](https://github.com/crack00r/eidolon/commit/9d15914c86aaacf1345ad07a6c70b5989d96a225))
+* close completeness gaps G-06, G-08, G-12, G-14 ([a4c0442](https://github.com/crack00r/eidolon/commit/a4c04425041ce9ee703448c46afb3f47b6303d2b))
+* close completeness gaps G-06/G-08/G-10/G-11/G-14/G-15 ([999f09d](https://github.com/crack00r/eidolon/commit/999f09defac86d21ee0549bab21c2f6d3ed8b6af))
+* close final completeness gaps G-01 and G-10 ([3c92e14](https://github.com/crack00r/eidolon/commit/3c92e144b1c9835734c863de4f9a3b7f50fb0951))
+* **core:** restore class property declarations removed by Biome unsafe lint ([cd6e3a9](https://github.com/crack00r/eidolon/commit/cd6e3a9429f992c725912818559a15fd06feacac))
+* **security:** second-round security audit remediation across audits [#8](https://github.com/crack00r/eidolon/issues/8)-[#12](https://github.com/crack00r/eidolon/issues/12) ([8b939b5](https://github.com/crack00r/eidolon/commit/8b939b54f81be53edf3aa27130341c85f5b8d7aa))
+
+
+### Documentation
+
+* add completeness audit report and onboard wizard tests ([dd059f1](https://github.com/crack00r/eidolon/commit/dd059f1938bd41a6ebf2a02e59237a77eeab2f48))
+* add post-v1.0 implementation plan for top 4 v1.1 features ([e416fec](https://github.com/crack00r/eidolon/commit/e416fec8e10cb03dc111ec30a1ed9a1428987bf7))
+* add v1.2/v2.0 implementation plan and update roadmap ([8f4d80c](https://github.com/crack00r/eidolon/commit/8f4d80c4105d6c9b9c51150dae7214f1be7f2f60))
+* mark post-v1.0 plan as completed ([4119b23](https://github.com/crack00r/eidolon/commit/4119b23f6e300c4d7ecc965c6f50ea8cc36a8a0c))
+
+
+### Miscellaneous
+
+* update agent memory with Integration Plan patterns and live status ([ec96c3a](https://github.com/crack00r/eidolon/commit/ec96c3aaa29d8fcbe9c519f2020560e382e6680b))
+* update planner agent memory ([cb67934](https://github.com/crack00r/eidolon/commit/cb67934466584e1a9cc24237ceba70222801e371))
+
 ## [0.1.5](https://github.com/crack00r/eidolon/compare/v0.1.4...v0.1.5) (2026-03-02)
 
 
