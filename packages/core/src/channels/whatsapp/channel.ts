@@ -86,10 +86,8 @@ export class WhatsAppChannel implements Channel {
   private readonly lastInboundTimestamp: Map<string, number> = new Map();
   private connected = false;
   private messageHandler: ((message: InboundMessage) => Promise<void>) | null = null;
-  private readonly config: WhatsAppChannelConfig;
 
   constructor(config: WhatsAppChannelConfig, api: WhatsAppApiClient, logger: Logger, tracer?: ITracer) {
-    this.config = config;
     this.api = api;
     this.logger = logger;
     this.tracer = tracer ?? new NoopTracer();

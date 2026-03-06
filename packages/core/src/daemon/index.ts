@@ -27,6 +27,7 @@ import { WhatsAppCloudApi } from "../channels/whatsapp/api.ts";
 import type { WhatsAppChannelConfig } from "../channels/whatsapp/channel.ts";
 import { WhatsAppChannel } from "../channels/whatsapp/channel.ts";
 import { ClaudeCodeManager } from "../claude/manager.ts";
+import { loadWorkspaceTemplates } from "../claude/templates.ts";
 import { WorkspacePreparer } from "../claude/workspace.ts";
 import { loadConfig } from "../config/loader.ts";
 import { getConfigPath, getDataDir, getPidFilePath } from "../config/paths.ts";
@@ -1766,27 +1767,44 @@ export class EidolonDaemon {
         }
       }
 
-      // 2. Prepare workspace with CLAUDE.md + MEMORY.md
-      const claudeMd = [
-        "# Eidolon System Instructions",
-        "",
-        `You are Eidolon, an autonomous personal AI assistant for ${config.identity.ownerName}.`,
-        `Current time: ${new Date().toISOString()}`,
-        "",
-        "## Rules",
-        "- Read MEMORY.md for context about the user and previous conversations.",
-        "- When you learn something new about the user, state it explicitly.",
-        "- When making decisions, explain your reasoning.",
-        "- For external actions, always confirm with the user first.",
-        "",
-        `## Current Session`,
-        `- Channel: ${channelId}`,
-        `- Session type: main`,
-        "",
-      ].join("\n");
+      // 2. Load workspace templates and prepare workspace
+      const templateResult = await loadWorkspaceTemplates({
+        ownerName: config.identity.ownerName,
+        currentTime: new Date().toISOString(),
+        channelId,
+        sessionType: "main",
+      });
+
+      let claudeMd: string;
+      let soulMd: string | undefined;
+      if (templateResult.ok) {
+        claudeMd = templateResult.value.claudeMd;
+        soulMd = templateResult.value.soulMd || undefined;
+      } else {
+        // Fallback to minimal inline content if templates are not found
+        logger.warn("loop-handler", `Template loading failed, using fallback: ${templateResult.error.message}`);
+        claudeMd = [
+          "# Eidolon System Instructions",
+          "",
+          `You are Eidolon, an autonomous personal AI assistant for ${config.identity.ownerName}.`,
+          `Current time: ${new Date().toISOString()}`,
+          "",
+          "## Rules",
+          "- Read MEMORY.md for context about the user and previous conversations.",
+          "- When you learn something new about the user, state it explicitly.",
+          "- When making decisions, explain your reasoning.",
+          "- For external actions, always confirm with the user first.",
+          "",
+          `## Current Session`,
+          `- Channel: ${channelId}`,
+          `- Session type: main`,
+          "",
+        ].join("\n");
+      }
 
       const prepareResult = await workspacePreparer.prepare(sessionId, {
         claudeMd,
+        soulMd,
         additionalFiles: {
           "MEMORY.md": memoryMdContent,
         },

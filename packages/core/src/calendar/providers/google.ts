@@ -85,7 +85,6 @@ export class GoogleCalendarProvider implements CalendarProvider {
   private readonly clientSecret: string;
   private readonly calendarId: string;
   private readonly logger: Logger;
-  private connected = false;
 
   constructor(config: GoogleCalendarConfig, logger: Logger, name?: string) {
     this.id = `google-${config.calendarId ?? "primary"}`;
@@ -102,12 +101,11 @@ export class GoogleCalendarProvider implements CalendarProvider {
     // Verify connectivity by refreshing the token
     const refreshResult = await this.refreshAccessToken();
     if (!refreshResult.ok) return refreshResult;
-    this.connected = true;
     return Ok(undefined);
   }
 
   async disconnect(): Promise<void> {
-    this.connected = false;
+    // Google Calendar API is stateless; no connection to close
   }
 
   async listEvents(start: number, end: number): Promise<Result<CalendarEvent[], EidolonError>> {

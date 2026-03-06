@@ -39,29 +39,25 @@ export class CalDAVProvider implements CalendarProvider {
   private readonly username: string;
   private readonly password: string;
   private readonly calendarPath: string;
-  private readonly logger: Logger;
-  private connected = false;
 
-  constructor(config: CalDAVConfig, logger: Logger, name?: string) {
+  constructor(config: CalDAVConfig, _logger: Logger, name?: string) {
     this.id = `caldav-${config.calendarPath.replace(/\//g, "-")}`;
     this.name = name ?? `CalDAV (${config.calendarPath})`;
     this.serverUrl = config.serverUrl.replace(/\/$/, "");
     this.username = config.username;
     this.password = config.password;
     this.calendarPath = config.calendarPath;
-    this.logger = logger;
   }
 
   async connect(): Promise<Result<void, EidolonError>> {
     // Verify connectivity with a PROPFIND request
     const result = await this.propfind(this.calendarUrl(), 0, "<d:resourcetype/>");
     if (!result.ok) return result;
-    this.connected = true;
     return Ok(undefined);
   }
 
   async disconnect(): Promise<void> {
-    this.connected = false;
+    // CalDAV is stateless; no connection to close
   }
 
   async listEvents(start: number, end: number): Promise<Result<CalendarEvent[], EidolonError>> {

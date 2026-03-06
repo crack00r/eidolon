@@ -12,5 +12,7 @@ export {
   StructuredOutputParser,
   zodToJsonDescription,
 } from "./structured-output.ts";
+export type { TemplateVariables, WorkspaceTemplates } from "./templates.ts";
+export { findTemplatesDir, interpolateTemplate, loadWorkspaceTemplates } from "./templates.ts";
 export type { WorkspaceContent } from "./workspace.ts";
 export { WorkspacePreparer } from "./workspace.ts";

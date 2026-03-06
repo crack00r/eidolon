@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Bun](https://img.shields.io/badge/Bun-1.1+-fbf0df?logo=bun&logoColor=black)](https://bun.sh/)
-[![Tests](https://img.shields.io/badge/tests-522%20passing-brightgreen)]()
+[![Tests](https://img.shields.io/badge/tests-1888%20passing-brightgreen)]()
 [![Security Audit](https://img.shields.io/badge/security%20audit-93%2F93%20fixed-brightgreen)]()
 
 **Autonomous, self-learning AI assistant daemon powered by Claude Code CLI.**
@@ -101,7 +101,7 @@ git clone https://github.com/crack00r/eidolon.git
 cd eidolon
 pnpm install
 pnpm -r build
-pnpm -r test          # 522 tests passing
+pnpm -r test          # 1888 tests passing
 ```
 
 ## Development

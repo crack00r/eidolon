@@ -1,0 +1,110 @@
+/**
+ * Shared types for the daemon module.
+ */
+
+import type { EidolonConfig } from "@eidolon/protocol";
+import type { AuditLogger } from "../audit/logger.ts";
+import type { BackupManager } from "../backup/manager.ts";
+import type { CalendarManager } from "../calendar/manager.ts";
+import type { DiscordChannel } from "../channels/discord/channel.ts";
+import type { EmailChannel } from "../channels/email/channel.ts";
+import type { MessageRouter } from "../channels/router.ts";
+import type { TelegramChannel } from "../channels/telegram/channel.ts";
+import type { WhatsAppChannel } from "../channels/whatsapp/channel.ts";
+import type { ClaudeCodeManager } from "../claude/manager.ts";
+import type { WorkspacePreparer } from "../claude/workspace.ts";
+import type { DatabaseManager } from "../database/manager.ts";
+import type { DigestBuilder } from "../digest/builder.ts";
+import type { DiscoveryBroadcaster } from "../discovery/broadcaster.ts";
+import type { TailscaleDetector } from "../discovery/tailscale.ts";
+import type { GatewayServer } from "../gateway/server.ts";
+import type { GPUManager } from "../gpu/manager.ts";
+import type { GPUWorkerPool } from "../gpu/pool.ts";
+import type { HealthChecker } from "../health/checker.ts";
+import type { createHealthServer } from "../health/server.ts";
+import type { HAManager } from "../home-automation/manager.ts";
+import type { ModelRouter } from "../llm/router.ts";
+import type { Logger } from "../logging/logger.ts";
+import type { CognitiveLoop } from "../loop/cognitive-loop.ts";
+import type { EnergyBudget } from "../loop/energy-budget.ts";
+import type { EventBus } from "../loop/event-bus.ts";
+import type { PriorityEvaluator } from "../loop/priority.ts";
+import type { RestCalculator } from "../loop/rest.ts";
+import type { SessionSupervisor } from "../loop/session-supervisor.ts";
+import type { CognitiveStateMachine } from "../loop/state-machine.ts";
+import type { MCPHealthMonitor } from "../mcp/health.ts";
+import type { MemoryCompressor } from "../memory/compression.ts";
+import type { MemoryConsolidator } from "../memory/consolidation.ts";
+import type { EmbeddingModel } from "../memory/embeddings.ts";
+import type { MemoryExtractor } from "../memory/extractor.ts";
+import type { MemoryInjector } from "../memory/injector.ts";
+import type { MemorySearch } from "../memory/search.ts";
+import type { MemoryStore } from "../memory/store.ts";
+import type { MetricsRegistry } from "../metrics/prometheus.ts";
+import type { TokenTracker } from "../metrics/token-tracker.ts";
+import type { MetricsWiringHandle } from "../metrics/wiring.ts";
+import type { PluginLifecycleManager } from "../plugins/lifecycle.ts";
+import type { PluginRegistry } from "../plugins/registry.ts";
+import type { AutomationEngine } from "../scheduler/automation.ts";
+import type { TaskScheduler } from "../scheduler/scheduler.ts";
+import type { SecretStore } from "../secrets/store.ts";
+import type { MetricsBridgeHandle } from "../telemetry/metrics-bridge.ts";
+import type { TelemetryProvider } from "../telemetry/provider.ts";
+
+export interface DaemonOptions {
+  readonly configPath?: string;
+  readonly foreground?: boolean;
+}
+
+/** Tracks which modules have been initialized for reverse-order teardown. */
+export interface InitializedModules {
+  logger?: Logger;
+  config?: EidolonConfig;
+  secretStore?: SecretStore;
+  dbManager?: DatabaseManager;
+  auditLogger?: AuditLogger;
+  healthChecker?: HealthChecker;
+  healthServer?: ReturnType<typeof createHealthServer>;
+  tokenTracker?: TokenTracker;
+  backupManager?: BackupManager;
+  embeddingModel?: EmbeddingModel;
+  memoryStore?: MemoryStore;
+  memorySearch?: MemorySearch;
+  memoryConsolidator?: MemoryConsolidator;
+  memoryCompressor?: MemoryCompressor;
+  claudeManager?: ClaudeCodeManager;
+  eventBus?: EventBus;
+  sessionSupervisor?: SessionSupervisor;
+  cognitiveStateMachine?: CognitiveStateMachine;
+  priorityEvaluator?: PriorityEvaluator;
+  energyBudget?: EnergyBudget;
+  restCalculator?: RestCalculator;
+  taskScheduler?: TaskScheduler;
+  automationEngine?: AutomationEngine;
+  memoryExtractor?: MemoryExtractor;
+  memoryInjector?: MemoryInjector;
+  workspacePreparer?: WorkspacePreparer;
+  cognitiveLoop?: CognitiveLoop;
+  digestBuilder?: DigestBuilder;
+  schedulerInterval?: ReturnType<typeof setInterval>;
+  messageRouter?: MessageRouter;
+  telegramChannel?: TelegramChannel;
+  discordChannel?: DiscordChannel;
+  whatsappChannel?: WhatsAppChannel;
+  emailChannel?: EmailChannel;
+  gpuManager?: GPUManager;
+  gpuWorkerPool?: GPUWorkerPool;
+  calendarManager?: CalendarManager;
+  haManager?: HAManager;
+  mcpHealthMonitor?: MCPHealthMonitor;
+  metricsRegistry?: MetricsRegistry;
+  metricsWiring?: MetricsWiringHandle;
+  telemetryProvider?: TelemetryProvider;
+  metricsBridge?: MetricsBridgeHandle;
+  pluginRegistry?: PluginRegistry;
+  pluginLifecycle?: PluginLifecycleManager;
+  modelRouter?: ModelRouter;
+  gatewayServer?: GatewayServer;
+  tailscaleDetector?: TailscaleDetector;
+  discoveryBroadcaster?: DiscoveryBroadcaster;
+}
