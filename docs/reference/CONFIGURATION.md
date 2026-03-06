@@ -1,6 +1,6 @@
 # Configuration Reference
 
-> **Status: Synchronized with the Zod schema in `packages/protocol/src/config.ts` as of v0.1.5.**
+> **Status: Synchronized with the Zod schema in `packages/protocol/src/config.ts` as of v0.1.6.**
 
 All configuration lives in `eidolon.json` (searched in: explicit path, `$EIDOLON_CONFIG`, `./eidolon.json`, `~/.config/eidolon/eidolon.json`). Secrets are never stored in this file -- they are referenced via `{ "$secret": "KEY_NAME" }` and resolved from the encrypted secret store (`secrets.db`).
 

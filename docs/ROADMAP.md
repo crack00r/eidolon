@@ -1,29 +1,30 @@
 # Roadmap
 
-> **Status: Implemented — v0.1.4 released. All phases scaffolded and tested (815 tests, 0 typecheck errors).**
-> Updated 2026-03-02. All phases implemented per [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
+> **Status: Implemented — v0.1.6 released. All phases through v2.0 completed (815+ tests, 0 typecheck errors).**
+> Updated 2026-03-06. All phases implemented per [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
 
 Development is organized into phases. Each phase produces a working system that builds on the previous one. No phase begins until the prior phase is stable and tested.
 
 ## Overview
 
 ```
-Phase 0: Foundation          (~2 weeks)    Monorepo, config, secrets, database, CI, testing
-Phase 1: Brain               (~2 weeks)    Claude Code integration, single conversation
-Phase 2: Memory              (~2 weeks)    Auto-extraction, search, dreaming
-Phase 3: Cognitive Loop       (~2 weeks)    Event bus, loop, multi-session, energy budget
-Phase 4: Telegram             (~1 week)     Telegram bot, message routing
-Phase 4.5: Home Automation    (~1 week)     Basic HA integration via MCP
-Phase 5: Self-Learning        (~2 weeks)    Discovery, filtering, implementation pipeline
-Phase 6: Voice                (~2 weeks)    GPU worker, TTS/STT, real-time voice
-Phase 7: Desktop Client       (~2 weeks)    Tauri app for macOS/Windows/Linux
-Phase 8: iOS Client           (~6 weeks)    Swift app for iPhone/iPad
-Phase 9: Polish & Release     (~1 week)     Docs, onboarding, performance, GitHub release
+Phase 0: Foundation          (~2 weeks)    Monorepo, config, secrets, database, CI, testing       DONE
+Phase 1: Brain               (~2 weeks)    Claude Code integration, single conversation            DONE
+Phase 2: Memory              (~2 weeks)    Auto-extraction, search, dreaming                       DONE
+Phase 3: Cognitive Loop       (~2 weeks)    Event bus, loop, multi-session, energy budget           DONE
+Phase 4: Telegram             (~1 week)     Telegram bot, message routing                          DONE
+Phase 4.5: Home Automation    (~1 week)     Basic HA integration via MCP                           DONE
+Phase 5: Self-Learning        (~2 weeks)    Discovery, filtering, implementation pipeline          DONE
+Phase 6: Voice                (~2 weeks)    GPU worker, TTS/STT, real-time voice                   DONE
+Phase 7: Desktop Client       (~2 weeks)    Tauri app for macOS/Windows/Linux                      DONE
+Phase 8: iOS Client           (~6 weeks)    Swift app for iPhone/iPad                              DONE
+Phase 9: Polish & Release     (~1 week)     Docs, onboarding, performance, GitHub release          DONE
+v1.1: Post-v1.0              (~5 weeks)    Web dashboard, Discord, calendar, HA, multi-GPU        DONE
+v1.2: Channels + Tracing     (~8 weeks)    WhatsApp, email, OpenTelemetry                         DONE
+v2.0: Extensibility          (~6 weeks)    Plugin system, local LLM support                       DONE
 ```
 
-**Estimated total:** ~22 weeks for a complete v1.0 release.
-
-**Strategic alternative (from competitive analysis):** Ship a minimal viable daemon (Phases 0-4) in ~8 weeks, then iterate. Accumulated memory is the moat — ship fast, get real usage.
+**All milestones through v2.0 are complete.** Total development spanned ~22 weeks for v1.0, plus ~14 weeks for v1.1 through v2.0.
 
 ---
 
@@ -298,45 +299,36 @@ All v1.1 features have been implemented. See [POST_V1_PLAN.md](POST_V1_PLAN.md).
 | Mobile widget | DONE | iOS home screen widget |
 | Distributed tracing (partial) | DONE | Prometheus /metrics endpoint |
 
-### v1.2 (PLANNED -- ~8 weeks with parallelism)
+### v1.2 (COMPLETED)
 
-See [V1.2_V2.0_PLAN.md](V1.2_V2.0_PLAN.md) for detailed implementation plan.
+All v1.2 features have been implemented. See [V1.2_V2.0_PLAN.md](V1.2_V2.0_PLAN.md) for detailed implementation plan.
 
-| Feature | Description | Est. Effort |
+| Feature | Status | Notes |
 |---|---|---|
-| WhatsApp channel | Official WhatsApp Business API integration | 2 sprints |
-| Email channel | IMAP/SMTP for async email interaction | 1.5 sprints |
-| OpenTelemetry | Full distributed tracing across Core, GPU Worker, clients | 1.5 sprints |
+| WhatsApp channel | DONE | Official WhatsApp Business API integration |
+| Email channel | DONE | IMAP/SMTP for async email interaction |
+| OpenTelemetry | DONE | Full distributed tracing across Core, GPU Worker, clients |
 
-### v1.3 (DEFERRED)
+### v2.0 (COMPLETED)
 
-| Feature | Description | Rationale for Deferral |
+All v2.0 features have been implemented. See [V1.2_V2.0_PLAN.md](V1.2_V2.0_PLAN.md) for detailed implementation plan.
+
+| Feature | Status | Notes |
 |---|---|---|
-| Multi-user | Household members with separate memory | Requires fundamental memory isolation architecture |
-| Mobile widget enhancements | Advanced iOS widgets with Intents | Depends on stable iOS usage patterns |
-
-### v2.0 (PLANNED -- ~6 weeks with parallelism)
-
-See [V1.2_V2.0_PLAN.md](V1.2_V2.0_PLAN.md) for detailed implementation plan.
-
-| Feature | Description | Breaking Change |
-|---|---|---|
-| Plugin system | Third-party extensions with sandboxing | New module loading API |
-| Local LLM support | Ollama / llama.cpp as alternative brain | IClaudeProcess abstracted to ILLMProvider |
+| Plugin system | DONE | Third-party extensions with sandboxing, new module loading API |
+| Local LLM support | DONE | Ollama / llama.cpp as alternative brain, ILLMProvider abstraction |
 
 ### v2.1+ (FUTURE)
 
-| Feature | Description |
-|---|---|
-| Secondary node replication | Disaster recovery to secondary server |
-| Multi-user (full) | Complete per-user memory isolation |
-| Custom model fine-tuning | Fine-tune local models on personal data |
+| Feature | Description | Status |
+|---|---|---|
+| Custom model fine-tuning | Fine-tune local models on personal data | Under consideration |
 
 ## Versioning
 
 Eidolon follows [Semantic Versioning](https://semver.org/):
 
-- **0.x.y** -- Development phase. Breaking changes expected.
+- **0.x.y** -- Development phase (completed).
 - **1.0.0** -- First stable release. All Phase 0-9 features complete.
-- **1.x.0** -- New features, backward compatible.
-- **2.0.0** -- Major architectural changes (plugin system, LLM provider abstraction).
+- **1.x.0** -- New features, backward compatible (v1.1 and v1.2 released).
+- **2.0.0** -- Major architectural changes: plugin system, LLM provider abstraction (released).
