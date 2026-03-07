@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.1.9](https://github.com/crack00r/eidolon/compare/v0.1.8...v0.1.9) (2026-03-07)
+
+
+### Features
+
+* implement v2.1 features -- proactive intelligence, agentic workflows, slack, browser, MCP marketplace, wyoming, multi-user, project management, node replication ([157a7cb](https://github.com/crack00r/eidolon/commit/157a7cb5aae6f7fa6acbb3cf397372c352976adc))
+
+
+### Bug Fixes
+
+* **core,cli,protocol:** biome lint and formatting fixes across all packages ([52c5d4d](https://github.com/crack00r/eidolon/commit/52c5d4d836a2629d6a28abf78f7db4fd35b60c8e))
+
+
+### Miscellaneous
+
+* release main ([7ae0b0b](https://github.com/crack00r/eidolon/commit/7ae0b0b6c2bfe5f643f9191683643b51984fe0ca))
+* release main ([41921fc](https://github.com/crack00r/eidolon/commit/41921fcc22711ebeeec9c33c5e2af30f7dd07c96))
+
 ## [0.1.8](https://github.com/crack00r/eidolon/compare/v0.1.7...v0.1.8) (2026-03-07)
 
 

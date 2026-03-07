@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.10](https://github.com/crack00r/eidolon/compare/v0.1.9...v0.1.10) (2026-03-07)
+
+
+### Features
+
+* implement v2.1 features -- proactive intelligence, agentic workflows, slack, browser, MCP marketplace, wyoming, multi-user, project management, node replication ([157a7cb](https://github.com/crack00r/eidolon/commit/157a7cb5aae6f7fa6acbb3cf397372c352976adc))
+
+
+### Bug Fixes
+
+* **desktop:** exclude test files from svelte-check typecheck ([db0fa5c](https://github.com/crack00r/eidolon/commit/db0fa5c40d2a3db755209ce292e07884b6a3de8d))
+
 ## [0.1.9](https://github.com/crack00r/eidolon/compare/v0.1.8...v0.1.9) (2026-03-07)
 
 
