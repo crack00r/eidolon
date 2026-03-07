@@ -4,7 +4,7 @@
  * and decisions, and checks if they were followed up on.
  */
 
-import type { AnticipationConfig, Memory } from "@eidolon/protocol";
+import type { AnticipationConfig } from "@eidolon/protocol";
 import type { DetectedPattern, DetectionContext, IPatternDetector } from "../patterns.ts";
 
 const DETECTOR_ID = "follow_up";

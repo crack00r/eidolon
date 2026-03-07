@@ -31,9 +31,7 @@ function makeLogger() {
 }
 
 /** Minimal mock DatabaseManager that satisfies the type for constructor. */
-function makeMockDbManager(): Parameters<
-  typeof ReplicationManager.prototype.handleMessage extends (...args: infer A) => unknown ? never : never
-> & {
+function makeMockDbManager(): {
   memory: { exec: (sql: string) => void; query: (sql: string) => { get: () => unknown } };
   operational: { exec: (sql: string) => void; query: (sql: string) => { get: () => unknown } };
   audit: { exec: (sql: string) => void; query: (sql: string) => { get: () => unknown } };

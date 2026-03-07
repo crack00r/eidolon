@@ -8,7 +8,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import type { EidolonError, Result } from "@eidolon/protocol";
-import { Err, ErrorCode, Ok, createError } from "@eidolon/protocol";
+import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 
 export interface ServerConfigInput {
   readonly ownerName: string;
@@ -88,17 +88,12 @@ export function buildClientConfig(server: ClientConfigInput): Record<string, unk
   };
 }
 
-export function writeConfig(
-  path: string,
-  config: Record<string, unknown>,
-): Result<void, EidolonError> {
+export function writeConfig(path: string, config: Record<string, unknown>): Result<void, EidolonError> {
   try {
     mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
     writeFileSync(path, JSON.stringify(config, null, 2), { mode: 0o600 });
     return Ok(undefined);
   } catch (cause) {
-    return Err(
-      createError(ErrorCode.INVALID_STATE, `Failed to write config: ${cause}`, cause),
-    );
+    return Err(createError(ErrorCode.INVALID_STATE, `Failed to write config: ${cause}`, cause));
   }
 }

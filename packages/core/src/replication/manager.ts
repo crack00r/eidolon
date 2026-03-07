@@ -220,7 +220,7 @@ export class ReplicationManager {
     this.send(createHeartbeat(this.nodeId, this.state.role, uptime));
   }
 
-  private handleHeartbeat(msg: ReplicationMessage & { type: "heartbeat" }): void {
+  private handleHeartbeat(_msg: ReplicationMessage & { type: "heartbeat" }): void {
     this.updatePeerConnected(true);
     this.send(createHeartbeatAck(this.nodeId, this.state.role));
   }

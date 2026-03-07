@@ -1,7 +1,7 @@
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { buildClientConfig, buildServerConfig, writeConfig } from "../setup-finalize.ts";
 
 describe("buildServerConfig", () => {
@@ -31,8 +31,19 @@ describe("buildServerConfig", () => {
     });
 
     const requiredKeys = [
-      "role", "identity", "brain", "loop", "memory", "learning",
-      "channels", "gateway", "gpu", "security", "database", "logging", "daemon",
+      "role",
+      "identity",
+      "brain",
+      "loop",
+      "memory",
+      "learning",
+      "channels",
+      "gateway",
+      "gpu",
+      "security",
+      "database",
+      "logging",
+      "daemon",
     ];
     for (const key of requiredKeys) {
       expect(config).toHaveProperty(key);

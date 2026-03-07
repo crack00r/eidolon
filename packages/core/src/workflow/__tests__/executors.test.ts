@@ -3,7 +3,6 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { Ok } from "@eidolon/protocol";
 import { ApiStepExecutor } from "../executors/api.ts";
 import { ConditionStepExecutor, evaluateCondition } from "../executors/condition.ts";
 import { TransformStepExecutor } from "../executors/transform.ts";

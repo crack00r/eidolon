@@ -130,7 +130,7 @@ describe("Workflow Integration", () => {
       return Ok({ data: { sent: true }, tokensUsed: 0 });
     });
 
-    const { engine, store } = setup({
+    const { engine } = setup({
       llm_call: llmExec,
       channel_send: channelExec,
     });
@@ -335,7 +335,7 @@ describe("Workflow Integration", () => {
   });
 
   test("crash recovery re-publishes ready steps", () => {
-    const { engine, store } = setup();
+    const { engine } = setup();
 
     const def: WorkflowDefinition = {
       id: "wf-recover",

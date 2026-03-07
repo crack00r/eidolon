@@ -89,7 +89,12 @@ mock.module("@eidolon/core", () => ({
   // ── Onboarding ─────────────────────────────────────────────────────────
   runPreflightChecks: () => ({
     ok: true,
-    value: { bunVersion: "1.0.0", diskSpaceMb: 5000, configDir: "/tmp/eidolon-test/config", dataDir: "/tmp/eidolon-test/data" },
+    value: {
+      bunVersion: "1.0.0",
+      diskSpaceMb: 5000,
+      configDir: "/tmp/eidolon-test/config",
+      dataDir: "/tmp/eidolon-test/data",
+    },
   }),
   getDefaultOwnerName: () => "testuser",
   initializeDatabases: () => ({ ok: true, value: { memoryTables: 5, operationalTables: 8, auditTables: 1 } }),

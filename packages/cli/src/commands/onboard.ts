@@ -20,6 +20,7 @@
 
 import { existsSync, mkdirSync } from "node:fs";
 import { createInterface } from "node:readline";
+import type { ServerConfigInput } from "@eidolon/core";
 import {
   buildServerConfig,
   detectTailscale,
@@ -30,7 +31,6 @@ import {
   zeroBuffer,
 } from "@eidolon/core";
 import { SECRETS_DB_FILENAME, VERSION } from "@eidolon/protocol";
-import type { ServerConfigInput } from "@eidolon/core";
 import type { Command } from "commander";
 import { onboardClient } from "./onboard-client.ts";
 import { deriveMasterKeyBuffer } from "./onboard-kdf.ts";
@@ -164,7 +164,7 @@ async function onboardServer(ask: AskFn): Promise<ServerSetupResult> {
   const discChoice = await ask("Enable network broadcast? [Y/n]: ");
   const discoveryEnabled = discChoice === "" || discChoice.toLowerCase() === "y";
 
-  const tailscaleIp = await detectTailscale() ?? undefined;
+  const tailscaleIp = (await detectTailscale()) ?? undefined;
   if (tailscaleIp) console.log(`  Tailscale detected: ${tailscaleIp}`);
 
   // Step 6: Telegram

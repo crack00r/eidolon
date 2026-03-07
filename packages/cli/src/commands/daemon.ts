@@ -3,9 +3,9 @@
  * Phase 9: full start/stop implementation.
  */
 
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { getPidFilePath, getLogDir } from "@eidolon/core";
+import { getLogDir, getPidFilePath } from "@eidolon/core";
 import type { Command } from "commander";
 
 // ---------------------------------------------------------------------------

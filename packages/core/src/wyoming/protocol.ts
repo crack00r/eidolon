@@ -172,7 +172,7 @@ export function serializeEvent(event: WyomingEvent): Uint8Array {
     payload_length: payloadLength,
   });
 
-  const headerBytes = new TextEncoder().encode(header + "\n");
+  const headerBytes = new TextEncoder().encode(`${header}\n`);
 
   if (payloadLength === 0 || event.payload === null) {
     return headerBytes;

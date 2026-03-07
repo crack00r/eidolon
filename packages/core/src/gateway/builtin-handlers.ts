@@ -54,7 +54,7 @@ export interface BuiltinHandlerDeps {
 
 /** Register all built-in RPC handlers on the gateway. */
 export function registerBuiltinHandlers(deps: BuiltinHandlerDeps): void {
-  const { logger, eventBus, registerHandler, pushToSubscribers } = deps;
+  const { logger, eventBus, registerHandler } = deps;
 
   // error.report / client.reportErrors
   const handleErrorReport: MethodHandler = async (params, clientId) => {

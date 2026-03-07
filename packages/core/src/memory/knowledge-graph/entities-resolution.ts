@@ -29,7 +29,7 @@ interface EntityRow {
 // ---------------------------------------------------------------------------
 
 /** Default thresholds matching the Zod schema defaults in protocol. */
-const DEFAULT_ENTITY_RESOLUTION_THRESHOLDS: EntityResolutionThresholds = {
+const _DEFAULT_ENTITY_RESOLUTION_THRESHOLDS: EntityResolutionThresholds = {
   personThreshold: 0.95,
   technologyThreshold: 0.9,
   conceptThreshold: 0.85,

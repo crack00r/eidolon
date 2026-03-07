@@ -3,7 +3,7 @@
  */
 
 import { Database } from "bun:sqlite";
-import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { afterEach, describe, expect, it } from "bun:test";
 import { createConnection, type Socket } from "node:net";
 import type { EidolonError, Result } from "@eidolon/protocol";
 import { Ok } from "@eidolon/protocol";

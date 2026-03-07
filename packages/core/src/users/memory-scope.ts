@@ -16,13 +16,7 @@ import type { EidolonError, Memory, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 import type { Logger } from "../logging/logger.ts";
 import type { CreateMemoryInput, MemoryListOptions, MemoryRow } from "../memory/store-helpers.ts";
-import {
-  DEFAULT_LIST_LIMIT,
-  MAX_BATCH_SIZE,
-  MAX_CONTENT_LENGTH,
-  MAX_LIST_LIMIT,
-  rowToMemory,
-} from "../memory/store-helpers.ts";
+import { DEFAULT_LIST_LIMIT, MAX_CONTENT_LENGTH, MAX_LIST_LIMIT, rowToMemory } from "../memory/store-helpers.ts";
 import { DEFAULT_USER_ID } from "./schema.ts";
 
 // ---------------------------------------------------------------------------

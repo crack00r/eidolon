@@ -64,7 +64,7 @@ describe("WorkflowParser", () => {
       createdAt: Date.now(),
     });
 
-    const response = "```json\n" + workflowJson + "\n```";
+    const response = `\`\`\`json\n${workflowJson}\n\`\`\``;
     const fake = FakeClaudeProcess.withResponse(/./, response);
     const parser = new WorkflowParser(fake, "/tmp", createSilentLogger());
 

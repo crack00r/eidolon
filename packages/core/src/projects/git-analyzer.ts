@@ -72,8 +72,6 @@ function parseCommitLine(line: string): GitCommit | null {
 // ---------------------------------------------------------------------------
 
 export class GitAnalyzer {
-  private readonly logger: Logger;
-
   constructor(logger: Logger) {
     this.logger = logger.child("git-analyzer");
   }

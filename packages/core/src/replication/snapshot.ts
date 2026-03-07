@@ -210,7 +210,7 @@ export function createSnapshotReceiver(snapshotDir: string, logger: Logger): Sna
 
       try {
         for (const [fileName, chunks] of fileBuffers) {
-          const missing = chunks.findIndex((c) => c === undefined);
+          const missing = chunks.indexOf(undefined);
           if (missing >= 0) {
             return Err(createError(ErrorCode.DB_QUERY_FAILED, `Missing chunk ${missing} for ${fileName}`));
           }

@@ -5,8 +5,6 @@
  * This module defines runtime state tracked by the ReplicationManager.
  */
 
-import type { ReplicationConfig } from "@eidolon/protocol";
-
 // Re-export the config type for convenience
 export type { ReplicationConfig } from "@eidolon/protocol";
 

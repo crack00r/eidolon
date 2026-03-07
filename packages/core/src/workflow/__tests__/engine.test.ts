@@ -186,7 +186,7 @@ describe("WorkflowEngine", () => {
   });
 
   test("starts a run and transitions to running", () => {
-    const { engine, store } = setup();
+    const { engine } = setup();
     const def = makeDef("wf-1", [
       { id: "a", name: "A", type: "llm_call", config: { prompt: "hi", outputKey: "r" }, dependsOn: [] },
     ]);
@@ -225,7 +225,7 @@ describe("WorkflowEngine", () => {
   });
 
   test("cancels a running workflow", () => {
-    const { engine, store } = setup();
+    const { engine } = setup();
     const def = makeDef("wf-1", [
       { id: "a", name: "A", type: "llm_call", config: { prompt: "hi", outputKey: "r" }, dependsOn: [] },
     ]);
@@ -266,7 +266,7 @@ describe("WorkflowEngine", () => {
   });
 
   test("handles workflow:step_ready event and executes step", async () => {
-    const { engine, store, registry } = setup();
+    const { engine, registry } = setup();
     const fakeExec = new FakeStepExecutor("llm_call");
     registry.register(fakeExec);
 
@@ -316,7 +316,7 @@ describe("WorkflowEngine", () => {
   });
 
   test("recovers running workflows", () => {
-    const { engine, store } = setup();
+    const { engine } = setup();
     const def = makeDef("wf-1", [
       { id: "a", name: "A", type: "llm_call", config: { prompt: "hi", outputKey: "r" }, dependsOn: [] },
     ]);
@@ -331,7 +331,7 @@ describe("WorkflowEngine", () => {
   });
 
   test("cancelAllActive cancels running workflows", () => {
-    const { engine, store } = setup();
+    const { engine } = setup();
     const def = makeDef("wf-1", [
       { id: "a", name: "A", type: "llm_call", config: { prompt: "hi", outputKey: "r" }, dependsOn: [] },
     ]);

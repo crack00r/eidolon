@@ -21,7 +21,7 @@ import type {
   MemoryConsolidationAction,
   Result,
 } from "@eidolon/protocol";
-import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
+import { Err, Ok } from "@eidolon/protocol";
 import type { Logger } from "../logging/logger.ts";
 import { applyDecision, heuristicContradiction, mergeContent } from "./consolidation-helpers.ts";
 import type { EmbeddingModel } from "./embeddings.ts";

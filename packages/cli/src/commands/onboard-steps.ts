@@ -41,9 +41,7 @@ export async function checkPrerequisites(): Promise<PrerequisiteResult> {
 
   // Delegate system checks to shared module
   const preflight = runPreflightChecks();
-  const bunOk = preflight.ok
-    ? Number.parseInt(preflight.value.bunVersion.split(".")[0] ?? "0", 10) >= 1
-    : false;
+  const bunOk = preflight.ok ? Number.parseInt(preflight.value.bunVersion.split(".")[0] ?? "0", 10) >= 1 : false;
   const diskOk = preflight.ok ? preflight.value.diskSpaceMb >= 500 || preflight.value.diskSpaceMb === 0 : false;
 
   if (preflight.ok) {

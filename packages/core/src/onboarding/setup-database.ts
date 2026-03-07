@@ -6,7 +6,7 @@
  */
 
 import type { EidolonError, Result } from "@eidolon/protocol";
-import { Err, ErrorCode, Ok, createError } from "@eidolon/protocol";
+import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 import { DatabaseManager } from "../database/manager.ts";
 import { createLogger } from "../logging/logger.ts";
 
@@ -35,12 +35,8 @@ export function initializeDatabases(directory: string): Result<DbInitResult, Eid
     const initResult = db.initialize();
     if (!initResult.ok) return initResult;
 
-    const countTables = (dbInstance: {
-      query: (sql: string) => { all: () => unknown[] };
-    }): number => {
-      const rows = dbInstance
-        .query("SELECT count(*) as c FROM sqlite_master WHERE type='table'")
-        .all();
+    const countTables = (dbInstance: { query: (sql: string) => { all: () => unknown[] } }): number => {
+      const rows = dbInstance.query("SELECT count(*) as c FROM sqlite_master WHERE type='table'").all();
       return (rows[0] as TableCountRow)?.c ?? 0;
     };
 
@@ -53,8 +49,6 @@ export function initializeDatabases(directory: string): Result<DbInitResult, Eid
     db.close();
     return Ok(result);
   } catch (cause) {
-    return Err(
-      createError(ErrorCode.DB_CONNECTION_FAILED, `Database init failed: ${cause}`, cause),
-    );
+    return Err(createError(ErrorCode.DB_CONNECTION_FAILED, `Database init failed: ${cause}`, cause));
   }
 }

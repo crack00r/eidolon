@@ -17,7 +17,6 @@ import {
   AudioStartDataSchema,
   SynthesizeDataSchema,
   serializeEvent,
-  TranscriptDataSchema,
   type WyomingEvent,
 } from "./protocol.ts";
 

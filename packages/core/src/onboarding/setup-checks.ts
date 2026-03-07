@@ -6,7 +6,7 @@
 
 import { mkdirSync, statfsSync } from "node:fs";
 import type { EidolonError, Result } from "@eidolon/protocol";
-import { Err, ErrorCode, Ok, createError } from "@eidolon/protocol";
+import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 import { getConfigDir, getDataDir } from "../config/paths.ts";
 
 const MIN_DISK_SPACE_MB = 500;
@@ -27,9 +27,7 @@ export function runPreflightChecks(): Result<PreflightResult, EidolonError> {
     mkdirSync(dataDir, { recursive: true, mode: 0o700 });
     mkdirSync(configDir, { recursive: true, mode: 0o700 });
   } catch (cause) {
-    return Err(
-      createError(ErrorCode.INVALID_STATE, `Failed to create directories: ${cause}`, cause),
-    );
+    return Err(createError(ErrorCode.INVALID_STATE, `Failed to create directories: ${cause}`, cause));
   }
 
   let diskSpaceMb = 0;
@@ -42,10 +40,7 @@ export function runPreflightChecks(): Result<PreflightResult, EidolonError> {
 
   if (diskSpaceMb > 0 && diskSpaceMb < MIN_DISK_SPACE_MB) {
     return Err(
-      createError(
-        ErrorCode.INVALID_INPUT,
-        `Insufficient disk space: ${diskSpaceMb}MB (need ${MIN_DISK_SPACE_MB}MB)`,
-      ),
+      createError(ErrorCode.INVALID_INPUT, `Insufficient disk space: ${diskSpaceMb}MB (need ${MIN_DISK_SPACE_MB}MB)`),
     );
   }
 

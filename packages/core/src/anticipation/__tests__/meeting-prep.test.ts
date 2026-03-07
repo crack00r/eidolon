@@ -1,6 +1,5 @@
-import { Database } from "bun:sqlite";
 import { describe, expect, test } from "bun:test";
-import type { CalendarEvent, Memory, MemorySearchResult } from "@eidolon/protocol";
+import type { CalendarEvent, MemorySearchResult } from "@eidolon/protocol";
 import { Ok } from "@eidolon/protocol";
 import { MeetingPrepDetector } from "../detectors/meeting-prep.ts";
 import type { DetectionContext } from "../patterns.ts";
