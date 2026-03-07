@@ -25,6 +25,7 @@ import type { MemorySearch } from "../memory/search.ts";
 import type { MemoryStore } from "../memory/store.ts";
 import {
   JSON_RPC_INTERNAL_ERROR,
+  JSON_RPC_INVALID_PARAMS,
   JSON_RPC_INVALID_REQUEST,
   JSON_RPC_METHOD_NOT_FOUND,
   JSON_RPC_PARSE_ERROR,
@@ -210,6 +211,8 @@ export class MemoryMcpServer {
 
     if (outcome.ok) {
       this.sendToolResult(id, outcome.text);
+    } else if (outcome.error.startsWith("Invalid parameters:")) {
+      this.sendError(id, JSON_RPC_INVALID_PARAMS, outcome.error);
     } else {
       this.sendToolError(id, outcome.error);
     }

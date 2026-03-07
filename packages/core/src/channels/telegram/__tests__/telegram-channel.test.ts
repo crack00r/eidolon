@@ -11,6 +11,7 @@ import { GrammyError, HttpError } from "grammy";
 import type { Logger } from "../../../logging/logger.ts";
 import type { TelegramConfig } from "../channel.ts";
 import { TelegramChannel } from "../channel.ts";
+import { isFatalBotError, sendWithRetry } from "../channel-retry.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -267,66 +268,55 @@ describe("TelegramChannel toInboundMessage", () => {
 
 describe("TelegramChannel isFatalBotError", () => {
   test("detects 401 Unauthorized as fatal", () => {
-    const channel = makeChannel();
     const err = createGrammyError(401, "Unauthorized");
-    expect((channel as any).isFatalBotError(err)).toBe(true);
+    expect(isFatalBotError(err)).toBe(true);
   });
 
   test("detects 'unauthorized' description pattern as fatal", () => {
-    const channel = makeChannel();
     const err = createGrammyError(403, "Forbidden: bot was blocked by the user - Unauthorized request");
-    expect((channel as any).isFatalBotError(err)).toBe(true);
+    expect(isFatalBotError(err)).toBe(true);
   });
 
   test("detects 'bot was blocked' pattern as fatal", () => {
-    const channel = makeChannel();
     const err = createGrammyError(403, "Forbidden: bot was blocked by the user");
-    expect((channel as any).isFatalBotError(err)).toBe(true);
+    expect(isFatalBotError(err)).toBe(true);
   });
 
   test("detects 'bot was kicked' pattern as fatal", () => {
-    const channel = makeChannel();
     const err = createGrammyError(403, "Forbidden: bot was kicked from the group chat");
-    expect((channel as any).isFatalBotError(err)).toBe(true);
+    expect(isFatalBotError(err)).toBe(true);
   });
 
   test("detects 'not found' pattern as fatal", () => {
-    const channel = makeChannel();
     const err = createGrammyError(404, "Not Found");
-    expect((channel as any).isFatalBotError(err)).toBe(true);
+    expect(isFatalBotError(err)).toBe(true);
   });
 
   test("does not treat 429 as fatal", () => {
-    const channel = makeChannel();
     const err = createGrammyError(429, "Too Many Requests: retry after 10");
-    expect((channel as any).isFatalBotError(err)).toBe(false);
+    expect(isFatalBotError(err)).toBe(false);
   });
 
   test("does not treat 500 as fatal", () => {
-    const channel = makeChannel();
     const err = createGrammyError(500, "Internal Server Error");
-    expect((channel as any).isFatalBotError(err)).toBe(false);
+    expect(isFatalBotError(err)).toBe(false);
   });
 
   test("does not treat 502 as fatal", () => {
-    const channel = makeChannel();
     const err = createGrammyError(502, "Bad Gateway");
-    expect((channel as any).isFatalBotError(err)).toBe(false);
+    expect(isFatalBotError(err)).toBe(false);
   });
 
   test("does not treat non-GrammyError as fatal", () => {
-    const channel = makeChannel();
-    expect((channel as any).isFatalBotError(new Error("network failure"))).toBe(false);
+    expect(isFatalBotError(new Error("network failure"))).toBe(false);
   });
 
   test("does not treat plain string as fatal", () => {
-    const channel = makeChannel();
-    expect((channel as any).isFatalBotError("something")).toBe(false);
+    expect(isFatalBotError("something")).toBe(false);
   });
 
   test("does not treat null as fatal", () => {
-    const channel = makeChannel();
-    expect((channel as any).isFatalBotError(null)).toBe(false);
+    expect(isFatalBotError(null)).toBe(false);
   });
 });
 
@@ -335,22 +325,22 @@ describe("TelegramChannel isFatalBotError", () => {
 // ---------------------------------------------------------------------------
 
 describe("TelegramChannel sendWithRetry", () => {
+  const logger = createSilentLogger();
+
   test("returns result on first success", async () => {
-    const channel = makeChannel();
-    const result = await (channel as any).sendWithRetry(() => Promise.resolve("ok"));
+    const result = await sendWithRetry(() => Promise.resolve("ok"), logger);
     expect(result).toBe("ok");
   });
 
   test("throws fatal errors immediately without retry", async () => {
-    const channel = makeChannel();
     const fatalErr = createGrammyError(401, "Unauthorized");
     let callCount = 0;
 
     try {
-      await (channel as any).sendWithRetry(() => {
+      await sendWithRetry(() => {
         callCount++;
         throw fatalErr;
-      });
+      }, logger);
       expect.unreachable("should have thrown");
     } catch (err) {
       expect(err).toBe(fatalErr);
@@ -359,15 +349,14 @@ describe("TelegramChannel sendWithRetry", () => {
   });
 
   test("throws non-retryable GrammyError (4xx) immediately", async () => {
-    const channel = makeChannel();
     const err = createGrammyError(400, "Bad Request: message is too long");
     let callCount = 0;
 
     try {
-      await (channel as any).sendWithRetry(() => {
+      await sendWithRetry(() => {
         callCount++;
         throw err;
-      });
+      }, logger);
       expect.unreachable("should have thrown");
     } catch (e) {
       expect(e).toBe(err);
@@ -376,14 +365,13 @@ describe("TelegramChannel sendWithRetry", () => {
   });
 
   test("retries on HttpError up to MAX_RETRIES", async () => {
-    const channel = makeChannel();
     let callCount = 0;
 
     try {
-      await (channel as any).sendWithRetry(() => {
+      await sendWithRetry(() => {
         callCount++;
         throw new HttpError("Network error", 0);
-      });
+      }, logger);
       expect.unreachable("should have thrown");
     } catch {
       // MAX_RETRIES = 3, so total attempts = 4 (initial + 3 retries)
@@ -392,14 +380,13 @@ describe("TelegramChannel sendWithRetry", () => {
   }, 15_000); // Allow time for retry delays
 
   test("retries on 429 GrammyError", async () => {
-    const channel = makeChannel();
     let callCount = 0;
 
     try {
-      await (channel as any).sendWithRetry(() => {
+      await sendWithRetry(() => {
         callCount++;
         throw createGrammyError(429, "Too Many Requests: retry after 1");
-      });
+      }, logger);
       expect.unreachable("should have thrown");
     } catch {
       expect(callCount).toBe(4); // initial + 3 retries
@@ -407,14 +394,13 @@ describe("TelegramChannel sendWithRetry", () => {
   }, 15_000);
 
   test("retries on 500 GrammyError", async () => {
-    const channel = makeChannel();
     let callCount = 0;
 
     try {
-      await (channel as any).sendWithRetry(() => {
+      await sendWithRetry(() => {
         callCount++;
         throw createGrammyError(500, "Internal Server Error");
-      });
+      }, logger);
       expect.unreachable("should have thrown");
     } catch {
       expect(callCount).toBe(4);
@@ -422,16 +408,15 @@ describe("TelegramChannel sendWithRetry", () => {
   }, 15_000);
 
   test("succeeds on retry after transient failure", async () => {
-    const channel = makeChannel();
     let callCount = 0;
 
-    const result = await (channel as any).sendWithRetry(() => {
+    const result = await sendWithRetry(() => {
       callCount++;
       if (callCount === 1) {
         throw new HttpError("Network error", 0);
       }
       return Promise.resolve("recovered");
-    });
+    }, logger);
 
     expect(result).toBe("recovered");
     expect(callCount).toBe(2);
