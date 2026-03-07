@@ -3,8 +3,9 @@
  * Phase 9: full start/stop implementation.
  */
 
-import { existsSync, readFileSync } from "node:fs";
-import { getPidFilePath } from "@eidolon/core";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
+import { getPidFilePath, getLogDir } from "@eidolon/core";
 import type { Command } from "commander";
 
 // ---------------------------------------------------------------------------
@@ -89,6 +90,70 @@ export function registerDaemonCommand(program: Command): void {
         // Background mode: spawn detached child
         startBackground(opts.config);
       }
+    });
+
+  // -- logs -----------------------------------------------------------------
+
+  cmd
+    .command("logs")
+    .description("Tail daemon log file")
+    .option("--lines <n>", "Number of lines to show", "50")
+    .action(async (opts: { readonly lines: string }) => {
+      const logDir = getLogDir();
+      if (!existsSync(logDir)) {
+        console.error(`Log directory does not exist: ${logDir}`);
+        console.error("Has the daemon been started at least once?");
+        process.exitCode = 1;
+        return;
+      }
+
+      // Find the log file -- look for eidolon.log or the first .log file
+      let logFile: string | undefined;
+      const candidates = ["eidolon.log", "daemon.log"];
+      for (const name of candidates) {
+        const candidate = join(logDir, name);
+        if (existsSync(candidate)) {
+          logFile = candidate;
+          break;
+        }
+      }
+
+      // Fallback: pick the most recent .log file in the directory
+      if (!logFile) {
+        try {
+          const entries = readdirSync(logDir).filter((f) => f.endsWith(".log"));
+          const first = entries[0];
+          if (first) {
+            logFile = join(logDir, first);
+          }
+        } catch {
+          // Ignore read errors
+        }
+      }
+
+      if (!logFile || !existsSync(logFile)) {
+        console.error(`No log files found in: ${logDir}`);
+        console.error("Has the daemon been started at least once?");
+        process.exitCode = 1;
+        return;
+      }
+
+      const lines = Number.parseInt(opts.lines, 10) || 50;
+      console.log(`Tailing ${logFile} (last ${lines} lines)...\n`);
+
+      const proc = Bun.spawn(["tail", "-n", String(lines), "-f", logFile], {
+        stdout: "inherit",
+        stderr: "inherit",
+      });
+
+      // Forward SIGINT/SIGTERM to tail process for clean exit
+      const handler = (): void => {
+        proc.kill();
+      };
+      process.on("SIGINT", handler);
+      process.on("SIGTERM", handler);
+
+      await proc.exited;
     });
 
   // -- stop -----------------------------------------------------------------
