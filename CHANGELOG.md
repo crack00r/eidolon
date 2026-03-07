@@ -9,6 +9,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > [release-please](https://github.com/googleapis/release-please).
 > Do not edit manually.
 
+## [0.1.8](https://github.com/crack00r/eidolon/compare/v0.1.7...v0.1.8) (2026-03-07)
+
+
+### Features
+
+* **core:** add security hardening, Memory MCP server, and PWA support ([9fb423d](https://github.com/crack00r/eidolon/commit/9fb423d0ede73744984cb8a2584793ee0345177d))
+* **core:** implement sqlite-vec ANN search, npm publish workflow, and doc corrections ([fe4e41c](https://github.com/crack00r/eidolon/commit/fe4e41cee6c4dcfcdb6542a22c0eb6f492b6d16b))
+* **core:** implement Wave 1 foundation tasks ([d257d1f](https://github.com/crack00r/eidolon/commit/d257d1f703122e95d09195cc6b6743304dd602fb))
+* **core:** implement Wave 2 core wiring and daemon decomposition ([13f5a15](https://github.com/crack00r/eidolon/commit/13f5a1585bc438a8a213b82f7302656beab16d74))
+* **core:** implement Wave 3 gateway methods, KG predictions, and learning pipeline ([6bc8054](https://github.com/crack00r/eidolon/commit/6bc805496076df26472ab4f6c12084eb89b9745a))
+* **core:** implement Waves 5-9 features, tests, and documentation ([05c2357](https://github.com/crack00r/eidolon/commit/05c235775582c1cdbd972c54f94656ccad12c40d))
+* **core:** wire user:message handler in daemon event loop ([ed3651e](https://github.com/crack00r/eidolon/commit/ed3651eebd379736cbcc79a053f66ddb679bbc02))
+
+
+### Bug Fixes
+
+* close 9 remaining gaps from plan audit ([8630c3e](https://github.com/crack00r/eidolon/commit/8630c3e18a4dbec80d522c671d20d686b107ef1f))
+* close all completeness gaps from project audit ([446ac5a](https://github.com/crack00r/eidolon/commit/446ac5a9fc663a9a8b520d3f1b82aa72243b2ed9))
+* **ios:** resolve Swift strict concurrency errors in deinit and NWConnection handlers ([682f588](https://github.com/crack00r/eidolon/commit/682f5887fac7d4483f86cbd6fc10d3fdb114f1a6))
+* sync desktop and iOS app versions to 0.1.7 and add to release-please ([318407c](https://github.com/crack00r/eidolon/commit/318407cf6807c1f9f2841b3f9f9bb31b5f636b55))
+
+
+### Documentation
+
+* update ROADMAP test count and CONFIGURATION reference ([6cc7904](https://github.com/crack00r/eidolon/commit/6cc7904ef6f3b7c56e710e2dc948c036db8d3ed5))
+* update ROADMAP test count to 2658 and version to v0.1.7 ([bcaea24](https://github.com/crack00r/eidolon/commit/bcaea24b88039c0308fe84153288a3adaf69bffc))
+
+
+### CI/CD
+
+* add workflow_dispatch trigger to release workflow ([4098cf2](https://github.com/crack00r/eidolon/commit/4098cf20a9a552a37e98749873ec206d05c48f59))
+
+
+### Tests
+
+* **core:** add Wave 4 integration tests and Wave 5 code quality improvements ([b7d6e61](https://github.com/crack00r/eidolon/commit/b7d6e61fffe4d003eaf5b6caf4fcd3a1dfd1e2f6))
+
 ## [0.1.7](https://github.com/crack00r/eidolon/compare/v0.1.6...v0.1.7) (2026-03-06)
 
 

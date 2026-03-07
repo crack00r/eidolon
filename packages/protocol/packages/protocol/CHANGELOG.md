@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.7](https://github.com/crack00r/eidolon/compare/v0.1.6...v0.1.7) (2026-03-07)
+
+
+### Features
+
+* **core:** add security hardening, Memory MCP server, and PWA support ([9fb423d](https://github.com/crack00r/eidolon/commit/9fb423d0ede73744984cb8a2584793ee0345177d))
+* **core:** implement Wave 2 core wiring and daemon decomposition ([13f5a15](https://github.com/crack00r/eidolon/commit/13f5a1585bc438a8a213b82f7302656beab16d74))
+
 ## [0.1.6](https://github.com/crack00r/eidolon/compare/v0.1.5...v0.1.6) (2026-03-06)
 
 
