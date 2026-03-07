@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.12](https://github.com/crack00r/eidolon/compare/v0.1.11...v0.1.12) (2026-03-07)
+
+
+### Miscellaneous
+
+* release main ([471360c](https://github.com/crack00r/eidolon/commit/471360c4f505751200697a4d9e6937a9adce96df))
+* release main ([54e907b](https://github.com/crack00r/eidolon/commit/54e907b0e73a643a74ee76e0799357b4f524cfab))
+
 ## [0.1.11](https://github.com/crack00r/eidolon/compare/v0.1.10...v0.1.11) (2026-03-07)
 
 
