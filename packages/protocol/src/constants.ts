@@ -3,9 +3,27 @@
  * Constants that depend on types from types/ will be added after those files exist.
  */
 
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
 import type { SessionType } from "./types/sessions.ts";
 
-export const VERSION = "0.0.0";
+function loadVersion(): string {
+  try {
+    const thisDir = dirname(fileURLToPath(import.meta.url));
+    const pkgPath = join(thisDir, "..", "package.json");
+    const pkg: unknown = JSON.parse(readFileSync(pkgPath, "utf-8"));
+    if (typeof pkg === "object" && pkg !== null && "version" in pkg && typeof (pkg as Record<string, unknown>).version === "string") {
+      return (pkg as Record<string, unknown>).version as string;
+    }
+    return "0.0.0";
+  } catch {
+    return "0.0.0";
+  }
+}
+
+export const VERSION: string = loadVersion();
 
 export const DEFAULT_CONFIG_FILENAME = "eidolon.json";
 export const DEFAULT_DATA_DIR_NAME = "eidolon";
