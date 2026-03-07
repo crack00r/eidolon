@@ -18,10 +18,19 @@
  *  10. Summary and next steps
  */
 
-import { chmodSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import { createInterface } from "node:readline";
-import { getConfigDir, getConfigPath, getDataDir, zeroBuffer } from "@eidolon/core";
+import {
+  buildServerConfig,
+  detectTailscale,
+  generateAuthToken,
+  getConfigPath,
+  getDataDir,
+  writeConfig,
+  zeroBuffer,
+} from "@eidolon/core";
 import { SECRETS_DB_FILENAME, VERSION } from "@eidolon/protocol";
+import type { ServerConfigInput } from "@eidolon/core";
 import type { Command } from "commander";
 import { onboardClient } from "./onboard-client.ts";
 import { deriveMasterKeyBuffer } from "./onboard-kdf.ts";
@@ -135,7 +144,6 @@ async function onboardServer(ask: AskFn): Promise<ServerSetupResult> {
   const gatewayPort = Number.parseInt(portInput, 10) || 8419;
 
   const tokenChoice = await ask("Auth token (auto-generate or enter manually) [auto]: ");
-  const { generateAuthToken } = await import("@eidolon/core");
   const gatewayToken = tokenChoice || generateAuthToken();
   if (!tokenChoice) {
     const masked = gatewayToken.length > 8 ? `${gatewayToken.slice(0, 4)}..${gatewayToken.slice(-4)}` : "****";
@@ -156,16 +164,8 @@ async function onboardServer(ask: AskFn): Promise<ServerSetupResult> {
   const discChoice = await ask("Enable network broadcast? [Y/n]: ");
   const discoveryEnabled = discChoice === "" || discChoice.toLowerCase() === "y";
 
-  let tailscaleIp: string | undefined;
-  try {
-    const result = Bun.spawnSync(["tailscale", "ip", "-4"], { stdout: "pipe", stderr: "pipe" });
-    if (result.exitCode === 0) {
-      tailscaleIp = result.stdout.toString().trim();
-      if (tailscaleIp) console.log(`  Tailscale detected: ${tailscaleIp}`);
-    }
-  } catch {
-    /* Tailscale not installed */
-  }
+  const tailscaleIp = await detectTailscale() ?? undefined;
+  if (tailscaleIp) console.log(`  Tailscale detected: ${tailscaleIp}`);
 
   // Step 6: Telegram
   const telegram = await setupTelegram(ask);
@@ -209,31 +209,31 @@ async function onboardServer(ask: AskFn): Promise<ServerSetupResult> {
 // Config file writer (server mode)
 // ---------------------------------------------------------------------------
 
-function writeServerConfig(r: ServerSetupResult): void {
+function writeServerConfigFile(r: ServerSetupResult): void {
   const configPath = getConfigPath();
-  const configDir = getConfigDir();
-  if (!existsSync(configDir)) mkdirSync(configDir, { recursive: true });
 
-  const config: Record<string, unknown> = {
-    identity: { name: "Eidolon", ownerName: r.ownerName || "User" },
-    brain: {
-      accounts: [
-        r.claudeAccountType === "api-key"
-          ? { type: "api-key", name: "primary", credential: { $secret: "claude-api-key" }, priority: 50 }
-          : { type: "oauth", name: "primary", credential: "oauth", priority: 50 },
-      ],
-    },
-    gateway: {
-      host: r.gatewayHost,
-      port: r.gatewayPort,
-      tls: { enabled: r.tlsEnabled },
-      auth: { type: "token", token: { $secret: "gateway-auth-token" } },
-    },
-    database: {},
-    logging: { level: "info", format: "pretty" },
-    daemon: {},
+  const claudeCredential =
+    r.claudeAccountType === "api-key"
+      ? { type: "api-key", name: "primary", credential: "claude-api-key" }
+      : { type: "oauth", name: "primary", credential: "oauth" };
+
+  const gateway: Record<string, unknown> = {
+    host: r.gatewayHost,
+    port: r.gatewayPort,
+    tls: { enabled: r.tlsEnabled },
+    auth: { type: "token", token: { $secret: "gateway-auth-token" } },
   };
 
+  const input: ServerConfigInput = {
+    ownerName: r.ownerName || "User",
+    claudeCredential,
+    gateway,
+    dataDir: getDataDir(),
+  };
+
+  const config = buildServerConfig(input);
+
+  // Add optional sections that the shared builder does not handle
   if (r.telegram.enabled) {
     config.channels = {
       telegram: {
@@ -257,11 +257,12 @@ function writeServerConfig(r: ServerSetupResult): void {
     };
   }
 
-  writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`, "utf-8");
-  if (process.platform !== "win32") {
-    chmodSync(configPath, 0o600);
+  const result = writeConfig(configPath, config);
+  if (result.ok) {
+    console.log(`\n  Config written to: ${configPath} (mode 0600)`);
+  } else {
+    console.log(`\n  Failed to write config: ${result.error.message}`);
   }
-  console.log(`\n  Config written to: ${configPath} (mode 0600)`);
 }
 
 // ---------------------------------------------------------------------------
@@ -303,7 +304,7 @@ export function registerOnboardCommand(program: Command): void {
           console.log("\n--- Step 10: Finalize ---\n");
           const writeChoice = await ask("Write config file? [Y/n]: ");
           if (writeChoice === "" || writeChoice.toLowerCase() === "y") {
-            writeServerConfig(result);
+            writeServerConfigFile(result);
           }
 
           // Platform service

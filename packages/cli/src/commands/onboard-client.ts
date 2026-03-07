@@ -3,8 +3,7 @@
  * Extracted from onboard.ts to keep files under 300 lines.
  */
 
-import { chmodSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
-import { getConfigDir, getConfigPath } from "@eidolon/core";
+import { buildClientConfig, getConfigPath, writeConfig } from "@eidolon/core";
 import type { AskFn } from "./onboard-steps.ts";
 
 // ---------------------------------------------------------------------------
@@ -58,7 +57,7 @@ export async function onboardClient(ask: AskFn): Promise<void> {
   const tlsChoice = await ask("Server uses TLS? [y/N]: ");
   tls = tlsChoice.toLowerCase() === "y";
 
-  writeClientConfig(host, port, token, tls);
+  writeClientConfigFile(host, port, token, tls);
   await testConnection(host, port, tls);
 
   console.log("\n--- Setup Complete ---\n");
@@ -117,14 +116,15 @@ async function discoverServers(): Promise<DiscoveredServer[]> {
   return servers;
 }
 
-function writeClientConfig(host: string, port: number, token: string, tls: boolean): void {
+function writeClientConfigFile(host: string, port: number, token: string, tls: boolean): void {
   const configPath = getConfigPath();
-  const configDir = getConfigDir();
-  if (!existsSync(configDir)) mkdirSync(configDir, { recursive: true });
-  const config = { role: "client", server: { host, port, token, tls }, logging: { level: "info", format: "pretty" } };
-  writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`, "utf-8");
-  if (process.platform !== "win32") chmodSync(configPath, 0o600);
-  console.log(`\n  Client config written to: ${configPath} (mode 0600)`);
+  const config = buildClientConfig({ host, port, token, tls });
+  const result = writeConfig(configPath, config);
+  if (result.ok) {
+    console.log(`\n  Client config written to: ${configPath} (mode 0600)`);
+  } else {
+    console.log(`\n  Failed to write client config: ${result.error.message}`);
+  }
 }
 
 async function testConnection(host: string, port: number, tls: boolean): Promise<void> {

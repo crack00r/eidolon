@@ -5,17 +5,17 @@
  * Each exported function performs one discrete step of the setup wizard.
  */
 
-import { existsSync, mkdirSync, statfsSync, unlinkSync, writeFileSync } from "node:fs";
-import { userInfo } from "node:os";
+import { existsSync, mkdirSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
-  createLogger,
-  DatabaseManager,
   generateMasterKey,
   getConfigDir,
   getDataDir,
+  getDefaultOwnerName,
   getLogDir,
+  initializeDatabases as initializeDatabasesShared,
   loadConfig,
+  runPreflightChecks,
   SecretStore,
   zeroBuffer,
 } from "@eidolon/core";
@@ -29,9 +29,6 @@ export type AskFn = (question: string) => Promise<string>;
 // Prerequisite checks
 // ---------------------------------------------------------------------------
 
-/** Minimum disk space in bytes (500 MB). */
-const MIN_DISK_SPACE_BYTES = 500 * 1024 * 1024;
-
 export interface PrerequisiteResult {
   readonly bunOk: boolean;
   readonly claudeOk: boolean;
@@ -42,13 +39,25 @@ export interface PrerequisiteResult {
 export async function checkPrerequisites(): Promise<PrerequisiteResult> {
   console.log("\n--- Step 1: System Checks ---\n");
 
-  // Bun version
-  const bunVersion = Bun.version;
-  const [major] = bunVersion.split(".");
-  const bunOk = Number.parseInt(major ?? "0", 10) >= 1;
-  console.log(formatCheck(bunOk ? "pass" : "fail", `Bun runtime v${bunVersion}`));
+  // Delegate system checks to shared module
+  const preflight = runPreflightChecks();
+  const bunOk = preflight.ok
+    ? Number.parseInt(preflight.value.bunVersion.split(".")[0] ?? "0", 10) >= 1
+    : false;
+  const diskOk = preflight.ok ? preflight.value.diskSpaceMb >= 500 || preflight.value.diskSpaceMb === 0 : false;
 
-  // Claude Code CLI
+  if (preflight.ok) {
+    console.log(formatCheck(bunOk ? "pass" : "fail", `Bun runtime v${preflight.value.bunVersion}`));
+    if (preflight.value.diskSpaceMb > 0) {
+      console.log(formatCheck(diskOk ? "pass" : "warn", `Disk space: ${preflight.value.diskSpaceMb} MB free`));
+    } else {
+      console.log(formatCheck("warn", "Disk space: could not determine"));
+    }
+  } else {
+    console.log(formatCheck("fail", `System check failed: ${preflight.error.message}`));
+  }
+
+  // Claude Code CLI (not covered by shared preflight)
   let claudeOk = false;
   try {
     const result = Bun.spawnSync(["claude", "--version"], { stdout: "pipe", stderr: "pipe" });
@@ -57,24 +66,6 @@ export async function checkPrerequisites(): Promise<PrerequisiteResult> {
     console.log(formatCheck(claudeOk ? "pass" : "fail", `Claude Code CLI ${output || "(not found)"}`));
   } catch {
     console.log(formatCheck("fail", "Claude Code CLI not installed"));
-  }
-
-  // Disk space
-  let diskOk = true;
-  try {
-    const dataDir = getDataDir();
-    const parentDir = existsSync(dataDir) ? dataDir : join(dataDir, "..");
-    if (existsSync(parentDir)) {
-      const stats = statfsSync(parentDir);
-      const freeBytes = stats.bfree * stats.bsize;
-      const freeMb = Math.round(freeBytes / (1024 * 1024));
-      diskOk = freeBytes >= MIN_DISK_SPACE_BYTES;
-      console.log(formatCheck(diskOk ? "pass" : "warn", `Disk space: ${freeMb} MB free`));
-    } else {
-      console.log(formatCheck("warn", "Disk space: could not determine"));
-    }
-  } catch {
-    console.log(formatCheck("warn", "Disk space: could not determine"));
   }
 
   // Directory paths (info only)
@@ -96,13 +87,7 @@ export async function checkPrerequisites(): Promise<PrerequisiteResult> {
 
 export async function setupIdentity(ask: AskFn): Promise<string> {
   console.log("\n--- Step 2: Identity ---\n");
-  let defaultName = "User";
-  try {
-    const info = userInfo();
-    if (info.username) defaultName = info.username;
-  } catch {
-    // userInfo may throw on some platforms
-  }
+  const defaultName = getDefaultOwnerName();
   const ownerName = await ask(`Owner name [${defaultName}]: `);
   return ownerName || defaultName;
 }
@@ -274,30 +259,19 @@ export async function setupGpuWorker(ask: AskFn): Promise<GpuSetupResult> {
 
 export function initializeDatabases(): boolean {
   console.log("\n--- Step 8: Database Initialization ---\n");
-  try {
-    const dataDir = getDataDir();
-    if (!existsSync(dataDir)) mkdirSync(dataDir, { recursive: true });
+  const dataDir = getDataDir();
+  if (!existsSync(dataDir)) mkdirSync(dataDir, { recursive: true });
 
-    const logger = createLogger({ level: "warn", format: "pretty", directory: "", maxSizeMb: 50, maxFiles: 10 });
-    const dbManager = new DatabaseManager({ directory: dataDir, walMode: true, backupSchedule: "0 3 * * *" }, logger);
-    const result = dbManager.initialize();
-
-    if (!result.ok) {
-      console.log(formatCheck("fail", `Database initialization failed: ${result.error.message}`));
-      return false;
-    }
-
-    const stats = dbManager.getStats();
-    console.log(formatCheck("pass", `memory.db   (${stats.memory.tableCount} tables)`));
-    console.log(formatCheck("pass", `operational.db (${stats.operational.tableCount} tables)`));
-    console.log(formatCheck("pass", `audit.db    (${stats.audit.tableCount} tables)`));
-    dbManager.close();
-    return true;
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.log(formatCheck("fail", `Database initialization failed: ${msg}`));
+  const result = initializeDatabasesShared(dataDir);
+  if (!result.ok) {
+    console.log(formatCheck("fail", `Database initialization failed: ${result.error.message}`));
     return false;
   }
+
+  console.log(formatCheck("pass", `memory.db   (${result.value.memoryTables} tables)`));
+  console.log(formatCheck("pass", `operational.db (${result.value.operationalTables} tables)`));
+  console.log(formatCheck("pass", `audit.db    (${result.value.auditTables} tables)`));
+  return true;
 }
 
 // ---------------------------------------------------------------------------
