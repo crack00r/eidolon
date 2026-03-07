@@ -44,7 +44,7 @@
       "extra-files": [
         {
           "type": "json",
-          "path": "apps/desktop/src-tauri/tauri.conf.json",
+          "path": "src-tauri/tauri.conf.json",
           "jsonpath": "$.version"
         }
       ]
