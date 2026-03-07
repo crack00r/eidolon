@@ -1,7 +1,11 @@
 use serde::Serialize;
 use std::collections::HashMap;
 use std::net::UdpSocket;
+use std::process::Command;
 use std::time::{Duration, Instant};
+use tauri::State;
+
+use crate::DaemonState;
 
 #[derive(Serialize)]
 pub struct PlatformInfo {
@@ -155,4 +159,159 @@ pub async fn discover_servers(timeout_ms: u64) -> Result<Vec<DiscoveredServer>, 
     .map_err(|e| format!("Discovery task failed: {}", e))?;
 
     result
+}
+
+// ---------------------------------------------------------------------------
+// Daemon lifecycle commands
+// ---------------------------------------------------------------------------
+
+#[tauri::command]
+pub fn start_daemon(state: State<DaemonState>, config_path: String) -> Result<u32, String> {
+    let mut daemon = state.0.lock().map_err(|e| e.to_string())?;
+    if daemon.is_some() {
+        return Err("Daemon already running".into());
+    }
+
+    let mut args = vec![
+        "run".to_string(),
+        "packages/cli/src/index.ts".to_string(),
+        "daemon".to_string(),
+        "start".to_string(),
+        "--foreground".to_string(),
+    ];
+    if !config_path.is_empty() {
+        args.push("--config".to_string());
+        args.push(config_path);
+    }
+
+    let child = Command::new("bun")
+        .args(&args)
+        .spawn()
+        .map_err(|e| format!("Failed to start daemon: {}", e))?;
+
+    let pid = child.id();
+    *daemon = Some(child);
+    Ok(pid)
+}
+
+#[tauri::command]
+pub fn stop_daemon(state: State<DaemonState>) -> Result<(), String> {
+    let mut daemon = state.0.lock().map_err(|e| e.to_string())?;
+    if let Some(mut child) = daemon.take() {
+        child
+            .kill()
+            .map_err(|e| format!("Failed to stop daemon: {}", e))?;
+        let _ = child.wait();
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn daemon_running(state: State<DaemonState>) -> bool {
+    let daemon = state.0.lock().unwrap_or_else(|e| e.into_inner());
+    daemon.is_some()
+}
+
+// ---------------------------------------------------------------------------
+// Onboarding commands
+// ---------------------------------------------------------------------------
+
+/// Return the platform-specific config file path.
+fn get_config_path_internal() -> String {
+    let home = std::env::var("HOME").unwrap_or_default();
+    if cfg!(target_os = "macos") {
+        format!("{}/Library/Preferences/eidolon/eidolon.json", home)
+    } else if cfg!(target_os = "windows") {
+        format!(
+            "{}/eidolon/config/eidolon.json",
+            std::env::var("APPDATA").unwrap_or_default()
+        )
+    } else {
+        format!("{}/.config/eidolon/eidolon.json", home)
+    }
+}
+
+#[tauri::command]
+pub async fn check_config_exists() -> bool {
+    let config_path = get_config_path_internal();
+    std::path::Path::new(&config_path).exists()
+}
+
+#[tauri::command]
+pub async fn get_config_role() -> Result<String, String> {
+    let config_path = get_config_path_internal();
+    let content = std::fs::read_to_string(&config_path).map_err(|e| e.to_string())?;
+    let json: serde_json::Value =
+        serde_json::from_str(&content).map_err(|e| e.to_string())?;
+    Ok(json
+        .get("role")
+        .and_then(|v| v.as_str())
+        .unwrap_or("server")
+        .to_string())
+}
+
+#[tauri::command]
+pub async fn get_os_username() -> String {
+    whoami::username()
+}
+
+#[tauri::command]
+pub async fn get_config_path() -> String {
+    get_config_path_internal()
+}
+
+#[tauri::command]
+pub async fn run_bun_script(script: String) -> Result<String, String> {
+    let output = Command::new("bun")
+        .args(["eval", &script])
+        .output()
+        .map_err(|e| format!("Bun execution failed: {}", e))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("Script failed: {}", stderr));
+    }
+
+    String::from_utf8(output.stdout).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn onboard_setup_server(
+    name: String,
+    credential_type: String,
+    api_key: Option<String>,
+) -> Result<String, String> {
+    let cred_value = api_key.unwrap_or_else(|| "oauth".to_string());
+    let script = format!(
+        r#"
+        import {{ generateMasterKey, generateAuthToken, detectTailscale, buildGatewayConfig, initializeDatabases, buildServerConfig, writeConfig }} from "./packages/core/src/onboarding/index.ts";
+        import {{ getDataDir, getConfigPath }} from "./packages/core/src/config/paths.ts";
+        const masterKey = generateMasterKey();
+        const token = generateAuthToken();
+        const tailscaleIp = await detectTailscale();
+        const gateway = buildGatewayConfig({{ port: 8419, token, tailscaleIp: tailscaleIp ?? undefined }});
+        const dataDir = getDataDir();
+        const dbResult = initializeDatabases(dataDir);
+        if (!dbResult.ok) throw new Error(dbResult.error.message);
+        const credential = {{ type: "{}", name: "primary", credential: "{}" }};
+        const config = buildServerConfig({{ ownerName: "{}", claudeCredential: credential, gateway, dataDir }});
+        const configPath = getConfigPath();
+        const writeResult = writeConfig(configPath, config);
+        if (!writeResult.ok) throw new Error(writeResult.error.message);
+        console.log(JSON.stringify({{ ok: true, configPath, tailscaleIp, token, masterKey }}));
+        "#,
+        credential_type, cred_value, name
+    );
+
+    let output = Command::new("bun")
+        .args(["eval", &script])
+        .output()
+        .map_err(|e| format!("Setup failed: {}", e))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("Setup failed: {}", stderr));
+    }
+
+    String::from_utf8(output.stdout).map_err(|e| e.to_string())
 }
