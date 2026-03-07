@@ -9,6 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > [release-please](https://github.com/googleapis/release-please).
 > Do not edit manually.
 
+## [0.1.10](https://github.com/crack00r/eidolon/compare/v0.1.9...v0.1.10) (2026-03-07)
+
+
+### Features
+
+* implement v2.1 features -- proactive intelligence, agentic workflows, slack, browser, MCP marketplace, wyoming, multi-user, project management, node replication ([157a7cb](https://github.com/crack00r/eidolon/commit/157a7cb5aae6f7fa6acbb3cf397372c352976adc))
+
+
+### Bug Fixes
+
+* **cli:** expand privacy-forget.ts formatting for biome compliance ([312ca22](https://github.com/crack00r/eidolon/commit/312ca22f1b8bceab6a01db07fb8c137d19adec11))
+* **core,cli,protocol:** biome lint and formatting fixes across all packages ([52c5d4d](https://github.com/crack00r/eidolon/commit/52c5d4d836a2629d6a28abf78f7db4fd35b60c8e))
+* **core:** fix test failures in MemoryMcpServer and TelegramChannel ([a5541e1](https://github.com/crack00r/eidolon/commit/a5541e1f76fc56b519098fac023ea4d267f99701))
+* **desktop:** exclude test files from svelte-check typecheck ([db0fa5c](https://github.com/crack00r/eidolon/commit/db0fa5c40d2a3db755209ce292e07884b6a3de8d))
+* update pnpm-lock.yaml for @slack/bolt dependency ([814e3a0](https://github.com/crack00r/eidolon/commit/814e3a0fed3323c3c76a5baa6ce8b4931f4a5f16))
+* **web:** exclude test files from svelte-check typecheck ([5893f8d](https://github.com/crack00r/eidolon/commit/5893f8d7b3ade3b89c6a1c3e168862371c3a754a))
+
 ## [0.1.9](https://github.com/crack00r/eidolon/compare/v0.1.8...v0.1.9) (2026-03-07)
 
 
