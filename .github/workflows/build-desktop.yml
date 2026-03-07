@@ -103,6 +103,18 @@ jobs:
         env:
           NODE_ENV: production
 
+      - name: Build CLI sidecar binary
+        shell: bash
+        run: |
+          mkdir -p apps/desktop/src-tauri/binaries
+          TARGET="${{ matrix.config.rust-target }}"
+          if [[ "$TARGET" == *"windows"* ]]; then
+            bun build packages/cli/src/index.ts --compile --outfile "apps/desktop/src-tauri/binaries/eidolon-cli-${TARGET}.exe"
+          else
+            bun build packages/cli/src/index.ts --compile --outfile "apps/desktop/src-tauri/binaries/eidolon-cli-${TARGET}"
+          fi
+          ls -la apps/desktop/src-tauri/binaries/
+
       - name: Build Tauri app
         id: tauri-build
         uses: tauri-apps/tauri-action@73fb865345c54760d875b94642314f8c0c894afa # v0
