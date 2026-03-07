@@ -276,6 +276,66 @@ pub async fn run_bun_script(script: String) -> Result<String, String> {
 }
 
 #[tauri::command]
+pub async fn save_client_config(host: String, port: u16, token: String) -> Result<(), String> {
+    let config_path = get_config_path_internal();
+
+    // Create parent directory if it doesn't exist
+    if let Some(parent) = std::path::Path::new(&config_path).parent() {
+        std::fs::create_dir_all(parent).map_err(|e| format!("Failed to create config dir: {}", e))?;
+    }
+
+    let config = serde_json::json!({
+        "role": "client",
+        "server": {
+            "host": host,
+            "port": port,
+            "token": token,
+            "tls": false
+        }
+    });
+
+    std::fs::write(&config_path, serde_json::to_string_pretty(&config).unwrap())
+        .map_err(|e| format!("Failed to write config: {}", e))?;
+
+    Ok(())
+}
+
+#[derive(Serialize)]
+pub struct ClientConfig {
+    pub host: String,
+    pub port: u16,
+    pub token: Option<String>,
+    pub tls: Option<bool>,
+}
+
+#[tauri::command]
+pub async fn get_client_config() -> Result<ClientConfig, String> {
+    let config_path = get_config_path_internal();
+    let content = std::fs::read_to_string(&config_path).map_err(|e| e.to_string())?;
+    let json: serde_json::Value = serde_json::from_str(&content).map_err(|e| e.to_string())?;
+
+    let server = json.get("server").ok_or("No server section in config")?;
+
+    Ok(ClientConfig {
+        host: server
+            .get("host")
+            .and_then(|v| v.as_str())
+            .unwrap_or("127.0.0.1")
+            .to_string(),
+        port: server
+            .get("port")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(8419) as u16,
+        token: server
+            .get("token")
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string()),
+        tls: server.get("tls").and_then(|v| v.as_bool()),
+    })
+}
+
+#[tauri::command]
 pub async fn onboard_setup_server(
     name: String,
     credential_type: String,

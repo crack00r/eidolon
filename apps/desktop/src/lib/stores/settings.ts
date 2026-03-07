@@ -27,7 +27,10 @@ export interface UpdateSettings {
   lastChecked: string | null;
 }
 
-const STORAGE_KEY = "eidolon-settings";
+/** localStorage key for non-sensitive connection settings (host, port, useTls). */
+const CONNECTION_STORAGE_KEY = "eidolon-connection";
+/** sessionStorage key for the auth token -- cleared on window close. */
+const TOKEN_STORAGE_KEY = "eidolon-token";
 const UPDATE_STORAGE_KEY = "eidolon-update-settings";
 /** Allowed characters for hostname to prevent URL injection. */
 const HOSTNAME_RE = /^[a-zA-Z0-9._-]+$/;
@@ -45,28 +48,57 @@ const DEFAULT_UPDATE_SETTINGS: UpdateSettings = {
 };
 
 function loadSettings(): Settings {
+  let host = DEFAULT_SETTINGS.host;
+  let port = DEFAULT_SETTINGS.port;
+  let useTls = DEFAULT_SETTINGS.useTls;
+  let token = DEFAULT_SETTINGS.token;
+
+  // Load non-sensitive fields from localStorage (survives restarts)
   try {
-    const stored = sessionStorage.getItem(STORAGE_KEY);
+    const stored = localStorage.getItem(CONNECTION_STORAGE_KEY);
     if (stored) {
       const parsed = JSON.parse(stored) as Partial<Settings>;
-      return {
-        host: typeof parsed.host === "string" ? parsed.host : DEFAULT_SETTINGS.host,
-        port: typeof parsed.port === "number" ? parsed.port : DEFAULT_SETTINGS.port,
-        token: typeof parsed.token === "string" ? parsed.token : DEFAULT_SETTINGS.token,
-        useTls: typeof parsed.useTls === "boolean" ? parsed.useTls : DEFAULT_SETTINGS.useTls,
-      };
+      if (typeof parsed.host === "string") host = parsed.host;
+      if (typeof parsed.port === "number") port = parsed.port;
+      if (typeof parsed.useTls === "boolean") useTls = parsed.useTls;
     }
   } catch (err) {
-    clientLog("warn", "settings", "Failed to load settings from sessionStorage", err);
+    clientLog("warn", "settings", "Failed to load connection settings from localStorage", err);
   }
-  return { ...DEFAULT_SETTINGS };
+
+  // Load token from sessionStorage (cleared on window close for security)
+  try {
+    const storedToken = sessionStorage.getItem(TOKEN_STORAGE_KEY);
+    if (storedToken && typeof storedToken === "string") {
+      token = storedToken;
+    }
+  } catch (err) {
+    clientLog("warn", "settings", "Failed to load token from sessionStorage", err);
+  }
+
+  return { host, port, token, useTls };
 }
 
 function persistSettings(settings: Settings): void {
+  // Non-sensitive fields go to localStorage (persist across restarts)
   try {
-    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+    localStorage.setItem(
+      CONNECTION_STORAGE_KEY,
+      JSON.stringify({ host: settings.host, port: settings.port, useTls: settings.useTls }),
+    );
   } catch (err) {
-    clientLog("warn", "settings", "Failed to persist settings to sessionStorage", err);
+    clientLog("warn", "settings", "Failed to persist connection settings to localStorage", err);
+  }
+
+  // Token stays in sessionStorage (cleared on window close)
+  try {
+    if (settings.token) {
+      sessionStorage.setItem(TOKEN_STORAGE_KEY, settings.token);
+    } else {
+      sessionStorage.removeItem(TOKEN_STORAGE_KEY);
+    }
+  } catch (err) {
+    clientLog("warn", "settings", "Failed to persist token to sessionStorage", err);
   }
 }
 

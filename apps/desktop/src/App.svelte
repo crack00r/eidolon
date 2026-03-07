@@ -10,6 +10,8 @@ import SettingsPage from "./routes/settings/+page.svelte";
 import RoleSelect from "./routes/onboarding/RoleSelect.svelte";
 import ServerSetup from "./routes/onboarding/ServerSetup.svelte";
 import ClientSetup from "./routes/onboarding/ClientSetup.svelte";
+import { connect } from "./lib/stores/connection";
+import { updateSettings } from "./lib/stores/settings";
 
 type AppState =
   | "loading"
@@ -34,6 +36,28 @@ function handleRoleSelect(role: "server" | "client"): void {
   }
 }
 
+async function autoConnect(role: string): Promise<void> {
+  try {
+    if (role === "server") {
+      updateSettings({ host: "127.0.0.1", port: 8419, useTls: false });
+      connect();
+    } else {
+      const config = await invoke<{ host: string; port: number; token?: string; tls?: boolean }>(
+        "get_client_config"
+      );
+      updateSettings({
+        host: config.host,
+        port: config.port,
+        useTls: config.tls ?? false,
+        ...(config.token ? { token: config.token } : {}),
+      });
+      connect();
+    }
+  } catch {
+    // Non-fatal -- dashboard will show connection status
+  }
+}
+
 async function handleOnboardingComplete(): Promise<void> {
   try {
     const role = await invoke<string>("get_config_role");
@@ -44,6 +68,8 @@ async function handleOnboardingComplete(): Promise<void> {
     // Non-fatal -- dashboard will show connection status
   }
   appState = "running";
+  const role = await invoke<string>("get_config_role").catch(() => "server");
+  autoConnect(role);
 }
 
 onMount(async () => {
@@ -63,6 +89,7 @@ onMount(async () => {
       }
     }
     appState = "running";
+    autoConnect(role);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     loadError = msg;
