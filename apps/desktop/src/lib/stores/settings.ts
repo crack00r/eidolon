@@ -36,7 +36,7 @@ const DEFAULT_SETTINGS: Settings = {
   host: "127.0.0.1",
   port: 8419,
   token: "",
-  useTls: true,
+  useTls: false,
 };
 
 const DEFAULT_UPDATE_SETTINGS: UpdateSettings = {
