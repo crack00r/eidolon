@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::net::UdpSocket;
 use std::process::Command;
 use std::time::{Duration, Instant};
-use tauri::State;
+use tauri::{Manager, State};
 
 use crate::DaemonState;
 
@@ -167,15 +167,23 @@ pub async fn discover_servers(timeout_ms: u64) -> Result<Vec<DiscoveredServer>, 
 // ---------------------------------------------------------------------------
 
 #[tauri::command]
-pub fn start_daemon(state: State<DaemonState>, config_path: String) -> Result<u32, String> {
+pub fn start_daemon(
+    app: tauri::AppHandle,
+    state: State<DaemonState>,
+    config_path: String,
+) -> Result<u32, String> {
     let mut daemon = state.0.lock().map_err(|e| e.to_string())?;
     if daemon.is_some() {
         return Err("Daemon already running".into());
     }
 
+    // Resolve the sidecar binary path
+    let sidecar_path = app
+        .path()
+        .resolve("binaries/eidolon-cli", tauri::path::BaseDirectory::Resource)
+        .map_err(|e| format!("Failed to resolve sidecar path: {}", e))?;
+
     let mut args = vec![
-        "run".to_string(),
-        "packages/cli/src/index.ts".to_string(),
         "daemon".to_string(),
         "start".to_string(),
         "--foreground".to_string(),
@@ -185,10 +193,15 @@ pub fn start_daemon(state: State<DaemonState>, config_path: String) -> Result<u3
         args.push(config_path);
     }
 
-    let child = Command::new("bun")
+    let child = Command::new(&sidecar_path)
         .args(&args)
         .spawn()
-        .map_err(|e| format!("Failed to start daemon: {}", e))?;
+        .map_err(|e| {
+            format!(
+                "Failed to start daemon: {}. Sidecar path: {:?}",
+                e, sidecar_path
+            )
+        })?;
 
     let pid = child.id();
     *daemon = Some(child);
@@ -259,21 +272,6 @@ pub async fn get_os_username() -> String {
 #[tauri::command]
 pub async fn get_config_path() -> String {
     get_config_path_internal()
-}
-
-#[tauri::command]
-pub async fn run_bun_script(script: String) -> Result<String, String> {
-    let output = Command::new("bun")
-        .args(["-e", &script])
-        .output()
-        .map_err(|e| format!("Bun execution failed: {}", e))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("Script failed: {}", stderr));
-    }
-
-    String::from_utf8(output.stdout).map_err(|e| e.to_string())
 }
 
 #[tauri::command]

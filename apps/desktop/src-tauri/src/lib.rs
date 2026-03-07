@@ -33,7 +33,6 @@ pub fn run() {
             commands::get_config_role,
             commands::get_os_username,
             commands::get_config_path,
-            commands::run_bun_script,
             commands::onboard_setup_server,
             commands::save_client_config,
             commands::get_client_config,

@@ -23,6 +23,7 @@ type AppState =
 let appState = $state<AppState>("loading");
 let currentRoute = $state("dashboard");
 let loadError = $state<string | null>(null);
+let daemonError = $state<string | null>(null);
 
 function navigate(route: string): void {
   currentRoute = route;
@@ -58,14 +59,20 @@ async function autoConnect(role: string): Promise<void> {
   }
 }
 
+async function startDaemonWithConfig(): Promise<void> {
+  const configPath = await invoke<string>("get_config_path");
+  await invoke("start_daemon", { configPath });
+}
+
 async function handleOnboardingComplete(): Promise<void> {
   try {
     const role = await invoke<string>("get_config_role");
     if (role === "server") {
-      await invoke("start_daemon");
+      await startDaemonWithConfig();
     }
-  } catch {
-    // Non-fatal -- dashboard will show connection status
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    daemonError = `Failed to start daemon: ${msg}`;
   }
   appState = "running";
   const role = await invoke<string>("get_config_role").catch(() => "server");
@@ -83,9 +90,10 @@ onMount(async () => {
     const role = await invoke<string>("get_config_role");
     if (role === "server") {
       try {
-        await invoke("start_daemon");
-      } catch {
-        // Non-fatal -- dashboard will show the error state
+        await startDaemonWithConfig();
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        daemonError = `Failed to start daemon: ${msg}`;
       }
     }
     appState = "running";
@@ -114,6 +122,12 @@ onMount(async () => {
   <ClientSetup onComplete={handleOnboardingComplete} />
 {:else}
   <Layout {currentRoute} onNavigate={navigate}>
+    {#if daemonError}
+      <div class="daemon-error-banner" role="alert">
+        <strong>Daemon error:</strong> {daemonError}
+        <button class="daemon-error-dismiss" onclick={() => (daemonError = null)}>Dismiss</button>
+      </div>
+    {/if}
     {#if currentRoute === "dashboard"}
       <DashboardPage />
     {:else if currentRoute === "chat"}
@@ -150,5 +164,33 @@ onMount(async () => {
     color: var(--error);
     max-width: 400px;
     text-align: center;
+  }
+
+  .daemon-error-banner {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background: var(--error-bg, rgba(239, 68, 68, 0.1));
+    border: 1px solid var(--error, #ef4444);
+    border-radius: 8px;
+    color: var(--error, #ef4444);
+    font-size: var(--ed-text-sm);
+    margin: 8px 16px;
+  }
+
+  .daemon-error-dismiss {
+    margin-left: auto;
+    background: none;
+    border: 1px solid currentColor;
+    border-radius: 4px;
+    color: inherit;
+    padding: 4px 10px;
+    font-size: var(--ed-text-xs);
+    cursor: pointer;
+  }
+
+  .daemon-error-dismiss:hover {
+    opacity: 0.8;
   }
 </style>

@@ -46,7 +46,7 @@ async function discoverServers(): Promise<void> {
   discovering = true;
   discoverError = null;
   try {
-    const found = await invoke<DiscoveredServer[]>("discover_servers");
+    const found = await invoke<DiscoveredServer[]>("discover_servers", { timeoutMs: 3000 });
     servers = found;
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);

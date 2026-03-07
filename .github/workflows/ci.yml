@@ -65,6 +65,27 @@ jobs:
         if: steps.check-packages.outputs.has_packages == 'true'
         run: pnpm -r test
 
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cargo check (Desktop)
+        run: |
+          cd apps/desktop/src-tauri
+          cargo check 2>&1
+
+      - name: Version sync check
+        run: |
+          PKG_VERSION=$(node -e "console.log(require('./apps/desktop/package.json').version)")
+          TAURI_VERSION=$(node -e "console.log(require('./apps/desktop/src-tauri/tauri.conf.json').version)")
+          CARGO_VERSION=$(grep '^version' apps/desktop/src-tauri/Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
+          echo "package.json: $PKG_VERSION"
+          echo "tauri.conf.json: $TAURI_VERSION"
+          echo "Cargo.toml: $CARGO_VERSION"
+          if [ "$PKG_VERSION" != "$TAURI_VERSION" ] || [ "$PKG_VERSION" != "$CARGO_VERSION" ]; then
+            echo "::error::Version mismatch! package.json=$PKG_VERSION tauri.conf.json=$TAURI_VERSION Cargo.toml=$CARGO_VERSION"
+            exit 1
+          fi
+
       - name: No packages yet
         if: steps.check-packages.outputs.has_packages != 'true'
         run: echo "No workspace packages found. CI will run checks once packages are added."

@@ -29,8 +29,6 @@ permissions:
 jobs:
   build-tauri:
     name: Build (${{ matrix.config.name }})
-    # Desktop builds may fail without signing keys -- this is expected
-    continue-on-error: true
     strategy:
       fail-fast: false
       matrix:
