@@ -1,6 +1,6 @@
 # Roadmap
 
-> **Status: Implemented — v0.1.7 released. All phases through v2.0 completed (2658 tests passing, 0 typecheck errors).**
+> **Status: Implemented — v0.1.8 released. All phases through v2.0 completed (2658 tests passing, 0 typecheck errors).**
 > Updated 2026-03-07. All phases implemented per [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
 
 Development is organized into phases. Each phase produces a working system that builds on the previous one. No phase begins until the prior phase is stable and tested.
