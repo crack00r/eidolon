@@ -168,9 +168,21 @@ export function forgetEntity(dbManager: DatabaseManager, entity: string): Deleti
   auditTx();
 
   // --- VACUUM databases ---
-  try { dbManager.memory.exec("VACUUM"); } catch { /* Non-fatal */ }
-  try { dbManager.operational.exec("VACUUM"); } catch { /* Non-fatal */ }
-  try { dbManager.audit.exec("VACUUM"); } catch { /* Non-fatal */ }
+  try {
+    dbManager.memory.exec("VACUUM");
+  } catch {
+    /* Non-fatal */
+  }
+  try {
+    dbManager.operational.exec("VACUUM");
+  } catch {
+    /* Non-fatal */
+  }
+  try {
+    dbManager.audit.exec("VACUUM");
+  } catch {
+    /* Non-fatal */
+  }
 
   // --- PRIV-003: Delete all backups ---
   let backupsDeleted = 0;
@@ -178,7 +190,11 @@ export function forgetEntity(dbManager: DatabaseManager, entity: string): Deleti
     const dbDir = getDataDir();
     const dbConfig = { directory: dbDir, walMode: true, backupSchedule: "0 3 * * *" };
     const loggingConfig = {
-      level: "warn" as const, format: "pretty" as const, directory: "", maxSizeMb: 50, maxFiles: 10,
+      level: "warn" as const,
+      format: "pretty" as const,
+      directory: "",
+      maxSizeMb: 50,
+      maxFiles: 10,
     };
     const logger = createLogger(loggingConfig);
     const backupMgr = new BackupManager(dbManager, dbConfig, logger);
@@ -197,7 +213,12 @@ export function forgetEntity(dbManager: DatabaseManager, entity: string): Deleti
         "INSERT INTO audit_log (id, timestamp, actor, action, target, result, metadata) VALUES (?, ?, ?, ?, ?, ?, ?)",
       )
       .run(
-        crypto.randomUUID(), Date.now(), "system", "privacy:forget", entity, "success",
+        crypto.randomUUID(),
+        Date.now(),
+        "system",
+        "privacy:forget",
+        entity,
+        "success",
         JSON.stringify({ deletedCounts, backupsDeleted }),
       );
   } catch {
