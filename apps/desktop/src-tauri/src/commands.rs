@@ -1,3 +1,4 @@
+use rand::Rng;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::net::UdpSocket;
@@ -263,7 +264,7 @@ pub async fn get_config_path() -> String {
 #[tauri::command]
 pub async fn run_bun_script(script: String) -> Result<String, String> {
     let output = Command::new("bun")
-        .args(["eval", &script])
+        .args(["-e", &script])
         .output()
         .map_err(|e| format!("Bun execution failed: {}", e))?;
 
@@ -335,43 +336,118 @@ pub async fn get_client_config() -> Result<ClientConfig, String> {
     })
 }
 
+/// Generate a random hex string of the given byte length (output is 2x bytes in hex chars).
+fn random_hex(byte_len: usize) -> String {
+    let mut rng = rand::thread_rng();
+    let bytes: Vec<u8> = (0..byte_len).map(|_| rng.gen()).collect();
+    bytes.iter().map(|b| format!("{:02x}", b)).collect()
+}
+
+/// Try to detect the Tailscale IPv4 address. Returns None if unavailable.
+fn detect_tailscale_ip() -> Option<String> {
+    Command::new("tailscale")
+        .args(["ip", "-4"])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+}
+
+/// Return platform-appropriate (data_dir, log_dir) for Eidolon.
+fn get_platform_dirs() -> (String, String) {
+    let home = std::env::var("HOME").unwrap_or_default();
+    if cfg!(target_os = "macos") {
+        (
+            format!("{}/Library/Application Support/eidolon", home),
+            format!("{}/Library/Logs/eidolon", home),
+        )
+    } else if cfg!(target_os = "windows") {
+        let appdata = std::env::var("APPDATA").unwrap_or_default();
+        (
+            format!("{}/eidolon/data", appdata),
+            format!("{}/eidolon/logs", appdata),
+        )
+    } else {
+        (
+            format!("{}/.local/share/eidolon", home),
+            format!("{}/.local/share/eidolon/logs", home),
+        )
+    }
+}
+
 #[tauri::command]
 pub async fn onboard_setup_server(
     name: String,
     credential_type: String,
     api_key: Option<String>,
 ) -> Result<String, String> {
+    let _master_key = random_hex(32); // 64 hex chars
+    let token = random_hex(16); // 32 hex chars
+    let tailscale_ip = detect_tailscale_ip();
+
+    let (data_dir, log_dir) = get_platform_dirs();
+
+    // Ensure data and log directories exist
+    std::fs::create_dir_all(&data_dir)
+        .map_err(|e| format!("Failed to create data dir: {}", e))?;
+    std::fs::create_dir_all(&log_dir)
+        .map_err(|e| format!("Failed to create log dir: {}", e))?;
+
+    // Build credential object
     let cred_value = api_key.unwrap_or_else(|| "oauth".to_string());
-    let script = format!(
-        r#"
-        import {{ generateMasterKey, generateAuthToken, detectTailscale, buildGatewayConfig, initializeDatabases, buildServerConfig, writeConfig }} from "./packages/core/src/onboarding/index.ts";
-        import {{ getDataDir, getConfigPath }} from "./packages/core/src/config/paths.ts";
-        const masterKey = generateMasterKey();
-        const token = generateAuthToken();
-        const tailscaleIp = await detectTailscale();
-        const gateway = buildGatewayConfig({{ port: 8419, token, tailscaleIp: tailscaleIp ?? undefined }});
-        const dataDir = getDataDir();
-        const dbResult = initializeDatabases(dataDir);
-        if (!dbResult.ok) throw new Error(dbResult.error.message);
-        const credential = {{ type: "{}", name: "primary", credential: "{}" }};
-        const config = buildServerConfig({{ ownerName: "{}", claudeCredential: credential, gateway, dataDir }});
-        const configPath = getConfigPath();
-        const writeResult = writeConfig(configPath, config);
-        if (!writeResult.ok) throw new Error(writeResult.error.message);
-        console.log(JSON.stringify({{ ok: true, configPath, tailscaleIp, token, masterKey }}));
-        "#,
-        credential_type, cred_value, name
-    );
+    let credential = serde_json::json!({
+        "type": credential_type,
+        "name": "primary",
+        "credential": cred_value
+    });
 
-    let output = Command::new("bun")
-        .args(["eval", &script])
-        .output()
-        .map_err(|e| format!("Setup failed: {}", e))?;
+    let config = serde_json::json!({
+        "role": "server",
+        "identity": {
+            "name": "Eidolon",
+            "ownerName": name
+        },
+        "gateway": {
+            "port": 8419,
+            "auth": { "type": "none" },
+            "tls": { "enabled": false }
+        },
+        "database": {
+            "directory": data_dir,
+            "walMode": true
+        },
+        "logging": {
+            "level": "info",
+            "format": "pretty",
+            "directory": log_dir,
+            "maxSizeMb": 50,
+            "maxFiles": 10
+        },
+        "brain": {
+            "claudeAccounts": [credential]
+        }
+    });
 
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("Setup failed: {}", stderr));
+    // Write config file
+    let config_path = get_config_path_internal();
+    if let Some(parent) = std::path::Path::new(&config_path).parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| format!("Failed to create config dir: {}", e))?;
     }
+    std::fs::write(
+        &config_path,
+        serde_json::to_string_pretty(&config).unwrap(),
+    )
+    .map_err(|e| format!("Failed to write config: {}", e))?;
 
-    String::from_utf8(output.stdout).map_err(|e| e.to_string())
+    let result = serde_json::json!({
+        "ok": true,
+        "configPath": config_path,
+        "tailscaleIp": tailscale_ip,
+        "token": token
+    });
+
+    Ok(result.to_string())
 }
