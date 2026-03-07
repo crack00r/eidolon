@@ -138,7 +138,7 @@ export const GatewayConfigSchema = z.object({
     .default({}),
   auth: z
     .object({
-      type: z.enum(["token", "none"]).default("token"),
+      type: z.enum(["token", "none"]).default("none"),
       token: SecretRefSchema.or(z.string()).optional(),
     })
     .refine((auth) => auth.type !== "token" || auth.token !== undefined, {
