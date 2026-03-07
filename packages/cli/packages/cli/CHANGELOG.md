@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.1.7](https://github.com/crack00r/eidolon/compare/v0.1.6...v0.1.7) (2026-03-07)
+
+
+### Features
+
+* **core:** add security hardening, Memory MCP server, and PWA support ([9fb423d](https://github.com/crack00r/eidolon/commit/9fb423d0ede73744984cb8a2584793ee0345177d))
+* **core:** implement sqlite-vec ANN search, npm publish workflow, and doc corrections ([fe4e41c](https://github.com/crack00r/eidolon/commit/fe4e41cee6c4dcfcdb6542a22c0eb6f492b6d16b))
+* **core:** implement Wave 1 foundation tasks ([d257d1f](https://github.com/crack00r/eidolon/commit/d257d1f703122e95d09195cc6b6743304dd602fb))
+* **core:** implement Wave 2 core wiring and daemon decomposition ([13f5a15](https://github.com/crack00r/eidolon/commit/13f5a1585bc438a8a213b82f7302656beab16d74))
+* **core:** implement Wave 3 gateway methods, KG predictions, and learning pipeline ([6bc8054](https://github.com/crack00r/eidolon/commit/6bc805496076df26472ab4f6c12084eb89b9745a))
+* **core:** implement Waves 5-9 features, tests, and documentation ([05c2357](https://github.com/crack00r/eidolon/commit/05c235775582c1cdbd972c54f94656ccad12c40d))
+
+
+### Bug Fixes
+
+* close all completeness gaps from project audit ([446ac5a](https://github.com/crack00r/eidolon/commit/446ac5a9fc663a9a8b520d3f1b82aa72243b2ed9))
+
+
+### Tests
+
+* **core:** add Wave 4 integration tests and Wave 5 code quality improvements ([b7d6e61](https://github.com/crack00r/eidolon/commit/b7d6e61fffe4d003eaf5b6caf4fcd3a1dfd1e2f6))
+
 ## [0.1.6](https://github.com/crack00r/eidolon/compare/v0.1.5...v0.1.6) (2026-03-06)
 
 
