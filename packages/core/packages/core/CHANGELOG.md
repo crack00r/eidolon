@@ -1,5 +1,33 @@
 # Changelog
 
+## [0.1.10](https://github.com/crack00r/eidolon/compare/v0.1.9...v0.1.10) (2026-03-07)
+
+
+### Features
+
+* **core:** add shared onboarding modules with tests ([0d0c939](https://github.com/crack00r/eidolon/commit/0d0c939118aa155d2081e734abe6187f1422af10))
+* implement v2.1 features -- proactive intelligence, agentic workflows, slack, browser, MCP marketplace, wyoming, multi-user, project management, node replication ([157a7cb](https://github.com/crack00r/eidolon/commit/157a7cb5aae6f7fa6acbb3cf397372c352976adc))
+
+
+### Bug Fixes
+
+* **core,cli,protocol:** biome lint and formatting fixes across all packages ([52c5d4d](https://github.com/crack00r/eidolon/commit/52c5d4d836a2629d6a28abf78f7db4fd35b60c8e))
+* **core,cli:** resolve all lint errors across codebase ([bf3de05](https://github.com/crack00r/eidolon/commit/bf3de0597bf920da5f568129175726e40531fca7))
+* **core:** fix test failures in MemoryMcpServer and TelegramChannel ([a5541e1](https://github.com/crack00r/eidolon/commit/a5541e1f76fc56b519098fac023ea4d267f99701))
+* **core:** improve error message when config file is not found ([2c33e50](https://github.com/crack00r/eidolon/commit/2c33e50fb4bf5bbe3993fe6591592ca07712cc7b))
+* **core:** resolve typecheck errors from lint cleanup ([8b9377a](https://github.com/crack00r/eidolon/commit/8b9377a2db105221a0609b433b081eb47712b70a))
+
+
+### Code Refactoring
+
+* **cli:** delegate onboarding logic to shared core modules ([e1ca7b2](https://github.com/crack00r/eidolon/commit/e1ca7b2b4fc7e3bff74c3b8a1339999af9b993e7))
+
+
+### Miscellaneous
+
+* release main ([20ad0fb](https://github.com/crack00r/eidolon/commit/20ad0fbed8771bb2203b9a492d867a7caa4c4754))
+* release main ([2b7c6e1](https://github.com/crack00r/eidolon/commit/2b7c6e19f0901509e87d6bc92ee17ef74717a173))
+
 ## [0.1.9](https://github.com/crack00r/eidolon/compare/v0.1.8...v0.1.9) (2026-03-07)
 
 

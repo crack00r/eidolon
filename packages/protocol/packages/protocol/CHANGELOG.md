@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.1.10](https://github.com/crack00r/eidolon/compare/v0.1.9...v0.1.10) (2026-03-07)
+
+
+### Features
+
+* implement v2.1 features -- proactive intelligence, agentic workflows, slack, browser, MCP marketplace, wyoming, multi-user, project management, node replication ([157a7cb](https://github.com/crack00r/eidolon/commit/157a7cb5aae6f7fa6acbb3cf397372c352976adc))
+* **protocol:** add role and server fields to config schema ([cf45071](https://github.com/crack00r/eidolon/commit/cf45071e96ce65987e9883891c3fef2abd0c536e))
+
+
+### Bug Fixes
+
+* **core,cli,protocol:** biome lint and formatting fixes across all packages ([52c5d4d](https://github.com/crack00r/eidolon/commit/52c5d4d836a2629d6a28abf78f7db4fd35b60c8e))
+* **protocol,cli:** resolve lint errors and update test mocks ([74b018a](https://github.com/crack00r/eidolon/commit/74b018a798859d06309005598660cafe6bf75bff))
+* **protocol:** change gateway auth default from "token" to "none" ([ae9116e](https://github.com/crack00r/eidolon/commit/ae9116ec349dc770511eb5f744aaeb50cbbcdf59))
+* **protocol:** read VERSION from package.json instead of hardcoded "0.0.0" ([d75dfe5](https://github.com/crack00r/eidolon/commit/d75dfe5c08a4565ab9a29e0c36fcfa448b1e2244))
+
+
+### Miscellaneous
+
+* release main ([20ad0fb](https://github.com/crack00r/eidolon/commit/20ad0fbed8771bb2203b9a492d867a7caa4c4754))
+* release main ([2b7c6e1](https://github.com/crack00r/eidolon/commit/2b7c6e19f0901509e87d6bc92ee17ef74717a173))
+
 ## [0.1.9](https://github.com/crack00r/eidolon/compare/v0.1.8...v0.1.9) (2026-03-07)
 
 

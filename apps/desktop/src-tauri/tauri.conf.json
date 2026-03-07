@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/nicerdicer/tauri-v2-nightly-schema/refs/heads/main/src/tauri.conf.json",
   "productName": "Eidolon",
-  "version": "0.1.9",
+  "version": "0.1.11",
   "identifier": "com.eidolon.desktop",
   "build": {
     "devUrl": "http://localhost:1420",
