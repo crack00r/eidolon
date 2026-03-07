@@ -14,18 +14,12 @@ import type {
   OllamaProviderConfig,
 } from "@eidolon/protocol";
 import type { Logger } from "../logging/logger.ts";
-
-interface OllamaChatResponse {
-  model: string;
-  message: { role: string; content: string };
-  done: boolean;
-  prompt_eval_count?: number;
-  eval_count?: number;
-}
-
-interface OllamaTagsResponse {
-  models: Array<{ name: string; size: number; digest: string }>;
-}
+import {
+  OllamaChatResponseSchema,
+  OllamaChatStreamChunkSchema,
+  OllamaEmbeddingsResponseSchema,
+  OllamaTagsResponseSchema,
+} from "./schemas.ts";
 
 export class OllamaProvider implements ILLMProvider {
   readonly type = "ollama" as const;
@@ -50,8 +44,13 @@ export class OllamaProvider implements ILLMProvider {
     try {
       const res = await fetch(`${this.config.host}/api/tags`);
       if (!res.ok) return [];
-      const data = (await res.json()) as OllamaTagsResponse;
-      return data.models.map((m) => m.name);
+      const raw: unknown = await res.json();
+      const parsed = OllamaTagsResponseSchema.safeParse(raw);
+      if (!parsed.success) {
+        this._logger.warn("ollama", "Malformed /api/tags response", { error: parsed.error.message });
+        return [];
+      }
+      return parsed.data.models.map((m) => m.name);
     } catch {
       // Intentional: network/parse error returns empty model list
       return [];
@@ -82,7 +81,14 @@ export class OllamaProvider implements ILLMProvider {
       throw new Error(`Ollama chat failed (${res.status}): ${text}`);
     }
 
-    const data = (await res.json()) as OllamaChatResponse;
+    const raw: unknown = await res.json();
+    const parsed = OllamaChatResponseSchema.safeParse(raw);
+
+    if (!parsed.success) {
+      throw new Error(`Ollama chat response validation failed: ${parsed.error.message}`);
+    }
+
+    const data = parsed.data;
 
     return {
       content: data.message.content,
@@ -139,7 +145,15 @@ export class OllamaProvider implements ILLMProvider {
 
         for (const line of lines) {
           try {
-            const data = JSON.parse(line) as OllamaChatResponse;
+            const raw: unknown = JSON.parse(line);
+            const parsed = OllamaChatStreamChunkSchema.safeParse(raw);
+            if (!parsed.success) {
+              this._logger.warn("ollama", "Malformed streaming chunk, skipping", {
+                error: parsed.error.message,
+              });
+              continue;
+            }
+            const data = parsed.data;
             if (data.message?.content) {
               yield { type: "text", text: data.message.content };
             }
@@ -170,8 +184,12 @@ export class OllamaProvider implements ILLMProvider {
       });
 
       if (!res.ok) throw new Error(`Ollama embeddings failed (${res.status})`);
-      const data = (await res.json()) as { embedding: number[] };
-      results.push(new Float32Array(data.embedding));
+      const raw: unknown = await res.json();
+      const parsed = OllamaEmbeddingsResponseSchema.safeParse(raw);
+      if (!parsed.success) {
+        throw new Error(`Ollama embeddings response validation failed: ${parsed.error.message}`);
+      }
+      results.push(new Float32Array(parsed.data.embedding));
     }
 
     return results;

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Maskable icon: safe zone is the inner 80% (circular area), so keep
+       the important content centered and away from the edges. -->
+  <rect width="512" height="512" fill="#6366f1"/>
+  <text x="256" y="350" text-anchor="middle" font-family="system-ui, sans-serif" font-weight="700" font-size="300" fill="#ffffff">E</text>
+  <circle cx="340" cy="160" r="24" fill="#a5b4fc" opacity="0.8"/>
+</svg>

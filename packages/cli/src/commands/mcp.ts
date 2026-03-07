@@ -8,14 +8,25 @@
  *   search  -- search templates by keyword
  */
 
-import { readFileSync, writeFileSync } from "node:fs";
+import { Database } from "bun:sqlite";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import {
+  createConnection,
   getConfigPath,
+  getDataDir,
   getMcpTemplate,
+  KGEntityStore,
+  KGRelationStore,
   listMcpTemplates,
+  MEMORY_MIGRATIONS,
+  MemoryMcpServer,
+  MemoryStore,
+  runMigrations,
   searchMcpTemplates,
   templateToConfigEntry,
 } from "@eidolon/core";
+import { MEMORY_DB_FILENAME } from "@eidolon/protocol";
 import type { Command } from "commander";
 import { formatTable } from "../utils/formatter.ts";
 
@@ -238,4 +249,95 @@ export function registerMcpCommand(program: Command): void {
       console.log("Configured MCP servers:");
       console.log(formatTable(rows, ["Name", "Command", "Status"]));
     });
+
+  // -----------------------------------------------------------------------
+  // eidolon mcp serve
+  // -----------------------------------------------------------------------
+  cmd
+    .command("serve")
+    .description("Start the Eidolon memory MCP server on stdio (for use as an MCP server in Claude Code, Cline, etc.)")
+    .option("--db <path>", "Path to memory.db (defaults to standard data directory)")
+    .action(async (options: { readonly db?: string }) => {
+      // Resolve the memory database path
+      const dbPath = options.db ?? join(getDataDir(), MEMORY_DB_FILENAME);
+
+      if (!existsSync(dbPath) && !options.db) {
+        console.error(`Error: Memory database not found at ${dbPath}`);
+        console.error("Make sure Eidolon has been started at least once, or specify --db <path>.");
+        process.exitCode = 1;
+        return;
+      }
+
+      // Create a stderr-only logger so stdout stays clean for MCP protocol
+      const logger = createStderrLogger();
+
+      // Open the memory database (read-write for memory_add)
+      const connResult = createConnection(dbPath, { walMode: true });
+      if (!connResult.ok) {
+        console.error(`Error: Failed to open database at ${dbPath}: ${connResult.error.message}`);
+        process.exitCode = 1;
+        return;
+      }
+
+      const db = connResult.value;
+
+      // Run migrations to ensure schema is up to date
+      const migrationResult = runMigrations(db, "memory", MEMORY_MIGRATIONS, logger);
+      if (!migrationResult.ok) {
+        console.error(`Error: Failed to run migrations: ${migrationResult.error.message}`);
+        db.close();
+        process.exitCode = 1;
+        return;
+      }
+
+      // Initialize stores
+      const store = new MemoryStore(db, logger);
+      const kgEntities = new KGEntityStore(db, logger);
+      const kgRelations = new KGRelationStore(db, logger);
+
+      // Start the MCP server (search=null since we don't have embeddings in CLI)
+      const server = new MemoryMcpServer({
+        store,
+        search: null,
+        kgEntities,
+        kgRelations,
+        logger,
+      });
+
+      // Handle graceful shutdown
+      const shutdown = (): void => {
+        server.stop();
+        db.close();
+      };
+      process.on("SIGINT", shutdown);
+      process.on("SIGTERM", shutdown);
+
+      await server.start();
+
+      // Clean up after server stops
+      db.close();
+    });
+}
+
+/**
+ * Create a logger that writes to stderr only (keeps stdout clean for MCP protocol).
+ * Uses a minimal inline implementation to avoid pulling in the full logging stack.
+ */
+function createStderrLogger(): {
+  debug(module: string, message: string, data?: Record<string, unknown>): void;
+  info(module: string, message: string, data?: Record<string, unknown>): void;
+  warn(module: string, message: string, data?: Record<string, unknown>): void;
+  error(module: string, message: string, error?: unknown, data?: Record<string, unknown>): void;
+  child(module: string): ReturnType<typeof createStderrLogger>;
+} {
+  const write = (level: string, module: string, message: string): void => {
+    process.stderr.write(`[${level}] ${module}: ${message}\n`);
+  };
+  return {
+    debug: () => {},
+    info: (mod, msg) => write("INFO", mod, msg),
+    warn: (mod, msg) => write("WARN", mod, msg),
+    error: (mod, msg) => write("ERROR", mod, msg),
+    child: () => createStderrLogger(),
+  };
 }

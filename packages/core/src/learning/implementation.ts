@@ -67,6 +67,25 @@ export interface ImplementationRunOptions {
 /** Maximum slug length in generated branch names. */
 const MAX_SLUG_LENGTH = 50;
 
+/** Maximum length for the ID prefix portion of branch names. */
+const MAX_ID_PREFIX_LENGTH = 8;
+
+/**
+ * Sanitize a string for use in a git branch name.
+ * Strips all characters except `[a-zA-Z0-9._-]`, collapses consecutive
+ * hyphens, trims leading/trailing hyphens, and enforces a maximum length.
+ *
+ * This prevents command injection when the branch name is interpolated
+ * into shell commands (e.g., `git checkout -b <branch>`).
+ */
+export function sanitizeBranchName(raw: string): string {
+  return raw
+    .replace(/[^a-zA-Z0-9._-]/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 60);
+}
+
 /**
  * Slugify a string: lowercase, replace non-alphanumeric with hyphens,
  * collapse consecutive hyphens, trim leading/trailing hyphens.
@@ -242,12 +261,24 @@ export class ImplementationPipeline {
 
   /**
    * Generate a branch name from a discovery ID and title.
-   * Format: learning/{first8charsOfId}-{slug}
-   * Slug is lowercase, max 50 chars.
+   * Format: learning/{sanitizedIdPrefix}-{slug}
+   *
+   * Both the ID prefix and the title slug are sanitized to prevent
+   * command injection when the branch name is used in shell commands.
    */
   static generateBranchName(discoveryId: string, title: string): string {
-    const idPrefix = discoveryId.slice(0, 8);
+    const idPrefix = sanitizeBranchName(discoveryId.slice(0, MAX_ID_PREFIX_LENGTH));
     const slug = slugify(title, MAX_SLUG_LENGTH);
+    // Guard against empty components after sanitization
+    if (idPrefix.length === 0 && slug.length === 0) {
+      return `learning/discovery-${Date.now()}`;
+    }
+    if (idPrefix.length === 0) {
+      return `learning/${slug}`;
+    }
+    if (slug.length === 0) {
+      return `learning/${idPrefix}`;
+    }
     return `learning/${idPrefix}-${slug}`;
   }
 

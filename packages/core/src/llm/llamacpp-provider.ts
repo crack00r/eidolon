@@ -14,22 +14,7 @@ import type {
   LlamaCppProviderConfig,
 } from "@eidolon/protocol";
 import type { Logger } from "../logging/logger.ts";
-
-interface LlamaCppChatResponse {
-  choices: Array<{
-    message: { role: string; content: string };
-    finish_reason: string;
-  }>;
-  usage?: { prompt_tokens: number; completion_tokens: number };
-  model: string;
-}
-
-interface LlamaCppStreamChunk {
-  choices: Array<{
-    delta: { content?: string };
-    finish_reason: string | null;
-  }>;
-}
+import { LlamaCppChatResponseSchema, LlamaCppStreamChunkSchema } from "./schemas.ts";
 
 export class LlamaCppProvider implements ILLMProvider {
   readonly type = "llamacpp" as const;
@@ -82,7 +67,14 @@ export class LlamaCppProvider implements ILLMProvider {
       throw new Error(`llama.cpp chat failed (${res.status}): ${text}`);
     }
 
-    const data = (await res.json()) as LlamaCppChatResponse;
+    const raw: unknown = await res.json();
+    const parsed = LlamaCppChatResponseSchema.safeParse(raw);
+
+    if (!parsed.success) {
+      throw new Error(`llama.cpp chat response validation failed: ${parsed.error.message}`);
+    }
+
+    const data = parsed.data;
     const choice = data.choices[0];
 
     return {
@@ -137,8 +129,15 @@ export class LlamaCppProvider implements ILLMProvider {
           if (data === "[DONE]") continue;
 
           try {
-            const chunk = JSON.parse(data) as LlamaCppStreamChunk;
-            const delta = chunk.choices[0]?.delta.content;
+            const raw: unknown = JSON.parse(data);
+            const parsed = LlamaCppStreamChunkSchema.safeParse(raw);
+            if (!parsed.success) {
+              this._logger.warn("llamacpp", "Malformed streaming chunk, skipping", {
+                error: parsed.error.message,
+              });
+              continue;
+            }
+            const delta = parsed.data.choices[0]?.delta.content;
             if (delta) {
               yield { type: "text", text: delta };
             }
