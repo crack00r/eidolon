@@ -40,7 +40,14 @@
     },
     "apps/desktop": {
       "component": "desktop",
-      "changelog-path": "apps/desktop/CHANGELOG.md"
+      "changelog-path": "apps/desktop/CHANGELOG.md",
+      "extra-files": [
+        {
+          "type": "json",
+          "path": "apps/desktop/src-tauri/tauri.conf.json",
+          "jsonpath": "$.version"
+        }
+      ]
     }
   }
 }
