@@ -1,0 +1,57 @@
+services:
+  eidolon:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: eidolon
+    restart: unless-stopped
+    ports:
+      - "18789:18789"
+    volumes:
+      - eidolon-data:/app/data
+      - ./config:/app/config:ro
+    environment:
+      - EIDOLON_DATA_DIR=/app/data
+      - EIDOLON_CONFIG_DIR=/app/config
+      - GPU_WORKER_URL=http://gpu-worker:8420
+    networks:
+      - eidolon-net
+    healthcheck:
+      test: ["CMD", "bun", "-e", "fetch('http://localhost:18789/health').then(r => { if (!r.ok) process.exit(1) })"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+
+  gpu-worker:
+    build:
+      context: ./services/gpu-worker
+      dockerfile: Dockerfile.cuda
+    container_name: eidolon-gpu-worker
+    restart: unless-stopped
+    profiles:
+      - gpu
+    ports:
+      - "8420:8420"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    networks:
+      - eidolon-net
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8420/health')"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+
+volumes:
+  eidolon-data:
+
+networks:
+  eidolon-net:
+    driver: bridge

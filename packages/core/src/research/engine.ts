@@ -4,162 +4,40 @@
  * Runs a research session via IClaudeProcess, parses the response for
  * structured findings and citations, and returns a structured result.
  * Designed to be triggered from the Cognitive Loop or gateway RPC.
+ *
+ * Types, constants, and helpers are in engine-helpers.ts.
  */
 
 import { randomUUID } from "node:crypto";
-import type { ClaudeSessionOptions, EidolonError, IClaudeProcess, Result, StreamEvent } from "@eidolon/protocol";
+import type { ClaudeSessionOptions, EidolonError, IClaudeProcess, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 import type { Logger } from "../logging/logger.ts";
+import {
+  BARE_URL_PATTERN,
+  collectStreamText,
+  DEFAULT_MAX_SOURCES,
+  DEFAULT_TIMEOUT_MS,
+  deduplicateCitations,
+  filterValidSources,
+  inferSourceFromUrl,
+  MARKDOWN_LINK_PATTERN,
+  MAX_QUERY_LENGTH,
+  NUMBERED_REF_PATTERN,
+  PARENTHETICAL_PATTERN,
+} from "./engine-helpers.ts";
+import type { Citation, ResearchEngineConfig, ResearchFinding, ResearchRequest, ResearchResult, ResearchSource } from "./engine-helpers.ts";
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-export type ResearchSource = "web" | "academic" | "github" | "hackernews" | "reddit";
-
-export interface ResearchRequest {
-  readonly query: string;
-  readonly sources: readonly ResearchSource[];
-  readonly maxSources: number;
-  readonly deliverTo?: string;
-}
-
-export interface Citation {
-  readonly url: string;
-  readonly title: string;
-  readonly source: ResearchSource;
-  readonly relevance: number;
-  readonly snippet: string;
-}
-
-export interface ResearchFinding {
-  readonly title: string;
-  readonly summary: string;
-  readonly citations: readonly Citation[];
-  readonly confidence: number;
-}
-
-export interface ResearchResult {
-  readonly id: string;
-  readonly query: string;
-  readonly findings: readonly ResearchFinding[];
-  readonly summary: string;
-  readonly citations: readonly Citation[];
-  readonly tokensUsed: number;
-  readonly durationMs: number;
-  readonly completedAt: number;
-}
-
-export interface ResearchEngineConfig {
-  readonly workspaceDir: string;
-  readonly maxSources: number;
-  /** Optional model override for the research session. */
-  readonly model?: string;
-  /** Optional timeout for the research session in milliseconds. */
-  readonly timeoutMs?: number;
-}
-
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-
-const VALID_SOURCES = new Set<string>(["web", "academic", "github", "hackernews", "reddit"]);
-
-const DEFAULT_MAX_SOURCES = 10;
-const DEFAULT_TIMEOUT_MS = 300_000; // 5 minutes
-const MAX_QUERY_LENGTH = 4096;
-
-/**
- * Regex patterns for extracting citations from text.
- * Supports formats:
- *  - Markdown links: [title](url)
- *  - Numbered refs: [1] url or [1]: url
- *  - Parenthetical: (Source: url)
- *  - Bare URLs: https://...
- */
-const MARKDOWN_LINK_PATTERN = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g;
-const NUMBERED_REF_PATTERN = /\[(\d+)\]:?\s+(https?:\/\/[^\s]+)/g;
-const PARENTHETICAL_PATTERN = /\((?:Source|Ref|Reference|Citation|See):\s*(https?:\/\/[^\s)]+)\)/gi;
-const BARE_URL_PATTERN = /(?<![[(])(https?:\/\/[^\s"'>)\]]+)/g;
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function validateSource(s: string): s is ResearchSource {
-  return VALID_SOURCES.has(s);
-}
-
-function filterValidSources(sources: readonly string[]): readonly ResearchSource[] {
-  const valid: ResearchSource[] = [];
-  for (const s of sources) {
-    if (validateSource(s)) {
-      valid.push(s);
-    }
-  }
-  return valid;
-}
-
-/**
- * Infer a ResearchSource from a URL's hostname.
- */
-function inferSourceFromUrl(url: string): ResearchSource {
-  try {
-    const hostname = new URL(url).hostname.toLowerCase();
-    if (hostname.includes("github.com") || hostname.includes("github.io")) return "github";
-    if (hostname.includes("reddit.com") || hostname.includes("redd.it")) return "reddit";
-    if (hostname.includes("news.ycombinator.com") || hostname.includes("hn.algolia.com")) return "hackernews";
-    if (
-      hostname.includes("arxiv.org") ||
-      hostname.includes("scholar.google") ||
-      hostname.includes("semantic") ||
-      hostname.includes("doi.org") ||
-      hostname.includes("ieee.org") ||
-      hostname.includes("acm.org")
-    ) {
-      return "academic";
-    }
-  } catch {
-    // Invalid URL -- fall through to web
-  }
-  return "web";
-}
-
-/**
- * Deduplicate citations by URL, keeping the first occurrence.
- */
-function deduplicateCitations(citations: Citation[]): Citation[] {
-  const seen = new Set<string>();
-  const unique: Citation[] = [];
-  for (const c of citations) {
-    const normalized = c.url.toLowerCase().replace(/\/+$/, "");
-    if (!seen.has(normalized)) {
-      seen.add(normalized);
-      unique.push(c);
-    }
-  }
-  return unique;
-}
-
-/**
- * Collect text content from a stream of events.
- */
-async function collectStreamText(
-  stream: AsyncIterable<StreamEvent>,
-): Promise<{ text: string; hasError: boolean; errorMessage: string }> {
-  const chunks: string[] = [];
-  let hasError = false;
-  let errorMessage = "";
-  for await (const event of stream) {
-    if (event.type === "text" && event.content) {
-      chunks.push(event.content);
-    } else if (event.type === "error") {
-      hasError = true;
-      errorMessage = event.error ?? "Unknown error";
-    }
-  }
-  return { text: chunks.join(""), hasError, errorMessage };
-}
+// Re-export all types and helpers for backward compatibility
+export type { Citation, ResearchEngineConfig, ResearchFinding, ResearchRequest, ResearchResult, ResearchSource } from "./engine-helpers.ts";
+export {
+  collectStreamText,
+  DEFAULT_MAX_SOURCES,
+  DEFAULT_TIMEOUT_MS,
+  deduplicateCitations,
+  filterValidSources,
+  inferSourceFromUrl,
+  MAX_QUERY_LENGTH,
+} from "./engine-helpers.ts";
 
 // ---------------------------------------------------------------------------
 // ResearchEngine
@@ -415,19 +293,13 @@ export class ResearchEngine {
 
   /**
    * Parse findings from the response text.
-   *
-   * Looks for "### Finding:" or "## Finding:" section headers and extracts
-   * the title, body, confidence, and associated citations.
    */
   private parseFindings(text: string, allCitations: readonly Citation[]): readonly ResearchFinding[] {
     const findings: ResearchFinding[] = [];
-
-    // Match heading patterns like "### Finding: Title" or "## Finding: Title"
     const findingPattern = /^#{2,3}\s+Finding:\s*(.+)$/gm;
     const matches = [...text.matchAll(findingPattern)];
 
     if (matches.length === 0) {
-      // Fallback: if no structured findings, treat the whole response as one
       if (text.trim().length > 0 && allCitations.length > 0) {
         findings.push({
           title: "Research Results",
@@ -447,11 +319,7 @@ export class ResearchEngine {
       const startIndex = (match.index ?? 0) + match[0].length;
       const endIndex = i + 1 < matches.length ? (matches[i + 1]?.index ?? text.length) : text.length;
       const body = text.slice(startIndex, endIndex).trim();
-
-      // Extract confidence from "**Confidence:** high/medium/low"
       const confidence = this.parseConfidence(body);
-
-      // Find citations that appear in this finding's body
       const findingCitations = allCitations.filter((c) => body.includes(c.url) || body.includes(c.title));
 
       findings.push({
@@ -465,9 +333,7 @@ export class ResearchEngine {
     return findings;
   }
 
-  /**
-   * Extract confidence level from finding body text.
-   */
+  /** Extract confidence level from finding body text. */
   private parseConfidence(body: string): number {
     const confidenceMatch = /\*?\*?Confidence:?\*?\*?\s*(high|medium|low)/i.exec(body);
     if (!confidenceMatch) return 0.5;
@@ -477,35 +343,26 @@ export class ResearchEngine {
     return 0.4;
   }
 
-  /**
-   * Clean a finding body by removing the confidence line and trimming.
-   */
+  /** Clean a finding body by removing the confidence line and trimming. */
   private cleanFindingBody(body: string): string {
     return body
       .replace(/\*?\*?Confidence:?\*?\*?\s*(high|medium|low)\s*/gi, "")
       .replace(/^---+\s*/gm, "")
       .trim()
-      .slice(0, 2000); // Limit summary length
+      .slice(0, 2000);
   }
 
-  /**
-   * Extract the executive summary from the response.
-   * Looks for "### Summary" or "## Summary" sections.
-   */
+  /** Extract the executive summary from the response. */
   private extractSummary(text: string): string {
     const summaryMatch = /^#{2,3}\s+Summary\s*$([\s\S]*?)(?=^#{2,3}\s|$)/im.exec(text);
     if (summaryMatch?.[1]) {
       return summaryMatch[1].trim().slice(0, 3000);
     }
-
-    // Fallback: take the first few paragraphs
     const paragraphs = text.split(/\n\n+/).filter((p) => p.trim().length > 0);
     return paragraphs.slice(0, 3).join("\n\n").trim().slice(0, 3000);
   }
 
-  /**
-   * Extract a snippet of text around a given index for citation context.
-   */
+  /** Extract a snippet of text around a given index for citation context. */
   private extractSnippetAround(text: string, index: number): string {
     const start = Math.max(0, index - 100);
     const end = Math.min(text.length, index + 200);

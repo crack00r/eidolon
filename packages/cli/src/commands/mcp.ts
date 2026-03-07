@@ -29,6 +29,7 @@ import {
 import { MEMORY_DB_FILENAME } from "@eidolon/protocol";
 import type { Command } from "commander";
 import { formatTable } from "../utils/formatter.ts";
+import { registerMcpMarketplaceCommands } from "./mcp-marketplace.ts";
 
 export function registerMcpCommand(program: Command): void {
   const cmd = program.command("mcp").description("Manage MCP server integrations");
@@ -249,6 +250,11 @@ export function registerMcpCommand(program: Command): void {
       console.log("Configured MCP servers:");
       console.log(formatTable(rows, ["Name", "Command", "Status"]));
     });
+
+  // -----------------------------------------------------------------------
+  // Marketplace commands (install, remove, discover, installed)
+  // -----------------------------------------------------------------------
+  registerMcpMarketplaceCommands(cmd);
 
   // -----------------------------------------------------------------------
   // eidolon mcp serve

@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Ask a Question
+    url: https://github.com/crack00r/eidolon/discussions/categories/q-a
+    about: Use GitHub Discussions for questions, troubleshooting, and general help.
+  - name: Ideas and Feedback
+    url: https://github.com/crack00r/eidolon/discussions/categories/ideas
+    about: Share ideas or give feedback in GitHub Discussions.

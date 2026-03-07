@@ -53,6 +53,15 @@ body:
     validations:
       required: true
 
+  - type: input
+    id: bun-version
+    attributes:
+      label: Bun Version
+      description: Output of `bun --version`
+      placeholder: "1.2.0"
+    validations:
+      required: false
+
   - type: dropdown
     id: platform
     attributes:

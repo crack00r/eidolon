@@ -50,7 +50,18 @@ export type EventType =
   | "calendar:sync_completed"
   | "ha:state_changed"
   | "ha:anomaly_detected"
-  | "ha:scene_executed";
+  | "ha:scene_executed"
+  | "anticipation:check"
+  | "anticipation:suggestion"
+  | "anticipation:dismissed"
+  | "anticipation:acted"
+  | "workflow:trigger"
+  | "workflow:step_ready"
+  | "workflow:step_completed"
+  | "workflow:step_failed"
+  | "workflow:completed"
+  | "workflow:failed"
+  | "workflow:cancelled";
 
 export interface BusEvent<T = unknown> {
   readonly id: string;
@@ -168,4 +179,38 @@ export interface ResearchFailedPayload {
   readonly researchId: string;
   readonly query: string;
   readonly error: string;
+}
+
+// ---------------------------------------------------------------------------
+// Anticipation event payloads
+// ---------------------------------------------------------------------------
+
+export type PatternType =
+  | "meeting_prep"
+  | "travel_prep"
+  | "health_nudge"
+  | "follow_up"
+  | "birthday_reminder"
+  | "routine_deviation"
+  | "commute_alert";
+
+export type AnticipationFeedback = "helpful" | "irrelevant" | "annoying";
+
+export interface AnticipationSuggestionPayload {
+  readonly suggestionId: string;
+  readonly patternType: PatternType;
+  readonly title: string;
+  readonly body: string;
+  readonly channelId: string;
+  readonly priority: "critical" | "normal" | "low";
+  readonly actionable: boolean;
+  readonly suggestedAction?: string;
+  readonly calendarEventId?: string;
+  readonly entityKey: string;
+  readonly confidence: number;
+}
+
+export interface AnticipationFeedbackPayload {
+  readonly suggestionId: string;
+  readonly feedback: AnticipationFeedback;
 }

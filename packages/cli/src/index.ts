@@ -17,6 +17,8 @@ import { registerOnboardCommand } from "./commands/onboard.ts";
 import { registerPairCommand } from "./commands/pair.ts";
 import { registerPluginCommand } from "./commands/plugin.ts";
 import { registerPrivacyCommand } from "./commands/privacy.ts";
+import { registerProjectsCommand } from "./commands/projects.ts";
+import { registerReplicationCommand } from "./commands/replication.ts";
 import { registerSecretsCommand } from "./commands/secrets.ts";
 
 const program = new Command();
@@ -37,6 +39,8 @@ registerLlmCommand(program);
 registerPrivacyCommand(program);
 registerOnboardCommand(program);
 registerPairCommand(program);
+registerProjectsCommand(program);
+registerReplicationCommand(program);
 
 program.parse();
 

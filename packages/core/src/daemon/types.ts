@@ -3,6 +3,8 @@
  */
 
 import type { EidolonConfig } from "@eidolon/protocol";
+import type { AnticipationEngine } from "../anticipation/engine.ts";
+import type { SuggestionHistory } from "../anticipation/history.ts";
 import type { AuditLogger } from "../audit/logger.ts";
 import type { BackupManager } from "../backup/manager.ts";
 import type { CalendarManager } from "../calendar/manager.ts";
@@ -61,6 +63,8 @@ import type { SecretStore } from "../secrets/store.ts";
 import type { ApprovalManager } from "../security/approval-manager.ts";
 import type { MetricsBridgeHandle } from "../telemetry/metrics-bridge.ts";
 import type { TelemetryProvider } from "../telemetry/provider.ts";
+import type { WorkflowEngine } from "../workflow/engine.ts";
+import type { WorkflowStore } from "../workflow/store.ts";
 
 export interface DaemonOptions {
   readonly configPath?: string;
@@ -131,4 +135,8 @@ export interface InitializedModules {
   tailscaleDetector?: TailscaleDetector;
   approvalManager?: ApprovalManager;
   discoveryBroadcaster?: DiscoveryBroadcaster;
+  anticipationEngine?: AnticipationEngine;
+  suggestionHistory?: SuggestionHistory;
+  workflowStore?: WorkflowStore;
+  workflowEngine?: WorkflowEngine;
 }

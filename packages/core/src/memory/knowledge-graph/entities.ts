@@ -10,7 +10,7 @@ import { randomUUID } from "node:crypto";
 import type { EidolonError, KGEntity, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 import type { Logger } from "../../logging/logger.ts";
-import { stringSimilarity } from "../dreaming/housekeeping.ts";
+import { findOrCreateWithResolution, findSimilarEntities, mergeEntities } from "./entities-resolution.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -37,26 +37,6 @@ const DEFAULT_ENTITY_RESOLUTION_THRESHOLDS: EntityResolutionThresholds = {
   technologyThreshold: 0.9,
   conceptThreshold: 0.85,
 };
-
-/**
- * Map entity type to the appropriate resolution threshold.
- * Types not explicitly configured fall back to the technology threshold.
- */
-function getThresholdForType(type: string, thresholds: EntityResolutionThresholds): number {
-  switch (type) {
-    case "person":
-      return thresholds.personThreshold;
-    case "technology":
-    case "device":
-    case "project":
-      return thresholds.technologyThreshold;
-    case "concept":
-    case "place":
-      return thresholds.conceptThreshold;
-    default:
-      return thresholds.technologyThreshold;
-  }
-}
 
 export interface CreateEntityInput {
   readonly name: string;
@@ -373,120 +353,28 @@ export class KGEntityStore {
   /**
    * Find entities with names similar to the given name, using per-type
    * thresholds from the entity resolution config.
-   *
-   * This powers entity deduplication: before creating a new entity, call
-   * this to check if a sufficiently similar one already exists.
-   *
-   * @param name       - The candidate entity name.
-   * @param type       - The entity type (determines which threshold to use).
-   * @param thresholds - Per-type similarity thresholds from config.
-   * @returns Matching entities that exceed the threshold for the given type.
    */
   findSimilar(
     name: string,
     type: EntityType,
     thresholds?: EntityResolutionThresholds,
   ): Result<Array<{ entity: KGEntity; similarity: number }>, EidolonError> {
-    const resolvedThresholds = thresholds ?? this.defaultThresholds;
-    const threshold = getThresholdForType(type, resolvedThresholds);
-
-    try {
-      // Load all entities of the same type (entity count per type is typically small)
-      const rows = this.db.query("SELECT * FROM kg_entities WHERE type = ?").all(type) as EntityRow[];
-
-      const matches: Array<{ entity: KGEntity; similarity: number }> = [];
-
-      for (const row of rows) {
-        const sim = stringSimilarity(name, row.name);
-        if (sim >= threshold) {
-          matches.push({ entity: rowToEntity(row), similarity: sim });
-        }
-      }
-
-      // Sort by similarity descending
-      matches.sort((a, b) => b.similarity - a.similarity);
-
-      this.logger.debug("findSimilar", `Found ${matches.length} similar entities for "${name}"`, {
-        type,
-        threshold,
-        candidateCount: rows.length,
-      });
-
-      return Ok(matches);
-    } catch (cause) {
-      return Err(createError(ErrorCode.DB_QUERY_FAILED, `Failed to find similar entities for "${name}"`, cause));
-    }
+    return findSimilarEntities(this.db, this.logger, name, type, this.defaultThresholds, thresholds);
   }
 
   /**
    * Find or create with deduplication: looks for existing entities of the
    * same type whose name exceeds the configured similarity threshold.
-   * If a similar entity is found, returns it; otherwise creates a new one.
-   *
-   * @param input      - The entity to find or create.
-   * @param thresholds - Per-type similarity thresholds from config.
    */
   findOrCreateWithResolution(
     input: CreateEntityInput,
     thresholds?: EntityResolutionThresholds,
   ): Result<{ entity: KGEntity; created: boolean }, EidolonError> {
-    // First check for similar entities using configurable thresholds
-    const similarResult = this.findSimilar(input.name, input.type, thresholds);
-    if (!similarResult.ok) return similarResult;
-
-    if (similarResult.value.length > 0) {
-      const best = similarResult.value[0];
-      if (best) {
-        this.logger.debug(
-          "findOrCreateWithResolution",
-          `Resolved "${input.name}" to existing entity "${best.entity.name}"`,
-          {
-            similarity: best.similarity,
-            type: input.type,
-          },
-        );
-        return Ok({ entity: best.entity, created: false });
-      }
-    }
-
-    // No similar entity found, create a new one
-    const createResult = this.create(input);
-    if (!createResult.ok) return createResult;
-    return Ok({ entity: createResult.value, created: true });
+    return findOrCreateWithResolution(this, this.logger, input, thresholds);
   }
 
   /** Merge two entities: keep target, move all relations from source to target, delete source. */
   merge(sourceId: string, targetId: string): Result<void, EidolonError> {
-    try {
-      const source = this.db.query("SELECT 1 FROM kg_entities WHERE id = ?").get(sourceId);
-      if (!source) {
-        return Err(createError(ErrorCode.DB_QUERY_FAILED, `Source entity ${sourceId} not found`));
-      }
-      const target = this.db.query("SELECT 1 FROM kg_entities WHERE id = ?").get(targetId);
-      if (!target) {
-        return Err(createError(ErrorCode.DB_QUERY_FAILED, `Target entity ${targetId} not found`));
-      }
-
-      const mergeFn = this.db.transaction(() => {
-        // Move outgoing relations (source_id = sourceId) to targetId
-        this.db.query("UPDATE kg_relations SET source_id = ? WHERE source_id = ?").run(targetId, sourceId);
-
-        // Move incoming relations (target_id = sourceId) to targetId
-        this.db.query("UPDATE kg_relations SET target_id = ? WHERE target_id = ?").run(targetId, sourceId);
-
-        // Delete self-loop relations created by the merge (scoped to targetId only)
-        this.db.query("DELETE FROM kg_relations WHERE source_id = ? AND source_id = target_id").run(targetId);
-
-        // Delete source entity
-        this.db.query("DELETE FROM kg_entities WHERE id = ?").run(sourceId);
-      });
-
-      mergeFn();
-
-      this.logger.debug("merge", `Merged entity ${sourceId} into ${targetId}`);
-      return Ok(undefined);
-    } catch (cause) {
-      return Err(createError(ErrorCode.DB_QUERY_FAILED, `Failed to merge entities`, cause));
-    }
+    return mergeEntities(this.db, this.logger, sourceId, targetId);
   }
 }

@@ -23,10 +23,6 @@ targets:
     platform: iOS
     sources:
       - path: Eidolon
-        excludes:
-          - "**/*.xcassets"
-      - path: Eidolon/Assets.xcassets
-        type: folder
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.eidolon.ios

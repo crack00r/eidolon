@@ -58,6 +58,82 @@
 - Vector search: **brute-force cosine similarity scan** with batching -- NOT sqlite-vec ANN. File: `packages/core/src/memory/search.ts`
 - sqlite-vec: referenced in code comments as future optimization, `Vec0KnnRow` and `VEC0_TABLE_NAME` exist but are unused dead code
 
+## Browser Automation Module
+- Lives in `packages/core/src/browser/`
+- `IBrowserClient` interface: navigate, snapshot, click, fill, screenshot, evaluate, close, isConnected
+- `PlaywrightClient`: production impl with lazy browser launch, persistent profile, dynamic import
+- `FakeBrowserClient`: test double recording calls and returning configurable responses
+- `BrowserManager`: lifecycle wrapper with screenshot cache, start/stop, config guard
+- `BrowserTools` (`tools.ts`): MCP-style tool definitions (6 tools: browse_navigate, browse_click, browse_fill, browse_screenshot, browse_snapshot, browse_evaluate)
+- Config: `BrowserConfigSchema` in `config-services.ts`, added to `EidolonConfigSchema` as `browser: BrowserConfigSchema.default({})`
+- Playwright is optional: ambient `playwright.d.ts` declaration (same pattern as `@slack/bolt`)
+- Logger in tests needs full LoggingConfig: `{ level, format, directory, maxSizeMb, maxFiles }`
+- Added error codes: BROWSER_NOT_AVAILABLE, BROWSER_NAVIGATION_FAILED, BROWSER_ACTION_FAILED, BROWSER_NOT_STARTED, INVALID_INPUT, INVALID_STATE, DEPENDENCY_MISSING
+
+## Wyoming Protocol Module
+- Lives in `packages/core/src/wyoming/` (4 source files + index, 3 test files, 40 tests)
+- `protocol.ts`: WyomingParser (streaming), serializeEvent(), Zod schemas for all event types
+- `handler.ts`: WyomingHandler processes satellite events (STT/TTS via GPU, EventBus integration)
+- `server.ts`: WyomingServer TCP server with connection management, satellite allowlist
+- `config.ts`: WyomingConfigSchema (enabled, port, allowedSatellites, audio settings)
+- Error codes: WYOMING_CONNECTION_REJECTED, WYOMING_PROTOCOL_ERROR, WYOMING_HANDLER_FAILED
+- Events table schema for tests must use `timestamp` column (not `created_at`), no `status` column
+- Test logger needs full config: `{ level: "error", format: "json", directory: "", maxSizeMb: 10, maxFiles: 1 }`
+
+## Multi-User Support
+- Module: `packages/core/src/users/` (schema.ts, manager.ts, channel-resolver.ts, memory-scope.ts)
+- Config: `UsersConfigSchema` in `config-services.ts`, added as `users:` in EidolonConfigSchema
+- DB: `users` table in operational.db (migration v12), `user_id` column in `memories` table (migration v6 in memory.db)
+- `DEFAULT_USER_ID = "default"` for backward compatibility
+- `CreateUserInput` uses `z.input<>` (not `z.infer<>`) to allow partial objects with defaults
+- `ScopedMemoryStore` wraps memory DB with user_id filtering (list, count, create, searchText)
+- `ChannelResolver` maps channel identities to Eidolon users (auto-create, fallback to default)
+- Pre-existing type errors in `workflow/` and `replication/` modules are NOT from multi-user changes
+
+## Replication (Disaster Recovery)
+- Module: `packages/core/src/replication/` (schema.ts, protocol.ts, snapshot.ts, manager.ts, health.ts)
+- Config: `ReplicationConfigSchema` in `config-services.ts`, added as `replication:` in EidolonConfigSchema
+- CLI: `packages/cli/src/commands/replication.ts` (status, promote, demote)
+- CLI package name is `@eidolon-ai/cli` (not `@eidolon/cli`)
+- Phase 1: Full DB snapshot via VACUUM INTO every 5 min; Phase 2 will add WAL streaming
+- Protocol: Zod-validated JSON messages over WebSocket (heartbeat, snapshot_*, promote, demote, error)
+- Snapshot flow: createSnapshot -> chunkSnapshotFile -> transfer -> createSnapshotReceiver -> finalize with checksum
+- Auto-failover: secondary promotes itself after missedHeartbeatsThreshold missed heartbeats
+- 46 tests across 4 test files (schema, protocol, manager, snapshot, health)
+
+## Anticipation Engine (Proactive Intelligence)
+- Module: `packages/core/src/anticipation/` (14 files, ~1225 LOC)
+- Config: `AnticipationConfigSchema` in `packages/protocol/src/config-anticipation.ts`
+- 5 detectors: MeetingPrep, TravelPrep, HealthNudge, FollowUp, Birthday
+- Pipeline: detect -> trigger evaluate -> enrich -> compose -> publish events
+- DB: `anticipation_history` + `anticipation_suppressions` tables in operational.db (migration v14)
+- Event types: `anticipation:check`, `anticipation:suggestion`, `anticipation:dismissed`, `anticipation:acted`
+- Templates in German (user preference), template mode is default (zero LLM tokens)
+- AnticipationEngine init in `init-loop.ts` step 17c (after DigestBuilder)
+- Event handlers in `event-handlers-anticipation.ts`
+- 45 tests across 10 test files, all passing
+- Pre-existing type errors in `replication/`, `users/`, `workflow/` modules are NOT from anticipation
+
+## Agentic Workflows
+- Module: `packages/core/src/workflow/` (15 source files + 6 test files, ~2800 LOC)
+- Engine: DAG-based workflow execution, one step per PEAR cycle via EventBus
+- Store: CRUD for definitions + runs + step results in operational.db (migration v15)
+- Parser: NL -> WorkflowDefinition via IClaudeProcess with structured prompt
+- 9 step types: llm_call, api_call, channel_send, wait, condition, transform, sub_workflow, ha_command, memory_query
+- Limits: max 5 concurrent workflows, max 3 parallel steps, max 1000 definitions, max 10000 runs
+- Condition evaluator: safe string comparison (==, !=, >, <, >=, <=, contains, &&, ||) -- no code execution
+- Event types: workflow:trigger, workflow:step_ready, workflow:step_completed, workflow:step_failed, workflow:completed, workflow:failed, workflow:cancelled
+- Crash recovery: `recoverRunningWorkflows()` re-publishes step_ready events for in-flight runs
+- Variable interpolation: `{{stepId.output}}` resolved from WorkflowContext
+- Store uses `store-rows.ts` for row types (auto-extracted by linter to keep files under 300 lines)
+- IClaudeProcess.run() returns AsyncIterable<StreamEvent> with `content` field (not `text`)
+- bun:sqlite dynamic SQL: use fixed queries with COALESCE for optional params (can't pass Record<string, unknown>)
+- HAManager method is `executeService(entityId, domain, service, data?, executorFn?)`
+- MemorySearch.search() takes `MemorySearchQuery` object with `text` and `limit` fields
+- MemorySearchResult has `memory.content` and `memory.type` (not direct properties)
+- Pre-existing type errors in dreaming module (nrem.ts, rem.ts) -- not from workflows
+- 73 tests across 6 test files, all passing
+
 ## Desktop App (Tauri)
 - Tauri CLI available via `cargo tauri` (cargo-tauri crate)
 - Updater signing keys: `cargo tauri signer generate -w ~/.tauri/eidolon.key --ci -p ""`

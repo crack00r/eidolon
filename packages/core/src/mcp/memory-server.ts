@@ -18,180 +18,22 @@
  * Errors are logged to stderr to keep stdout clean for protocol messages.
  */
 
-import type { Database } from "bun:sqlite";
-import type { EidolonError, MemoryType, Result } from "@eidolon/protocol";
-import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
-import { z } from "zod";
 import type { Logger } from "../logging/logger.ts";
 import type { KGEntityStore } from "../memory/knowledge-graph/entities.ts";
 import type { KGRelationStore } from "../memory/knowledge-graph/relations.ts";
 import type { MemorySearch } from "../memory/search.ts";
 import type { MemoryStore } from "../memory/store.ts";
-
-// ---------------------------------------------------------------------------
-// MCP protocol types (JSON-RPC 2.0)
-// ---------------------------------------------------------------------------
-
-/** JSON-RPC 2.0 request. */
-interface JsonRpcRequest {
-  readonly jsonrpc: "2.0";
-  readonly id?: string | number | null;
-  readonly method: string;
-  readonly params?: Record<string, unknown>;
-}
-
-/** JSON-RPC 2.0 success response. */
-interface JsonRpcResponse {
-  readonly jsonrpc: "2.0";
-  readonly id: string | number | null;
-  readonly result?: unknown;
-  readonly error?: { code: number; message: string; data?: unknown };
-}
-
-/** MCP tool definition. */
-interface McpToolDefinition {
-  readonly name: string;
-  readonly description: string;
-  readonly inputSchema: Record<string, unknown>;
-}
-
-/** MCP resource definition. */
-interface McpResourceDefinition {
-  readonly uri: string;
-  readonly name: string;
-  readonly description: string;
-  readonly mimeType: string;
-}
-
-// ---------------------------------------------------------------------------
-// JSON-RPC error codes
-// ---------------------------------------------------------------------------
-
-const JSON_RPC_PARSE_ERROR = -32700;
-const JSON_RPC_INVALID_REQUEST = -32600;
-const JSON_RPC_METHOD_NOT_FOUND = -32601;
-const JSON_RPC_INVALID_PARAMS = -32602;
-const JSON_RPC_INTERNAL_ERROR = -32603;
-
-// ---------------------------------------------------------------------------
-// Zod schemas for tool inputs
-// ---------------------------------------------------------------------------
-
-const MemorySearchInputSchema = z.object({
-  query: z.string().min(1).max(2000),
-  limit: z.number().int().min(1).max(100).optional().default(10),
-  type: z.enum(["fact", "preference", "decision", "episode", "skill", "relationship", "schema"]).optional(),
-});
-
-const MemoryAddInputSchema = z.object({
-  content: z.string().min(1).max(50000),
-  type: z.enum(["fact", "preference", "decision", "episode", "skill", "relationship", "schema"]).default("fact"),
-  tags: z.array(z.string()).optional().default([]),
-  source: z.string().optional().default("mcp"),
-});
-
-const MemoryListInputSchema = z.object({
-  limit: z.number().int().min(1).max(100).optional().default(20),
-  type: z.enum(["fact", "preference", "decision", "episode", "skill", "relationship", "schema"]).optional(),
-  offset: z.number().int().min(0).optional().default(0),
-});
-
-const KgQueryInputSchema = z.object({
-  entity_name: z.string().min(1).max(500).optional(),
-  entity_type: z.enum(["person", "technology", "device", "project", "concept", "place"]).optional(),
-  limit: z.number().int().min(1).max(100).optional().default(20),
-});
-
-// ---------------------------------------------------------------------------
-// Tool definitions
-// ---------------------------------------------------------------------------
-
-const TOOLS: ReadonlyArray<McpToolDefinition> = [
-  {
-    name: "memory_search",
-    description:
-      "Search Eidolon's memory using hybrid BM25 + vector + graph search with Reciprocal Rank Fusion. " +
-      "Returns the most relevant memories matching the query.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        query: { type: "string", description: "The search query text" },
-        limit: { type: "number", description: "Max results (1-100, default 10)" },
-        type: {
-          type: "string",
-          enum: ["fact", "preference", "decision", "episode", "skill", "relationship", "schema"],
-          description: "Filter by memory type",
-        },
-      },
-      required: ["query"],
-    },
-  },
-  {
-    name: "memory_add",
-    description: "Add a new memory to Eidolon's knowledge base.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        content: { type: "string", description: "The memory content to store" },
-        type: {
-          type: "string",
-          enum: ["fact", "preference", "decision", "episode", "skill", "relationship", "schema"],
-          description: "Memory type (default: fact)",
-        },
-        tags: { type: "array", items: { type: "string" }, description: "Tags for categorization" },
-        source: { type: "string", description: "Source identifier (default: mcp)" },
-      },
-      required: ["content"],
-    },
-  },
-  {
-    name: "memory_list",
-    description: "List recent memories with optional type filter and pagination.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        limit: { type: "number", description: "Max results (1-100, default 20)" },
-        type: {
-          type: "string",
-          enum: ["fact", "preference", "decision", "episode", "skill", "relationship", "schema"],
-          description: "Filter by memory type",
-        },
-        offset: { type: "number", description: "Pagination offset (default 0)" },
-      },
-    },
-  },
-  {
-    name: "kg_query",
-    description:
-      "Query the knowledge graph for entities and their relations. " +
-      "Search by entity name or type, and returns matching entities with their triples.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        entity_name: { type: "string", description: "Search for entities by name (prefix match)" },
-        entity_type: {
-          type: "string",
-          enum: ["person", "technology", "device", "project", "concept", "place"],
-          description: "Filter by entity type",
-        },
-        limit: { type: "number", description: "Max results (1-100, default 20)" },
-      },
-    },
-  },
-];
-
-// ---------------------------------------------------------------------------
-// Resource definitions
-// ---------------------------------------------------------------------------
-
-const RESOURCES: ReadonlyArray<McpResourceDefinition> = [
-  {
-    uri: "memory://stats",
-    name: "Memory Statistics",
-    description: "Memory count, types breakdown, and knowledge graph statistics",
-    mimeType: "application/json",
-  },
-];
+import {
+  JSON_RPC_INTERNAL_ERROR,
+  JSON_RPC_INVALID_REQUEST,
+  JSON_RPC_METHOD_NOT_FOUND,
+  JSON_RPC_PARSE_ERROR,
+  type JsonRpcRequest,
+  type JsonRpcResponse,
+  RESOURCES,
+  TOOLS,
+} from "./memory-server-protocol.ts";
+import { toolKgQuery, toolMemoryAdd, toolMemoryList, toolMemorySearch } from "./memory-server-tools.ts";
 
 // ---------------------------------------------------------------------------
 // Dependencies
@@ -241,7 +83,6 @@ export class MemoryMcpServer {
 
         buffer += decoder.decode(value, { stream: true });
 
-        // Process complete lines
         let newlineIdx = buffer.indexOf("\n");
         while (newlineIdx !== -1) {
           const line = buffer.slice(0, newlineIdx).trim();
@@ -305,19 +146,12 @@ export class MemoryMcpServer {
       case "initialize":
         this.sendResult(id, {
           protocolVersion: "2024-11-05",
-          capabilities: {
-            tools: {},
-            resources: {},
-          },
-          serverInfo: {
-            name: "eidolon-memory",
-            version: "0.1.0",
-          },
+          capabilities: { tools: {}, resources: {} },
+          serverInfo: { name: "eidolon-memory", version: "0.1.0" },
         });
         break;
 
       case "notifications/initialized":
-        // Client notification -- no response needed
         break;
 
       case "tools/list":
@@ -341,221 +175,44 @@ export class MemoryMcpServer {
         break;
 
       default:
-        if (request.method.startsWith("notifications/")) {
-          // Notifications don't need a response
-          break;
-        }
+        if (request.method.startsWith("notifications/")) break;
         this.sendError(id, JSON_RPC_METHOD_NOT_FOUND, `Unknown method: ${request.method}`);
     }
   }
 
   // -----------------------------------------------------------------------
-  // Tool handlers
+  // Tool handlers (delegated to memory-server-tools.ts)
   // -----------------------------------------------------------------------
 
   private async handleToolCall(id: string | number | null, params: Record<string, unknown>): Promise<void> {
     const name = params.name as string | undefined;
     const args = (params.arguments ?? {}) as Record<string, unknown>;
 
+    let outcome: { ok: true; text: string } | { ok: false; error: string };
+
     switch (name) {
       case "memory_search":
-        await this.toolMemorySearch(id, args);
+        outcome = await toolMemorySearch(args, this.store, this.search);
         break;
       case "memory_add":
-        this.toolMemoryAdd(id, args);
+        outcome = toolMemoryAdd(args, this.store);
         break;
       case "memory_list":
-        this.toolMemoryList(id, args);
+        outcome = toolMemoryList(args, this.store);
         break;
       case "kg_query":
-        this.toolKgQuery(id, args);
+        outcome = toolKgQuery(args, this.kgEntities, this.kgRelations);
         break;
       default:
         this.sendError(id, JSON_RPC_METHOD_NOT_FOUND, `Unknown tool: ${name}`);
-    }
-  }
-
-  private async toolMemorySearch(id: string | number | null, args: Record<string, unknown>): Promise<void> {
-    const parsed = MemorySearchInputSchema.safeParse(args);
-    if (!parsed.success) {
-      this.sendError(id, JSON_RPC_INVALID_PARAMS, `Invalid parameters: ${parsed.error.message}`);
-      return;
-    }
-
-    if (!this.search) {
-      // Fall back to text-only search
-      const textResult = this.store.searchText(parsed.data.query, parsed.data.limit);
-      if (!textResult.ok) {
-        this.sendToolError(id, `Search failed: ${textResult.error.message}`);
         return;
-      }
-
-      const results = textResult.value
-        .filter((r) => !parsed.data.type || r.memory.type === parsed.data.type)
-        .map((r) => ({
-          id: r.memory.id,
-          type: r.memory.type,
-          content: r.memory.content,
-          confidence: r.memory.confidence,
-          tags: r.memory.tags,
-          score: r.rank,
-          createdAt: new Date(r.memory.createdAt).toISOString(),
-        }));
-
-      this.sendToolResult(id, JSON.stringify(results, null, 2));
-      return;
     }
 
-    const types = parsed.data.type ? [parsed.data.type as MemoryType] : undefined;
-    const searchResult = await this.search.search({
-      text: parsed.data.query,
-      limit: parsed.data.limit,
-      types,
-    });
-
-    if (!searchResult.ok) {
-      this.sendToolError(id, `Search failed: ${searchResult.error.message}`);
-      return;
-    }
-
-    const results = searchResult.value.map((r) => ({
-      id: r.memory.id,
-      type: r.memory.type,
-      content: r.memory.content,
-      confidence: r.memory.confidence,
-      tags: r.memory.tags,
-      score: r.score,
-      matchReason: r.matchReason,
-      createdAt: new Date(r.memory.createdAt).toISOString(),
-    }));
-
-    this.sendToolResult(id, JSON.stringify(results, null, 2));
-  }
-
-  private toolMemoryAdd(id: string | number | null, args: Record<string, unknown>): void {
-    const parsed = MemoryAddInputSchema.safeParse(args);
-    if (!parsed.success) {
-      this.sendError(id, JSON_RPC_INVALID_PARAMS, `Invalid parameters: ${parsed.error.message}`);
-      return;
-    }
-
-    const createResult = this.store.create({
-      content: parsed.data.content,
-      type: parsed.data.type as MemoryType,
-      layer: "long_term",
-      confidence: 0.8,
-      source: parsed.data.source,
-      tags: parsed.data.tags,
-    });
-
-    if (!createResult.ok) {
-      this.sendToolError(id, `Failed to create memory: ${createResult.error.message}`);
-      return;
-    }
-
-    this.sendToolResult(
-      id,
-      JSON.stringify(
-        {
-          id: createResult.value.id,
-          content: createResult.value.content,
-          type: createResult.value.type,
-          createdAt: new Date(createResult.value.createdAt).toISOString(),
-        },
-        null,
-        2,
-      ),
-    );
-  }
-
-  private toolMemoryList(id: string | number | null, args: Record<string, unknown>): void {
-    const parsed = MemoryListInputSchema.safeParse(args);
-    if (!parsed.success) {
-      this.sendError(id, JSON_RPC_INVALID_PARAMS, `Invalid parameters: ${parsed.error.message}`);
-      return;
-    }
-
-    const types = parsed.data.type ? [parsed.data.type as MemoryType] : undefined;
-    const listResult = this.store.list({
-      limit: parsed.data.limit,
-      types,
-      offset: parsed.data.offset,
-      orderBy: "created_at",
-      order: "desc",
-    });
-
-    if (!listResult.ok) {
-      this.sendToolError(id, `Failed to list memories: ${listResult.error.message}`);
-      return;
-    }
-
-    const results = listResult.value.map((m) => ({
-      id: m.id,
-      type: m.type,
-      content: m.content,
-      confidence: m.confidence,
-      tags: m.tags,
-      createdAt: new Date(m.createdAt).toISOString(),
-    }));
-
-    this.sendToolResult(id, JSON.stringify(results, null, 2));
-  }
-
-  private toolKgQuery(id: string | number | null, args: Record<string, unknown>): void {
-    const parsed = KgQueryInputSchema.safeParse(args);
-    if (!parsed.success) {
-      this.sendError(id, JSON_RPC_INVALID_PARAMS, `Invalid parameters: ${parsed.error.message}`);
-      return;
-    }
-
-    if (!this.kgEntities) {
-      this.sendToolError(id, "Knowledge graph is not available");
-      return;
-    }
-
-    // Find entities by name prefix or type
-    let entityResult: Result<
-      Array<{ id: string; name: string; type: string; attributes: Record<string, unknown>; createdAt: number }>,
-      EidolonError
-    >;
-
-    if (parsed.data.entity_name) {
-      entityResult = this.kgEntities.searchByName(parsed.data.entity_name, parsed.data.limit);
-    } else if (parsed.data.entity_type) {
-      entityResult = this.kgEntities.findByType(parsed.data.entity_type, parsed.data.limit);
+    if (outcome.ok) {
+      this.sendToolResult(id, outcome.text);
     } else {
-      entityResult = this.kgEntities.list({ limit: parsed.data.limit });
+      this.sendToolError(id, outcome.error);
     }
-
-    if (!entityResult.ok) {
-      this.sendToolError(id, `KG query failed: ${entityResult.error.message}`);
-      return;
-    }
-
-    const entities = entityResult.value;
-
-    // Get triples for found entities
-    let triples: Array<{ subject: string; predicate: string; object: string; confidence: number }> = [];
-    if (this.kgRelations && entities.length > 0) {
-      const entityIds = entities.map((e) => e.id);
-      const triplesResult = this.kgRelations.getTriplesForEntities(entityIds, parsed.data.limit);
-      if (triplesResult.ok) {
-        triples = triplesResult.value;
-      }
-    }
-
-    const result = {
-      entities: entities.map((e) => ({
-        id: e.id,
-        name: e.name,
-        type: e.type,
-        attributes: e.attributes,
-        createdAt: new Date(e.createdAt).toISOString(),
-      })),
-      triples,
-    };
-
-    this.sendToolResult(id, JSON.stringify(result, null, 2));
   }
 
   // -----------------------------------------------------------------------
@@ -568,7 +225,7 @@ export class MemoryMcpServer {
     if (uri === "memory://stats") {
       this.resourceStats(id);
     } else {
-      this.sendError(id, JSON_RPC_INVALID_PARAMS, `Unknown resource: ${uri}`);
+      this.sendError(id, -32602, `Unknown resource: ${uri}`);
     }
   }
 
@@ -602,10 +259,7 @@ export class MemoryMcpServer {
     const stats = {
       totalMemories: countResult.value,
       byType: typeCounts,
-      knowledgeGraph: {
-        entities: entityCount,
-        relations: relationCount,
-      },
+      knowledgeGraph: { entities: entityCount, relations: relationCount },
     };
 
     this.sendResult(id, {
@@ -631,19 +285,12 @@ export class MemoryMcpServer {
     this.writeResponse({ jsonrpc: "2.0", id, error: { code, message, data } });
   }
 
-  /** Send a tool result in the MCP content format. */
   private sendToolResult(id: string | number | null, text: string): void {
-    this.sendResult(id, {
-      content: [{ type: "text", text }],
-    });
+    this.sendResult(id, { content: [{ type: "text", text }] });
   }
 
-  /** Send a tool error in the MCP content format. */
   private sendToolError(id: string | number | null, message: string): void {
-    this.sendResult(id, {
-      content: [{ type: "text", text: message }],
-      isError: true,
-    });
+    this.sendResult(id, { content: [{ type: "text", text: message }], isError: true });
   }
 
   private writeResponse(response: JsonRpcResponse): void {

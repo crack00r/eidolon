@@ -34,6 +34,14 @@
     "pdf-parse": "^1.1.1",
     "zod": "^3.24"
   },
+  "peerDependencies": {
+    "@slack/bolt": "^4.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@slack/bolt": {
+      "optional": true
+    }
+  },
   "devDependencies": {
     "@biomejs/biome": "^2.0.0",
     "@eidolon/test-utils": "workspace:*",

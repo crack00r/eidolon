@@ -10,65 +10,66 @@
 - RRF fusion for hybrid search (BM25 + vector)
 - scrypt KDF for secret encryption (docs updated to reflect scrypt, not Argon2id)
 
-## Live Status (March 6, 2026 -- final audit v13)
+## Live Status (March 2026 -- comprehensive audit v16)
 - Version: 0.1.6 released
-- Source: 236 files, ~45,617 lines (core non-test source)
-- Tests: 2,405 core (1 fail, 6 skip) + 168 cli (1 fail) + 92 protocol + 24 test-utils = 2,689 pass, 2 fail, 6 skip
-- TypeCheck: 0 errors across all 6 packages
-- Lint: 0 errors (was 102, now clean)
-- npm: @eidolon-ai/cli NOT published (404), publish workflow EXISTS in CI
-- Golden datasets: 105 extraction entries (referenced by tests), 35 search queries (structure-only tests)
+- Source: 293 non-test files, ~54,962 lines (packages only)
+- Test files: 164 files, ~2,781 test() calls
+- Lines by package: protocol ~2,500+ | core ~46,000+ | cli ~5,000+ | test-utils 459
+- Apps: web ~5,899L (32 files) | desktop ~3,229L (18+5 rust files) | ios 5,417L (24 files)
+- GPU worker: 1,156L Python (8 files)
+- Total project source (excl tests): ~72,000+ lines
+- TypeCheck: 0 errors; Lint: 0 errors
+- npm: @eidolon-ai/cli NOT published (404), release-cli.yml workflow exists
+- Daemon module: 19 files, 4,370L (decomposed from monolith)
+- Golden datasets: 105 extraction entries, 35 search queries
 
 ## All Phases Implemented (verified with code inspection)
 - Phases 0-9: COMPLETE (real implementations, not stubs)
 - v1.1 (Calendar, HA, Web Dashboard, Discord, Multi-GPU): COMPLETE
 - v1.2 (WhatsApp, Email, OpenTelemetry): COMPLETE
 - v2.0 (Plugin System, Local LLM): COMPLETE
-- Dreaming REM/NREM: WIRED to ILLMProvider (graceful degradation when no provider)
+- Dreaming REM/NREM: WIRED to ILLMProvider (graceful degradation)
 - Crawlers: REAL HTTP (Reddit, HN, GitHub, RSS, arXiv) with fetch()
+- PageRank: IMPLEMENTED in memory/knowledge-graph/pagerank.ts
 
-## Remaining Gaps (Priority Order -- final audit v13, March 6 2026)
-1. npm package @eidolon-ai/cli not published (404) -- workflow exists but never triggered
-2. 1 core test failure: config-reload.test.ts time-dependent (night mode multiplier)
-3. 1 CLI test failure: plugin-commands.test.ts -- stale dist/index.js missing PluginRegistry export
-4. Search golden dataset (35 queries) only structurally validated, no integration test for actual ranking
-5. PageRank for entity importance described in MEMORY_ENGINE.md but zero code in codebase
-6. voice.start/voice.stop gateway handlers are placeholder stubs (log + return config, no real voice session)
-7. Search golden dataset entries reference "Argon2id" (should be scrypt) -- 3 stale entries
-8. MEMORY_ENGINE.md lines 370+380 still say "TransE" (should say "ComplEx")
-9. Web/Desktop/iOS apps + GPU worker: 0 tests combined (~19,670 lines untested)
-RESOLVED: sqlite-vec ANN search IS implemented (vec0 + MATCH, with brute-force fallback)
-RESOLVED: npm publish workflow EXISTS (.github/workflows/release-cli.yml)
-RESOLVED: Doc drift (Argon2id/Leiden/MiniLM) MOSTLY fixed, 2 TransE refs remain in MEMORY_ENGINE.md
-RESOLVED: DocumentWatcher with fs.watch() IS implemented and wired in daemon
-RESOLVED: ConfigWatcher IS wired via config-reload.ts
-RESOLVED: Lint: 0 errors (clean)
-RESOLVED: Golden datasets ARE referenced by test files
+## Remaining Gaps (Priority Order -- audit v16)
+1. npm @eidolon-ai/cli not published (404) -- workflow exists, never triggered
+2. 1 core test failure: config-reload.test.ts (time-dependent night mode)
+3. 1 CLI test failure: plugin-commands.test.ts (stale dist/index.js)
+4. Search golden dataset only structurally validated, no ranking integration test
+5. voice.start/voice.stop: session lifecycle + GPU check implemented but no real audio streaming
+6. Web/Desktop/iOS apps + GPU worker: 0 tests combined (~15,700 lines untested)
+7. 65 files exceed 300-line project rule; 10 exceed 500 lines
+8. iOS app: no .xcodeproj file (Swift source exists but no Xcode project)
+9. Web dashboard: manifest.json exists but no service worker (not a true PWA)
+10. ClaudeProvider.complete()/stream() return empty content (routing stub by design)
 
-## Key File Paths (verified v4)
-- daemon/index.ts: 147L (orchestrator, decomposed into 11 sub-modules)
-- daemon/initializer.ts: 1,025L (30+ init steps)
-- daemon/event-handlers.ts: 829L (all event routing)
-- daemon/gateway-wiring.ts: 519L (35+ RPC methods)
-- daemon/channel-wiring.ts: 340L (Telegram, Discord, WhatsApp, Email)
-- gateway/server.ts: ~740L (WebSocket + JSON-RPC)
-- gateway/builtin-handlers.ts: ~580L (core RPC handlers)
-- memory/search.ts: 371L (BM25 + vector + RRF + sqlite-vec ANN)
-- memory/extractor.ts: 440L (hybrid extraction)
-- loop/cognitive-loop.ts: 399L (PEAR cycle)
-- loop/event-bus.ts: 485L (persisted pub/sub)
+## Key File Paths (verified v16)
+- daemon/ total: 4,370L across 19 files (decomposed architecture)
+- gateway/: 3,869L across 14 files (incl. OpenAI compat, webhooks, rate limiter)
+- memory/: largest module -- search 746L, extractor 545L, store 498L
+- gpu/: 3,062L across 15 files (pool, balancer, voice pipeline, WS handler)
+- learning/: 2,169L across 10 files + 1,030L crawlers (7 files)
+- loop/: cognitive-loop 399L, event-bus 391L
+
+## Feature Plans Created
+- Proactive Intelligence: docs/design/PROACTIVE_INTELLIGENCE.md (March 2026)
+  - Anticipation Engine hooks into scheduler, not cognitive loop
+  - 5 built-in detectors: meeting prep, travel prep, health nudge, follow-up, birthday
+  - Zero LLM tokens in template mode; optional LLM composition via Haiku
+  - New tables: anticipation_history, anticipation_suppressions (operational.db)
+  - New events: anticipation:check, anticipation:suggestion, anticipation:dismissed, anticipation:acted
+  - 14 new files (~1,225 lines), 10 modified files (~150 lines)
 
 ## Patterns Learned
 - Always compare plan docs against actual code
 - Gateway defaults to 127.0.0.1 (more secure than plan's 0.0.0.0)
-- Gateway uses registerHandler(method, handler) for JSON-RPC routing
-- EventBus has VALID_EVENT_TYPES Set for extension
-- All channels except Telegram use injectable interfaces (no npm SDK deps)
-- scrypt is used for KDF, NOT Argon2id (multiple docs were wrong, mostly fixed)
-- Louvain is used for community detection, NOT Leiden (MEMORY_ENGINE.md fixed)
-- sqlite-vec ANN IS implemented (vec0 + MATCH), with brute-force fallback
+- scrypt is used for KDF, NOT Argon2id
+- Louvain for community detection (louvain.ts 259L), NOT Leiden
+- sqlite-vec ANN IS implemented (vec0 + MATCH, with brute-force fallback)
 - 6 skipped tests are embeddings.test.ts (behind RUN_SLOW env var)
-- config-reload test is time-dependent: fails during night hours (23:00-07:00) due to nightModeMultiplier
-- CLI plugin test fails when core dist/ is stale (needs rebuild before testing)
-- Dreaming gracefully degrades when no LLM provider configured (not a bug)
-- Core RPC handlers ARE all implemented in gateway/rpc-handlers.ts
+- config-reload test fails during night hours (23:00-07:00)
+- CLI plugin test fails when core dist/ is stale
+- Dreaming gracefully degrades when no LLM provider configured
+- Daemon was decomposed from monolithic files into 19 sub-modules
+- ClaudeProvider intentionally delegates to session pipeline (not a bug)

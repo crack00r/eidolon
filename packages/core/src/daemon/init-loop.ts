@@ -5,6 +5,8 @@
  */
 
 import { Ok } from "@eidolon/protocol";
+import { AnticipationEngine } from "../anticipation/engine.ts";
+import { SuggestionHistory } from "../anticipation/history.ts";
 import { WorkspacePreparer } from "../claude/workspace.ts";
 import { DigestBuilder } from "../digest/builder.ts";
 import { CognitiveLoop } from "../loop/cognitive-loop.ts";
@@ -255,6 +257,72 @@ export function buildLoopSteps(modules: InitializedModules): InitStep[] {
           }
         } else {
           logger.debug("daemon", "Digest scheduled task already exists");
+        }
+      }
+    },
+  });
+
+  // 17c. AnticipationEngine (needs Config, Logger, MemorySearch, ProfileGenerator, EventBus, DB)
+  steps.push({
+    name: "AnticipationEngine",
+    fn: () => {
+      const logger = modules.logger;
+      const config = modules.config;
+      const dbManager = modules.dbManager;
+      const eventBus = modules.eventBus;
+      const memorySearch = modules.memorySearch;
+      const profileGenerator = modules.profileGenerator;
+      const taskScheduler = modules.taskScheduler;
+
+      if (!config || !logger || !dbManager || !eventBus || !memorySearch || !profileGenerator) {
+        logger?.warn("daemon", "AnticipationEngine skipped: missing dependencies");
+        return;
+      }
+
+      if (!config.anticipation.enabled) {
+        logger.info("daemon", "AnticipationEngine skipped: anticipation not enabled in config");
+        return;
+      }
+
+      // Initialize SuggestionHistory
+      modules.suggestionHistory = new SuggestionHistory(dbManager.operational, logger);
+
+      // Initialize engine
+      modules.anticipationEngine = new AnticipationEngine({
+        memorySearch,
+        calendarManager: modules.calendarManager ?? null,
+        profileGenerator,
+        kgEntityStore: modules.kgEntityStore ?? null,
+        kgRelationStore: modules.kgRelationStore ?? null,
+        history: modules.suggestionHistory,
+        eventBus,
+        config: config.anticipation,
+        logger,
+      });
+
+      logger.info("daemon", "AnticipationEngine initialized");
+
+      // Register recurring scheduled task for anticipation checks
+      if (taskScheduler) {
+        const listResult = taskScheduler.list();
+        const alreadyExists =
+          listResult.ok && listResult.value.some((t) => t.action === "anticipation:check");
+        if (!alreadyExists) {
+          const intervalMinutes = config.anticipation.checkIntervalMinutes;
+          const createResult = taskScheduler.create({
+            name: "Anticipation Check",
+            type: "recurring",
+            cron: `*/${intervalMinutes}`,
+            action: "anticipation:check",
+            payload: {},
+          });
+          if (createResult.ok) {
+            logger.info("daemon", `Anticipation check scheduled every ${intervalMinutes} minutes`);
+          } else {
+            logger.error("daemon", `Failed to schedule anticipation check: ${createResult.error.message}`);
+          }
+        } else {
+          logger.debug("daemon", "Anticipation check task already exists");
         }
       }
     },

@@ -57,6 +57,35 @@
 - Example: query "What is the package manager?" does NOT match (no content has that exact phrase)
 - StubEmbeddingModel with `isInitialized=false` forces BM25-only mode (no vector search)
 
+## Web/Desktop App Testing
+- Web app: `apps/web/src/lib/` -- tests next to source (`.test.ts`)
+- Desktop app: `apps/desktop/src/lib/` -- tests next to source (`.test.ts`)
+- Web uses `$lib/` path alias (SvelteKit) -- only test files with relative imports or self-contained modules
+- Desktop uses relative imports -- easier to test directly with `bun test`
+- Both apps share identical `utils.ts` (sanitizeErrorForDisplay) and `logger.ts` (ring buffer)
+- Logger module uses singleton buffer -- always `clearErrorBuffer()` in `beforeEach` to prevent cross-test pollution
+- `sanitizeErrorForDisplay` path regex: `/[A-Z]:\\[^\s:]+\.[a-z]+/gi` -- Windows paths with spaces won't match (test accordingly)
+- Theme tokens (`theme.ts`) are pure constants -- test structural integrity, not visual appearance
+- Test scripts added to both package.json: `"test": "bun test src/"`
+- Web: 35 tests (utils, logger, theme), Desktop: 32 tests (utils, logger, discovery beacon validation)
+
+## GPU Worker Testing (Python)
+- Location: `services/gpu-worker/tests/`
+- Framework: pytest with FastAPI TestClient
+- Tests: 78 total (health, auth, TTS validation, STT validation, middleware, voice_ws helpers, logging)
+- Auth middleware: health endpoint exempt, all others require X-API-Key header
+- Auth failure tracker: 5 failures per IP per 60s window triggers 429
+- TTS validation: text required+non-empty, max 10000 chars, speed 0.25-4.0, format in {opus,wav,mp3}
+- STT validation: content type must be in ALLOWED_STT_CONTENT_TYPES set, file required
+- Middleware tests: security headers (nosniff, DENY, no-store, CSP), request ID, size limits (50MB)
+- Voice WS: `_validate_token()` and `_compute_rms_energy()` are directly testable helper functions
+- conftest.py: `client_with_auth` (sets EIDOLON_GPU_API_KEY env), `client_no_auth` (removes it)
+- Always clear `_failure_tracker._buckets` between tests to reset rate limiting state
+
+## Pre-existing Test Failures (not introduced by testing agent)
+- MemoryMcpServer > memory_search > rejects missing query parameter
+- WyomingHandler > audio session (STT) > processes audio-start, audio-chunk, audio-stop sequence
+
 ## Audit Logger Testing
 - Schema: apply all 3 migrations with db.run() (table, indexes, integrity hash + triggers)
 - Tamper test: drop trigger, modify data, re-create trigger, verify integrity fails

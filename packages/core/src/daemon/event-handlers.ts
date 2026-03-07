@@ -11,6 +11,7 @@
  */
 
 import type { EventHandler, EventHandlerResult } from "../loop/cognitive-loop.ts";
+import { handleAnticipationCheck, handleAnticipationSuggestion } from "./event-handlers-anticipation.ts";
 import { handleResearchStarted } from "./event-handlers-learning.ts";
 import { handleDigestGenerate } from "./event-handlers-system.ts";
 import { handleUserApproval, handleUserFeedback, handleUserMessage } from "./event-handlers-user.ts";
@@ -63,6 +64,20 @@ export function buildEventHandler(modules: InitializedModules): EventHandler {
       }
       case "digest:generate": {
         return handleDigestGenerate(modules, event, logger);
+      }
+      case "anticipation:check": {
+        return handleAnticipationCheck(modules, event, logger);
+      }
+      case "anticipation:suggestion": {
+        return handleAnticipationSuggestion(modules, event, logger);
+      }
+      case "workflow:trigger":
+      case "workflow:step_ready": {
+        if (!modules.workflowEngine) {
+          logger.warn("loop-handler", "WorkflowEngine not available, ignoring workflow event");
+          return { success: false, tokensUsed: 0, error: "WorkflowEngine not initialized" };
+        }
+        return modules.workflowEngine.processEvent(event);
       }
       case "system:shutdown": {
         logger.info("loop-handler", "System shutdown event received");

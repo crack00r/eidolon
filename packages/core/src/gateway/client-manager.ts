@@ -7,6 +7,7 @@ import type { GatewayMethod, GatewayPushType } from "@eidolon/protocol";
 import type { Logger } from "../logging/logger.ts";
 import type { EventBus } from "../loop/event-bus.ts";
 import type { ITracer } from "../telemetry/tracer.ts";
+import { handleClientAuth } from "./client-manager-auth.ts";
 import {
   createJsonRpcError,
   createJsonRpcResponse,
@@ -22,7 +23,6 @@ import {
   AUTH_TIMEOUT_MS,
   anonymizeIp,
   type ClientState,
-  constantTimeCompare,
   type MethodHandler,
   type ServerWS,
 } from "./server-helpers.ts";
@@ -300,109 +300,17 @@ export class ClientManager {
   }
 
   // -------------------------------------------------------------------------
-  // Private: auth and send helpers
+  // Private: send helpers
   // -------------------------------------------------------------------------
 
   private handleAuth(ws: ServerWS, client: ClientState, text: string): void {
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(text);
-    } catch {
-      // Intentional: invalid JSON in auth payload is an auth failure
-      this.emitAuthFailure(ws, client, "Invalid auth payload");
-      return;
-    }
-
-    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-      this.emitAuthFailure(ws, client, "Invalid auth payload");
-      return;
-    }
-
-    const obj = parsed as Record<string, unknown>;
-    const isJsonRpc = obj.jsonrpc === "2.0" && typeof obj.method === "string";
-    let token: string | undefined;
-    let jsonRpcId: string | undefined;
-
-    if (isJsonRpc) {
-      if (obj.method !== "auth.authenticate") {
-        this.emitAuthFailure(ws, client, "Expected auth.authenticate method", obj.id as string);
-        return;
-      }
-      jsonRpcId = typeof obj.id === "string" ? obj.id : undefined;
-      const params = obj.params as Record<string, unknown> | undefined;
-      if (params && typeof params.token === "string") token = params.token;
-    } else {
-      if (obj.type !== "token" || typeof obj.token !== "string") {
-        this.emitAuthFailure(ws, client, "Invalid auth: expected { type: 'token', token: string }");
-        return;
-      }
-      token = obj.token;
-    }
-
-    if (typeof token !== "string") {
-      this.emitAuthFailure(ws, client, "Missing token in auth payload", jsonRpcId);
-      return;
-    }
-
-    const authConfig = this.getAuthConfig();
-    const configToken = authConfig.token;
-    if (typeof configToken !== "string" || !constantTimeCompare(token, configToken)) {
-      this.rateLimiter.recordFailure(client.ip);
-      this.emitAuthFailure(ws, client, "Authentication failed", jsonRpcId);
-      return;
-    }
-
-    this.rateLimiter.recordSuccess(client.ip);
-    client.authenticated = true;
-
-    const authTimer = this.authTimers.get(client.id);
-    if (authTimer) {
-      clearTimeout(authTimer);
-      this.authTimers.delete(client.id);
-    }
-
-    if (isJsonRpc) {
-      const params = obj.params as Record<string, unknown> | undefined;
-      if (params) {
-        if (typeof params.platform === "string") client.platform = params.platform;
-        if (typeof params.version === "string") client.version = params.version;
-      }
-    }
-
-    this.logger.info("auth", `Client ${client.id} authenticated from ${anonymizeIp(client.ip)}`);
-    this.eventBus.publish(
-      "gateway:client_connected",
-      { clientId: client.id, authenticated: true },
-      { source: "gateway" },
-    );
-    this.pushToSubscribers("push.clientConnected", {
-      clientId: client.id,
-      platform: client.platform,
-      version: client.version,
-      timestamp: client.connectedAt,
-    });
-
-    if (isJsonRpc && jsonRpcId) {
-      const response = createJsonRpcResponse(jsonRpcId, { authenticated: true });
-      ws.send(JSON.stringify(response));
-    }
-  }
-
-  private emitAuthFailure(ws: ServerWS, client: ClientState, reason: string, jsonRpcId?: string): void {
-    this.logger.warn("auth-failure", `Auth failed for client ${client.id}: ${reason}`, {
-      ip: anonymizeIp(client.ip),
-    });
-    const genericMessage = "Authentication failed";
-    if (jsonRpcId) {
-      const errResp = createJsonRpcError(jsonRpcId, -32000, genericMessage);
-      ws.send(JSON.stringify(errResp));
-    }
-    ws.close(4001, genericMessage);
-    this.eventBus.publish(
-      "gateway:client_connected",
-      { clientId: client.id, authenticated: false },
-      { source: "gateway" },
-    );
+    handleClientAuth(ws, client, text, {
+      logger: this.logger,
+      eventBus: this.eventBus,
+      rateLimiter: this.rateLimiter,
+      getAuthConfig: this.getAuthConfig,
+      pushToSubscribers: (type, data) => this.pushToSubscribers(type, data),
+    }, this.authTimers);
   }
 
   private safeSend(ws: ServerWS, data: string): void {

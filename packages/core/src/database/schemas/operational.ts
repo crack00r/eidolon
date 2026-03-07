@@ -362,4 +362,176 @@ export const OPERATIONAL_MIGRATIONS: ReadonlyArray<Migration> = [
       DROP TABLE IF EXISTS ha_entities;
     `,
   },
+  {
+    version: 12,
+    name: "add_users_table",
+    database: "operational",
+    up: `
+      CREATE TABLE users (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        channel_mappings TEXT NOT NULL DEFAULT '[]',
+        preferences TEXT NOT NULL DEFAULT '{}',
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+
+      CREATE INDEX idx_users_created_at ON users(created_at);
+    `,
+    down: `
+      DROP INDEX IF EXISTS idx_users_created_at;
+      DROP TABLE IF EXISTS users;
+    `,
+  },
+  {
+    version: 13,
+    name: "add_projects_tables",
+    database: "operational",
+    up: `
+      CREATE TABLE projects (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL UNIQUE,
+        repo_path TEXT NOT NULL,
+        description TEXT NOT NULL DEFAULT '',
+        last_synced_at INTEGER,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+
+      CREATE INDEX idx_projects_name ON projects(name);
+
+      CREATE TABLE project_journal (
+        id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        period TEXT NOT NULL CHECK(period IN ('daily','weekly')),
+        period_start INTEGER NOT NULL,
+        period_end INTEGER NOT NULL,
+        summary TEXT NOT NULL,
+        commit_count INTEGER NOT NULL DEFAULT 0,
+        files_changed INTEGER NOT NULL DEFAULT 0,
+        created_at INTEGER NOT NULL
+      );
+
+      CREATE INDEX idx_project_journal_project ON project_journal(project_id);
+      CREATE INDEX idx_project_journal_period ON project_journal(period_start, period_end);
+    `,
+    down: `
+      DROP INDEX IF EXISTS idx_project_journal_period;
+      DROP INDEX IF EXISTS idx_project_journal_project;
+      DROP TABLE IF EXISTS project_journal;
+      DROP INDEX IF EXISTS idx_projects_name;
+      DROP TABLE IF EXISTS projects;
+    `,
+  },
+  {
+    version: 14,
+    name: "add_anticipation_tables",
+    database: "operational",
+    up: `
+      CREATE TABLE anticipation_history (
+        id TEXT PRIMARY KEY,
+        pattern_type TEXT NOT NULL,
+        detector_id TEXT NOT NULL,
+        entity_key TEXT,
+        confidence REAL NOT NULL,
+        suggestion_title TEXT NOT NULL,
+        channel_id TEXT NOT NULL,
+        fired_at INTEGER NOT NULL,
+        dismissed_at INTEGER,
+        acted_on_at INTEGER,
+        feedback TEXT
+      );
+
+      CREATE INDEX idx_anticipation_pattern_type ON anticipation_history(pattern_type);
+      CREATE INDEX idx_anticipation_entity_key ON anticipation_history(entity_key);
+      CREATE INDEX idx_anticipation_fired_at ON anticipation_history(fired_at);
+
+      CREATE TABLE anticipation_suppressions (
+        id TEXT PRIMARY KEY,
+        pattern_type TEXT NOT NULL,
+        entity_key TEXT,
+        suppressed_at INTEGER NOT NULL,
+        expires_at INTEGER,
+        reason TEXT NOT NULL
+      );
+
+      CREATE INDEX idx_suppression_pattern ON anticipation_suppressions(pattern_type);
+    `,
+    down: `
+      DROP INDEX IF EXISTS idx_suppression_pattern;
+      DROP TABLE IF EXISTS anticipation_suppressions;
+      DROP INDEX IF EXISTS idx_anticipation_fired_at;
+      DROP INDEX IF EXISTS idx_anticipation_entity_key;
+      DROP INDEX IF EXISTS idx_anticipation_pattern_type;
+      DROP TABLE IF EXISTS anticipation_history;
+    `,
+  },
+  {
+    version: 15,
+    name: "add_workflow_tables",
+    database: "operational",
+    up: `
+      CREATE TABLE workflow_definitions (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        description TEXT NOT NULL DEFAULT '',
+        trigger_type TEXT NOT NULL CHECK(trigger_type IN ('manual','scheduled','event','webhook','condition')),
+        trigger_config TEXT NOT NULL DEFAULT '{}',
+        steps TEXT NOT NULL,
+        on_failure TEXT NOT NULL DEFAULT '{"type":"notify","channel":"telegram"}',
+        max_duration_ms INTEGER NOT NULL DEFAULT 1800000,
+        enabled INTEGER NOT NULL DEFAULT 1,
+        created_by TEXT NOT NULL DEFAULT 'user',
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        metadata TEXT NOT NULL DEFAULT '{}'
+      );
+
+      CREATE INDEX idx_workflow_defs_enabled ON workflow_definitions(enabled);
+      CREATE INDEX idx_workflow_defs_trigger ON workflow_definitions(trigger_type);
+
+      CREATE TABLE workflow_runs (
+        id TEXT PRIMARY KEY,
+        definition_id TEXT NOT NULL REFERENCES workflow_definitions(id),
+        status TEXT NOT NULL CHECK(status IN ('pending','running','waiting','retrying','completed','failed','cancelled')),
+        context TEXT NOT NULL DEFAULT '{}',
+        current_step_id TEXT,
+        started_at INTEGER,
+        completed_at INTEGER,
+        error TEXT,
+        trigger_payload TEXT DEFAULT '{}',
+        created_at INTEGER NOT NULL
+      );
+
+      CREATE INDEX idx_workflow_runs_status ON workflow_runs(status);
+      CREATE INDEX idx_workflow_runs_def ON workflow_runs(definition_id);
+
+      CREATE TABLE workflow_step_results (
+        id TEXT PRIMARY KEY,
+        run_id TEXT NOT NULL REFERENCES workflow_runs(id),
+        step_id TEXT NOT NULL,
+        status TEXT NOT NULL CHECK(status IN ('pending','running','completed','failed','skipped')),
+        output TEXT,
+        error TEXT,
+        attempt INTEGER NOT NULL DEFAULT 1,
+        started_at INTEGER,
+        completed_at INTEGER,
+        tokens_used INTEGER NOT NULL DEFAULT 0
+      );
+
+      CREATE INDEX idx_step_results_run ON workflow_step_results(run_id);
+      CREATE INDEX idx_step_results_status ON workflow_step_results(run_id, status);
+    `,
+    down: `
+      DROP INDEX IF EXISTS idx_step_results_status;
+      DROP INDEX IF EXISTS idx_step_results_run;
+      DROP TABLE IF EXISTS workflow_step_results;
+      DROP INDEX IF EXISTS idx_workflow_runs_def;
+      DROP INDEX IF EXISTS idx_workflow_runs_status;
+      DROP TABLE IF EXISTS workflow_runs;
+      DROP INDEX IF EXISTS idx_workflow_defs_trigger;
+      DROP INDEX IF EXISTS idx_workflow_defs_enabled;
+      DROP TABLE IF EXISTS workflow_definitions;
+    `,
+  },
 ];

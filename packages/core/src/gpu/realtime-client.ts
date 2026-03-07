@@ -12,6 +12,13 @@
 import type { EidolonError, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 import type { Logger } from "../logging/logger.ts";
+import type { ReconnectConfig, ReconnectState } from "./realtime-reconnect.ts";
+import {
+  clearReconnectTimer,
+  scheduleReconnect,
+  startPing,
+  stopPing,
+} from "./realtime-reconnect.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -62,15 +69,11 @@ const DEFAULT_RECONNECT_MAX_DELAY_MS = 30_000;
 export class RealtimeVoiceClient {
   private readonly logger: Logger;
   private readonly config: Required<RealtimeClientConfig>;
+  private readonly reconnectState: ReconnectState;
 
   private ws: WebSocket | null = null;
   private url = "";
   private token = "";
-
-  private pingTimer: ReturnType<typeof setInterval> | null = null;
-  private reconnectAttempts = 0;
-  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-  private intentionalClose = false;
 
   private transcriptionCallbacks: TranscriptionCallback[] = [];
   private audioCallbacks: AudioCallback[] = [];
@@ -83,6 +86,12 @@ export class RealtimeVoiceClient {
       maxReconnectAttempts: config?.maxReconnectAttempts ?? DEFAULT_MAX_RECONNECT_ATTEMPTS,
       reconnectBaseDelayMs: config?.reconnectBaseDelayMs ?? DEFAULT_RECONNECT_BASE_DELAY_MS,
       reconnectMaxDelayMs: config?.reconnectMaxDelayMs ?? DEFAULT_RECONNECT_MAX_DELAY_MS,
+    };
+    this.reconnectState = {
+      reconnectAttempts: 0,
+      reconnectTimer: null,
+      pingTimer: null,
+      intentionalClose: false,
     };
   }
 
@@ -99,8 +108,8 @@ export class RealtimeVoiceClient {
 
     this.url = url;
     this.token = authToken;
-    this.intentionalClose = false;
-    this.reconnectAttempts = 0;
+    this.reconnectState.intentionalClose = false;
+    this.reconnectState.reconnectAttempts = 0;
 
     return this.openConnection();
   }
@@ -109,9 +118,9 @@ export class RealtimeVoiceClient {
    * Close the WebSocket connection cleanly.
    */
   async disconnect(): Promise<void> {
-    this.intentionalClose = true;
-    this.stopPing();
-    this.clearReconnectTimer();
+    this.reconnectState.intentionalClose = true;
+    stopPing(this.reconnectState);
+    clearReconnectTimer(this.reconnectState);
 
     if (this.ws !== null) {
       try {
@@ -211,8 +220,8 @@ export class RealtimeVoiceClient {
 
         socket.onopen = (): void => {
           this.ws = socket;
-          this.reconnectAttempts = 0;
-          this.startPing();
+          this.reconnectState.reconnectAttempts = 0;
+          startPing(this.ws, this.reconnectState, this.config);
           this.logger.info("connect", "Realtime voice WebSocket connected", { url: this.url });
 
           if (!resolved) {
@@ -247,7 +256,7 @@ export class RealtimeVoiceClient {
           });
 
           this.ws = null;
-          this.stopPing();
+          stopPing(this.reconnectState);
 
           if (!resolved) {
             resolved = true;
@@ -262,8 +271,14 @@ export class RealtimeVoiceClient {
           }
 
           // Attempt reconnection if not intentional
-          if (!this.intentionalClose) {
-            this.scheduleReconnect();
+          if (!this.reconnectState.intentionalClose) {
+            scheduleReconnect(
+              this.reconnectState,
+              this.config,
+              this.logger,
+              () => this.openConnection(),
+              (error) => this.notifyError(error),
+            );
           }
         };
       } catch (err: unknown) {
@@ -368,80 +383,6 @@ export class RealtimeVoiceClient {
         this.logger.debug("unknown-type", `Unknown server message type: ${msgType}`);
         break;
       }
-    }
-  }
-
-  // ---------------------------------------------------------------------------
-  // Private: Ping/pong keep-alive
-  // ---------------------------------------------------------------------------
-
-  private startPing(): void {
-    this.stopPing();
-    this.pingTimer = setInterval(() => {
-      if (this.ws !== null && this.ws.readyState === WebSocket.OPEN) {
-        try {
-          this.ws.send(JSON.stringify({ type: "ping" }));
-        } catch {
-          // Connection may be closing
-        }
-      }
-    }, this.config.pingIntervalMs);
-  }
-
-  private stopPing(): void {
-    if (this.pingTimer !== null) {
-      clearInterval(this.pingTimer);
-      this.pingTimer = null;
-    }
-  }
-
-  // ---------------------------------------------------------------------------
-  // Private: Reconnection with exponential backoff
-  // ---------------------------------------------------------------------------
-
-  private scheduleReconnect(): void {
-    if (this.reconnectAttempts >= this.config.maxReconnectAttempts) {
-      this.logger.warn("reconnect", "Max reconnection attempts reached", {
-        attempts: this.reconnectAttempts,
-        max: this.config.maxReconnectAttempts,
-      });
-      this.notifyError(new Error(`Max reconnection attempts (${this.config.maxReconnectAttempts}) reached`));
-      return;
-    }
-
-    const delay = Math.min(
-      this.config.reconnectBaseDelayMs * 2 ** this.reconnectAttempts,
-      this.config.reconnectMaxDelayMs,
-    );
-
-    this.reconnectAttempts += 1;
-
-    this.logger.info("reconnect", `Scheduling reconnect attempt ${this.reconnectAttempts}`, {
-      delayMs: delay,
-    });
-
-    // ERR-002: Properly handle reconnect promise to prevent unhandled rejections
-    this.reconnectTimer = setTimeout(() => {
-      this.reconnectTimer = null;
-      this.openConnection()
-        .then((result) => {
-          if (!result.ok) {
-            this.logger.warn("reconnect", `Reconnect attempt ${this.reconnectAttempts} failed`, {
-              error: result.error.message,
-            });
-          }
-        })
-        .catch((err: unknown) => {
-          this.logger.error("reconnect", "Reconnect attempt threw unexpected error", err);
-          this.notifyError(err instanceof Error ? err : new Error(String(err)));
-        });
-    }, delay);
-  }
-
-  private clearReconnectTimer(): void {
-    if (this.reconnectTimer !== null) {
-      clearTimeout(this.reconnectTimer);
-      this.reconnectTimer = null;
     }
   }
 

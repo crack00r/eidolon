@@ -12,9 +12,8 @@
  */
 
 import type { Database } from "bun:sqlite";
-import { mkdirSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
 import type { Logger } from "../logging/logger.ts";
+import { capitalizeFirst, exportJournalToFile, formatDate, sanitizeForMarkdown } from "./journal-export.ts";
 
 export type JournalEntryType = "discovery" | "evaluation" | "approval" | "rejection" | "implementation" | "error";
 
@@ -31,14 +30,6 @@ const DEFAULT_MAX_ENTRIES = 10_000;
 
 /** Maximum number of entries that can be retrieved at once. */
 const MAX_RECENT_LIMIT = 1000;
-
-/**
- * Sanitize user-sourced text before embedding in Markdown output.
- * Escapes characters that could inject Markdown headings or formatting.
- */
-function sanitizeForMarkdown(text: string): string {
-  return text.replace(/\n/g, " ").replace(/[#*\->`[\]\\|!()<>]/g, (ch) => `\\${ch}`);
-}
 
 let nextEntryId = 0;
 
@@ -197,128 +188,7 @@ export class LearningJournal {
    * @returns The full path to the written file, or null on failure.
    */
   exportToFile(journalDir: string, filename?: string): string | null {
-    const dateStr = formatDate(new Date()).slice(0, 10); // YYYY-MM-DD
-    const fname = filename ?? `${dateStr}.md`;
-    const filePath = join(journalDir, fname);
-
-    try {
-      mkdirSync(dirname(filePath), { recursive: true });
-
-      // Filter entries for today if using default filename
-      let entriesToExport: JournalEntry[];
-      if (!filename) {
-        entriesToExport = this.entries.filter((e) => {
-          const entryDate = formatDate(new Date(e.timestamp)).slice(0, 10);
-          return entryDate === dateStr;
-        });
-      } else {
-        entriesToExport = [...this.entries];
-      }
-
-      if (entriesToExport.length === 0) {
-        this.logger.debug("learning", "No entries to export for this date", { dateStr });
-        return null;
-      }
-
-      const lines: string[] = [`# Learning Journal - ${dateStr}`, ""];
-
-      // Group entries by type
-      const byType = new Map<JournalEntryType, JournalEntry[]>();
-      for (const entry of entriesToExport) {
-        const existing = byType.get(entry.type) ?? [];
-        existing.push(entry);
-        byType.set(entry.type, existing);
-      }
-
-      // Discoveries
-      const discoveries = byType.get("discovery") ?? [];
-      if (discoveries.length > 0) {
-        lines.push(`## Discoveries (${discoveries.length} items)`);
-        for (const d of discoveries) {
-          const score = d.metadata.score !== undefined ? ` (score: ${d.metadata.score})` : "";
-          lines.push(`- ${sanitizeForMarkdown(d.title)}${score}`);
-        }
-        lines.push("");
-      }
-
-      // Evaluations
-      const evaluations = byType.get("evaluation") ?? [];
-      if (evaluations.length > 0) {
-        lines.push(`## Evaluations (${evaluations.length} items)`);
-        for (const e of evaluations) {
-          lines.push(`- ${sanitizeForMarkdown(e.title)}: ${sanitizeForMarkdown(e.content)}`);
-        }
-        lines.push("");
-      }
-
-      // Approvals
-      const approvals = byType.get("approval") ?? [];
-      if (approvals.length > 0) {
-        lines.push("## Approvals");
-        for (const a of approvals) {
-          lines.push(`- ${sanitizeForMarkdown(a.title)}`);
-        }
-        lines.push("");
-      }
-
-      // Rejections
-      const rejections = byType.get("rejection") ?? [];
-      if (rejections.length > 0) {
-        lines.push("## Rejections");
-        for (const r of rejections) {
-          lines.push(`- ${sanitizeForMarkdown(r.title)}: ${sanitizeForMarkdown(r.content)}`);
-        }
-        lines.push("");
-      }
-
-      // Implementations
-      const implementations = byType.get("implementation") ?? [];
-      if (implementations.length > 0) {
-        lines.push("## Implementations");
-        for (const impl of implementations) {
-          const branch = impl.metadata.branch ? ` (branch: ${impl.metadata.branch})` : "";
-          lines.push(`- ${sanitizeForMarkdown(impl.title)}${branch}`);
-          if (impl.content.length > 0) {
-            lines.push(`  ${sanitizeForMarkdown(impl.content)}`);
-          }
-        }
-        lines.push("");
-      }
-
-      // Errors
-      const errors = byType.get("error") ?? [];
-      if (errors.length > 0) {
-        lines.push("## Errors");
-        for (const err of errors) {
-          lines.push(`- ${sanitizeForMarkdown(err.title)}: ${sanitizeForMarkdown(err.content)}`);
-        }
-        lines.push("");
-      }
-
-      // Token usage summary from metadata
-      let totalTokens = 0;
-      for (const entry of entriesToExport) {
-        const tokens = entry.metadata.tokensUsed;
-        if (typeof tokens === "number") {
-          totalTokens += tokens;
-        }
-      }
-      if (totalTokens > 0) {
-        lines.push("## Token Usage");
-        lines.push(`- Total: ${totalTokens} tokens`);
-        lines.push("");
-      }
-
-      writeFileSync(filePath, lines.join("\n"), "utf-8");
-      this.logger.info("learning", `Journal exported to ${filePath}`, {
-        entryCount: entriesToExport.length,
-      });
-
-      return filePath;
-    } catch (err: unknown) {
-      this.logger.error("learning", `Failed to export journal to ${filePath}`, err);
-      return null;
-    }
+    return exportJournalToFile(this.entries, journalDir, this.logger, filename);
   }
 
   /** ERR-007: Dispose of the journal, clearing any periodic timers. */
@@ -399,22 +269,4 @@ export class LearningJournal {
       this.logger.error("learning", "Failed to load journal from DB, starting empty", err);
     }
   }
-}
-
-/**
- * Format a Date as "YYYY-MM-DD HH:MM".
- */
-function formatDate(date: Date): string {
-  const y = date.getFullYear();
-  const mo = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  const h = String(date.getHours()).padStart(2, "0");
-  const mi = String(date.getMinutes()).padStart(2, "0");
-  return `${y}-${mo}-${d} ${h}:${mi}`;
-}
-
-/** Capitalize the first character of a string. */
-function capitalizeFirst(s: string): string {
-  if (s.length === 0) return s;
-  return s.charAt(0).toUpperCase() + s.slice(1);
 }

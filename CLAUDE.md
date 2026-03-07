@@ -5,8 +5,7 @@ Public repo: `crack00r/eidolon`. Owner: Manuel Guttmann (German speaker, English
 
 ## Current Phase
 
-**All phases implemented (0-9 + v1.1/v1.2/v2.0).** ~122k lines of code, 2610 tests, 0 typecheck errors.
-See @docs/ROADMAP.md for full plan and completion status.
+**All phases implemented (0-9 + v1.1/v1.2/v2.0).** ~55k lines of code, 2781 tests, 0 typecheck errors.
 
 ## Tech Stack
 
@@ -72,30 +71,10 @@ enable parallel execution, and produce better results through focused system pro
 7. **All code changes from self-learning require user approval**
 8. **AES-256-GCM encrypted secrets** with scrypt key derivation, API keys isolated per subprocess
 
-## MASTER IMPLEMENTATION PLAN (BINDING)
+## Design Documentation
 
-**Every session MUST follow this plan. No deviations without explicit user approval.**
-
-- @docs/IMPLEMENTATION_PLAN.md -- exact file structure, interfaces, build order, dependencies, SQL schemas
-
-This is the single source of truth for WHAT to build, WHERE each file goes, WHICH interfaces connect components,
-and in WHAT ORDER to implement. Always check current phase progress against this plan.
-
-## Key Design References
-
-Architecture and design details live in these docs (Claude loads on demand):
-
-- @docs/design/ARCHITECTURE.md -- 3-database split, resilience patterns, degradation matrix
-- @docs/design/COGNITIVE_LOOP.md -- Perceive-Evaluate-Act-Reflect, backpressure, energy budget
-- @docs/design/MEMORY_ENGINE.md -- 5-layer memory, ComplEx KG, RRF hybrid search
-- @docs/design/CLAUDE_INTEGRATION.md -- IClaudeProcess, CLI flags, multi-session orchestration
-- @docs/design/SECURITY.md -- secrets, GPU auth, GDPR, learning sandbox
-- @docs/design/TESTING.md -- test strategy, FakeClaudeProcess, golden datasets, CI
-- @docs/design/SELF_LEARNING.md -- discovery, filtering, sandboxed implementation
-- @docs/design/GPU_AND_VOICE.md -- Opus codec, faster-whisper, audio preprocessing
-- @docs/design/CLIENT_ARCHITECTURE.md -- Tauri, iOS, Cloudflare Tunnel
-- @docs/design/CHANNELS.md -- Telegram via grammy
-- @docs/reference/CONFIGURATION.md -- config schema, env overrides
+All design docs live in `docs/`. **Do NOT use @ references here** -- read them on demand with the Read tool when needed.
+See the memory file for a quick reference of which doc covers what topic.
 
 ## Coding Conventions
 

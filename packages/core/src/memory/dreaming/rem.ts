@@ -14,11 +14,11 @@ import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 import type { ModelRouter } from "../../llm/router.ts";
 import type { Logger } from "../../logging/logger.ts";
 import type { GraphMemory } from "../graph.ts";
-import type { Triple } from "../knowledge-graph/complex.ts";
-import { ComplExEmbeddings } from "../knowledge-graph/complex.ts";
-import type { KGRelationStore, RelationPredicate } from "../knowledge-graph/relations.ts";
+import type { ComplExEmbeddings } from "../knowledge-graph/complex.ts";
+import type { KGRelationStore } from "../knowledge-graph/relations.ts";
 import type { MemorySearch } from "../search.ts";
 import type { MemoryStore } from "../store.ts";
+import { predictAndStoreLinks, trainComplEx } from "./rem-complex.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -57,7 +57,6 @@ const DEFAULT_RECENT_DAYS = 7;
 const DEFAULT_MAX_NEIGHBORS = 5;
 const MIN_SIMILARITY_FOR_EDGE = 0.3;
 const MIN_INSIGHT_CONFIDENCE = 0.5;
-const MIN_PREDICTION_CONFIDENCE = 0.7;
 
 const ASSOCIATION_PROMPT_SYSTEM = `You are a memory analysis system. Given a recent memory and a list of related memories, find non-obvious connections, patterns, or insights that link them. Focus on connections that are NOT immediately apparent from surface-level similarity.
 
@@ -216,12 +215,12 @@ export class RemPhase {
       let complexTrained = false;
       let predictionsCreated = 0;
       if (this.complex && this.kgRelations) {
-        const trainResult = this.trainComplEx();
+        const trainResult = trainComplEx(this.complex, this.kgRelations, this.logger);
         complexTrained = trainResult.ok;
 
         // 6. Predict new links and store high-confidence predictions
         if (complexTrained) {
-          const predResult = this.predictAndStoreLinks();
+          const predResult = predictAndStoreLinks(this.complex, this.kgRelations, this.logger);
           if (predResult.ok) {
             predictionsCreated = predResult.value;
           }
@@ -377,93 +376,4 @@ export class RemPhase {
     }
   }
 
-  /** Collect all triples from KG relations (using entity IDs) and train ComplEx. */
-  private trainComplEx(): Result<void, EidolonError> {
-    if (!this.complex || !this.kgRelations) {
-      return Ok(undefined);
-    }
-
-    const triplesResult = this.kgRelations.getAllTriplesWithIds(10000);
-    if (!triplesResult.ok) return triplesResult;
-
-    const triples: Triple[] = triplesResult.value.map((t) => ({
-      subject: t.subjectId,
-      predicate: t.predicate,
-      object: t.objectId,
-    }));
-
-    if (triples.length === 0) {
-      return Ok(undefined);
-    }
-
-    const entityIds = [...new Set(triples.flatMap((t) => [t.subject, t.object]))];
-    const trainResult = this.complex.train(triples, entityIds);
-
-    if (!trainResult.ok) return trainResult;
-
-    this.logger.debug("trainComplEx", "ComplEx training complete", {
-      triples: triples.length,
-      loss: trainResult.value.loss,
-    });
-
-    return Ok(undefined);
-  }
-
-  /**
-   * Predict new links using trained ComplEx embeddings and store high-confidence
-   * predictions as new relations with source='prediction'.
-   */
-  private predictAndStoreLinks(): Result<number, EidolonError> {
-    if (!this.complex || !this.kgRelations) {
-      return Ok(0);
-    }
-
-    const triplesResult = this.kgRelations.getAllTriplesWithIds(10000);
-    if (!triplesResult.ok) return triplesResult;
-
-    if (triplesResult.value.length === 0) {
-      return Ok(0);
-    }
-
-    const entityIds = [...new Set(triplesResult.value.flatMap((t) => [t.subjectId, t.objectId]))];
-    const predicates = [...new Set(triplesResult.value.map((t) => t.predicate))];
-
-    // Build a set of existing triples for fast lookup
-    const existingTriples = new Set(triplesResult.value.map((t) => `${t.subjectId}|${t.predicate}|${t.objectId}`));
-
-    let created = 0;
-
-    for (const entityId of entityIds) {
-      const predictions = this.complex.predictLinks(entityId, predicates, entityIds, 5);
-      if (!predictions.ok) continue;
-
-      for (const pred of predictions.value) {
-        // Skip if triple already exists or score is too low
-        const key = `${pred.subject}|${pred.predicate}|${pred.object}`;
-        if (existingTriples.has(key)) continue;
-        if (pred.score < MIN_PREDICTION_CONFIDENCE) continue;
-
-        // Validate that the predicate is a valid RelationPredicate before creating
-        const createResult = this.kgRelations.create({
-          sourceId: pred.subject,
-          targetId: pred.object,
-          type: pred.predicate as RelationPredicate,
-          confidence: Math.min(ComplExEmbeddings.sigmoid(pred.score), 0.9),
-          source: "prediction",
-        });
-
-        if (createResult.ok) {
-          created++;
-          existingTriples.add(key);
-        }
-      }
-    }
-
-    this.logger.debug("predictAndStoreLinks", `Stored ${created} predicted relations`, {
-      totalEntities: entityIds.length,
-      totalPredicates: predicates.length,
-    });
-
-    return Ok(created);
-  }
 }

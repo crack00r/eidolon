@@ -1,0 +1,33 @@
+node_modules
+**/node_modules
+dist
+**/dist
+.git
+.github
+.claude
+.vscode
+*.md
+!pnpm-workspace.yaml
+
+# Desktop / iOS / Web apps (not needed for daemon)
+apps/
+
+# Test files
+**/*.test.ts
+**/*.spec.ts
+**/__tests__/
+
+# Build artifacts
+*.tsbuildinfo
+coverage/
+
+# Secrets and local config
+.env
+.env.*
+*.pem
+*.key
+secrets.enc
+
+# OS files
+.DS_Store
+Thumbs.db

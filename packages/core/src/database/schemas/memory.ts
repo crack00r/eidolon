@@ -200,4 +200,19 @@ export const MEMORY_MIGRATIONS: ReadonlyArray<Migration> = [
       -- SQLite cannot drop columns in older versions; importance column remains.
     `,
   },
+  {
+    version: 6,
+    name: "add_user_id_to_memories",
+    database: "memory",
+    up: `
+      -- Multi-user support: scope memories to individual users.
+      -- Default value "default" ensures backward compatibility with existing data.
+      ALTER TABLE memories ADD COLUMN user_id TEXT NOT NULL DEFAULT 'default';
+      CREATE INDEX IF NOT EXISTS idx_memories_user_id ON memories(user_id);
+    `,
+    down: `
+      DROP INDEX IF EXISTS idx_memories_user_id;
+      -- SQLite cannot drop columns in older versions; user_id column remains.
+    `,
+  },
 ];

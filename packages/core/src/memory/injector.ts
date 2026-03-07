@@ -13,12 +13,13 @@
 
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { EidolonError, Memory, MemoryType, Result } from "@eidolon/protocol";
+import type { EidolonError, Memory, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 import type { Logger } from "../logging/logger.ts";
 import type { CommunityDetector } from "./knowledge-graph/communities.ts";
 import type { KGEntityStore } from "./knowledge-graph/entities.ts";
 import type { KGRelationStore, TripleResult } from "./knowledge-graph/relations.ts";
+import { formatMemoryMarkdown, type KnowledgeGraphContext, sanitizeForMarkdown } from "./injector-format.ts";
 import type { MemorySearch } from "./search.ts";
 import type { MemoryStore } from "./store.ts";
 
@@ -47,12 +48,6 @@ export interface InjectionContext {
   readonly staticContext?: string;
 }
 
-/** Aggregated Knowledge Graph context for MEMORY.md injection. */
-interface KnowledgeGraphContext {
-  readonly triples: readonly TripleResult[];
-  readonly communitySummaries: readonly string[];
-}
-
 // ---------------------------------------------------------------------------
 // Defaults
 // ---------------------------------------------------------------------------
@@ -63,40 +58,6 @@ const DEFAULT_MAX_COMMUNITIES = 3;
 const DEFAULT_INCLUDE_KG = true;
 const RECENT_HIGH_CONFIDENCE_LIMIT = 10;
 const MIN_CONFIDENCE_RECENT = 0.8;
-
-// ---------------------------------------------------------------------------
-// Display labels for memory types
-// ---------------------------------------------------------------------------
-
-const TYPE_LABELS: Record<MemoryType, string> = {
-  fact: "Facts",
-  preference: "Preferences",
-  decision: "Decisions",
-  episode: "Episodes",
-  skill: "Skills",
-  relationship: "Relationships",
-  schema: "Schemas",
-};
-
-/** Desired display order for memory type sections. */
-const TYPE_ORDER: readonly MemoryType[] = [
-  "fact",
-  "preference",
-  "decision",
-  "skill",
-  "episode",
-  "relationship",
-  "schema",
-];
-
-/**
- * Sanitize user-sourced content before embedding in Markdown.
- * Escapes Markdown special characters and replaces newlines with spaces
- * to prevent prompt injection via memory content or KG triple names.
- */
-function sanitizeForMarkdown(text: string): string {
-  return text.replace(/\n/g, " ").replace(/[#*\->`[\]\\`<]/g, (ch) => `\\${ch}`);
-}
 
 // ---------------------------------------------------------------------------
 // MemoryInjector
@@ -312,7 +273,7 @@ export class MemoryInjector {
   }
 
   // -----------------------------------------------------------------------
-  // Private: markdown formatting
+  // Private: markdown formatting (delegated to injector-format.ts)
   // -----------------------------------------------------------------------
 
   private formatMarkdown(
@@ -320,89 +281,6 @@ export class MemoryInjector {
     memories: readonly Memory[],
     kgContext: KnowledgeGraphContext,
   ): string {
-    const sections: string[] = ["# Memory Context"];
-    const { triples, communitySummaries } = kgContext;
-
-    // Static context
-    if (staticContext) {
-      sections.push("");
-      sections.push(sanitizeForMarkdown(staticContext));
-    }
-
-    // No content at all
-    if (memories.length === 0 && triples.length === 0 && communitySummaries.length === 0 && !staticContext) {
-      sections.push("");
-      sections.push("No relevant memories found for this context.");
-      return `${sections.join("\n")}\n`;
-    }
-
-    // Group memories by type
-    if (memories.length > 0) {
-      const grouped = this.groupByType(memories);
-
-      sections.push("");
-      sections.push("## Key Memories");
-
-      for (const type of TYPE_ORDER) {
-        const group = grouped.get(type);
-        if (!group || group.length === 0) continue;
-
-        const label = TYPE_LABELS[type];
-        sections.push("");
-        sections.push(`### ${label}`);
-        for (const memory of group) {
-          sections.push(`- ${sanitizeForMarkdown(memory.content)}`);
-        }
-      }
-    }
-
-    // Knowledge Graph Context (triples + communities)
-    if (triples.length > 0 || communitySummaries.length > 0) {
-      sections.push("");
-      sections.push("## Knowledge Graph Context");
-
-      if (triples.length > 0) {
-        for (const triple of triples) {
-          const subject = sanitizeForMarkdown(triple.subject);
-          const predicate = sanitizeForMarkdown(triple.predicate);
-          const object = sanitizeForMarkdown(triple.object);
-          sections.push(`- ${subject} ${predicate} ${object} (confidence: ${triple.confidence})`);
-        }
-      }
-
-      if (communitySummaries.length > 0) {
-        sections.push("");
-        sections.push("### Related Clusters");
-        for (const summary of communitySummaries) {
-          sections.push(`- ${summary}`);
-        }
-      }
-    }
-
-    // Append context providers (HA state, calendar schedule, etc.)
-    for (const provider of this.contextProviders) {
-      const result = provider();
-      if (result.ok && result.value.length > 0) {
-        sections.push("");
-        sections.push(result.value);
-      }
-    }
-
-    return `${sections.join("\n")}\n`;
-  }
-
-  private groupByType(memories: readonly Memory[]): Map<MemoryType, Memory[]> {
-    const grouped = new Map<MemoryType, Memory[]>();
-
-    for (const memory of memories) {
-      const existing = grouped.get(memory.type);
-      if (existing) {
-        existing.push(memory);
-      } else {
-        grouped.set(memory.type, [memory]);
-      }
-    }
-
-    return grouped;
+    return formatMemoryMarkdown(staticContext, memories, kgContext, this.contextProviders);
   }
 }

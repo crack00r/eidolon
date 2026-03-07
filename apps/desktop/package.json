@@ -8,6 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "tauri": "tauri",
+    "test": "bun test src/",
     "typecheck": "svelte-check --tsconfig ./tsconfig.json"
   },
   "dependencies": {

@@ -1,8 +1,10 @@
 // @eidolon/core -- The Brain
 // All business logic: config, secrets, database, logging, memory, loop, channels, etc.
 
+export * from "./anticipation/index.ts";
 export * from "./audit/index.ts";
 export * from "./backup/index.ts";
+export * from "./browser/index.ts";
 export * from "./calendar/index.ts";
 export * from "./channels/index.ts";
 export * from "./claude/index.ts";
@@ -26,7 +28,12 @@ export * from "./metrics/index.ts";
 export * from "./notifications/index.ts";
 export * from "./plugins/index.ts";
 export * from "./privacy/index.ts";
+export * from "./projects/index.ts";
+export * from "./replication/index.ts";
 export * from "./research/index.ts";
 export * from "./scheduler/index.ts";
 export * from "./secrets/index.ts";
 export * from "./telemetry/index.ts";
+export * from "./users/index.ts";
+export * from "./workflow/index.ts";
+export * from "./wyoming/index.ts";
