@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.12](https://github.com/crack00r/eidolon/compare/v0.1.11...v0.1.12) (2026-03-07)
+
+
+### Bug Fixes
+
+* **desktop:** fix bun eval and onboarding server setup ([e62a3a7](https://github.com/crack00r/eidolon/commit/e62a3a721e201273145ddd029bdcdc9d9a193b7d))
+
 ## [0.1.11](https://github.com/crack00r/eidolon/compare/v0.1.10...v0.1.11) (2026-03-07)
 
 

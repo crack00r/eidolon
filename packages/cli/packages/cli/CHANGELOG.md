@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.1.11](https://github.com/crack00r/eidolon/compare/v0.1.10...v0.1.11) (2026-03-07)
+
+
+### Features
+
+* **cli:** add daemon logs command ([5bce1ad](https://github.com/crack00r/eidolon/commit/5bce1ad48eb8177527d995c6cd015940c093a534))
+
+
+### Bug Fixes
+
+* **cli:** pass --config flag to EidolonDaemon in foreground mode ([c9ba26c](https://github.com/crack00r/eidolon/commit/c9ba26c9d7863cc7079bebf2e39195730b8af0b4))
+* **core,cli:** resolve all lint errors across codebase ([bf3de05](https://github.com/crack00r/eidolon/commit/bf3de0597bf920da5f568129175726e40531fca7))
+* **protocol,cli:** resolve lint errors and update test mocks ([74b018a](https://github.com/crack00r/eidolon/commit/74b018a798859d06309005598660cafe6bf75bff))
+
+
+### Code Refactoring
+
+* **cli:** delegate onboarding logic to shared core modules ([e1ca7b2](https://github.com/crack00r/eidolon/commit/e1ca7b2b4fc7e3bff74c3b8a1339999af9b993e7))
+
+
+### Miscellaneous
+
+* release main ([2d597dd](https://github.com/crack00r/eidolon/commit/2d597dd6d378857a2dd0e09e9be5b95d12082eea))
+* release main ([5ebae5c](https://github.com/crack00r/eidolon/commit/5ebae5ce643baf3cf5ad60ef0391a3a81d4f23c7))
+
 ## [0.1.10](https://github.com/crack00r/eidolon/compare/v0.1.9...v0.1.10) (2026-03-07)
 
 
