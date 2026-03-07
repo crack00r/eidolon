@@ -44,7 +44,10 @@ export function buildFoundationSteps(modules: InitializedModules, options?: Daem
     fn: async () => {
       const result = await loadConfig(options?.configPath);
       if (!result.ok) {
-        throw new Error(`Config load failed: ${result.error.message}`);
+        const msg = result.error.message.includes("not found")
+          ? `${result.error.message}\n\nRun 'eidolon onboard' to set up your configuration, or use --config <path> to specify a config file.`
+          : result.error.message;
+        throw new Error(`Config load failed: ${msg}`);
       }
       modules.config = result.value;
       const logDir = result.value.logging.directory;
