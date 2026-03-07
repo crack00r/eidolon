@@ -28,11 +28,7 @@ export class ContextEnricher {
   private readonly calendarManager: CalendarManager | null;
   private readonly logger: Logger;
 
-  constructor(
-    memorySearch: MemorySearch,
-    calendarManager: CalendarManager | null,
-    logger: Logger,
-  ) {
+  constructor(memorySearch: MemorySearch, calendarManager: CalendarManager | null, logger: Logger) {
     this.memorySearch = memorySearch;
     this.calendarManager = calendarManager;
     this.logger = logger;
@@ -94,15 +90,11 @@ export class ContextEnricher {
       case "meeting_prep":
         return pattern.relevantEntities.join(" ");
       case "travel_prep": {
-        const dest = typeof pattern.metadata.destination === "string"
-          ? pattern.metadata.destination
-          : "";
+        const dest = typeof pattern.metadata.destination === "string" ? pattern.metadata.destination : "";
         return dest || (pattern.relevantEntities[0] ?? "");
       }
       case "follow_up":
-        return typeof pattern.metadata.commitment === "string"
-          ? pattern.metadata.commitment
-          : "";
+        return typeof pattern.metadata.commitment === "string" ? pattern.metadata.commitment : "";
       case "birthday_reminder":
         return pattern.relevantEntities[0] ?? "";
       case "health_nudge":

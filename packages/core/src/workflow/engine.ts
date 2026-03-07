@@ -9,11 +9,19 @@
 import { randomUUID } from "node:crypto";
 import type { BusEvent, EidolonError, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
+import type { Logger } from "../logging/logger.ts";
 import type { EventHandlerResult } from "../loop/cognitive-loop.ts";
 import type { EventBus } from "../loop/event-bus.ts";
-import type { Logger } from "../logging/logger.ts";
-import { interpolateConfig } from "./interpolation.ts";
+import {
+  advanceWorkflow as advanceWorkflowImpl,
+  handleStepFailure as handleStepFailureImpl,
+  markStepSkipped as markStepSkippedImpl,
+  publishReadySteps as publishReadyStepsImpl,
+  validateDag,
+} from "./engine-dag.ts";
 import type { StepExecutorRegistry } from "./executor-registry.ts";
+import { evaluateCondition } from "./executors/condition.ts";
+import { interpolateConfig } from "./interpolation.ts";
 import type { WorkflowStore } from "./store.ts";
 import type {
   IWorkflowEngine,
@@ -25,18 +33,7 @@ import type {
   WorkflowStepReadyPayload,
   WorkflowTriggerPayload,
 } from "./types.ts";
-import {
-  DEFAULT_STEP_TIMEOUT_MS,
-  MAX_CONCURRENT_WORKFLOWS,
-} from "./types.ts";
-import { evaluateCondition } from "./executors/condition.ts";
-import {
-  advanceWorkflow as advanceWorkflowImpl,
-  handleStepFailure as handleStepFailureImpl,
-  markStepSkipped as markStepSkippedImpl,
-  publishReadySteps as publishReadyStepsImpl,
-  validateDag,
-} from "./engine-dag.ts";
+import { DEFAULT_STEP_TIMEOUT_MS, MAX_CONCURRENT_WORKFLOWS } from "./types.ts";
 
 // ---------------------------------------------------------------------------
 // WorkflowEngine
@@ -65,7 +62,12 @@ export class WorkflowEngine implements IWorkflowEngine {
     const countResult = this.store.countActiveRuns();
     if (!countResult.ok) return Err(countResult.error);
     if (countResult.value >= MAX_CONCURRENT_WORKFLOWS) {
-      return Err(createError(ErrorCode.SESSION_LIMIT_REACHED, `Maximum ${MAX_CONCURRENT_WORKFLOWS} concurrent workflows reached`));
+      return Err(
+        createError(
+          ErrorCode.SESSION_LIMIT_REACHED,
+          `Maximum ${MAX_CONCURRENT_WORKFLOWS} concurrent workflows reached`,
+        ),
+      );
     }
 
     // Verify definition exists
@@ -138,10 +140,14 @@ export class WorkflowEngine implements IWorkflowEngine {
     const updateResult = this.store.updateRunStatus(runId, "cancelled");
     if (!updateResult.ok) return Err(updateResult.error);
 
-    this.eventBus.publish("workflow:cancelled", { runId, definitionId: run.definitionId }, {
-      priority: "normal",
-      source: "workflow-engine",
-    });
+    this.eventBus.publish(
+      "workflow:cancelled",
+      { runId, definitionId: run.definitionId },
+      {
+        priority: "normal",
+        source: "workflow-engine",
+      },
+    );
 
     this.logger.info("workflow-engine", `Cancelled workflow run: ${runId}`);
     return Ok(undefined);
@@ -272,11 +278,15 @@ export class WorkflowEngine implements IWorkflowEngine {
       };
       this.store.updateRunStatus(runId, "running", { context: newContext, currentStepId: null });
 
-      this.eventBus.publish("workflow:step_completed", {
-        runId,
-        stepId,
-        tokensUsed: execResult.value.tokensUsed,
-      }, { priority: "normal", source: "workflow-engine" });
+      this.eventBus.publish(
+        "workflow:step_completed",
+        {
+          runId,
+          stepId,
+          tokensUsed: execResult.value.tokensUsed,
+        },
+        { priority: "normal", source: "workflow-engine" },
+      );
 
       advanceWorkflowImpl(runId, defResult.value, this.store, this.eventBus, this.logger);
       return { success: true, tokensUsed: execResult.value.tokensUsed };
@@ -309,10 +319,14 @@ export class WorkflowEngine implements IWorkflowEngine {
           completedAt: null,
           tokensUsed: 0,
         });
-        this.eventBus.publish("workflow:step_ready", { runId, stepId }, {
-          priority: "normal",
-          source: "workflow-engine",
-        });
+        this.eventBus.publish(
+          "workflow:step_ready",
+          { runId, stepId },
+          {
+            priority: "normal",
+            source: "workflow-engine",
+          },
+        );
       }, backoff);
 
       return { success: true, tokensUsed: 0 };
@@ -386,5 +400,4 @@ export class WorkflowEngine implements IWorkflowEngine {
       return Err(createError(ErrorCode.TIMEOUT, `Step execution error: ${msg}`, err));
     }
   }
-
 }

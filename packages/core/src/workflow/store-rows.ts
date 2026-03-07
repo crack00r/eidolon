@@ -78,9 +78,7 @@ export function rowToDefinition(row: DefinitionRow): WorkflowDefinition {
   };
 }
 
-export function rowToRun(
-  row: RunRow,
-): WorkflowRun {
+export function rowToRun(row: RunRow): WorkflowRun {
   return {
     id: row.id,
     definitionId: row.definition_id,

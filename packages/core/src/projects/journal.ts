@@ -56,10 +56,7 @@ export class ProjectJournal {
   }
 
   /** Generate a daily journal entry for a project. Skips if already exists. */
-  async generateDaily(
-    project: Project,
-    date?: number,
-  ): Promise<Result<ProjectJournalEntry | null, EidolonError>> {
+  async generateDaily(project: Project, date?: number): Promise<Result<ProjectJournalEntry | null, EidolonError>> {
     const dayStart = startOfDayUtc(date ?? Date.now());
     const dayEnd = dayStart + MS_PER_DAY;
 
@@ -73,9 +70,7 @@ export class ProjectJournal {
     if (!commitsResult.ok) return commitsResult;
 
     // Filter to only commits within the day
-    const dayCommits = commitsResult.value.filter(
-      (c) => c.date >= dayStart && c.date < dayEnd,
-    );
+    const dayCommits = commitsResult.value.filter((c) => c.date >= dayStart && c.date < dayEnd);
 
     if (dayCommits.length === 0) return Ok(null); // nothing to report
 
@@ -100,10 +95,7 @@ export class ProjectJournal {
   }
 
   /** Generate a weekly journal entry for a project. Skips if already exists. */
-  async generateWeekly(
-    project: Project,
-    date?: number,
-  ): Promise<Result<ProjectJournalEntry | null, EidolonError>> {
+  async generateWeekly(project: Project, date?: number): Promise<Result<ProjectJournalEntry | null, EidolonError>> {
     const weekStart = startOfWeekUtc(date ?? Date.now());
     const weekEnd = weekStart + MS_PER_WEEK;
 
@@ -116,9 +108,7 @@ export class ProjectJournal {
     const commitsResult = await this.git.getCommits(project.repoPath, 500, weekStart);
     if (!commitsResult.ok) return commitsResult;
 
-    const weekCommits = commitsResult.value.filter(
-      (c) => c.date >= weekStart && c.date < weekEnd,
-    );
+    const weekCommits = commitsResult.value.filter((c) => c.date >= weekStart && c.date < weekEnd);
 
     if (weekCommits.length === 0) return Ok(null);
 
@@ -162,9 +152,7 @@ export class ProjectJournal {
       const rows = this.db.query(sql).all(...params) as ProjectJournalRow[];
       return Ok(rows.map(rowToJournalEntry));
     } catch (cause) {
-      return Err(
-        createError(ErrorCode.DB_QUERY_FAILED, `Failed to get journal entries for ${projectId}`, cause),
-      );
+      return Err(createError(ErrorCode.DB_QUERY_FAILED, `Failed to get journal entries for ${projectId}`, cause));
     }
   }
 
@@ -176,9 +164,7 @@ export class ProjectJournal {
   ): Result<ProjectJournalEntry | null, EidolonError> {
     try {
       const row = this.db
-        .query(
-          "SELECT * FROM project_journal WHERE project_id = ? AND period = ? AND period_start = ?",
-        )
+        .query("SELECT * FROM project_journal WHERE project_id = ? AND period = ? AND period_start = ?")
         .get(projectId, period, periodStart) as ProjectJournalRow | null;
       return Ok(row ? rowToJournalEntry(row) : null);
     } catch (cause) {

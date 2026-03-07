@@ -30,9 +30,7 @@ const TEMPLATES: Record<PatternType, TemplateDefinition> = {
       if (ctx.relatedMemories.length > 0) {
         lines.push("Letzte Gespraeche:");
         for (const mem of ctx.relatedMemories.slice(0, 3)) {
-          const summary = mem.memory.content.length > 80
-            ? `${mem.memory.content.slice(0, 77)}...`
-            : mem.memory.content;
+          const summary = mem.memory.content.length > 80 ? `${mem.memory.content.slice(0, 77)}...` : mem.memory.content;
           lines.push(`  - ${summary}`);
         }
       }
@@ -61,9 +59,7 @@ const TEMPLATES: Record<PatternType, TemplateDefinition> = {
       if (ctx.relatedMemories.length > 0) {
         lines.push("Fruehere Besuche:");
         for (const mem of ctx.relatedMemories.slice(0, 2)) {
-          const summary = mem.memory.content.length > 80
-            ? `${mem.memory.content.slice(0, 77)}...`
-            : mem.memory.content;
+          const summary = mem.memory.content.length > 80 ? `${mem.memory.content.slice(0, 77)}...` : mem.memory.content;
           lines.push(`  - ${summary}`);
         }
       }
@@ -103,9 +99,7 @@ const TEMPLATES: Record<PatternType, TemplateDefinition> = {
       if (ctx.relatedMemories.length > 0) {
         lines.push("\nLetzte Interaktionen:");
         for (const mem of ctx.relatedMemories.slice(0, 2)) {
-          const summary = mem.memory.content.length > 80
-            ? `${mem.memory.content.slice(0, 77)}...`
-            : mem.memory.content;
+          const summary = mem.memory.content.length > 80 ? `${mem.memory.content.slice(0, 77)}...` : mem.memory.content;
           lines.push(`  - ${summary}`);
         }
       }

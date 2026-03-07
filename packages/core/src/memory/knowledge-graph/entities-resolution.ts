@@ -142,14 +142,10 @@ export function findOrCreateWithResolution(
   if (similarResult.value.length > 0) {
     const best = similarResult.value[0];
     if (best) {
-      logger.debug(
-        "findOrCreateWithResolution",
-        `Resolved "${input.name}" to existing entity "${best.entity.name}"`,
-        {
-          similarity: best.similarity,
-          type: input.type,
-        },
-      );
+      logger.debug("findOrCreateWithResolution", `Resolved "${input.name}" to existing entity "${best.entity.name}"`, {
+        similarity: best.similarity,
+        type: input.type,
+      });
       return Ok({ entity: best.entity, created: false });
     }
   }

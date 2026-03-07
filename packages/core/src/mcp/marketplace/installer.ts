@@ -66,7 +66,10 @@ export class McpInstaller {
     const packageName = extractPackageName(template.args);
     if (!packageName) {
       return Err(
-        createError(ErrorCode.CONFIG_INVALID, `Cannot determine package name from template args: ${template.args.join(" ")}`),
+        createError(
+          ErrorCode.CONFIG_INVALID,
+          `Cannot determine package name from template args: ${template.args.join(" ")}`,
+        ),
       );
     }
 
@@ -112,7 +115,11 @@ export class McpInstaller {
       ]);
 
       if (exitCode === "timeout") {
-        try { proc.kill(); } catch { /* best effort */ }
+        try {
+          proc.kill();
+        } catch {
+          /* best effort */
+        }
         const error = `Installation timed out after ${INSTALL_TIMEOUT_MS}ms`;
         this.registry.updateStatus(templateId, "failed", error);
         return Err(createError(ErrorCode.TIMEOUT, error));

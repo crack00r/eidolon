@@ -4,15 +4,8 @@
  * Subcommands: list, add, remove, status, journal, sync.
  */
 
-import {
-  createLogger,
-  DatabaseManager,
-  GitAnalyzer,
-  loadConfig,
-  ProjectJournal,
-  ProjectManager,
-} from "@eidolon/core";
 import type { Logger } from "@eidolon/core";
+import { createLogger, DatabaseManager, GitAnalyzer, loadConfig, ProjectJournal, ProjectManager } from "@eidolon/core";
 import type { EidolonConfig } from "@eidolon/protocol";
 import type { Command } from "commander";
 import { formatTable } from "../utils/formatter.ts";

@@ -2,11 +2,11 @@
  * Tests for the ReplicationManager.
  */
 
-import { describe, expect, test, beforeEach } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
 import type { ReplicationConfig } from "@eidolon/protocol";
 import { createLogger } from "../../logging/logger.ts";
-import type { ReplicationMessage } from "../protocol.ts";
 import { ReplicationManager } from "../manager.ts";
+import type { ReplicationMessage } from "../protocol.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -31,7 +31,9 @@ function makeLogger() {
 }
 
 /** Minimal mock DatabaseManager that satisfies the type for constructor. */
-function makeMockDbManager(): Parameters<typeof ReplicationManager.prototype.handleMessage extends (...args: infer A) => unknown ? never : never> & {
+function makeMockDbManager(): Parameters<
+  typeof ReplicationManager.prototype.handleMessage extends (...args: infer A) => unknown ? never : never
+> & {
   memory: { exec: (sql: string) => void; query: (sql: string) => { get: () => unknown } };
   operational: { exec: (sql: string) => void; query: (sql: string) => { get: () => unknown } };
   audit: { exec: (sql: string) => void; query: (sql: string) => { get: () => unknown } };

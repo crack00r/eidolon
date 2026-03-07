@@ -25,18 +25,13 @@ export function interpolate(template: string, context: WorkflowContext): string 
  * Deeply interpolate all string values in a config object.
  * Returns a new object with all string values interpolated.
  */
-export function interpolateConfig(
-  config: Record<string, unknown>,
-  context: WorkflowContext,
-): Record<string, unknown> {
+export function interpolateConfig(config: Record<string, unknown>, context: WorkflowContext): Record<string, unknown> {
   const result: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(config)) {
     if (typeof value === "string") {
       result[key] = interpolate(value, context);
     } else if (Array.isArray(value)) {
-      result[key] = value.map((item) =>
-        typeof item === "string" ? interpolate(item, context) : item,
-      );
+      result[key] = value.map((item) => (typeof item === "string" ? interpolate(item, context) : item));
     } else if (value !== null && typeof value === "object") {
       result[key] = interpolateConfig(value as Record<string, unknown>, context);
     } else {
@@ -52,9 +47,8 @@ export function interpolateConfig(
  */
 export function extractReferences(template: string): readonly string[] {
   const refs: string[] = [];
-  let match: RegExpExecArray | null;
   const regex = new RegExp(PLACEHOLDER_REGEX.source, "g");
-  while ((match = regex.exec(template)) !== null) {
+  for (const match of template.matchAll(regex)) {
     const stepId = match[1];
     if (stepId && !refs.includes(stepId)) {
       refs.push(stepId);

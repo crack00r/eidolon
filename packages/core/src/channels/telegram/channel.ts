@@ -387,5 +387,4 @@ export class TelegramChannel implements Channel {
       span.end();
     }
   }
-
 }

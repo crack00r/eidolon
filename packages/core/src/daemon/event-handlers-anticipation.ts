@@ -75,10 +75,7 @@ export async function handleAnticipationSuggestion(
   );
 
   if (!sendResult.ok) {
-    logger.error(
-      "loop-handler",
-      `Suggestion delivery failed to ${payload.channelId}: ${sendResult.error.message}`,
-    );
+    logger.error("loop-handler", `Suggestion delivery failed to ${payload.channelId}: ${sendResult.error.message}`);
     return { success: false, tokensUsed: 0, error: sendResult.error.message };
   }
 
@@ -106,7 +103,7 @@ function parsePayload(raw: unknown): AnticipationSuggestionPayload | null {
     title: obj.title,
     body: obj.body,
     channelId: obj.channelId,
-    priority: (obj.priority === "critical" || obj.priority === "low") ? obj.priority : "normal",
+    priority: obj.priority === "critical" || obj.priority === "low" ? obj.priority : "normal",
     actionable: typeof obj.actionable === "boolean" ? obj.actionable : false,
     suggestedAction: typeof obj.suggestedAction === "string" ? obj.suggestedAction : undefined,
     calendarEventId: typeof obj.calendarEventId === "string" ? obj.calendarEventId : undefined,

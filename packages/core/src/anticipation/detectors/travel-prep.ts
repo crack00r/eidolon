@@ -10,8 +10,18 @@ const DETECTOR_ID = "travel_prep";
 
 /** Keywords that suggest travel when found in event title or description. */
 const TRAVEL_KEYWORDS = [
-  "trip", "travel", "flight", "train", "hotel", "reise", "flug", "zug",
-  "airport", "bahnhof", "anreise", "abreise",
+  "trip",
+  "travel",
+  "flight",
+  "train",
+  "hotel",
+  "reise",
+  "flug",
+  "zug",
+  "airport",
+  "bahnhof",
+  "anreise",
+  "abreise",
 ];
 
 export class TravelPrepDetector implements IPatternDetector {
@@ -55,9 +65,7 @@ export class TravelPrepDetector implements IPatternDetector {
         metadata.destination = location;
       } else {
         // Check for travel keywords in title/description
-        const hasKeyword = TRAVEL_KEYWORDS.some(
-          (kw) => title.includes(kw) || description.includes(kw),
-        );
+        const hasKeyword = TRAVEL_KEYWORDS.some((kw) => title.includes(kw) || description.includes(kw));
         if (hasKeyword) {
           confidence = 0.5;
         }

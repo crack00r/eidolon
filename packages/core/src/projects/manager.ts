@@ -11,17 +11,11 @@ import type { EidolonError, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 import type { Logger } from "../logging/logger.ts";
 import { GitAnalyzer } from "./git-analyzer.ts";
-import type {
-  CreateProjectInput,
-  Project,
-  ProjectRow,
-  ProjectStatus,
-  UpdateProjectInput,
-} from "./schema.ts";
+import type { CreateProjectInput, Project, ProjectRow, ProjectStatus, UpdateProjectInput } from "./schema.ts";
 import {
   CreateProjectInputSchema,
-  PROJECTS_TABLE_SQL,
   PROJECT_JOURNAL_TABLE_SQL,
+  PROJECTS_TABLE_SQL,
   rowToProject,
   UpdateProjectInputSchema,
 } from "./schema.ts";
@@ -56,29 +50,23 @@ export class ProjectManager {
   async create(input: CreateProjectInput): Promise<Result<Project, EidolonError>> {
     const parsed = CreateProjectInputSchema.safeParse(input);
     if (!parsed.success) {
-      return Err(
-        createError(ErrorCode.CONFIG_INVALID, `Invalid project input: ${parsed.error.message}`),
-      );
+      return Err(createError(ErrorCode.CONFIG_INVALID, `Invalid project input: ${parsed.error.message}`));
     }
 
     // Check that the path is a git repo
     const isRepo = await this.git.isGitRepo(parsed.data.repoPath);
     if (!isRepo.ok) return isRepo;
     if (!isRepo.value) {
-      return Err(
-        createError(ErrorCode.CONFIG_INVALID, `Path is not a git repository: ${parsed.data.repoPath}`),
-      );
+      return Err(createError(ErrorCode.CONFIG_INVALID, `Path is not a git repository: ${parsed.data.repoPath}`));
     }
 
     // Check for duplicate name
     try {
-      const existing = this.db
-        .query("SELECT id FROM projects WHERE name = ?")
-        .get(parsed.data.name) as { id: string } | null;
+      const existing = this.db.query("SELECT id FROM projects WHERE name = ?").get(parsed.data.name) as {
+        id: string;
+      } | null;
       if (existing) {
-        return Err(
-          createError(ErrorCode.DB_QUERY_FAILED, `Project with name "${parsed.data.name}" already exists`),
-        );
+        return Err(createError(ErrorCode.DB_QUERY_FAILED, `Project with name "${parsed.data.name}" already exists`));
       }
     } catch (cause) {
       return Err(createError(ErrorCode.DB_QUERY_FAILED, "Failed to check for duplicate project", cause));
@@ -147,9 +135,7 @@ export class ProjectManager {
   update(id: string, input: UpdateProjectInput): Result<Project, EidolonError> {
     const parsed = UpdateProjectInputSchema.safeParse(input);
     if (!parsed.success) {
-      return Err(
-        createError(ErrorCode.CONFIG_INVALID, `Invalid update input: ${parsed.error.message}`),
-      );
+      return Err(createError(ErrorCode.CONFIG_INVALID, `Invalid update input: ${parsed.error.message}`));
     }
 
     try {
@@ -224,20 +210,19 @@ export class ProjectManager {
     const project = projectResult.value;
     const repoPath = project.repoPath;
 
-    const [branchResult, branchesResult, commitsResult, changesResult, aheadBehindResult] =
-      await Promise.all([
-        this.git.getCurrentBranch(repoPath),
-        this.git.getBranches(repoPath),
-        this.git.getCommits(repoPath, 10),
-        this.git.getUncommittedCount(repoPath),
-        this.git.getAheadBehind(repoPath),
-      ]);
+    const [branchResult, branchesResult, commitsResult, changesResult, aheadBehindResult] = await Promise.all([
+      this.git.getCurrentBranch(repoPath),
+      this.git.getBranches(repoPath),
+      this.git.getCommits(repoPath, 10),
+      this.git.getUncommittedCount(repoPath),
+      this.git.getAheadBehind(repoPath),
+    ]);
 
     const currentBranch = branchResult.ok ? branchResult.value : "unknown";
     const branches = branchesResult.ok ? branchesResult.value : [];
     const recentCommits = commitsResult.ok ? commitsResult.value : [];
     const uncommittedChanges = changesResult.ok ? changesResult.value : 0;
-    const aheadBehind = aheadBehindResult.ok ? aheadBehindResult.value ?? undefined : undefined;
+    const aheadBehind = aheadBehindResult.ok ? (aheadBehindResult.value ?? undefined) : undefined;
 
     return Ok({
       project,

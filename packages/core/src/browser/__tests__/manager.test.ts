@@ -2,7 +2,7 @@
  * Tests for BrowserManager.
  */
 
-import { describe, expect, it, beforeEach } from "bun:test";
+import { beforeEach, describe, expect, it } from "bun:test";
 import type { BrowserConfig } from "@eidolon/protocol";
 import { ErrorCode } from "@eidolon/protocol";
 import { createLogger } from "../../logging/logger.ts";
@@ -27,7 +27,11 @@ describe("BrowserManager", () => {
 
   beforeEach(() => {
     client = new FakeBrowserClient();
-    manager = new BrowserManager(client, makeConfig(), createLogger({ level: "error", format: "json", directory: "", maxSizeMb: 50, maxFiles: 10 }));
+    manager = new BrowserManager(
+      client,
+      makeConfig(),
+      createLogger({ level: "error", format: "json", directory: "", maxSizeMb: 50, maxFiles: 10 }),
+    );
   });
 
   it("isEnabled returns true when config.enabled is true", () => {

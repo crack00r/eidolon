@@ -2,19 +2,19 @@
  * Tests for WyomingServer -- TCP server and connection management.
  */
 
-import { createConnection, type Socket } from "node:net";
 import { Database } from "bun:sqlite";
-import { afterEach, describe, expect, it, beforeEach } from "bun:test";
-import { Ok } from "@eidolon/protocol";
+import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { createConnection, type Socket } from "node:net";
 import type { EidolonError, Result } from "@eidolon/protocol";
-import { createLogger } from "../../logging/logger.ts";
-import { EventBus } from "../../loop/event-bus.ts";
-import { WyomingServer } from "../server.ts";
-import { WyomingHandler } from "../handler.ts";
-import { WyomingParser, serializeEvent } from "../protocol.ts";
+import { Ok } from "@eidolon/protocol";
 import type { SttResult } from "../../gpu/stt-client.ts";
 import type { TtsResult } from "../../gpu/tts-client.ts";
+import { createLogger } from "../../logging/logger.ts";
+import { EventBus } from "../../loop/event-bus.ts";
 import type { WyomingConfig } from "../config.ts";
+import { WyomingHandler } from "../handler.ts";
+import { serializeEvent, WyomingParser } from "../protocol.ts";
+import { WyomingServer } from "../server.ts";
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -64,9 +64,7 @@ function createTestConfig(overrides?: Partial<WyomingConfig>): WyomingConfig {
   };
 }
 
-function createTestServer(
-  config?: Partial<WyomingConfig>,
-): { server: WyomingServer; eventBus: EventBus } {
+function createTestServer(config?: Partial<WyomingConfig>): { server: WyomingServer; eventBus: EventBus } {
   const db = createTestDb();
   const logger = createLogger({ level: "error", format: "json", directory: "", maxSizeMb: 10, maxFiles: 1 });
   const eventBus = new EventBus(db, logger);

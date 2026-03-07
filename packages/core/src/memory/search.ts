@@ -21,7 +21,7 @@ import { Err, Ok } from "@eidolon/protocol";
 import type { Logger } from "../logging/logger.ts";
 import type { ITracer } from "../telemetry/tracer.ts";
 import { NoopTracer } from "../telemetry/tracer.ts";
-import { EmbeddingModel } from "./embeddings.ts";
+import type { EmbeddingModel } from "./embeddings.ts";
 import type { GraphMemory } from "./graph.ts";
 import { expandViaGraph, fuseRRF } from "./search-fusion.ts";
 import {

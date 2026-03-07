@@ -1,3 +1,4 @@
+export { createBoltSlackClient } from "./bolt-client.ts";
 export type {
   ISlackClient,
   SlackConfig,
@@ -7,5 +8,4 @@ export type {
   SlackUser,
 } from "./channel.ts";
 export { SlackChannel } from "./channel.ts";
-export { createBoltSlackClient } from "./bolt-client.ts";
 export { formatForSlack, splitSlackMessage } from "./formatter.ts";

@@ -45,10 +45,7 @@ interface PwContext {
 }
 
 interface PwChromium {
-  launchPersistentContext(
-    userDataDir: string,
-    options: Record<string, unknown>,
-  ): Promise<PwContext>;
+  launchPersistentContext(userDataDir: string, options: Record<string, unknown>): Promise<PwContext>;
 }
 
 interface PwModule {
@@ -88,7 +85,8 @@ export class PlaywrightClient implements IBrowserClient {
       });
 
       const pages = this.context.pages();
-      this.page = pages.length > 0 ? pages[0]! : await this.context.newPage();
+      const firstPage = pages[0];
+      this.page = firstPage ?? (await this.context.newPage());
       this.logger.info("browser", "Browser launched", { headless: this.config.headless, profilePath });
 
       return Ok(this.page);
@@ -97,11 +95,7 @@ export class PlaywrightClient implements IBrowserClient {
 
       if (message.includes("Cannot find module") || message.includes("playwright")) {
         return Err(
-          createError(
-            ErrorCode.DEPENDENCY_MISSING,
-            "Playwright is not installed. Run: pnpm add playwright",
-            cause,
-          ),
+          createError(ErrorCode.DEPENDENCY_MISSING, "Playwright is not installed. Run: pnpm add playwright", cause),
         );
       }
 
@@ -188,7 +182,10 @@ export class PlaywrightClient implements IBrowserClient {
     try {
       const buffer = await page.screenshot({ type: "png", fullPage: false });
       const base64 = buffer.toString("base64");
-      const viewport = page.viewportSize() ?? { width: this.config.viewport.width, height: this.config.viewport.height };
+      const viewport = page.viewportSize() ?? {
+        width: this.config.viewport.width,
+        height: this.config.viewport.height,
+      };
 
       return Ok({
         url: page.url(),

@@ -338,11 +338,9 @@ export class SlackChannel implements Channel {
         if (!isRetryable) throw err;
 
         const delayMs = INITIAL_RETRY_DELAY_MS * 2 ** attempt;
-        this.logger.warn(
-          "slack",
-          `API call failed (attempt ${attempt + 1}/${MAX_RETRIES}), retrying in ${delayMs}ms`,
-          { error: err instanceof Error ? err.message : String(err) },
-        );
+        this.logger.warn("slack", `API call failed (attempt ${attempt + 1}/${MAX_RETRIES}), retrying in ${delayMs}ms`, {
+          error: err instanceof Error ? err.message : String(err),
+        });
         await sleep(delayMs);
       }
     }

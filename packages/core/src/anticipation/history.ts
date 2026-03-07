@@ -134,7 +134,16 @@ export class SuggestionHistory {
         `INSERT INTO anticipation_history (id, pattern_type, detector_id, entity_key, confidence, suggestion_title, channel_id, fired_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       )
-      .run(id, input.patternType, input.detectorId, input.entityKey, input.confidence, input.suggestionTitle, input.channelId, firedAt);
+      .run(
+        id,
+        input.patternType,
+        input.detectorId,
+        input.entityKey,
+        input.confidence,
+        input.suggestionTitle,
+        input.channelId,
+        firedAt,
+      );
 
     return {
       id,
@@ -175,17 +184,15 @@ export class SuggestionHistory {
   /** Count suggestions fired in the last hour. */
   countLastHour(): number {
     const cutoff = Date.now() - 3_600_000;
-    const row = this.db
-      .query("SELECT COUNT(*) as cnt FROM anticipation_history WHERE fired_at >= ?")
-      .get(cutoff) as { cnt: number } | null;
+    const row = this.db.query("SELECT COUNT(*) as cnt FROM anticipation_history WHERE fired_at >= ?").get(cutoff) as {
+      cnt: number;
+    } | null;
     return row?.cnt ?? 0;
   }
 
   /** Record user feedback on a suggestion. Also triggers auto-suppression check. */
   recordFeedback(suggestionId: string, feedback: AnticipationFeedback): void {
-    this.db
-      .query("UPDATE anticipation_history SET feedback = ? WHERE id = ?")
-      .run(feedback, suggestionId);
+    this.db.query("UPDATE anticipation_history SET feedback = ? WHERE id = ?").run(feedback, suggestionId);
 
     if (feedback === "annoying") {
       this.checkAutoSuppression(suggestionId);
@@ -194,9 +201,7 @@ export class SuggestionHistory {
 
   /** Record that user acted on a suggestion. */
   recordActed(suggestionId: string): void {
-    this.db
-      .query("UPDATE anticipation_history SET acted_on_at = ? WHERE id = ?")
-      .run(Date.now(), suggestionId);
+    this.db.query("UPDATE anticipation_history SET acted_on_at = ? WHERE id = ?").run(Date.now(), suggestionId);
   }
 
   /** Get active suppressions (not expired). */
@@ -223,9 +228,9 @@ export class SuggestionHistory {
 
   /** Auto-suppress a pattern type if it received too many "annoying" feedbacks. */
   private checkAutoSuppression(suggestionId: string): void {
-    const record = this.db
-      .query("SELECT pattern_type FROM anticipation_history WHERE id = ?")
-      .get(suggestionId) as { pattern_type: string } | null;
+    const record = this.db.query("SELECT pattern_type FROM anticipation_history WHERE id = ?").get(suggestionId) as {
+      pattern_type: string;
+    } | null;
     if (!record) return;
 
     const cutoff = Date.now() - AUTO_SUPPRESS_WINDOW_DAYS * 86_400_000;

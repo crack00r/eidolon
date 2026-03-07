@@ -1,12 +1,9 @@
-import { describe, expect, test } from "bun:test";
 import { Database } from "bun:sqlite";
-import { Ok } from "@eidolon/protocol";
+import { describe, expect, test } from "bun:test";
 import type { CalendarEvent, Memory, MemorySearchResult } from "@eidolon/protocol";
-import { createLogger } from "../../logging/logger.ts";
+import { Ok } from "@eidolon/protocol";
 import { MeetingPrepDetector } from "../detectors/meeting-prep.ts";
 import type { DetectionContext } from "../patterns.ts";
-
-const logger = createLogger({ level: "error", directory: "", format: "json", maxSizeMb: 10, maxFiles: 1 });
 
 function makeContext(overrides: Partial<DetectionContext> = {}): DetectionContext {
   return {
@@ -77,11 +74,10 @@ describe("MeetingPrepDetector", () => {
     const kgStore = createMockKGEntityStore({ Anna: { name: "Anna Mueller" } });
     const memSearch = createMockMemorySearch();
 
-    const detector = new MeetingPrepDetector(
-      memSearch as never,
-      kgStore as never,
-      { enabled: true, windowMinutes: 60 },
-    );
+    const detector = new MeetingPrepDetector(memSearch as never, kgStore as never, {
+      enabled: true,
+      windowMinutes: 60,
+    });
 
     const context = makeContext({ now, upcomingEvents: [event] });
     const patterns = await detector.detect(context);
@@ -96,11 +92,10 @@ describe("MeetingPrepDetector", () => {
     const now = Date.now();
     const event = makeEvent({ allDay: true, startTime: now + 30 * 60_000 });
 
-    const detector = new MeetingPrepDetector(
-      createMockMemorySearch() as never,
-      createMockKGEntityStore() as never,
-      { enabled: true, windowMinutes: 60 },
-    );
+    const detector = new MeetingPrepDetector(createMockMemorySearch() as never, createMockKGEntityStore() as never, {
+      enabled: true,
+      windowMinutes: 60,
+    });
 
     const context = makeContext({ now, upcomingEvents: [event] });
     const patterns = await detector.detect(context);
@@ -111,11 +106,10 @@ describe("MeetingPrepDetector", () => {
     const now = Date.now();
     const event = makeEvent({ startTime: now + 120 * 60_000 }); // 2 hours out
 
-    const detector = new MeetingPrepDetector(
-      createMockMemorySearch() as never,
-      createMockKGEntityStore() as never,
-      { enabled: true, windowMinutes: 60 },
-    );
+    const detector = new MeetingPrepDetector(createMockMemorySearch() as never, createMockKGEntityStore() as never, {
+      enabled: true,
+      windowMinutes: 60,
+    });
 
     const context = makeContext({ now, upcomingEvents: [event] });
     const patterns = await detector.detect(context);
@@ -161,11 +155,10 @@ describe("MeetingPrepDetector", () => {
     const now = Date.now();
     const event = makeEvent({ title: "lunch break", startTime: now + 30 * 60_000 });
 
-    const detector = new MeetingPrepDetector(
-      createMockMemorySearch() as never,
-      createMockKGEntityStore() as never,
-      { enabled: true, windowMinutes: 60 },
-    );
+    const detector = new MeetingPrepDetector(createMockMemorySearch() as never, createMockKGEntityStore() as never, {
+      enabled: true,
+      windowMinutes: 60,
+    });
 
     const context = makeContext({ now, upcomingEvents: [event] });
     const patterns = await detector.detect(context);

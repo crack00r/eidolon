@@ -4,12 +4,7 @@
  */
 
 import type { Logger } from "@eidolon/core";
-import {
-  createLogger,
-  DatabaseManager,
-  loadConfig,
-  MemoryStore,
-} from "@eidolon/core";
+import { createLogger, DatabaseManager, loadConfig, MemoryStore } from "@eidolon/core";
 import type { EidolonConfig, MemoryLayer, MemoryType } from "@eidolon/protocol";
 import type { Command } from "commander";
 import { formatTable } from "../utils/formatter.ts";

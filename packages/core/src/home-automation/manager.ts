@@ -356,4 +356,3 @@ export class HAManager {
     this.logger.info("dispose", "HA manager disposed");
   }
 }
-

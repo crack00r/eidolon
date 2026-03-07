@@ -36,9 +36,7 @@ export class FollowUpDetector implements IPatternDetector {
 
     // Filter memories to decisions and episodes that are old enough
     const candidateMemories = context.recentMemories.filter(
-      (m) =>
-        (m.type === "decision" || m.type === "episode") &&
-        m.createdAt < context.now - delayMs,
+      (m) => (m.type === "decision" || m.type === "episode") && m.createdAt < context.now - delayMs,
     );
 
     for (const memory of candidateMemories) {
@@ -46,10 +44,7 @@ export class FollowUpDetector implements IPatternDetector {
 
       // Check if there's a follow-up (newer memory referencing same content)
       const isResolved = context.recentMemories.some(
-        (m) =>
-          m.id !== memory.id &&
-          m.createdAt > memory.createdAt &&
-          contentOverlaps(memory.content, m.content),
+        (m) => m.id !== memory.id && m.createdAt > memory.createdAt && contentOverlaps(memory.content, m.content),
       );
 
       if (isResolved) continue;
@@ -94,7 +89,10 @@ function contentOverlaps(original: string, candidate: string): boolean {
 
 /** Extract the first sentence containing a commitment pattern. */
 function extractCommitmentSummary(content: string): string {
-  const sentences = content.split(/[.!?\n]+/).map((s) => s.trim()).filter(Boolean);
+  const sentences = content
+    .split(/[.!?\n]+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
   for (const sentence of sentences) {
     if (COMMITMENT_PATTERNS.some((p) => p.test(sentence))) {
       return sentence.length > 120 ? `${sentence.slice(0, 117)}...` : sentence;

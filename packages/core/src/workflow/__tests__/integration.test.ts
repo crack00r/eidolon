@@ -8,7 +8,7 @@
 import { Database } from "bun:sqlite";
 import { afterEach, describe, expect, test } from "bun:test";
 import type { EidolonError, Result } from "@eidolon/protocol";
-import { Err, createError, ErrorCode, Ok } from "@eidolon/protocol";
+import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 import { runMigrations } from "../../database/migrations.ts";
 import { OPERATIONAL_MIGRATIONS } from "../../database/schemas/operational.ts";
 import type { Logger } from "../../logging/logger.ts";
@@ -19,13 +19,7 @@ import { ConditionStepExecutor } from "../executors/condition.ts";
 import { TransformStepExecutor } from "../executors/transform.ts";
 import { WaitStepExecutor } from "../executors/wait.ts";
 import { WorkflowStore } from "../store.ts";
-import type {
-  IStepExecutor,
-  StepConfig,
-  StepOutput,
-  WorkflowContext,
-  WorkflowDefinition,
-} from "../types.ts";
+import type { IStepExecutor, StepConfig, StepOutput, WorkflowContext, WorkflowDefinition } from "../types.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -73,9 +67,7 @@ interface TestHarness {
   db: Database;
 }
 
-function createHarness(
-  executorOverrides?: Record<string, ConfigurableExecutor>,
-): TestHarness {
+function createHarness(executorOverrides?: Record<string, ConfigurableExecutor>): TestHarness {
   const db = createTestDb();
   const logger = createSilentLogger();
   const store = new WorkflowStore(db, logger);

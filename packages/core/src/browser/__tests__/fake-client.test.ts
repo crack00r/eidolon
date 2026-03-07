@@ -3,8 +3,8 @@
  */
 
 import { describe, expect, it } from "bun:test";
-import { FakeBrowserClient } from "../fake-client.ts";
 import { createError, ErrorCode } from "@eidolon/protocol";
+import { FakeBrowserClient } from "../fake-client.ts";
 
 describe("FakeBrowserClient", () => {
   it("starts connected", () => {

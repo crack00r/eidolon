@@ -78,10 +78,7 @@ export function getTriplesForEntities(
  * Get all triples with entity IDs (not names) for ComplEx embedding training.
  * Returns (subject_id, predicate, object_id, confidence).
  */
-export function getAllTriplesWithIds(
-  db: Database,
-  limit?: number,
-): Result<TripleWithIds[], EidolonError> {
+export function getAllTriplesWithIds(db: Database, limit?: number): Result<TripleWithIds[], EidolonError> {
   try {
     const maxResults = limit ?? 100;
     const rows = db
@@ -111,10 +108,7 @@ export function getAllTriplesWithIds(
 }
 
 /** Get all triples as (subject_name, predicate, object_name) for display. */
-export function getAllTriples(
-  db: Database,
-  limit?: number,
-): Result<TripleResult[], EidolonError> {
+export function getAllTriples(db: Database, limit?: number): Result<TripleResult[], EidolonError> {
   try {
     const maxResults = limit ?? 100;
     const rows = db

@@ -64,22 +64,13 @@ const EVENT_SCORING: ReadonlyMap<string, ScoringRule> = new Map([
   ["gateway:client_connected", { score: 35, reason: "Gateway client connected", action: "alert", model: "fast" }],
   ["gateway:client_disconnected", { score: 30, reason: "Gateway client disconnected", action: "alert", model: "fast" }],
   ["webhook:received", { score: 50, reason: "External webhook event received", action: "execute_task", model: "fast" }],
-  [
-    "anticipation:check",
-    { score: 40, reason: "Anticipation pattern check", action: "execute_task", model: "fast" },
-  ],
+  ["anticipation:check", { score: 40, reason: "Anticipation pattern check", action: "execute_task", model: "fast" }],
   [
     "anticipation:suggestion",
     { score: 50, reason: "Proactive suggestion for user", action: "execute_task", model: "fast" },
   ],
-  [
-    "anticipation:dismissed",
-    { score: 20, reason: "Suggestion dismissed, log only", action: "rest", model: "fast" },
-  ],
-  [
-    "anticipation:acted",
-    { score: 20, reason: "Suggestion acted on, log only", action: "rest", model: "fast" },
-  ],
+  ["anticipation:dismissed", { score: 20, reason: "Suggestion dismissed, log only", action: "rest", model: "fast" }],
+  ["anticipation:acted", { score: 20, reason: "Suggestion acted on, log only", action: "rest", model: "fast" }],
 ]);
 
 const DEFAULT_RULE: ScoringRule = {

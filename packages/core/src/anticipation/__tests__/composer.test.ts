@@ -8,11 +8,13 @@ import type { DetectedPattern } from "../patterns.ts";
 const logger = createLogger({ level: "error", directory: "", format: "json", maxSizeMb: 10, maxFiles: 1 });
 const config = AnticipationConfigSchema.parse({ enabled: true });
 
-function makeEnrichedContext(overrides: {
-  pattern?: Partial<DetectedPattern>;
-  relatedMemories?: EnrichedContext["relatedMemories"];
-  calendarContext?: string;
-} = {}): EnrichedContext {
+function makeEnrichedContext(
+  overrides: {
+    pattern?: Partial<DetectedPattern>;
+    relatedMemories?: EnrichedContext["relatedMemories"];
+    calendarContext?: string;
+  } = {},
+): EnrichedContext {
   return {
     pattern: {
       detectorId: "test",

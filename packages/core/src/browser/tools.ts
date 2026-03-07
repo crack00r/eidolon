@@ -5,9 +5,9 @@
  * enabling Claude to interact with web pages through the browser manager.
  */
 
-import { z } from "zod";
 import type { EidolonError, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
+import { z } from "zod";
 import type { BrowserManager } from "./manager.ts";
 
 // ---------------------------------------------------------------------------
@@ -150,10 +150,7 @@ async function handleNavigate(
   return Ok({ success: true, data: result.value });
 }
 
-async function handleClick(
-  manager: BrowserManager,
-  input: unknown,
-): Promise<Result<BrowserToolResult, EidolonError>> {
+async function handleClick(manager: BrowserManager, input: unknown): Promise<Result<BrowserToolResult, EidolonError>> {
   const parsed = BrowseClickInputSchema.safeParse(input);
   if (!parsed.success) {
     return Err(createError(ErrorCode.INVALID_INPUT, `Invalid click input: ${parsed.error.message}`));
@@ -165,10 +162,7 @@ async function handleClick(
   return Ok({ success: true });
 }
 
-async function handleFill(
-  manager: BrowserManager,
-  input: unknown,
-): Promise<Result<BrowserToolResult, EidolonError>> {
+async function handleFill(manager: BrowserManager, input: unknown): Promise<Result<BrowserToolResult, EidolonError>> {
   const parsed = BrowseFillInputSchema.safeParse(input);
   if (!parsed.success) {
     return Err(createError(ErrorCode.INVALID_INPUT, `Invalid fill input: ${parsed.error.message}`));

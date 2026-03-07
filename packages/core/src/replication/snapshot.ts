@@ -8,20 +8,20 @@
  * Phase 2 will add incremental WAL streaming.
  */
 
+import type { Database } from "bun:sqlite";
 import { createHash } from "node:crypto";
 import {
   chmodSync,
   existsSync,
   mkdirSync,
-  readFileSync,
   readdirSync,
+  readFileSync,
   renameSync,
   statSync,
   unlinkSync,
   writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
-import type { Database } from "bun:sqlite";
 import type { EidolonError, Result } from "@eidolon/protocol";
 import {
   AUDIT_DB_FILENAME,

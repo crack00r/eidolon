@@ -115,9 +115,9 @@ export function buildLearningSummary(operationalDb: Database, since: number): Di
 
 /** Memory stats: new memories created in the last 24h. */
 export function buildMemoryStats(memoryDb: Database, since: number): DigestSection | null {
-  const newCountRow = memoryDb
-    .query("SELECT COUNT(*) as count FROM memories WHERE created_at >= ?")
-    .get(since) as { count: number } | null;
+  const newCountRow = memoryDb.query("SELECT COUNT(*) as count FROM memories WHERE created_at >= ?").get(since) as {
+    count: number;
+  } | null;
 
   const totalCountRow = memoryDb.query("SELECT COUNT(*) as count FROM memories").get() as {
     count: number;

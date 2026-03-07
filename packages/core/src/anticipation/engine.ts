@@ -190,9 +190,7 @@ export class AnticipationEngine {
       text: "*",
       limit: 50,
     });
-    const recentMemories = recentResult.ok
-      ? recentResult.value.map((r) => r.memory)
-      : [];
+    const recentMemories = recentResult.ok ? recentResult.value.map((r) => r.memory) : [];
 
     return { now, profile, upcomingEvents, recentMemories, timezone };
   }

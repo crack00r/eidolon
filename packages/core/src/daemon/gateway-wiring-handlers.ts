@@ -6,10 +6,10 @@
  */
 
 import type { CalendarEvent } from "@eidolon/protocol";
-import { registerFeedbackHandlers } from "../feedback/gateway-handlers.ts";
-import { wireMetrics } from "../metrics/wiring.ts";
 import { CalendarManager } from "../calendar/manager.ts";
+import { registerFeedbackHandlers } from "../feedback/gateway-handlers.ts";
 import { HAManager } from "../home-automation/manager.ts";
+import { wireMetrics } from "../metrics/wiring.ts";
 import type { InitializedModules } from "./types.ts";
 
 // ---------------------------------------------------------------------------

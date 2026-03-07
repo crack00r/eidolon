@@ -9,7 +9,7 @@ import type { EidolonError, IClaudeProcess, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 import type { Logger } from "../../logging/logger.ts";
 import { listMcpTemplates, type McpTemplate } from "../templates.ts";
-import { McpDiscoveryResponseSchema, type McpDiscoveryMatch } from "./types.ts";
+import { type McpDiscoveryMatch, McpDiscoveryResponseSchema } from "./types.ts";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -57,15 +57,17 @@ export class McpDiscovery {
       if (!matches.ok) return matches;
 
       // Sort by confidence descending and limit
-      const sorted = [...matches.value]
-        .sort((a, b) => b.confidence - a.confidence)
-        .slice(0, MAX_MATCHES);
+      const sorted = [...matches.value].sort((a, b) => b.confidence - a.confidence).slice(0, MAX_MATCHES);
 
       this.logger.info("match", `Found ${String(sorted.length)} matches for intent: "${userIntent}"`);
       return Ok(sorted);
     } catch (cause) {
       return Err(
-        createError(ErrorCode.STRUCTURED_OUTPUT_PARSE_FAILED, `MCP discovery failed for intent: "${userIntent}"`, cause),
+        createError(
+          ErrorCode.STRUCTURED_OUTPUT_PARSE_FAILED,
+          `MCP discovery failed for intent: "${userIntent}"`,
+          cause,
+        ),
       );
     }
   }
@@ -136,7 +138,10 @@ Respond with ONLY the JSON, no other text.`;
     const jsonMatch = output.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
       return Err(
-        createError(ErrorCode.STRUCTURED_OUTPUT_PARSE_FAILED, `No JSON found in discovery response: ${output.slice(0, 200)}`),
+        createError(
+          ErrorCode.STRUCTURED_OUTPUT_PARSE_FAILED,
+          `No JSON found in discovery response: ${output.slice(0, 200)}`,
+        ),
       );
     }
 

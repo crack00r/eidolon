@@ -96,16 +96,22 @@ export function exportJournalToFile(
       return `- ${sanitizeForMarkdown(d.title)}${score}`;
     });
 
-    appendSection(lines, byType, "evaluation", "Evaluations", (e) =>
-      `- ${sanitizeForMarkdown(e.title)}: ${sanitizeForMarkdown(e.content)}`,
+    appendSection(
+      lines,
+      byType,
+      "evaluation",
+      "Evaluations",
+      (e) => `- ${sanitizeForMarkdown(e.title)}: ${sanitizeForMarkdown(e.content)}`,
     );
 
-    appendSection(lines, byType, "approval", "Approvals", (a) =>
-      `- ${sanitizeForMarkdown(a.title)}`,
-    );
+    appendSection(lines, byType, "approval", "Approvals", (a) => `- ${sanitizeForMarkdown(a.title)}`);
 
-    appendSection(lines, byType, "rejection", "Rejections", (r) =>
-      `- ${sanitizeForMarkdown(r.title)}: ${sanitizeForMarkdown(r.content)}`,
+    appendSection(
+      lines,
+      byType,
+      "rejection",
+      "Rejections",
+      (r) => `- ${sanitizeForMarkdown(r.title)}: ${sanitizeForMarkdown(r.content)}`,
     );
 
     appendSection(lines, byType, "implementation", "Implementations", (impl) => {
@@ -117,8 +123,12 @@ export function exportJournalToFile(
       return line;
     });
 
-    appendSection(lines, byType, "error", "Errors", (err) =>
-      `- ${sanitizeForMarkdown(err.title)}: ${sanitizeForMarkdown(err.content)}`,
+    appendSection(
+      lines,
+      byType,
+      "error",
+      "Errors",
+      (err) => `- ${sanitizeForMarkdown(err.title)}: ${sanitizeForMarkdown(err.content)}`,
     );
 
     // Token usage summary from metadata

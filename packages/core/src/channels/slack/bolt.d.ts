@@ -48,12 +48,11 @@ declare module "@slack/bolt" {
     constructor(options: AppOptions);
     start(port?: number): Promise<void>;
     stop(): Promise<void>;
-    message(handler: (args: SlackEventMiddlewareArgs & { say: (text: string) => Promise<void> }) => Promise<void>): void;
-    event(eventType: string, handler: (args: SlackEventMiddlewareArgs) => Promise<void>): void;
-    command(
-      commandName: string,
-      handler: (args: SlackCommandMiddlewareArgs) => Promise<void>,
+    message(
+      handler: (args: SlackEventMiddlewareArgs & { say: (text: string) => Promise<void> }) => Promise<void>,
     ): void;
+    event(eventType: string, handler: (args: SlackEventMiddlewareArgs) => Promise<void>): void;
+    command(commandName: string, handler: (args: SlackCommandMiddlewareArgs) => Promise<void>): void;
     client: {
       chat: {
         postMessage(args: {

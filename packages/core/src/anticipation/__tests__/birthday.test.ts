@@ -28,11 +28,7 @@ function makeContext(overrides: Partial<DetectionContext> = {}): DetectionContex
 }
 
 // Mock stores
-function createStores(
-  persons: KGEntity[],
-  relations: KGRelation[],
-  dateEntities: Record<string, KGEntity>,
-) {
+function createStores(persons: KGEntity[], relations: KGRelation[], dateEntities: Record<string, KGEntity>) {
   return {
     entityStore: {
       findByType: (_type: string, _limit?: number) => ({ ok: true, value: persons }),
@@ -87,11 +83,10 @@ describe("BirthdayDetector", () => {
 
     const { entityStore, relationStore } = createStores([person], [relation], { "date-1": dateEntity });
 
-    const detector = new BirthdayDetector(
-      entityStore as never,
-      relationStore as never,
-      { enabled: true, daysBefore: 1 },
-    );
+    const detector = new BirthdayDetector(entityStore as never, relationStore as never, {
+      enabled: true,
+      daysBefore: 1,
+    });
 
     const ctx = makeContext({ now: now.getTime() });
     const patterns = await detector.detect(ctx);
@@ -137,11 +132,10 @@ describe("BirthdayDetector", () => {
     };
 
     const { entityStore, relationStore } = createStores([person], [rel], { "d-1": dateEntity });
-    const detector = new BirthdayDetector(
-      entityStore as never,
-      relationStore as never,
-      { enabled: true, daysBefore: 3 },
-    );
+    const detector = new BirthdayDetector(entityStore as never, relationStore as never, {
+      enabled: true,
+      daysBefore: 3,
+    });
 
     const ctx = makeContext({ now: now.getTime() });
     const patterns = await detector.detect(ctx);

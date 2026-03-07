@@ -11,8 +11,8 @@ import type { EidolonError, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 import type { Logger } from "../logging/logger.ts";
 import type { WyomingConfig } from "./config.ts";
-import { WyomingParser } from "./protocol.ts";
 import type { WyomingHandler } from "./handler.ts";
+import { WyomingParser } from "./protocol.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -178,11 +178,7 @@ export class WyomingServer {
     });
   }
 
-  private async handleData(
-    connectionId: string,
-    conn: SatelliteConnection,
-    data: Uint8Array,
-  ): Promise<void> {
+  private async handleData(connectionId: string, conn: SatelliteConnection, data: Uint8Array): Promise<void> {
     const feedResult = conn.parser.feed(data);
     if (!feedResult.ok) {
       this.logger.warn("handleData", `Protocol error from ${connectionId}: ${feedResult.error.message}`);
@@ -218,8 +214,6 @@ export class WyomingServer {
     }
 
     // Check if satellite ID or remote address is in the allowlist
-    return this.config.allowedSatellites.some(
-      (allowed) => allowed === satelliteId || allowed === remoteAddress,
-    );
+    return this.config.allowedSatellites.some((allowed) => allowed === satelliteId || allowed === remoteAddress);
   }
 }

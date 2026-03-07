@@ -8,12 +8,12 @@
  */
 
 import { Database } from "bun:sqlite";
-import { describe, expect, test, beforeEach } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
 import { join } from "node:path";
 import type { Logger } from "../../logging/logger.ts";
 import { ProjectJournal } from "../journal.ts";
 import type { Project } from "../schema.ts";
-import { PROJECTS_TABLE_SQL, PROJECT_JOURNAL_TABLE_SQL } from "../schema.ts";
+import { PROJECT_JOURNAL_TABLE_SQL, PROJECTS_TABLE_SQL } from "../schema.ts";
 
 function createSilentLogger(): Logger {
   const noop = (): void => {};
@@ -141,11 +141,7 @@ describe("ProjectJournal", () => {
         `INSERT INTO project_journal
          (id, project_id, period, period_start, period_end, summary, commit_count, files_changed, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      ).run(
-        `e${i}`, project.id, "daily",
-        now - (i + 1) * 86400000, now - i * 86400000,
-        `entry ${i}`, 1, 1, now,
-      );
+      ).run(`e${i}`, project.id, "daily", now - (i + 1) * 86400000, now - i * 86400000, `entry ${i}`, 1, 1, now);
     }
 
     const result = journal.getEntries(project.id, { limit: 3 });

@@ -305,8 +305,7 @@ export function buildLoopSteps(modules: InitializedModules): InitStep[] {
       // Register recurring scheduled task for anticipation checks
       if (taskScheduler) {
         const listResult = taskScheduler.list();
-        const alreadyExists =
-          listResult.ok && listResult.value.some((t) => t.action === "anticipation:check");
+        const alreadyExists = listResult.ok && listResult.value.some((t) => t.action === "anticipation:check");
         if (!alreadyExists) {
           const intervalMinutes = config.anticipation.checkIntervalMinutes;
           const createResult = taskScheduler.create({

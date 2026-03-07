@@ -7,14 +7,14 @@
 import { existsSync, statSync } from "node:fs";
 import type { Logger } from "@eidolon/core";
 import {
-  DatabaseManager,
+  type DatabaseManager,
   DocumentIndexer,
   DreamRunner,
   EmbeddingModel,
   GraphMemory,
   HousekeepingPhase,
   MemorySearch,
-  MemoryStore,
+  type MemoryStore,
   NremPhase,
   RemPhase,
 } from "@eidolon/core";

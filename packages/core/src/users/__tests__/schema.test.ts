@@ -3,6 +3,7 @@
  */
 
 import { describe, expect, test } from "bun:test";
+import type { UserRow } from "../schema.ts";
 import {
   ChannelMappingSchema,
   CreateUserInputSchema,
@@ -12,7 +13,6 @@ import {
   UserPreferencesSchema,
   UserSchema,
 } from "../schema.ts";
-import type { UserRow } from "../schema.ts";
 
 describe("User Schemas", () => {
   describe("UserSchema", () => {

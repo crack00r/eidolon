@@ -8,7 +8,6 @@
  *   search  -- search templates by keyword
  */
 
-import { Database } from "bun:sqlite";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {

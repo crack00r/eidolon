@@ -13,13 +13,7 @@ import { EventBus } from "../../loop/event-bus.ts";
 import { WorkflowEngine } from "../engine.ts";
 import { StepExecutorRegistry } from "../executor-registry.ts";
 import { WorkflowStore } from "../store.ts";
-import type {
-  IStepExecutor,
-  StepConfig,
-  StepOutput,
-  WorkflowContext,
-  WorkflowDefinition,
-} from "../types.ts";
+import type { IStepExecutor, StepConfig, StepOutput, WorkflowContext, WorkflowDefinition } from "../types.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -100,8 +94,15 @@ function createHarness(): TestHarness {
 
   // Register fake executors for all step types
   const types = [
-    "llm_call", "api_call", "channel_send", "wait",
-    "condition", "transform", "ha_command", "memory_query", "sub_workflow",
+    "llm_call",
+    "api_call",
+    "channel_send",
+    "wait",
+    "condition",
+    "transform",
+    "ha_command",
+    "memory_query",
+    "sub_workflow",
   ] as const;
   for (const t of types) {
     registry.register(new FakeStepExecutor(t));
@@ -206,9 +207,7 @@ describe("WorkflowEngine", () => {
 
   test("enforces concurrent workflow limit", () => {
     const { engine } = setup();
-    const def = makeDef("wf-1", [
-      { id: "a", name: "A", type: "wait", config: { durationMs: 60000 }, dependsOn: [] },
-    ]);
+    const def = makeDef("wf-1", [{ id: "a", name: "A", type: "wait", config: { durationMs: 60000 }, dependsOn: [] }]);
     engine.createDefinition(def);
 
     // Start 5 runs (max limit)

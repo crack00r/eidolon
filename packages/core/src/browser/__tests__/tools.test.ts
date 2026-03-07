@@ -2,12 +2,12 @@
  * Tests for browser tools executor.
  */
 
-import { describe, expect, it, beforeEach } from "bun:test";
+import { beforeEach, describe, expect, it } from "bun:test";
 import type { BrowserConfig } from "@eidolon/protocol";
 import { createLogger } from "../../logging/logger.ts";
 import { FakeBrowserClient } from "../fake-client.ts";
 import { BrowserManager } from "../manager.ts";
-import { executeBrowserTool, BROWSER_TOOL_NAMES, BROWSER_TOOL_DEFINITIONS } from "../tools.ts";
+import { BROWSER_TOOL_DEFINITIONS, BROWSER_TOOL_NAMES, executeBrowserTool } from "../tools.ts";
 
 function makeConfig(): BrowserConfig {
   return {
@@ -26,7 +26,11 @@ describe("executeBrowserTool", () => {
 
   beforeEach(() => {
     client = new FakeBrowserClient();
-    manager = new BrowserManager(client, makeConfig(), createLogger({ level: "error", format: "json", directory: "", maxSizeMb: 50, maxFiles: 10 }));
+    manager = new BrowserManager(
+      client,
+      makeConfig(),
+      createLogger({ level: "error", format: "json", directory: "", maxSizeMb: 50, maxFiles: 10 }),
+    );
     manager.start();
   });
 

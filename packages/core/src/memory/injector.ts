@@ -16,10 +16,10 @@ import { join } from "node:path";
 import type { EidolonError, Memory, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 import type { Logger } from "../logging/logger.ts";
+import { formatMemoryMarkdown, type KnowledgeGraphContext, sanitizeForMarkdown } from "./injector-format.ts";
 import type { CommunityDetector } from "./knowledge-graph/communities.ts";
 import type { KGEntityStore } from "./knowledge-graph/entities.ts";
 import type { KGRelationStore, TripleResult } from "./knowledge-graph/relations.ts";
-import { formatMemoryMarkdown, type KnowledgeGraphContext, sanitizeForMarkdown } from "./injector-format.ts";
 import type { MemorySearch } from "./search.ts";
 import type { MemoryStore } from "./store.ts";
 

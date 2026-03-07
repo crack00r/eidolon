@@ -16,8 +16,8 @@ import type { AutomationTask, EidolonError, ParsedAutomation, Result } from "@ei
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 import { z } from "zod";
 import type { Logger } from "../logging/logger.ts";
-import type { TaskScheduler } from "./scheduler.ts";
 import { deriveName, extractScheduleAndAction } from "./automation-parsing.ts";
+import type { TaskScheduler } from "./scheduler.ts";
 
 // ---------------------------------------------------------------------------
 // Zod schemas for DB rows

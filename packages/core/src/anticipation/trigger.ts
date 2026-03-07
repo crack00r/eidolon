@@ -18,11 +18,7 @@ export class TriggerEvaluator {
   private readonly config: AnticipationConfig;
   private readonly logger: Logger;
 
-  constructor(
-    history: SuggestionHistory,
-    config: AnticipationConfig,
-    logger: Logger,
-  ) {
+  constructor(history: SuggestionHistory, config: AnticipationConfig, logger: Logger) {
     this.history = history;
     this.config = config;
     this.logger = logger;
@@ -99,9 +95,7 @@ export class TriggerEvaluator {
   /** Calculate confidence penalty from repeated dismissals. */
   private calculateFeedbackPenalty(pattern: DetectedPattern): number {
     const recentHistory = this.history.getRecent(Date.now() - 30 * 86_400_000);
-    const dismissals = recentHistory.filter(
-      (r) => r.patternType === pattern.type && r.feedback === "irrelevant",
-    );
+    const dismissals = recentHistory.filter((r) => r.patternType === pattern.type && r.feedback === "irrelevant");
 
     // Each dismissal reduces confidence by 0.1, max 0.3
     return Math.min(dismissals.length * 0.1, 0.3);
@@ -116,19 +110,14 @@ export function buildEntityKey(pattern: DetectedPattern): string | null {
     case "travel_prep":
       return pattern.calendarEventId ? `travel:${pattern.calendarEventId}` : null;
     case "health_nudge": {
-      const date = typeof pattern.metadata.date === "string"
-        ? pattern.metadata.date
-        : new Date().toISOString().slice(0, 10);
+      const date =
+        typeof pattern.metadata.date === "string" ? pattern.metadata.date : new Date().toISOString().slice(0, 10);
       return `health:${date}`;
     }
     case "follow_up":
-      return typeof pattern.metadata.memoryId === "string"
-        ? `followup:${pattern.metadata.memoryId}`
-        : null;
+      return typeof pattern.metadata.memoryId === "string" ? `followup:${pattern.metadata.memoryId}` : null;
     case "birthday_reminder":
-      return pattern.relevantEntities[0]
-        ? `birthday:${pattern.relevantEntities[0]}`
-        : null;
+      return pattern.relevantEntities[0] ? `birthday:${pattern.relevantEntities[0]}` : null;
     default:
       return null;
   }

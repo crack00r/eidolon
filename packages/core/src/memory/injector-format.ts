@@ -6,8 +6,8 @@
  */
 
 import type { Memory, MemoryType } from "@eidolon/protocol";
-import type { TripleResult } from "./knowledge-graph/relations.ts";
 import type { ContextProvider } from "./injector.ts";
+import type { TripleResult } from "./knowledge-graph/relations.ts";
 
 // ---------------------------------------------------------------------------
 // Constants

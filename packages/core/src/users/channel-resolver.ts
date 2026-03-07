@@ -81,7 +81,10 @@ export class ChannelResolver {
     }
 
     // Fall back to default user
-    this.logger.debug("resolve", `No mapping found for ${context.channelType}:${context.externalUserId}, using default`);
+    this.logger.debug(
+      "resolve",
+      `No mapping found for ${context.channelType}:${context.externalUserId}, using default`,
+    );
     return this.getDefaultUser();
   }
 
@@ -106,10 +109,7 @@ export class ChannelResolver {
       return Ok(user); // Already mapped
     }
 
-    const updatedMappings = [
-      ...user.channelMappings,
-      { channelType, externalUserId },
-    ];
+    const updatedMappings = [...user.channelMappings, { channelType, externalUserId }];
 
     return this.userManager.update(userId, { channelMappings: updatedMappings });
   }

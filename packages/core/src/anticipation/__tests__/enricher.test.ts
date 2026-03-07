@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { Ok } from "@eidolon/protocol";
 import type { MemorySearchResult } from "@eidolon/protocol";
+import { Ok } from "@eidolon/protocol";
 import { createLogger } from "../../logging/logger.ts";
 import { ContextEnricher } from "../enricher.ts";
 import type { DetectedPattern } from "../patterns.ts";
@@ -64,11 +64,7 @@ describe("ContextEnricher", () => {
   });
 
   test("handles empty memory results gracefully", async () => {
-    const enricher = new ContextEnricher(
-      createMockMemorySearch([]) as never,
-      null,
-      logger,
-    );
+    const enricher = new ContextEnricher(createMockMemorySearch([]) as never, null, logger);
 
     const pattern = makePattern({ type: "health_nudge", relevantEntities: [] });
     const enriched = await enricher.enrich(pattern);
@@ -78,11 +74,7 @@ describe("ContextEnricher", () => {
   });
 
   test("enriches multiple patterns", async () => {
-    const enricher = new ContextEnricher(
-      createMockMemorySearch([]) as never,
-      null,
-      logger,
-    );
+    const enricher = new ContextEnricher(createMockMemorySearch([]) as never, null, logger);
 
     const patterns = [
       makePattern({ type: "meeting_prep" }),

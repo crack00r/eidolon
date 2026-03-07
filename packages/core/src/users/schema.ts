@@ -119,9 +119,8 @@ export function rowToUser(row: UserRow): User {
   let preferences: UserPreferences;
   try {
     const parsed: unknown = JSON.parse(row.preferences);
-    preferences = typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
-      ? (parsed as UserPreferences)
-      : {};
+    preferences =
+      typeof parsed === "object" && parsed !== null && !Array.isArray(parsed) ? (parsed as UserPreferences) : {};
   } catch {
     preferences = {};
   }

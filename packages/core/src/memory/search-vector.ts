@@ -71,9 +71,9 @@ export const VEC0_TABLE_NAME = "memory_embeddings";
 export function initVec0Table(db: Database, logger: Logger): boolean {
   try {
     // Check if table already exists
-    const existing = db
-      .query("SELECT name FROM sqlite_master WHERE type='table' AND name=?")
-      .get(VEC0_TABLE_NAME) as { name: string } | null;
+    const existing = db.query("SELECT name FROM sqlite_master WHERE type='table' AND name=?").get(VEC0_TABLE_NAME) as {
+      name: string;
+    } | null;
 
     if (existing) {
       // Table exists -- verify we can query it (extension might have been
@@ -340,10 +340,7 @@ export function storeEmbedding(
 }
 
 /** Get the embedding for a memory. */
-export function getEmbedding(
-  db: Database,
-  memoryId: string,
-): Result<Float32Array | null, EidolonError> {
+export function getEmbedding(db: Database, memoryId: string): Result<Float32Array | null, EidolonError> {
   try {
     const row = db.query("SELECT embedding FROM memories WHERE id = ?").get(memoryId) as {
       embedding: Uint8Array | null;

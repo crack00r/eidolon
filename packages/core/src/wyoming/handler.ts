@@ -8,17 +8,17 @@
 
 import type { EidolonError, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
-import type { Logger } from "../logging/logger.ts";
-import type { EventBus } from "../loop/event-bus.ts";
 import type { STTClient } from "../gpu/stt-client.ts";
 import type { TTSClient } from "../gpu/tts-client.ts";
+import type { Logger } from "../logging/logger.ts";
+import type { EventBus } from "../loop/event-bus.ts";
 import {
-  type WyomingEvent,
-  AudioStartDataSchema,
   AudioChunkDataSchema,
-  TranscriptDataSchema,
+  AudioStartDataSchema,
   SynthesizeDataSchema,
   serializeEvent,
+  TranscriptDataSchema,
+  type WyomingEvent,
 } from "./protocol.ts";
 
 // ---------------------------------------------------------------------------
@@ -80,10 +80,7 @@ export class WyomingHandler {
    * Handle a Wyoming event from a satellite.
    * Returns serialized response events to send back, or empty array if none.
    */
-  async handleEvent(
-    event: WyomingEvent,
-    satelliteId: string,
-  ): Promise<Result<readonly Uint8Array[], EidolonError>> {
+  async handleEvent(event: WyomingEvent, satelliteId: string): Promise<Result<readonly Uint8Array[], EidolonError>> {
     switch (event.type) {
       case "describe":
         return this.handleDescribe();
@@ -183,9 +180,7 @@ export class WyomingHandler {
     const newTotal = this.audioSession.totalBytes + event.payload.byteLength;
     if (newTotal > MAX_AUDIO_SESSION_BYTES) {
       this.audioSession = null;
-      return Err(
-        createError(ErrorCode.WYOMING_PROTOCOL_ERROR, `Audio session too large: ${newTotal} bytes`),
-      );
+      return Err(createError(ErrorCode.WYOMING_PROTOCOL_ERROR, `Audio session too large: ${newTotal} bytes`));
     }
 
     this.audioSession.chunks.push(event.payload);

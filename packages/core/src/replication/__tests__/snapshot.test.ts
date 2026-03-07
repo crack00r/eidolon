@@ -2,11 +2,11 @@
  * Tests for snapshot creation and receiving.
  */
 
+import { Database } from "bun:sqlite";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
-import { Database } from "bun:sqlite";
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { createLogger } from "../../logging/logger.ts";
 import { chunkSnapshotFile, createSnapshot, createSnapshotReceiver } from "../snapshot.ts";
 

@@ -48,9 +48,13 @@ export const WyomingConfigSchema = z.object({
   /** Audio channels (mono = 1, stereo = 2). */
   audioChannels: z.number().int().min(1).max(2).default(1),
   /** Bits per audio sample. */
-  bitsPerSample: z.number().int().refine((v) => v === 8 || v === 16 || v === 32, {
-    message: "bitsPerSample must be 8, 16, or 32",
-  }).default(16),
+  bitsPerSample: z
+    .number()
+    .int()
+    .refine((v) => v === 8 || v === 16 || v === 32, {
+      message: "bitsPerSample must be 8, 16, or 32",
+    })
+    .default(16),
 });
 
 export type WyomingConfig = z.infer<typeof WyomingConfigSchema>;

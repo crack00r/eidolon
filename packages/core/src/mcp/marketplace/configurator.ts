@@ -11,7 +11,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import type { EidolonError, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 import type { Logger } from "../../logging/logger.ts";
-import { getMcpTemplate, templateToConfigEntry, type McpTemplate } from "../templates.ts";
+import { getMcpTemplate, type McpTemplate, templateToConfigEntry } from "../templates.ts";
 import type { MarketplaceRegistry } from "./registry.ts";
 import type { McpConfigStatus } from "./types.ts";
 
@@ -96,9 +96,7 @@ export class McpConfigurator {
 
     // Check if already exists
     if (name in mcpServers) {
-      return Err(
-        createError(ErrorCode.CONFIG_INVALID, `MCP server "${name}" already exists in config`),
-      );
+      return Err(createError(ErrorCode.CONFIG_INVALID, `MCP server "${name}" already exists in config`));
     }
 
     // Generate entry

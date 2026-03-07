@@ -185,7 +185,11 @@ export class UserManager {
       return Ok(null);
     } catch (cause) {
       return Err(
-        createError(ErrorCode.DB_QUERY_FAILED, `Failed to find user by channel ${channelType}:${externalUserId}`, cause),
+        createError(
+          ErrorCode.DB_QUERY_FAILED,
+          `Failed to find user by channel ${channelType}:${externalUserId}`,
+          cause,
+        ),
       );
     }
   }

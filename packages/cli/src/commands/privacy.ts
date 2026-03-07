@@ -11,12 +11,12 @@
  *   - privacy-export.ts -- PRIV-004 data export
  */
 
-import { existsSync, mkdirSync, writeFileSync, chmodSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { ConsentManager, createLogger, DatabaseManager, getDataDir, loadConfig } from "@eidolon/core";
 import type { Command } from "commander";
-import { forgetEntity } from "./privacy-forget.ts";
 import { exportAllData } from "./privacy-export.ts";
+import { forgetEntity } from "./privacy-forget.ts";
 
 // ---------------------------------------------------------------------------
 // Database initialization helper

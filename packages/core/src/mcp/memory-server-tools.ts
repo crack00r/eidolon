@@ -118,10 +118,7 @@ export async function toolMemorySearch(
   return { ok: true, text: JSON.stringify(results, null, 2) };
 }
 
-export function toolMemoryAdd(
-  args: Record<string, unknown>,
-  store: MemoryStore,
-): ToolOutcome {
+export function toolMemoryAdd(args: Record<string, unknown>, store: MemoryStore): ToolOutcome {
   const parsed = MemoryAddInputSchema.safeParse(args);
   if (!parsed.success) {
     return { ok: false, error: `Invalid parameters: ${parsed.error.message}` };
@@ -155,10 +152,7 @@ export function toolMemoryAdd(
   };
 }
 
-export function toolMemoryList(
-  args: Record<string, unknown>,
-  store: MemoryStore,
-): ToolOutcome {
+export function toolMemoryList(args: Record<string, unknown>, store: MemoryStore): ToolOutcome {
   const parsed = MemoryListInputSchema.safeParse(args);
   if (!parsed.success) {
     return { ok: false, error: `Invalid parameters: ${parsed.error.message}` };

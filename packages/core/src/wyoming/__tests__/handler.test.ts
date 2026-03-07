@@ -3,16 +3,16 @@
  */
 
 import { Database } from "bun:sqlite";
-import { describe, expect, it, beforeEach } from "bun:test";
+import { beforeEach, describe, expect, it } from "bun:test";
 import type { EidolonError, Result } from "@eidolon/protocol";
 import { Ok } from "@eidolon/protocol";
+import type { SttResult } from "../../gpu/stt-client.ts";
+import type { TtsResult } from "../../gpu/tts-client.ts";
 import { createLogger } from "../../logging/logger.ts";
 import { EventBus } from "../../loop/event-bus.ts";
 import { WyomingHandler } from "../handler.ts";
-import { WyomingParser, serializeEvent } from "../protocol.ts";
 import type { WyomingEvent } from "../protocol.ts";
-import type { SttResult } from "../../gpu/stt-client.ts";
-import type { TtsResult } from "../../gpu/tts-client.ts";
+import { serializeEvent, WyomingParser } from "../protocol.ts";
 
 // ---------------------------------------------------------------------------
 // Mock STT/TTS clients
@@ -43,7 +43,11 @@ class MockTTSClient {
 
   lastText: string | null = null;
 
-  async synthesize(request: { text: string; voice?: string; format?: string }): Promise<Result<TtsResult, EidolonError>> {
+  async synthesize(request: {
+    text: string;
+    voice?: string;
+    format?: string;
+  }): Promise<Result<TtsResult, EidolonError>> {
     this.lastText = request.text;
     return this.synthesizeResult;
   }
@@ -104,10 +108,7 @@ describe("WyomingHandler", () => {
     it("responds with info event listing capabilities", async () => {
       const { handler } = createHandlerWithMocks();
 
-      const result = await handler.handleEvent(
-        { type: "describe", data: {}, payload: null },
-        "test-satellite",
-      );
+      const result = await handler.handleEvent({ type: "describe", data: {}, payload: null }, "test-satellite");
 
       expect(result.ok).toBe(true);
       if (!result.ok) return;
@@ -130,10 +131,7 @@ describe("WyomingHandler", () => {
     it("responds with pong", async () => {
       const { handler } = createHandlerWithMocks();
 
-      const result = await handler.handleEvent(
-        { type: "ping", data: {}, payload: null },
-        "test-satellite",
-      );
+      const result = await handler.handleEvent({ type: "ping", data: {}, payload: null }, "test-satellite");
 
       expect(result.ok).toBe(true);
       if (!result.ok) return;
@@ -183,10 +181,7 @@ describe("WyomingHandler", () => {
       expect(chunkResult.ok).toBe(true);
 
       // audio-stop
-      const stopResult = await handler.handleEvent(
-        { type: "audio-stop", data: {}, payload: null },
-        "test-satellite",
-      );
+      const stopResult = await handler.handleEvent({ type: "audio-stop", data: {}, payload: null }, "test-satellite");
       expect(stopResult.ok).toBe(true);
       if (!stopResult.ok) return;
 
@@ -229,10 +224,7 @@ describe("WyomingHandler", () => {
     it("rejects audio-stop without audio-start", async () => {
       const { handler } = createHandlerWithMocks();
 
-      const result = await handler.handleEvent(
-        { type: "audio-stop", data: {}, payload: null },
-        "test-satellite",
-      );
+      const result = await handler.handleEvent({ type: "audio-stop", data: {}, payload: null }, "test-satellite");
 
       expect(result.ok).toBe(false);
       if (result.ok) return;
@@ -247,10 +239,7 @@ describe("WyomingHandler", () => {
         "test-satellite",
       );
 
-      const result = await handler.handleEvent(
-        { type: "audio-stop", data: {}, payload: null },
-        "test-satellite",
-      );
+      const result = await handler.handleEvent({ type: "audio-stop", data: {}, payload: null }, "test-satellite");
 
       expect(result.ok).toBe(true);
       if (!result.ok) return;
@@ -315,10 +304,7 @@ describe("WyomingHandler", () => {
     it("returns empty array for unknown event types", async () => {
       const { handler } = createHandlerWithMocks();
 
-      const result = await handler.handleEvent(
-        { type: "detection", data: {}, payload: null },
-        "test-satellite",
-      );
+      const result = await handler.handleEvent({ type: "detection", data: {}, payload: null }, "test-satellite");
 
       expect(result.ok).toBe(true);
       if (!result.ok) return;
@@ -339,10 +325,7 @@ describe("WyomingHandler", () => {
       handler.reset();
 
       // audio-stop should fail since session was cleared
-      const result = await handler.handleEvent(
-        { type: "audio-stop", data: {}, payload: null },
-        "test-satellite",
-      );
+      const result = await handler.handleEvent({ type: "audio-stop", data: {}, payload: null }, "test-satellite");
 
       expect(result.ok).toBe(false);
     });

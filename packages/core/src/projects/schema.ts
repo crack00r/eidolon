@@ -95,10 +95,12 @@ export const ProjectStatusSchema = z.object({
   branches: z.array(GitBranchInfoSchema),
   recentCommits: z.array(GitCommitSchema),
   uncommittedChanges: z.number(),
-  aheadBehind: z.object({
-    ahead: z.number(),
-    behind: z.number(),
-  }).optional(),
+  aheadBehind: z
+    .object({
+      ahead: z.number(),
+      behind: z.number(),
+    })
+    .optional(),
 });
 
 export type ProjectStatus = z.infer<typeof ProjectStatusSchema>;

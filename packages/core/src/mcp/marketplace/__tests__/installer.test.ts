@@ -7,10 +7,10 @@
  */
 
 import { Database } from "bun:sqlite";
-import { existsSync, mkdirSync, rmSync } from "node:fs";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
 import { afterEach, describe, expect, test } from "bun:test";
+import { existsSync, mkdirSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { Logger } from "../../../logging/logger.ts";
 import { McpInstaller } from "../installer.ts";
 import { MarketplaceRegistry } from "../registry.ts";

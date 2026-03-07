@@ -15,6 +15,7 @@ import type { Logger } from "../logging/logger.ts";
 import type { EventBus } from "../loop/event-bus.ts";
 import type { RateLimitTracker } from "../metrics/rate-limits.ts";
 import { registerCalendarHandlers } from "./builtin-handlers-calendar.ts";
+import { registerMiscHandlers, registerResearchHandlers } from "./builtin-handlers-research.ts";
 import { createPushEvent } from "./protocol.ts";
 import {
   BrainGetLogParamsSchema,
@@ -25,7 +26,6 @@ import {
   RpcValidationError,
 } from "./rpc-schemas.ts";
 import type { ClientState, MethodHandler } from "./server-helpers.ts";
-import { registerMiscHandlers, registerResearchHandlers } from "./builtin-handlers-research.ts";
 
 // ---------------------------------------------------------------------------
 // Types for the registration context
@@ -294,4 +294,3 @@ function registerClientHandlers(deps: BuiltinHandlerDeps): void {
     return { received: true, commandId };
   });
 }
-

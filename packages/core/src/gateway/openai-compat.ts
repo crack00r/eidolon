@@ -18,13 +18,7 @@ import { z } from "zod";
 import type { ModelRouter } from "../llm/router.ts";
 import type { Logger } from "../logging/logger.ts";
 import type { OpenAIChatCompletionResponse } from "./openai-compat-types.ts";
-import {
-  buildModelList,
-  checkAuth,
-  jsonResponse,
-  openAIError,
-  SECURITY_HEADERS,
-} from "./openai-compat-types.ts";
+import { buildModelList, checkAuth, jsonResponse, openAIError, SECURITY_HEADERS } from "./openai-compat-types.ts";
 
 // ---------------------------------------------------------------------------
 // Zod schemas for OpenAI request validation

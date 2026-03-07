@@ -10,7 +10,12 @@ import type { EidolonError, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 import type { Logger } from "../../logging/logger.ts";
 import { getMcpTemplate, listMcpTemplates, type McpTemplate } from "../templates.ts";
-import { InstalledMcpServerSchema, type InstalledMcpServer, type McpConfigStatus, type McpInstallStatus } from "./types.ts";
+import {
+  type InstalledMcpServer,
+  InstalledMcpServerSchema,
+  type McpConfigStatus,
+  type McpInstallStatus,
+} from "./types.ts";
 
 // ---------------------------------------------------------------------------
 // SQL
@@ -142,10 +147,12 @@ export class MarketplaceRegistry {
   /** Update the status of an installed server. */
   updateStatus(templateId: string, status: McpInstallStatus, error?: string): Result<void, EidolonError> {
     try {
-      this.db.run(
-        "UPDATE mcp_installed SET status = ?, updated_at = ?, error = ? WHERE template_id = ?",
-        [status, Date.now(), error ?? null, templateId],
-      );
+      this.db.run("UPDATE mcp_installed SET status = ?, updated_at = ?, error = ? WHERE template_id = ?", [
+        status,
+        Date.now(),
+        error ?? null,
+        templateId,
+      ]);
       return Ok(undefined);
     } catch (cause) {
       return Err(createError(ErrorCode.DB_QUERY_FAILED, `Failed to update status for ${templateId}`, cause));
@@ -163,10 +170,7 @@ export class MarketplaceRegistry {
   }
 
   /** Check configuration status for a template (installed, configured, missing secrets). */
-  getConfigStatus(
-    templateId: string,
-    installedSecrets: ReadonlySet<string>,
-  ): Result<McpConfigStatus, EidolonError> {
+  getConfigStatus(templateId: string, installedSecrets: ReadonlySet<string>): Result<McpConfigStatus, EidolonError> {
     const template = getMcpTemplate(templateId);
     if (!template) {
       return Err(createError(ErrorCode.CONFIG_NOT_FOUND, `Unknown MCP template: ${templateId}`));

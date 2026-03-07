@@ -5,19 +5,11 @@
  * legacy token format and JSON-RPC auth.authenticate method.
  */
 
-import type { EventBus } from "../loop/event-bus.ts";
 import type { Logger } from "../logging/logger.ts";
-import {
-  createJsonRpcError,
-  createJsonRpcResponse,
-} from "./protocol.ts";
+import type { EventBus } from "../loop/event-bus.ts";
+import { createJsonRpcError, createJsonRpcResponse } from "./protocol.ts";
 import type { AuthRateLimiter } from "./rate-limiter.ts";
-import {
-  anonymizeIp,
-  type ClientState,
-  constantTimeCompare,
-  type ServerWS,
-} from "./server-helpers.ts";
+import { anonymizeIp, type ClientState, constantTimeCompare, type ServerWS } from "./server-helpers.ts";
 
 // ---------------------------------------------------------------------------
 // Types

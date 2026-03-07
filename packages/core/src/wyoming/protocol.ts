@@ -301,9 +301,7 @@ function findNewline(data: Uint8Array): number {
   return -1;
 }
 
-function parseHeader(
-  line: string,
-): Result<z.infer<typeof WyomingHeaderSchema>, EidolonError> {
+function parseHeader(line: string): Result<z.infer<typeof WyomingHeaderSchema>, EidolonError> {
   let parsed: unknown;
   try {
     parsed = JSON.parse(line);
@@ -313,9 +311,7 @@ function parseHeader(
 
   const result = WyomingHeaderSchema.safeParse(parsed);
   if (!result.success) {
-    return Err(
-      createError(ErrorCode.WYOMING_PROTOCOL_ERROR, `Invalid Wyoming header: ${result.error.message}`),
-    );
+    return Err(createError(ErrorCode.WYOMING_PROTOCOL_ERROR, `Invalid Wyoming header: ${result.error.message}`));
   }
 
   return Ok(result.data);

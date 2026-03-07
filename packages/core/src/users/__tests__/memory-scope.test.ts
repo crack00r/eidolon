@@ -91,13 +91,25 @@ describe("ScopedMemoryStore", () => {
       const storeB = new ScopedMemoryStore(db, createSilentLogger(), "user-b");
 
       storeA.create({
-        type: "fact", layer: "long_term", content: "Fact 1", confidence: 0.9, source: "test",
+        type: "fact",
+        layer: "long_term",
+        content: "Fact 1",
+        confidence: 0.9,
+        source: "test",
       });
       storeA.create({
-        type: "fact", layer: "long_term", content: "Fact 2", confidence: 0.9, source: "test",
+        type: "fact",
+        layer: "long_term",
+        content: "Fact 2",
+        confidence: 0.9,
+        source: "test",
       });
       storeB.create({
-        type: "fact", layer: "long_term", content: "Fact 3", confidence: 0.9, source: "test",
+        type: "fact",
+        layer: "long_term",
+        content: "Fact 3",
+        confidence: 0.9,
+        source: "test",
       });
 
       const countA = storeA.count();
@@ -116,12 +128,18 @@ describe("ScopedMemoryStore", () => {
       const storeB = new ScopedMemoryStore(db, createSilentLogger(), "user-b");
 
       storeA.create({
-        type: "fact", layer: "long_term", content: "TypeScript is great",
-        confidence: 0.9, source: "test",
+        type: "fact",
+        layer: "long_term",
+        content: "TypeScript is great",
+        confidence: 0.9,
+        source: "test",
       });
       storeB.create({
-        type: "fact", layer: "long_term", content: "TypeScript is awesome",
-        confidence: 0.9, source: "test",
+        type: "fact",
+        layer: "long_term",
+        content: "TypeScript is awesome",
+        confidence: 0.9,
+        source: "test",
       });
 
       const searchA = storeA.searchText("TypeScript");
@@ -179,9 +197,9 @@ describe("ScopedMemoryStore", () => {
       expect(result.value.type).toBe("preference");
 
       // Verify user_id was set in the database
-      const row = db.query("SELECT user_id FROM memories WHERE id = ?").get(
-        result.value.id,
-      ) as { user_id: string } | null;
+      const row = db.query("SELECT user_id FROM memories WHERE id = ?").get(result.value.id) as {
+        user_id: string;
+      } | null;
       expect(row?.user_id).toBe("user-x");
     });
 
@@ -214,12 +232,18 @@ describe("ScopedMemoryStore", () => {
     test("filters by type", () => {
       const store = new ScopedMemoryStore(db, createSilentLogger(), "user-a");
       store.create({
-        type: "fact", layer: "long_term", content: "A fact",
-        confidence: 0.9, source: "test",
+        type: "fact",
+        layer: "long_term",
+        content: "A fact",
+        confidence: 0.9,
+        source: "test",
       });
       store.create({
-        type: "preference", layer: "long_term", content: "A pref",
-        confidence: 0.9, source: "test",
+        type: "preference",
+        layer: "long_term",
+        content: "A pref",
+        confidence: 0.9,
+        source: "test",
       });
 
       const result = store.list({ types: ["fact"] });
@@ -232,12 +256,18 @@ describe("ScopedMemoryStore", () => {
     test("filters by layer", () => {
       const store = new ScopedMemoryStore(db, createSilentLogger(), "user-a");
       store.create({
-        type: "fact", layer: "long_term", content: "Long term",
-        confidence: 0.9, source: "test",
+        type: "fact",
+        layer: "long_term",
+        content: "Long term",
+        confidence: 0.9,
+        source: "test",
       });
       store.create({
-        type: "fact", layer: "short_term", content: "Short term",
-        confidence: 0.9, source: "test",
+        type: "fact",
+        layer: "short_term",
+        content: "Short term",
+        confidence: 0.9,
+        source: "test",
       });
 
       const result = store.list({ layers: ["short_term"] });

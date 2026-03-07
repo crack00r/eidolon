@@ -5,6 +5,7 @@
 
 import { randomUUID } from "node:crypto";
 import type { z } from "zod";
+import type { BuiltinHandlerDeps } from "./builtin-handlers.ts";
 import {
   ApprovalListParamsSchema,
   ApprovalRespondParamsSchema,
@@ -17,7 +18,6 @@ import {
   RpcValidationError,
   SystemHealthParamsSchema,
 } from "./rpc-schemas.ts";
-import type { BuiltinHandlerDeps } from "./builtin-handlers.ts";
 
 // ---------------------------------------------------------------------------
 // Research handlers

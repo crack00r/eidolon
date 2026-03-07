@@ -31,11 +31,7 @@ export interface ReconnectState {
 // ---------------------------------------------------------------------------
 
 /** Start periodic ping messages to keep the WebSocket alive. */
-export function startPing(
-  ws: WebSocket | null,
-  state: ReconnectState,
-  config: ReconnectConfig,
-): void {
+export function startPing(ws: WebSocket | null, state: ReconnectState, config: ReconnectConfig): void {
   stopPing(state);
   state.pingTimer = setInterval(() => {
     if (ws !== null && ws.readyState === WebSocket.OPEN) {
@@ -82,10 +78,7 @@ export function scheduleReconnect(
     return;
   }
 
-  const delay = Math.min(
-    config.reconnectBaseDelayMs * 2 ** state.reconnectAttempts,
-    config.reconnectMaxDelayMs,
-  );
+  const delay = Math.min(config.reconnectBaseDelayMs * 2 ** state.reconnectAttempts, config.reconnectMaxDelayMs);
 
   state.reconnectAttempts += 1;
 

@@ -5,11 +5,11 @@
  */
 
 import { Database } from "bun:sqlite";
-import { describe, expect, test, beforeEach } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
 import { join } from "node:path";
 import type { Logger } from "../../logging/logger.ts";
 import { ProjectManager } from "../manager.ts";
-import { PROJECTS_TABLE_SQL, PROJECT_JOURNAL_TABLE_SQL } from "../schema.ts";
+import { PROJECT_JOURNAL_TABLE_SQL, PROJECTS_TABLE_SQL } from "../schema.ts";
 
 function createSilentLogger(): Logger {
   const noop = (): void => {};

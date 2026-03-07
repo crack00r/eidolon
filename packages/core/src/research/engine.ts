@@ -12,6 +12,14 @@ import { randomUUID } from "node:crypto";
 import type { ClaudeSessionOptions, EidolonError, IClaudeProcess, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 import type { Logger } from "../logging/logger.ts";
+import type {
+  Citation,
+  ResearchEngineConfig,
+  ResearchFinding,
+  ResearchRequest,
+  ResearchResult,
+  ResearchSource,
+} from "./engine-helpers.ts";
 import {
   BARE_URL_PATTERN,
   collectStreamText,
@@ -25,10 +33,16 @@ import {
   NUMBERED_REF_PATTERN,
   PARENTHETICAL_PATTERN,
 } from "./engine-helpers.ts";
-import type { Citation, ResearchEngineConfig, ResearchFinding, ResearchRequest, ResearchResult, ResearchSource } from "./engine-helpers.ts";
 
 // Re-export all types and helpers for backward compatibility
-export type { Citation, ResearchEngineConfig, ResearchFinding, ResearchRequest, ResearchResult, ResearchSource } from "./engine-helpers.ts";
+export type {
+  Citation,
+  ResearchEngineConfig,
+  ResearchFinding,
+  ResearchRequest,
+  ResearchResult,
+  ResearchSource,
+} from "./engine-helpers.ts";
 export {
   collectStreamText,
   DEFAULT_MAX_SOURCES,

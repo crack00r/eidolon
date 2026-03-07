@@ -16,10 +16,7 @@ declare module "playwright" {
     title(): Promise<string>;
     url(): string;
     content(): Promise<string>;
-    click(
-      selector: string,
-      options?: { button?: string; clickCount?: number; timeout?: number },
-    ): Promise<void>;
+    click(selector: string, options?: { button?: string; clickCount?: number; timeout?: number }): Promise<void>;
     fill(selector: string, value: string, options?: { timeout?: number }): Promise<void>;
     screenshot(options?: { type?: string; fullPage?: boolean }): Promise<Buffer>;
     evaluate<T>(pageFunction: string | (() => T)): Promise<T>;
@@ -34,10 +31,7 @@ declare module "playwright" {
   }
 
   interface BrowserType {
-    launchPersistentContext(
-      userDataDir: string,
-      options?: LaunchPersistentContextOptions,
-    ): Promise<BrowserContext>;
+    launchPersistentContext(userDataDir: string, options?: LaunchPersistentContextOptions): Promise<BrowserContext>;
   }
 
   export const chromium: BrowserType;

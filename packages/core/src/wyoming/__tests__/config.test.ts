@@ -3,7 +3,7 @@
  */
 
 import { describe, expect, it } from "bun:test";
-import { WyomingConfigSchema, DEFAULT_WYOMING_PORT } from "../config.ts";
+import { DEFAULT_WYOMING_PORT, WyomingConfigSchema } from "../config.ts";
 
 describe("WyomingConfigSchema", () => {
   it("accepts minimal config with defaults", () => {

@@ -275,7 +275,6 @@ export class MemoryConsolidator {
     return Ok({ decisions, added, updated, deleted, noops });
   }
 
-
   /**
    * Detect contradiction between two memory contents.
    * Uses injected LLM function if available, otherwise falls back to

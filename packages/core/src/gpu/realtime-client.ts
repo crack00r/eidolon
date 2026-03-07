@@ -13,12 +13,7 @@ import type { EidolonError, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 import type { Logger } from "../logging/logger.ts";
 import type { ReconnectConfig, ReconnectState } from "./realtime-reconnect.ts";
-import {
-  clearReconnectTimer,
-  scheduleReconnect,
-  startPing,
-  stopPing,
-} from "./realtime-reconnect.ts";
+import { clearReconnectTimer, scheduleReconnect, startPing, stopPing } from "./realtime-reconnect.ts";
 
 // ---------------------------------------------------------------------------
 // Types

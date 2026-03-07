@@ -81,13 +81,9 @@ export async function sendWithRetry<T>(fn: () => Promise<T>, logger: Logger): Pr
         throw err;
       }
 
-      logger.warn(
-        "telegram",
-        `API call failed (attempt ${attempt + 1}/${MAX_RETRIES}), retrying in ${delayMs}ms`,
-        {
-          error: err instanceof Error ? err.message : String(err),
-        },
-      );
+      logger.warn("telegram", `API call failed (attempt ${attempt + 1}/${MAX_RETRIES}), retrying in ${delayMs}ms`, {
+        error: err instanceof Error ? err.message : String(err),
+      });
       await sleep(delayMs);
     }
   }

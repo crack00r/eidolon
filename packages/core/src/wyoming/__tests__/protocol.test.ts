@@ -3,8 +3,8 @@
  */
 
 import { describe, expect, it } from "bun:test";
-import { WyomingParser, serializeEvent } from "../protocol.ts";
 import type { WyomingEvent } from "../protocol.ts";
+import { serializeEvent, WyomingParser } from "../protocol.ts";
 
 // ---------------------------------------------------------------------------
 // serializeEvent
@@ -78,7 +78,7 @@ describe("WyomingParser", () => {
   it("parses a complete event without payload", () => {
     const parser = new WyomingParser();
     const header = JSON.stringify({ type: "ping", data: {}, payload_length: 0 });
-    const bytes = new TextEncoder().encode(header + "\n");
+    const bytes = new TextEncoder().encode(`${header}\n`);
 
     const result = parser.feed(bytes);
     expect(result.ok).toBe(true);
@@ -98,7 +98,7 @@ describe("WyomingParser", () => {
       payload_length: 3,
     });
 
-    const headerBytes = new TextEncoder().encode(header + "\n");
+    const headerBytes = new TextEncoder().encode(`${header}\n`);
     const fullData = new Uint8Array(headerBytes.byteLength + 3);
     fullData.set(headerBytes, 0);
     fullData.set(payload, headerBytes.byteLength);
@@ -114,7 +114,7 @@ describe("WyomingParser", () => {
 
   it("handles partial header across multiple feeds", () => {
     const parser = new WyomingParser();
-    const header = JSON.stringify({ type: "pong", data: {}, payload_length: 0 }) + "\n";
+    const header = `${JSON.stringify({ type: "pong", data: {}, payload_length: 0 })}\n`;
     const bytes = new TextEncoder().encode(header);
 
     // Feed first half
@@ -141,7 +141,7 @@ describe("WyomingParser", () => {
     });
 
     // Feed header + partial payload
-    const headerBytes = new TextEncoder().encode(header + "\n");
+    const headerBytes = new TextEncoder().encode(`${header}\n`);
     const partial = new Uint8Array(headerBytes.byteLength + 2);
     partial.set(headerBytes, 0);
     partial.set(payload.slice(0, 2), headerBytes.byteLength);
@@ -161,9 +161,9 @@ describe("WyomingParser", () => {
 
   it("parses multiple events in a single feed", () => {
     const parser = new WyomingParser();
-    const event1 = JSON.stringify({ type: "ping", data: {}, payload_length: 0 }) + "\n";
-    const event2 = JSON.stringify({ type: "pong", data: {}, payload_length: 0 }) + "\n";
-    const bytes = new TextEncoder().encode(event1 + event2);
+    const event1 = `${JSON.stringify({ type: "ping", data: {}, payload_length: 0 })}\n`;
+    const event2 = `${JSON.stringify({ type: "pong", data: {}, payload_length: 0 })}\n`;
+    const bytes = new TextEncoder().encode(`${event1}${event2}`);
 
     const result = parser.feed(bytes);
     expect(result.ok).toBe(true);
@@ -187,7 +187,7 @@ describe("WyomingParser", () => {
 
   it("rejects header missing type field", () => {
     const parser = new WyomingParser();
-    const bytes = new TextEncoder().encode(JSON.stringify({ data: {} }) + "\n");
+    const bytes = new TextEncoder().encode(`${JSON.stringify({ data: {} })}\n`);
 
     const result = parser.feed(bytes);
     expect(result.ok).toBe(false);
@@ -196,7 +196,7 @@ describe("WyomingParser", () => {
   it("skips empty lines", () => {
     const parser = new WyomingParser();
     const header = JSON.stringify({ type: "ping", data: {}, payload_length: 0 });
-    const bytes = new TextEncoder().encode("\n\n" + header + "\n");
+    const bytes = new TextEncoder().encode(`\n\n${header}\n`);
 
     const result = parser.feed(bytes);
     expect(result.ok).toBe(true);
@@ -208,9 +208,7 @@ describe("WyomingParser", () => {
 
   it("take() clears the event queue", () => {
     const parser = new WyomingParser();
-    const bytes = new TextEncoder().encode(
-      JSON.stringify({ type: "ping", data: {}, payload_length: 0 }) + "\n",
-    );
+    const bytes = new TextEncoder().encode(`${JSON.stringify({ type: "ping", data: {}, payload_length: 0 })}\n`);
 
     parser.feed(bytes);
     expect(parser.take()).toHaveLength(1);

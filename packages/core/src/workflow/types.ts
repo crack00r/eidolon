@@ -267,11 +267,7 @@ import type { EidolonError, Result } from "@eidolon/protocol";
 
 export interface IStepExecutor {
   readonly type: StepType;
-  execute(
-    config: StepConfig,
-    context: WorkflowContext,
-    signal: AbortSignal,
-  ): Promise<Result<StepOutput, EidolonError>>;
+  execute(config: StepConfig, context: WorkflowContext, signal: AbortSignal): Promise<Result<StepOutput, EidolonError>>;
 }
 
 // ---------------------------------------------------------------------------

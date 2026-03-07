@@ -19,12 +19,7 @@ import type {
 } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 import type { Logger } from "../../logging/logger.ts";
-import type {
-  DiscordAttachment,
-  DiscordConfig,
-  DiscordInboundMessage,
-  IDiscordClient,
-} from "./channel-types.ts";
+import type { DiscordAttachment, DiscordConfig, DiscordInboundMessage, IDiscordClient } from "./channel-types.ts";
 import { formatForDiscord, splitDiscordMessage } from "./formatter.ts";
 
 // Re-export types for backward compatibility

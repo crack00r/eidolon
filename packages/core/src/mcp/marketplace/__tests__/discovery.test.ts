@@ -141,10 +141,7 @@ describe("McpDiscovery", () => {
     });
 
     test("handles empty matches", async () => {
-      const claude = FakeClaudeProcess.withResponse(
-        /MCP.*recommendation/,
-        '{"matches": []}',
-      );
+      const claude = FakeClaudeProcess.withResponse(/MCP.*recommendation/, '{"matches": []}');
 
       const discovery = new McpDiscovery(claude, createSilentLogger());
       const result = await discovery.matchIntent("Something completely unrelated to any MCP server");
@@ -155,10 +152,7 @@ describe("McpDiscovery", () => {
     });
 
     test("returns error for unparseable response", async () => {
-      const claude = FakeClaudeProcess.withResponse(
-        /MCP.*recommendation/,
-        "I cannot provide JSON output right now.",
-      );
+      const claude = FakeClaudeProcess.withResponse(/MCP.*recommendation/, "I cannot provide JSON output right now.");
 
       const discovery = new McpDiscovery(claude, createSilentLogger());
       const result = await discovery.matchIntent("test");
@@ -167,10 +161,7 @@ describe("McpDiscovery", () => {
     });
 
     test("returns error for invalid JSON structure", async () => {
-      const claude = FakeClaudeProcess.withResponse(
-        /MCP.*recommendation/,
-        '{"wrong_key": "value"}',
-      );
+      const claude = FakeClaudeProcess.withResponse(/MCP.*recommendation/, '{"wrong_key": "value"}');
 
       const discovery = new McpDiscovery(claude, createSilentLogger());
       const result = await discovery.matchIntent("test");

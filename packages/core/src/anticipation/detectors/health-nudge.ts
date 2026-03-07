@@ -23,10 +23,7 @@ export class HealthNudgeDetector implements IPatternDetector {
   async detect(context: DetectionContext): Promise<DetectedPattern[]> {
     // Check if user has exercise preferences
     const hasExercisePref = context.profile.preferences.some((p) =>
-      this.activityTags.some(
-        (tag) =>
-          p.key.toLowerCase().includes(tag) || p.value.toLowerCase().includes(tag),
-      ),
+      this.activityTags.some((tag) => p.key.toLowerCase().includes(tag) || p.value.toLowerCase().includes(tag)),
     );
 
     if (!hasExercisePref) return [];
@@ -41,9 +38,7 @@ export class HealthNudgeDetector implements IPatternDetector {
       if (m.createdAt < todayStart) return false;
       const content = m.content.toLowerCase();
       const tags = m.tags.map((t) => t.toLowerCase());
-      return this.activityTags.some(
-        (tag) => content.includes(tag) || tags.includes(tag),
-      );
+      return this.activityTags.some((tag) => content.includes(tag) || tags.includes(tag));
     });
 
     if (hasActivityToday) return [];

@@ -7,15 +7,10 @@
 
 import type { EidolonError, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
-import type { EventBus } from "../loop/event-bus.ts";
 import type { Logger } from "../logging/logger.ts";
+import type { EventBus } from "../loop/event-bus.ts";
 import type { WorkflowStore } from "./store.ts";
-import type {
-  StepResult,
-  WorkflowDefinition,
-  WorkflowStepDef,
-  WorkflowStepReadyPayload,
-} from "./types.ts";
+import type { StepResult, WorkflowDefinition, WorkflowStepDef, WorkflowStepReadyPayload } from "./types.ts";
 import { MAX_PARALLEL_STEPS } from "./types.ts";
 
 // ---------------------------------------------------------------------------
@@ -70,10 +65,7 @@ export function publishReadySteps(
 // ---------------------------------------------------------------------------
 
 /** Determine which steps are enabled based on completed condition steps. */
-export function getEnabledSteps(
-  def: WorkflowDefinition,
-  stepResults: readonly StepResult[],
-): Set<string> {
+export function getEnabledSteps(def: WorkflowDefinition, stepResults: readonly StepResult[]): Set<string> {
   // By default all steps are enabled
   const enabled = new Set(def.steps.map((s) => s.id));
 
@@ -119,17 +111,19 @@ export function advanceWorkflow(
   const enabledSteps = getEnabledSteps(def, stepResults);
 
   const allDone = [...enabledSteps].every((stepId) =>
-    stepResults.some(
-      (r) => r.stepId === stepId && (r.status === "completed" || r.status === "skipped"),
-    ),
+    stepResults.some((r) => r.stepId === stepId && (r.status === "completed" || r.status === "skipped")),
   );
 
   if (allDone) {
     store.updateRunStatus(runId, "completed");
-    eventBus.publish("workflow:completed", {
-      runId,
-      definitionId: def.id,
-    }, { priority: "normal", source: "workflow-engine" });
+    eventBus.publish(
+      "workflow:completed",
+      {
+        runId,
+        definitionId: def.id,
+      },
+      { priority: "normal", source: "workflow-engine" },
+    );
     logger.info("workflow-engine", `Workflow completed: ${runId}`);
   } else {
     publishReadySteps(runId, def, store, eventBus);
@@ -156,18 +150,26 @@ export function handleStepFailure(
       break;
     case "notify":
       store.updateRunStatus(runId, "failed", { error: errorMsg });
-      eventBus.publish("workflow:failed", {
-        runId,
-        definitionId: def.id,
-        error: errorMsg,
-      }, { priority: "high", source: "workflow-engine" });
+      eventBus.publish(
+        "workflow:failed",
+        {
+          runId,
+          definitionId: def.id,
+          error: errorMsg,
+        },
+        { priority: "high", source: "workflow-engine" },
+      );
       break;
     case "retry_from":
       store.updateRunStatus(runId, "retrying");
-      eventBus.publish("workflow:step_ready", {
-        runId,
-        stepId: strategy.stepId,
-      }, { priority: "normal", source: "workflow-engine" });
+      eventBus.publish(
+        "workflow:step_ready",
+        {
+          runId,
+          stepId: strategy.stepId,
+        },
+        { priority: "normal", source: "workflow-engine" },
+      );
       break;
   }
 }

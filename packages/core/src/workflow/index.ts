@@ -1,7 +1,16 @@
 // Workflow engine -- barrel export
 export { WorkflowEngine } from "./engine.ts";
 export { StepExecutorRegistry } from "./executor-registry.ts";
-export { interpolate, interpolateConfig, extractReferences } from "./interpolation.ts";
+export { ApiStepExecutor } from "./executors/api.ts";
+export { ChannelStepExecutor } from "./executors/channel.ts";
+export { ConditionStepExecutor, evaluateCondition } from "./executors/condition.ts";
+export { HaStepExecutor } from "./executors/ha.ts";
+// Step executors
+export { LlmStepExecutor } from "./executors/llm.ts";
+export { MemoryStepExecutor } from "./executors/memory.ts";
+export { TransformStepExecutor } from "./executors/transform.ts";
+export { WaitStepExecutor } from "./executors/wait.ts";
+export { extractReferences, interpolate, interpolateConfig } from "./interpolation.ts";
 export { WorkflowParser } from "./parser.ts";
 export { WorkflowStore } from "./store.ts";
 export type {
@@ -20,18 +29,9 @@ export type {
   WorkflowTrigger,
 } from "./types.ts";
 export {
+  FailureStrategySchema,
+  RetryPolicySchema,
   WorkflowDefinitionSchema,
   WorkflowStepDefSchema,
   WorkflowTriggerSchema,
-  FailureStrategySchema,
-  RetryPolicySchema,
 } from "./types.ts";
-// Step executors
-export { LlmStepExecutor } from "./executors/llm.ts";
-export { ApiStepExecutor } from "./executors/api.ts";
-export { ChannelStepExecutor } from "./executors/channel.ts";
-export { WaitStepExecutor } from "./executors/wait.ts";
-export { ConditionStepExecutor, evaluateCondition } from "./executors/condition.ts";
-export { TransformStepExecutor } from "./executors/transform.ts";
-export { HaStepExecutor } from "./executors/ha.ts";
-export { MemoryStepExecutor } from "./executors/memory.ts";

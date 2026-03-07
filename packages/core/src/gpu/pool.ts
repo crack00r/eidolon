@@ -44,7 +44,6 @@ export interface GPUPoolStatus {
   readonly workers: readonly GPUWorkerInfo[];
 }
 
-
 // ---------------------------------------------------------------------------
 // GPUWorkerPool
 // ---------------------------------------------------------------------------
@@ -338,5 +337,4 @@ export class GPUWorkerPool {
     this.stopHealthChecks();
     this.logger.info("dispose", "GPU worker pool disposed");
   }
-
 }

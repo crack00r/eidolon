@@ -18,7 +18,12 @@ import type { Logger } from "../logging/logger.ts";
 import type { EventBus } from "../loop/event-bus.ts";
 import type { MemorySearch } from "../memory/search.ts";
 import type { MemoryStore } from "../memory/store.ts";
-import { createChatSendHandler, createChatStreamHandler, createMemoryDeleteHandler, createMemorySearchHandler } from "./rpc-handlers-chat.ts";
+import {
+  createChatSendHandler,
+  createChatStreamHandler,
+  createMemoryDeleteHandler,
+  createMemorySearchHandler,
+} from "./rpc-handlers-chat.ts";
 import {
   createLearningApproveHandler,
   createLearningListHandler,
@@ -35,7 +40,12 @@ import type { MethodHandler } from "./server.ts";
 // Re-exports for backward compatibility
 // ---------------------------------------------------------------------------
 
-export { createChatSendHandler, createChatStreamHandler, createMemoryDeleteHandler, createMemorySearchHandler } from "./rpc-handlers-chat.ts";
+export {
+  createChatSendHandler,
+  createChatStreamHandler,
+  createMemoryDeleteHandler,
+  createMemorySearchHandler,
+} from "./rpc-handlers-chat.ts";
 export {
   createLearningApproveHandler,
   createLearningListHandler,

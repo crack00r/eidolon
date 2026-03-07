@@ -15,36 +15,36 @@ import { AnticipationConfigSchema } from "./config-anticipation.ts";
 import { SecretRefSchema, stringOrSecret } from "./config-base.ts";
 import {
   BrainConfigSchema,
-  ClaudeAccountSchema,
+  type ClaudeAccountSchema,
   LearningConfigSchema,
   LoopConfigSchema,
   MemoryConfigSchema,
 } from "./config-brain.ts";
 import {
   ChannelConfigSchema,
-  EmailConfigSchema,
+  type EmailConfigSchema,
   GatewayConfigSchema,
   GpuConfigSchema,
-  GpuPoolSchema,
-  GpuWorkerSchema,
-  SlackConfigSchema,
-  WebhookEndpointSchema,
-  WhatsAppConfigSchema,
+  type GpuPoolSchema,
+  type GpuWorkerSchema,
+  type SlackConfigSchema,
+  type WebhookEndpointSchema,
+  type WhatsAppConfigSchema,
 } from "./config-channels.ts";
 import {
   BrowserConfigSchema,
   DaemonConfigSchema,
   DatabaseConfigSchema,
   DigestConfigSchema,
-  HADomainPolicySchema,
   HAAnomalyRuleSchema,
+  HADomainPolicySchema,
   HASceneActionConfigSchema,
   HASceneConfigSchema,
   HomeAutomationConfigSchema,
-  LlamaCppProviderSchema,
   LLMConfigSchema,
+  type LlamaCppProviderSchema,
   LoggingConfigSchema,
-  OllamaProviderSchema,
+  type OllamaProviderSchema,
   PluginConfigSchema,
   PrivacyConfigSchema,
   ReplicationConfigSchema,
@@ -58,10 +58,10 @@ import { CalendarConfigSchema } from "./types/calendar.ts";
 // Re-exports from config-base and config-anticipation
 // ---------------------------------------------------------------------------
 
-export { AnticipationConfigSchema } from "./config-anticipation.ts";
 export type { AnticipationConfig } from "./config-anticipation.ts";
-export { SecretRefSchema, stringOrSecret } from "./config-base.ts";
+export { AnticipationConfigSchema } from "./config-anticipation.ts";
 export type { SecretRef } from "./config-base.ts";
+export { SecretRefSchema, stringOrSecret } from "./config-base.ts";
 
 // ---------------------------------------------------------------------------
 // Re-exports from sub-modules
@@ -90,13 +90,13 @@ export {
   DaemonConfigSchema,
   DatabaseConfigSchema,
   DigestConfigSchema,
-  HADomainPolicySchema,
   HAAnomalyRuleSchema,
+  HADomainPolicySchema,
   HASceneActionConfigSchema,
   HASceneConfigSchema,
   HomeAutomationConfigSchema,
-  LlamaCppProviderSchema,
   LLMConfigSchema,
+  LlamaCppProviderSchema,
   LoggingConfigSchema,
   OllamaProviderSchema,
   PluginConfigSchema,

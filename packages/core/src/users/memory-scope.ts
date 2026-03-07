@@ -148,7 +148,21 @@ export class ScopedMemoryStore {
           `INSERT INTO memories (id, type, layer, content, confidence, source, tags, created_at, updated_at, accessed_at, access_count, metadata, sensitive, user_id)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)`,
         )
-        .run(id, input.type, input.layer, input.content, input.confidence, input.source, tags, now, now, now, metadata, sensitive, this.userId);
+        .run(
+          id,
+          input.type,
+          input.layer,
+          input.content,
+          input.confidence,
+          input.source,
+          tags,
+          now,
+          now,
+          now,
+          metadata,
+          sensitive,
+          this.userId,
+        );
 
       const memory: Memory = {
         id,
@@ -174,10 +188,7 @@ export class ScopedMemoryStore {
   }
 
   /** Full-text search scoped to this user. */
-  searchText(
-    query: string,
-    limit?: number,
-  ): Result<Array<{ memory: Memory; rank: number }>, EidolonError> {
+  searchText(query: string, limit?: number): Result<Array<{ memory: Memory; rank: number }>, EidolonError> {
     try {
       const maxResults = Math.max(1, Math.min(limit ?? 20, 1000));
       const sanitized = `"${query.replace(/"/g, '""')}"`;

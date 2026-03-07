@@ -198,7 +198,9 @@ describe("SlackChannel", () => {
     test("routes authorized text message to handler", async () => {
       const channel = new SlackChannel(createTestConfig(), client, logger);
       const received: InboundMessage[] = [];
-      channel.onMessage(async (msg) => { received.push(msg); });
+      channel.onMessage(async (msg) => {
+        received.push(msg);
+      });
       await channel.connect();
 
       await client.simulateEvent(createInboundEvent());
@@ -212,7 +214,9 @@ describe("SlackChannel", () => {
     test("sets replyToId from threadTs", async () => {
       const channel = new SlackChannel(createTestConfig(), client, logger);
       const received: InboundMessage[] = [];
-      channel.onMessage(async (msg) => { received.push(msg); });
+      channel.onMessage(async (msg) => {
+        received.push(msg);
+      });
       await channel.connect();
 
       await client.simulateEvent(createInboundEvent({ threadTs: "1234567890.000000" }));
@@ -224,7 +228,9 @@ describe("SlackChannel", () => {
     test("rejects messages from unauthorized users", async () => {
       const channel = new SlackChannel(createTestConfig(), client, logger);
       const received: InboundMessage[] = [];
-      channel.onMessage(async (msg) => { received.push(msg); });
+      channel.onMessage(async (msg) => {
+        received.push(msg);
+      });
       await channel.connect();
 
       await client.simulateEvent(
@@ -237,30 +243,24 @@ describe("SlackChannel", () => {
     });
 
     test("rejects messages from unauthorized channel", async () => {
-      const channel = new SlackChannel(
-        createTestConfig({ allowedChannelIds: ["C01ALLOWED"] }),
-        client,
-        logger,
-      );
+      const channel = new SlackChannel(createTestConfig({ allowedChannelIds: ["C01ALLOWED"] }), client, logger);
       const received: InboundMessage[] = [];
-      channel.onMessage(async (msg) => { received.push(msg); });
+      channel.onMessage(async (msg) => {
+        received.push(msg);
+      });
       await channel.connect();
 
-      await client.simulateEvent(
-        createInboundEvent({ channel: "C99NOTALLOWED" }),
-      );
+      await client.simulateEvent(createInboundEvent({ channel: "C99NOTALLOWED" }));
 
       expect(received).toHaveLength(0);
     });
 
     test("accepts messages when allowedChannelIds is empty (all allowed)", async () => {
-      const channel = new SlackChannel(
-        createTestConfig({ allowedChannelIds: [] }),
-        client,
-        logger,
-      );
+      const channel = new SlackChannel(createTestConfig({ allowedChannelIds: [] }), client, logger);
       const received: InboundMessage[] = [];
-      channel.onMessage(async (msg) => { received.push(msg); });
+      channel.onMessage(async (msg) => {
+        received.push(msg);
+      });
       await channel.connect();
 
       await client.simulateEvent(createInboundEvent({ channel: "C99ANYCHANNEL" }));
@@ -271,7 +271,9 @@ describe("SlackChannel", () => {
     test("ignores bot messages", async () => {
       const channel = new SlackChannel(createTestConfig(), client, logger);
       const received: InboundMessage[] = [];
-      channel.onMessage(async (msg) => { received.push(msg); });
+      channel.onMessage(async (msg) => {
+        received.push(msg);
+      });
       await channel.connect();
 
       await client.simulateEvent(
@@ -286,7 +288,9 @@ describe("SlackChannel", () => {
     test("truncates excessively long inbound text", async () => {
       const channel = new SlackChannel(createTestConfig(), client, logger);
       const received: InboundMessage[] = [];
-      channel.onMessage(async (msg) => { received.push(msg); });
+      channel.onMessage(async (msg) => {
+        received.push(msg);
+      });
       await channel.connect();
 
       const longText = "A".repeat(200_000);
@@ -299,15 +303,19 @@ describe("SlackChannel", () => {
     test("handles slash command as inbound message", async () => {
       const channel = new SlackChannel(createTestConfig(), client, logger);
       const received: InboundMessage[] = [];
-      channel.onMessage(async (msg) => { received.push(msg); });
+      channel.onMessage(async (msg) => {
+        received.push(msg);
+      });
       await channel.connect();
 
-      await client.simulateEvent(createInboundEvent({
-        type: "slash_command",
-        text: "what is the weather?",
-        commandName: "/eidolon",
-        responseUrl: "https://hooks.slack.com/commands/resp",
-      }));
+      await client.simulateEvent(
+        createInboundEvent({
+          type: "slash_command",
+          text: "what is the weather?",
+          commandName: "/eidolon",
+          responseUrl: "https://hooks.slack.com/commands/resp",
+        }),
+      );
 
       expect(received).toHaveLength(1);
       expect(received[0]?.text).toBe("what is the weather?");
@@ -316,13 +324,17 @@ describe("SlackChannel", () => {
     test("handles app_mention as inbound message", async () => {
       const channel = new SlackChannel(createTestConfig(), client, logger);
       const received: InboundMessage[] = [];
-      channel.onMessage(async (msg) => { received.push(msg); });
+      channel.onMessage(async (msg) => {
+        received.push(msg);
+      });
       await channel.connect();
 
-      await client.simulateEvent(createInboundEvent({
-        type: "app_mention",
-        text: "<@U01BOT> do something",
-      }));
+      await client.simulateEvent(
+        createInboundEvent({
+          type: "app_mention",
+          text: "<@U01BOT> do something",
+        }),
+      );
 
       expect(received).toHaveLength(1);
       expect(received[0]?.text).toBe("<@U01BOT> do something");
@@ -331,20 +343,24 @@ describe("SlackChannel", () => {
     test("converts file attachments", async () => {
       const channel = new SlackChannel(createTestConfig(), client, logger);
       const received: InboundMessage[] = [];
-      channel.onMessage(async (msg) => { received.push(msg); });
+      channel.onMessage(async (msg) => {
+        received.push(msg);
+      });
       await channel.connect();
 
-      await client.simulateEvent(createInboundEvent({
-        files: [
-          {
-            id: "F01FILE",
-            name: "screenshot.png",
-            mimetype: "image/png",
-            size: 2048,
-            urlPrivateDownload: "https://files.slack.com/screenshot.png",
-          },
-        ],
-      }));
+      await client.simulateEvent(
+        createInboundEvent({
+          files: [
+            {
+              id: "F01FILE",
+              name: "screenshot.png",
+              mimetype: "image/png",
+              size: 2048,
+              urlPrivateDownload: "https://files.slack.com/screenshot.png",
+            },
+          ],
+        }),
+      );
 
       expect(received).toHaveLength(1);
       expect(received[0]?.attachments).toHaveLength(1);
@@ -367,7 +383,9 @@ describe("SlackChannel", () => {
     test("rate limits after 30 messages in 60 seconds", async () => {
       const channel = new SlackChannel(createTestConfig(), client, logger);
       const received: InboundMessage[] = [];
-      channel.onMessage(async (msg) => { received.push(msg); });
+      channel.onMessage(async (msg) => {
+        received.push(msg);
+      });
       await channel.connect();
 
       for (let i = 0; i < 31; i++) {

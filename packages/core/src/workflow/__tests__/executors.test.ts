@@ -4,16 +4,13 @@
 
 import { describe, expect, test } from "bun:test";
 import { Ok } from "@eidolon/protocol";
+import { ApiStepExecutor } from "../executors/api.ts";
 import { ConditionStepExecutor, evaluateCondition } from "../executors/condition.ts";
 import { TransformStepExecutor } from "../executors/transform.ts";
 import { WaitStepExecutor } from "../executors/wait.ts";
-import { ApiStepExecutor } from "../executors/api.ts";
 import type { WorkflowContext } from "../types.ts";
 
-function makeContext(
-  outputs: Record<string, unknown> = {},
-  trigger: unknown = {},
-): WorkflowContext {
+function makeContext(outputs: Record<string, unknown> = {}, trigger: unknown = {}): WorkflowContext {
   return {
     runId: "test-run",
     definitionId: "test-def",
@@ -238,11 +235,7 @@ describe("WaitStepExecutor", () => {
   test("waits for specified duration", async () => {
     const executor = new WaitStepExecutor();
     const start = Date.now();
-    const result = await executor.execute(
-      { durationMs: 50 },
-      makeContext(),
-      makeSignal(),
-    );
+    const result = await executor.execute({ durationMs: 50 }, makeContext(), makeSignal());
     const elapsed = Date.now() - start;
     expect(result.ok).toBe(true);
     expect(elapsed).toBeGreaterThanOrEqual(40);
@@ -253,11 +246,7 @@ describe("WaitStepExecutor", () => {
     const controller = new AbortController();
 
     setTimeout(() => controller.abort(), 20);
-    const result = await executor.execute(
-      { durationMs: 5000 },
-      makeContext(),
-      controller.signal,
-    );
+    const result = await executor.execute({ durationMs: 5000 }, makeContext(), controller.signal);
     expect(result.ok).toBe(false);
   });
 

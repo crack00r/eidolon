@@ -49,9 +49,10 @@ export class BirthdayDetector implements IPatternDetector {
 
         // The target entity or relation attributes should contain a date
         const targetEntity = this.kgEntityStore.get(relation.targetId);
-        const dateStr = targetEntity.ok && targetEntity.value
-          ? extractDateFromEntity(targetEntity.value.name, targetEntity.value.attributes)
-          : null;
+        const dateStr =
+          targetEntity.ok && targetEntity.value
+            ? extractDateFromEntity(targetEntity.value.name, targetEntity.value.attributes)
+            : null;
 
         if (!dateStr) continue;
 
@@ -76,10 +77,7 @@ export class BirthdayDetector implements IPatternDetector {
 }
 
 /** Extract a MM-DD or YYYY-MM-DD date string from entity name or attributes. */
-function extractDateFromEntity(
-  name: string,
-  attributes: Record<string, unknown>,
-): string | null {
+function extractDateFromEntity(name: string, attributes: Record<string, unknown>): string | null {
   // Check attributes for "date", "birthday", "born_on"
   for (const key of ["date", "birthday", "born_on"]) {
     const val = attributes[key];
@@ -95,12 +93,7 @@ function extractDateFromEntity(
 }
 
 /** Check if a birthday date (MM-DD or YYYY-MM-DD) falls within N days of now. */
-function isWithinDays(
-  dateStr: string,
-  nowMs: number,
-  daysBefore: number,
-  timezone: string,
-): boolean {
+function isWithinDays(dateStr: string, nowMs: number, daysBefore: number, timezone: string): boolean {
   // Extract month and day
   const pattern = /(?:\d{4}-)?(\d{2})-(\d{2})/;
   const match = pattern.exec(dateStr);
@@ -133,8 +126,5 @@ function isWithinDays(
   const diffThisYear = birthdayThisYear - nowMs;
   const diffNextYear = birthdayNextYear - nowMs;
 
-  return (
-    (diffThisYear >= 0 && diffThisYear <= windowMs) ||
-    (diffNextYear >= 0 && diffNextYear <= windowMs)
-  );
+  return (diffThisYear >= 0 && diffThisYear <= windowMs) || (diffNextYear >= 0 && diffNextYear <= windowMs);
 }

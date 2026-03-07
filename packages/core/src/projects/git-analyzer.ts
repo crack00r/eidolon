@@ -42,16 +42,12 @@ async function runGit(
     clearTimeout(timeoutId);
 
     if (exitCode !== 0) {
-      return Err(
-        createError(ErrorCode.DB_QUERY_FAILED, `git ${args[0]} failed: ${stderr.trim()}`),
-      );
+      return Err(createError(ErrorCode.DB_QUERY_FAILED, `git ${args[0]} failed: ${stderr.trim()}`));
     }
 
     return Ok(stdout.trim());
   } catch (cause) {
-    return Err(
-      createError(ErrorCode.DB_QUERY_FAILED, `Failed to run git ${args[0]}`, cause),
-    );
+    return Err(createError(ErrorCode.DB_QUERY_FAILED, `Failed to run git ${args[0]}`, cause));
   }
 }
 
@@ -99,10 +95,7 @@ export class GitAnalyzer {
 
   /** List all local branches. */
   async getBranches(repoPath: string): Promise<Result<GitBranchInfo[], EidolonError>> {
-    const result = await runGit(
-      ["branch", "--format=%(refname:short)|%(objectname:short)|%(HEAD)"],
-      repoPath,
-    );
+    const result = await runGit(["branch", "--format=%(refname:short)|%(objectname:short)|%(HEAD)"], repoPath);
     if (!result.ok) return result;
 
     const branches: GitBranchInfo[] = [];
@@ -121,17 +114,9 @@ export class GitAnalyzer {
   }
 
   /** Get recent commits from git log. */
-  async getCommits(
-    repoPath: string,
-    limit?: number,
-    since?: number,
-  ): Promise<Result<GitCommit[], EidolonError>> {
+  async getCommits(repoPath: string, limit?: number, since?: number): Promise<Result<GitCommit[], EidolonError>> {
     const count = Math.max(1, Math.min(limit ?? DEFAULT_LOG_LIMIT, MAX_LOG_LIMIT));
-    const args = [
-      "log",
-      `--max-count=${count}`,
-      "--format=%H|%h|%an|%at|%s",
-    ];
+    const args = ["log", `--max-count=${count}`, "--format=%H|%h|%an|%at|%s"];
 
     if (since !== undefined) {
       const sinceDate = new Date(since).toISOString();
@@ -161,13 +146,8 @@ export class GitAnalyzer {
   }
 
   /** Get ahead/behind counts relative to the upstream tracking branch. */
-  async getAheadBehind(
-    repoPath: string,
-  ): Promise<Result<{ ahead: number; behind: number } | null, EidolonError>> {
-    const result = await runGit(
-      ["rev-list", "--left-right", "--count", "HEAD...@{upstream}"],
-      repoPath,
-    );
+  async getAheadBehind(repoPath: string): Promise<Result<{ ahead: number; behind: number } | null, EidolonError>> {
+    const result = await runGit(["rev-list", "--left-right", "--count", "HEAD...@{upstream}"], repoPath);
     if (!result.ok) return Ok(null); // no upstream configured
 
     const parts = result.value.split(/\s+/);
@@ -181,11 +161,7 @@ export class GitAnalyzer {
   }
 
   /** Get file change statistics for commits in a date range. */
-  async getFileStats(
-    repoPath: string,
-    since: number,
-    until: number,
-  ): Promise<Result<number, EidolonError>> {
+  async getFileStats(repoPath: string, since: number, until: number): Promise<Result<number, EidolonError>> {
     const sinceStr = new Date(since).toISOString();
     const untilStr = new Date(until).toISOString();
 

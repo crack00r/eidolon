@@ -1,7 +1,7 @@
-import { describe, expect, test } from "bun:test";
 import { Database } from "bun:sqlite";
-import { AnticipationConfigSchema, Ok } from "@eidolon/protocol";
+import { describe, expect, test } from "bun:test";
 import type { CalendarEvent, MemorySearchResult } from "@eidolon/protocol";
+import { AnticipationConfigSchema, Ok } from "@eidolon/protocol";
 import { createLogger } from "../../logging/logger.ts";
 import { EventBus } from "../../loop/event-bus.ts";
 import { AnticipationEngine } from "../engine.ts";

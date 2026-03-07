@@ -19,9 +19,7 @@ export class StepExecutorRegistry {
   get(type: StepType): Result<IStepExecutor, EidolonError> {
     const executor = this.executors.get(type);
     if (!executor) {
-      return Err(
-        createError(ErrorCode.CONFIG_INVALID, `No executor registered for step type: ${type}`),
-      );
+      return Err(createError(ErrorCode.CONFIG_INVALID, `No executor registered for step type: ${type}`));
     }
     return Ok(executor);
   }

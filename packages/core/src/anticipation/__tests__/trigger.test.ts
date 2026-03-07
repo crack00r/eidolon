@@ -1,11 +1,11 @@
-import { describe, expect, test } from "bun:test";
 import { Database } from "bun:sqlite";
+import { describe, expect, test } from "bun:test";
 import type { AnticipationConfig } from "@eidolon/protocol";
 import { AnticipationConfigSchema } from "@eidolon/protocol";
 import { createLogger } from "../../logging/logger.ts";
 import { SuggestionHistory } from "../history.ts";
 import type { DetectedPattern } from "../patterns.ts";
-import { TriggerEvaluator, buildEntityKey } from "../trigger.ts";
+import { buildEntityKey, TriggerEvaluator } from "../trigger.ts";
 
 const logger = createLogger({ level: "error", directory: "", format: "json", maxSizeMb: 10, maxFiles: 1 });
 
@@ -37,10 +37,7 @@ describe("TriggerEvaluator", () => {
     const config = makeConfig({ minConfidence: 0.6 });
     const evaluator = new TriggerEvaluator(history, config, logger);
 
-    const patterns = [
-      makePattern({ confidence: 0.9 }),
-      makePattern({ confidence: 0.5 }),
-    ];
+    const patterns = [makePattern({ confidence: 0.9 }), makePattern({ confidence: 0.5 })];
 
     const result = evaluator.evaluate(patterns);
     expect(result.length).toBe(1);
@@ -161,17 +158,29 @@ describe("buildEntityKey", () => {
   test("builds correct keys for each pattern type", () => {
     expect(buildEntityKey(makePattern({ type: "meeting_prep", calendarEventId: "e1" }))).toBe("meeting:e1");
     expect(buildEntityKey(makePattern({ type: "travel_prep", calendarEventId: "e2" }))).toBe("travel:e2");
-    expect(buildEntityKey(makePattern({
-      type: "health_nudge",
-      metadata: { date: "2026-03-07" },
-    }))).toBe("health:2026-03-07");
-    expect(buildEntityKey(makePattern({
-      type: "follow_up",
-      metadata: { memoryId: "m1" },
-    }))).toBe("followup:m1");
-    expect(buildEntityKey(makePattern({
-      type: "birthday_reminder",
-      relevantEntities: ["Maria"],
-    }))).toBe("birthday:Maria");
+    expect(
+      buildEntityKey(
+        makePattern({
+          type: "health_nudge",
+          metadata: { date: "2026-03-07" },
+        }),
+      ),
+    ).toBe("health:2026-03-07");
+    expect(
+      buildEntityKey(
+        makePattern({
+          type: "follow_up",
+          metadata: { memoryId: "m1" },
+        }),
+      ),
+    ).toBe("followup:m1");
+    expect(
+      buildEntityKey(
+        makePattern({
+          type: "birthday_reminder",
+          relevantEntities: ["Maria"],
+        }),
+      ),
+    ).toBe("birthday:Maria");
   });
 });

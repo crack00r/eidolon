@@ -19,13 +19,7 @@ import {
 } from "./protocol.ts";
 import type { AuthRateLimiter } from "./rate-limiter.ts";
 import { RpcValidationError } from "./rpc-schemas.ts";
-import {
-  AUTH_TIMEOUT_MS,
-  anonymizeIp,
-  type ClientState,
-  type MethodHandler,
-  type ServerWS,
-} from "./server-helpers.ts";
+import { AUTH_TIMEOUT_MS, anonymizeIp, type ClientState, type MethodHandler, type ServerWS } from "./server-helpers.ts";
 
 // ---------------------------------------------------------------------------
 // ClientManager -- manages connected WebSocket clients
@@ -304,13 +298,19 @@ export class ClientManager {
   // -------------------------------------------------------------------------
 
   private handleAuth(ws: ServerWS, client: ClientState, text: string): void {
-    handleClientAuth(ws, client, text, {
-      logger: this.logger,
-      eventBus: this.eventBus,
-      rateLimiter: this.rateLimiter,
-      getAuthConfig: this.getAuthConfig,
-      pushToSubscribers: (type, data) => this.pushToSubscribers(type, data),
-    }, this.authTimers);
+    handleClientAuth(
+      ws,
+      client,
+      text,
+      {
+        logger: this.logger,
+        eventBus: this.eventBus,
+        rateLimiter: this.rateLimiter,
+        getAuthConfig: this.getAuthConfig,
+        pushToSubscribers: (type, data) => this.pushToSubscribers(type, data),
+      },
+      this.authTimers,
+    );
   }
 
   private safeSend(ws: ServerWS, data: string): void {

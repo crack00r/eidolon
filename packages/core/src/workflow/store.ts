@@ -11,17 +11,8 @@ import type { Database } from "bun:sqlite";
 import type { EidolonError, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 import type { Logger } from "../logging/logger.ts";
-import type {
-  DefinitionRow,
-  RunRow,
-  StepResultRow,
-} from "./store-rows.ts";
-import {
-  rowToDefinition,
-  rowToRun,
-  rowToStepResult,
-  serializeContext,
-} from "./store-rows.ts";
+import type { DefinitionRow, RunRow, StepResultRow } from "./store-rows.ts";
+import { rowToDefinition, rowToRun, rowToStepResult, serializeContext } from "./store-rows.ts";
 import type {
   StepResult,
   StepStatus,
@@ -50,7 +41,9 @@ export class WorkflowStore {
         c: number;
       };
       if (count.c >= MAX_WORKFLOW_DEFINITIONS) {
-        return Err(createError(ErrorCode.DB_QUERY_FAILED, `Maximum ${MAX_WORKFLOW_DEFINITIONS} workflow definitions reached`));
+        return Err(
+          createError(ErrorCode.DB_QUERY_FAILED, `Maximum ${MAX_WORKFLOW_DEFINITIONS} workflow definitions reached`),
+        );
       }
 
       const parsed = WorkflowDefinitionSchema.safeParse(def);
@@ -117,9 +110,7 @@ export class WorkflowStore {
 
   deleteDefinition(id: string): Result<void, EidolonError> {
     try {
-      const result = this.db
-        .query("DELETE FROM workflow_definitions WHERE id = $id")
-        .run({ $id: id });
+      const result = this.db.query("DELETE FROM workflow_definitions WHERE id = $id").run({ $id: id });
       if (result.changes === 0) {
         return Err(createError(ErrorCode.DB_QUERY_FAILED, `Workflow definition not found: ${id}`));
       }
@@ -132,11 +123,7 @@ export class WorkflowStore {
 
   // -- Runs -----------------------------------------------------------------
 
-  createRun(
-    id: string,
-    definitionId: string,
-    triggerPayload: unknown,
-  ): Result<WorkflowRun, EidolonError> {
+  createRun(id: string, definitionId: string, triggerPayload: unknown): Result<WorkflowRun, EidolonError> {
     try {
       const count = this.db.query("SELECT COUNT(*) as c FROM workflow_runs").get() as { c: number };
       if (count.c >= MAX_WORKFLOW_RUNS) {
@@ -187,9 +174,7 @@ export class WorkflowStore {
 
   getRun(id: string): Result<WorkflowRun, EidolonError> {
     try {
-      const row = this.db
-        .query("SELECT * FROM workflow_runs WHERE id = $id")
-        .get({ $id: id }) as RunRow | null;
+      const row = this.db.query("SELECT * FROM workflow_runs WHERE id = $id").get({ $id: id }) as RunRow | null;
       if (!row) {
         return Err(createError(ErrorCode.DB_QUERY_FAILED, `Workflow run not found: ${id}`));
       }
