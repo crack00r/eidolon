@@ -14,7 +14,12 @@ function loadVersion(): string {
     const thisDir = dirname(fileURLToPath(import.meta.url));
     const pkgPath = join(thisDir, "..", "package.json");
     const pkg: unknown = JSON.parse(readFileSync(pkgPath, "utf-8"));
-    if (typeof pkg === "object" && pkg !== null && "version" in pkg && typeof (pkg as Record<string, unknown>).version === "string") {
+    if (
+      typeof pkg === "object" &&
+      pkg !== null &&
+      "version" in pkg &&
+      typeof (pkg as Record<string, unknown>).version === "string"
+    ) {
       return (pkg as Record<string, unknown>).version as string;
     }
     return "0.0.0";

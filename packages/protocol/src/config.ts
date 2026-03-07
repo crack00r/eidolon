@@ -12,7 +12,6 @@
 
 import { z } from "zod";
 import { AnticipationConfigSchema } from "./config-anticipation.ts";
-import { SecretRefSchema, stringOrSecret } from "./config-base.ts";
 import {
   BrainConfigSchema,
   type ClaudeAccountSchema,
@@ -36,10 +35,6 @@ import {
   DaemonConfigSchema,
   DatabaseConfigSchema,
   DigestConfigSchema,
-  HAAnomalyRuleSchema,
-  HADomainPolicySchema,
-  HASceneActionConfigSchema,
-  HASceneConfigSchema,
   HomeAutomationConfigSchema,
   LLMConfigSchema,
   type LlamaCppProviderSchema,

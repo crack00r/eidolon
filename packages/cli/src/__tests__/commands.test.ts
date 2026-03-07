@@ -312,7 +312,8 @@ describe("daemon command", () => {
     expect(subNames).toContain("start");
     expect(subNames).toContain("stop");
     expect(subNames).toContain("status");
-    expect(subNames).toHaveLength(3);
+    expect(subNames).toContain("logs");
+    expect(subNames).toHaveLength(4);
   });
 
   test("start has --foreground and --config options", () => {
