@@ -111,11 +111,23 @@ export {
 // Master Config
 // ---------------------------------------------------------------------------
 
+export const EidolonRoleSchema = z.enum(["server", "client"]);
+export type EidolonRole = z.infer<typeof EidolonRoleSchema>;
+
+export const ServerConnectionSchema = z.object({
+  host: z.string(),
+  port: z.number().int().min(1).max(65535).default(8419),
+  token: z.string().optional(),
+  tls: z.boolean().default(false),
+});
+
 export const EidolonConfigSchema = z.object({
   identity: z.object({
     name: z.string().default("Eidolon"),
     ownerName: z.string(),
   }),
+  role: EidolonRoleSchema.default("server"),
+  server: ServerConnectionSchema.optional(),
   brain: BrainConfigSchema,
   loop: LoopConfigSchema,
   memory: MemoryConfigSchema,

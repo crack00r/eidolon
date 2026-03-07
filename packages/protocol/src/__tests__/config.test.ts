@@ -933,6 +933,89 @@ describe("ClaudeAccountSchema", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Role and Server fields
+// ---------------------------------------------------------------------------
+
+describe("Role field", () => {
+  test("defaults to server", () => {
+    const result = EidolonConfigSchema.safeParse(minimalValidConfig());
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.role).toBe("server");
+  });
+
+  test("accepts client role with server block", () => {
+    const config = {
+      ...minimalValidConfig(),
+      role: "client",
+      server: { host: "192.168.1.10", port: 8419 },
+    };
+    const result = EidolonConfigSchema.safeParse(config);
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.role).toBe("client");
+    expect(result.data.server?.host).toBe("192.168.1.10");
+    expect(result.data.server?.port).toBe(8419);
+    expect(result.data.server?.tls).toBe(false);
+  });
+
+  test("rejects invalid role", () => {
+    const config = { ...minimalValidConfig(), role: "invalid" };
+    const result = EidolonConfigSchema.safeParse(config);
+    expect(result.success).toBe(false);
+  });
+
+  test("server block is optional", () => {
+    const result = EidolonConfigSchema.safeParse(minimalValidConfig());
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.server).toBeUndefined();
+  });
+
+  test("server block with token and tls", () => {
+    const config = {
+      ...minimalValidConfig(),
+      role: "client",
+      server: { host: "eidolon.local", port: 443, token: "secret-token", tls: true },
+    };
+    const result = EidolonConfigSchema.safeParse(config);
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.server?.token).toBe("secret-token");
+    expect(result.data.server?.tls).toBe(true);
+  });
+
+  test("server block rejects invalid port", () => {
+    const config = {
+      ...minimalValidConfig(),
+      server: { host: "localhost", port: 0 },
+    };
+    const result = EidolonConfigSchema.safeParse(config);
+    expect(result.success).toBe(false);
+  });
+
+  test("server block rejects port above 65535", () => {
+    const config = {
+      ...minimalValidConfig(),
+      server: { host: "localhost", port: 70000 },
+    };
+    const result = EidolonConfigSchema.safeParse(config);
+    expect(result.success).toBe(false);
+  });
+
+  test("server block defaults port to 8419", () => {
+    const config = {
+      ...minimalValidConfig(),
+      server: { host: "eidolon.local" },
+    };
+    const result = EidolonConfigSchema.safeParse(config);
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.server?.port).toBe(8419);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Type coercion edge cases
 // ---------------------------------------------------------------------------
 
