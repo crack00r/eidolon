@@ -210,7 +210,8 @@ export function createSnapshotReceiver(snapshotDir: string, logger: Logger): Sna
 
       try {
         for (const [fileName, chunks] of fileBuffers) {
-          const missing = chunks.indexOf(undefined);
+          // biome-ignore lint/complexity/useIndexOf: indexOf(undefined) rejected by TypeScript for Buffer[]
+          const missing = chunks.findIndex((c) => c === undefined);
           if (missing >= 0) {
             return Err(createError(ErrorCode.DB_QUERY_FAILED, `Missing chunk ${missing} for ${fileName}`));
           }

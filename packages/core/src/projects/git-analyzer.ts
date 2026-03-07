@@ -72,8 +72,8 @@ function parseCommitLine(line: string): GitCommit | null {
 // ---------------------------------------------------------------------------
 
 export class GitAnalyzer {
-  constructor(logger: Logger) {
-    this.logger = logger.child("git-analyzer");
+  constructor(_logger: Logger) {
+    // Logger reserved for future diagnostic use
   }
 
   /** Verify that a path is a valid git repository. */
