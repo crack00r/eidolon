@@ -1,5 +1,7 @@
 <script lang="ts">
 import type { Snippet } from "svelte";
+import { onMount } from "svelte";
+import { getVersion } from "@tauri-apps/api/app";
 import { connectionState } from "../lib/stores/connection";
 
 interface Props {
@@ -9,6 +11,15 @@ interface Props {
 }
 
 let { currentRoute, onNavigate, children }: Props = $props();
+
+let appVersion = $state("...");
+onMount(async () => {
+  try {
+    appVersion = await getVersion();
+  } catch {
+    appVersion = "dev";
+  }
+});
 
 const navItems = [
   { route: "dashboard", label: "Dashboard", icon: "\u{25A6}" },
@@ -64,7 +75,7 @@ function stateColor(state: string): string {
     </nav>
 
     <div class="sidebar-footer">
-      <span class="version">v0.1.0</span>
+      <span class="version">v{appVersion}</span>
     </div>
   </aside>
 
