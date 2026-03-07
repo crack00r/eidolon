@@ -156,7 +156,7 @@ async function startForeground(_configPath?: string): Promise<void> {
   // Dynamic import to avoid loading core modules for status/stop commands
   const { EidolonDaemon } = await import("@eidolon/core");
 
-  const daemon = new EidolonDaemon();
+  const daemon = new EidolonDaemon(_configPath ? { configPath: _configPath } : undefined);
 
   console.log("Starting Eidolon daemon in foreground mode...");
 
