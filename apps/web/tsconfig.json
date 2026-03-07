@@ -7,5 +7,6 @@
     "moduleResolution": "bundler",
     "module": "ESNext",
     "target": "ESNext"
-  }
+  },
+  "exclude": ["src/**/*.test.ts"]
 }
