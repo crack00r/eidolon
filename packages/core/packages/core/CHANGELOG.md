@@ -1,5 +1,35 @@
 # Changelog
 
+## [0.1.8](https://github.com/crack00r/eidolon/compare/v0.1.7...v0.1.8) (2026-03-07)
+
+
+### Features
+
+* **core:** add security hardening, Memory MCP server, and PWA support ([9fb423d](https://github.com/crack00r/eidolon/commit/9fb423d0ede73744984cb8a2584793ee0345177d))
+* **core:** implement sqlite-vec ANN search, npm publish workflow, and doc corrections ([fe4e41c](https://github.com/crack00r/eidolon/commit/fe4e41cee6c4dcfcdb6542a22c0eb6f492b6d16b))
+* **core:** implement Wave 1 foundation tasks ([d257d1f](https://github.com/crack00r/eidolon/commit/d257d1f703122e95d09195cc6b6743304dd602fb))
+* **core:** implement Wave 2 core wiring and daemon decomposition ([13f5a15](https://github.com/crack00r/eidolon/commit/13f5a1585bc438a8a213b82f7302656beab16d74))
+* **core:** implement Wave 3 gateway methods, KG predictions, and learning pipeline ([6bc8054](https://github.com/crack00r/eidolon/commit/6bc805496076df26472ab4f6c12084eb89b9745a))
+* **core:** implement Waves 5-9 features, tests, and documentation ([05c2357](https://github.com/crack00r/eidolon/commit/05c235775582c1cdbd972c54f94656ccad12c40d))
+* **core:** wire user:message handler in daemon event loop ([ed3651e](https://github.com/crack00r/eidolon/commit/ed3651eebd379736cbcc79a053f66ddb679bbc02))
+
+
+### Bug Fixes
+
+* close 9 remaining gaps from plan audit ([8630c3e](https://github.com/crack00r/eidolon/commit/8630c3e18a4dbec80d522c671d20d686b107ef1f))
+* close all completeness gaps from project audit ([446ac5a](https://github.com/crack00r/eidolon/commit/446ac5a9fc663a9a8b520d3f1b82aa72243b2ed9))
+
+
+### Miscellaneous
+
+* release main ([5a3ee16](https://github.com/crack00r/eidolon/commit/5a3ee16308e3dd13184677b050cf6f2eb8de013e))
+* release main ([04d55a0](https://github.com/crack00r/eidolon/commit/04d55a0dc8fa21433ef61bcf730c0bb05f1e22fa))
+
+
+### Tests
+
+* **core:** add Wave 4 integration tests and Wave 5 code quality improvements ([b7d6e61](https://github.com/crack00r/eidolon/commit/b7d6e61fffe4d003eaf5b6caf4fcd3a1dfd1e2f6))
+
 ## [0.1.7](https://github.com/crack00r/eidolon/compare/v0.1.6...v0.1.7) (2026-03-07)
 
 
