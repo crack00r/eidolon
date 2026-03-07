@@ -9,6 +9,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > [release-please](https://github.com/googleapis/release-please).
 > Do not edit manually.
 
+## [0.1.11](https://github.com/crack00r/eidolon/compare/v0.1.10...v0.1.11) (2026-03-07)
+
+
+### Features
+
+* **cli:** add daemon logs command ([5bce1ad](https://github.com/crack00r/eidolon/commit/5bce1ad48eb8177527d995c6cd015940c093a534))
+* **core:** add shared onboarding modules with tests ([0d0c939](https://github.com/crack00r/eidolon/commit/0d0c939118aa155d2081e734abe6187f1422af10))
+* **desktop:** add onboarding UI with role selection, server setup, and client pairing ([4014ca8](https://github.com/crack00r/eidolon/commit/4014ca8b2478e30120db10c897c13d30dd481699))
+* **desktop:** add Tauri commands for daemon lifecycle and onboarding ([dedaca8](https://github.com/crack00r/eidolon/commit/dedaca8841794e3ad7dad6b72f7b9f8e5e0b9736))
+* **desktop:** auto-connect on launch and persist settings ([37b4c62](https://github.com/crack00r/eidolon/commit/37b4c627a4739118afdc5b2bf47d0a4f625619c3))
+* **protocol:** add role and server fields to config schema ([cf45071](https://github.com/crack00r/eidolon/commit/cf45071e96ce65987e9883891c3fef2abd0c536e))
+
+
+### Bug Fixes
+
+* **cli:** pass --config flag to EidolonDaemon in foreground mode ([c9ba26c](https://github.com/crack00r/eidolon/commit/c9ba26c9d7863cc7079bebf2e39195730b8af0b4))
+* **core,cli:** resolve all lint errors across codebase ([bf3de05](https://github.com/crack00r/eidolon/commit/bf3de0597bf920da5f568129175726e40531fca7))
+* **core:** improve error message when config file is not found ([2c33e50](https://github.com/crack00r/eidolon/commit/2c33e50fb4bf5bbe3993fe6591592ca07712cc7b))
+* **core:** resolve typecheck errors from lint cleanup ([8b9377a](https://github.com/crack00r/eidolon/commit/8b9377a2db105221a0609b433b081eb47712b70a))
+* **desktop:** default useTls to false to match server default ([ff193eb](https://github.com/crack00r/eidolon/commit/ff193eb40fdb7af1b077d9e664f6847bb88af0e2))
+* **desktop:** expand CSP connect-src to allow WebSocket and Tailscale domains ([9ab800d](https://github.com/crack00r/eidolon/commit/9ab800d8f517901fc3a686c93327a557f60fafee))
+* **desktop:** show dynamic app version instead of hardcoded v0.1.0 ([6f731dd](https://github.com/crack00r/eidolon/commit/6f731dd8ad3657e5a7c20a5417665f7eabcebb77))
+* **desktop:** sync tauri.conf.json version with release-please ([24a092e](https://github.com/crack00r/eidolon/commit/24a092ed22288043199b723dbf1cb3cf8d0b989f))
+* **protocol,cli:** resolve lint errors and update test mocks ([74b018a](https://github.com/crack00r/eidolon/commit/74b018a798859d06309005598660cafe6bf75bff))
+* **protocol:** change gateway auth default from "token" to "none" ([ae9116e](https://github.com/crack00r/eidolon/commit/ae9116ec349dc770511eb5f744aaeb50cbbcdf59))
+* **protocol:** read VERSION from package.json instead of hardcoded "0.0.0" ([d75dfe5](https://github.com/crack00r/eidolon/commit/d75dfe5c08a4565ab9a29e0c36fcfa448b1e2244))
+
+
+### Code Refactoring
+
+* **cli:** delegate onboarding logic to shared core modules ([e1ca7b2](https://github.com/crack00r/eidolon/commit/e1ca7b2b4fc7e3bff74c3b8a1339999af9b993e7))
+
+
+### Documentation
+
+* first-launch experience implementation plan ([f3f3075](https://github.com/crack00r/eidolon/commit/f3f30756245d5b9c169242451edcaaba16eed3bb))
+* first-launch experience redesign design doc ([5dabb6e](https://github.com/crack00r/eidolon/commit/5dabb6e89613af114d035d2c08d9da7ccd5c7aca))
+
 ## [0.1.10](https://github.com/crack00r/eidolon/compare/v0.1.9...v0.1.10) (2026-03-07)
 
 

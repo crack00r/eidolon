@@ -1,5 +1,33 @@
 # Changelog
 
+## [0.1.10](https://github.com/crack00r/eidolon/compare/v0.1.9...v0.1.10) (2026-03-07)
+
+
+### Features
+
+* **cli:** add daemon logs command ([5bce1ad](https://github.com/crack00r/eidolon/commit/5bce1ad48eb8177527d995c6cd015940c093a534))
+* implement v2.1 features -- proactive intelligence, agentic workflows, slack, browser, MCP marketplace, wyoming, multi-user, project management, node replication ([157a7cb](https://github.com/crack00r/eidolon/commit/157a7cb5aae6f7fa6acbb3cf397372c352976adc))
+
+
+### Bug Fixes
+
+* **cli:** expand privacy-forget.ts formatting for biome compliance ([312ca22](https://github.com/crack00r/eidolon/commit/312ca22f1b8bceab6a01db07fb8c137d19adec11))
+* **cli:** pass --config flag to EidolonDaemon in foreground mode ([c9ba26c](https://github.com/crack00r/eidolon/commit/c9ba26c9d7863cc7079bebf2e39195730b8af0b4))
+* **core,cli,protocol:** biome lint and formatting fixes across all packages ([52c5d4d](https://github.com/crack00r/eidolon/commit/52c5d4d836a2629d6a28abf78f7db4fd35b60c8e))
+* **core,cli:** resolve all lint errors across codebase ([bf3de05](https://github.com/crack00r/eidolon/commit/bf3de0597bf920da5f568129175726e40531fca7))
+* **protocol,cli:** resolve lint errors and update test mocks ([74b018a](https://github.com/crack00r/eidolon/commit/74b018a798859d06309005598660cafe6bf75bff))
+
+
+### Code Refactoring
+
+* **cli:** delegate onboarding logic to shared core modules ([e1ca7b2](https://github.com/crack00r/eidolon/commit/e1ca7b2b4fc7e3bff74c3b8a1339999af9b993e7))
+
+
+### Miscellaneous
+
+* release main ([20ad0fb](https://github.com/crack00r/eidolon/commit/20ad0fbed8771bb2203b9a492d867a7caa4c4754))
+* release main ([2b7c6e1](https://github.com/crack00r/eidolon/commit/2b7c6e19f0901509e87d6bc92ee17ef74717a173))
+
 ## [0.1.9](https://github.com/crack00r/eidolon/compare/v0.1.8...v0.1.9) (2026-03-07)
 
 

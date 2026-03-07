@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.1.11](https://github.com/crack00r/eidolon/compare/v0.1.10...v0.1.11) (2026-03-07)
+
+
+### Features
+
+* **desktop:** add onboarding UI with role selection, server setup, and client pairing ([4014ca8](https://github.com/crack00r/eidolon/commit/4014ca8b2478e30120db10c897c13d30dd481699))
+* **desktop:** add Tauri commands for daemon lifecycle and onboarding ([dedaca8](https://github.com/crack00r/eidolon/commit/dedaca8841794e3ad7dad6b72f7b9f8e5e0b9736))
+* **desktop:** auto-connect on launch and persist settings ([37b4c62](https://github.com/crack00r/eidolon/commit/37b4c627a4739118afdc5b2bf47d0a4f625619c3))
+
+
+### Bug Fixes
+
+* **desktop:** default useTls to false to match server default ([ff193eb](https://github.com/crack00r/eidolon/commit/ff193eb40fdb7af1b077d9e664f6847bb88af0e2))
+* **desktop:** expand CSP connect-src to allow WebSocket and Tailscale domains ([9ab800d](https://github.com/crack00r/eidolon/commit/9ab800d8f517901fc3a686c93327a557f60fafee))
+* **desktop:** show dynamic app version instead of hardcoded v0.1.0 ([6f731dd](https://github.com/crack00r/eidolon/commit/6f731dd8ad3657e5a7c20a5417665f7eabcebb77))
+* **desktop:** sync tauri.conf.json version with release-please ([24a092e](https://github.com/crack00r/eidolon/commit/24a092ed22288043199b723dbf1cb3cf8d0b989f))
+
 ## [0.1.10](https://github.com/crack00r/eidolon/compare/v0.1.9...v0.1.10) (2026-03-07)
 
 
