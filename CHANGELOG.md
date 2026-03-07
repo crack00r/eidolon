@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > [release-please](https://github.com/googleapis/release-please).
 > Do not edit manually.
 
+## [0.1.13](https://github.com/crack00r/eidolon/compare/v0.1.12...v0.1.13) (2026-03-07)
+
+
+### Bug Fixes
+
+* **ci:** build CLI sidecar binary before Tauri desktop build ([a8a7991](https://github.com/crack00r/eidolon/commit/a8a79911b22e896fba2c43d2c229947a70eeae16))
+* sync Cargo.toml version to 0.1.12 and fix release-please TOML config ([2a222d6](https://github.com/crack00r/eidolon/commit/2a222d6145adedc5972f4e55ceb568e5c2b7393c))
+
 ## [0.1.12](https://github.com/crack00r/eidolon/compare/v0.1.11...v0.1.12) (2026-03-07)
 
 

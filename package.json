@@ -1,6 +1,6 @@
 {
   "name": "eidolon",
-  "version": "0.1.12",
+  "version": "0.1.13",
   "private": true,
   "description": "Autonomous, self-learning personal AI assistant powered by Claude Code",
   "author": "Manuel Guttmann",
