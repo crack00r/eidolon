@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.1.11](https://github.com/crack00r/eidolon/compare/v0.1.10...v0.1.11) (2026-03-07)
+
+
+### Features
+
+* **core:** add shared onboarding modules with tests ([0d0c939](https://github.com/crack00r/eidolon/commit/0d0c939118aa155d2081e734abe6187f1422af10))
+
+
+### Bug Fixes
+
+* **core,cli:** resolve all lint errors across codebase ([bf3de05](https://github.com/crack00r/eidolon/commit/bf3de0597bf920da5f568129175726e40531fca7))
+* **core:** improve error message when config file is not found ([2c33e50](https://github.com/crack00r/eidolon/commit/2c33e50fb4bf5bbe3993fe6591592ca07712cc7b))
+* **core:** resolve typecheck errors from lint cleanup ([8b9377a](https://github.com/crack00r/eidolon/commit/8b9377a2db105221a0609b433b081eb47712b70a))
+
+
+### Code Refactoring
+
+* **cli:** delegate onboarding logic to shared core modules ([e1ca7b2](https://github.com/crack00r/eidolon/commit/e1ca7b2b4fc7e3bff74c3b8a1339999af9b993e7))
+
+
+### Miscellaneous
+
+* release main ([2d597dd](https://github.com/crack00r/eidolon/commit/2d597dd6d378857a2dd0e09e9be5b95d12082eea))
+* release main ([5ebae5c](https://github.com/crack00r/eidolon/commit/5ebae5ce643baf3cf5ad60ef0391a3a81d4f23c7))
+
 ## [0.1.10](https://github.com/crack00r/eidolon/compare/v0.1.9...v0.1.10) (2026-03-07)
 
 

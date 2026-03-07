@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.1.11](https://github.com/crack00r/eidolon/compare/v0.1.10...v0.1.11) (2026-03-07)
+
+
+### Features
+
+* **protocol:** add role and server fields to config schema ([cf45071](https://github.com/crack00r/eidolon/commit/cf45071e96ce65987e9883891c3fef2abd0c536e))
+
+
+### Bug Fixes
+
+* **protocol,cli:** resolve lint errors and update test mocks ([74b018a](https://github.com/crack00r/eidolon/commit/74b018a798859d06309005598660cafe6bf75bff))
+* **protocol:** change gateway auth default from "token" to "none" ([ae9116e](https://github.com/crack00r/eidolon/commit/ae9116ec349dc770511eb5f744aaeb50cbbcdf59))
+* **protocol:** read VERSION from package.json instead of hardcoded "0.0.0" ([d75dfe5](https://github.com/crack00r/eidolon/commit/d75dfe5c08a4565ab9a29e0c36fcfa448b1e2244))
+
+
+### Miscellaneous
+
+* release main ([2d597dd](https://github.com/crack00r/eidolon/commit/2d597dd6d378857a2dd0e09e9be5b95d12082eea))
+* release main ([5ebae5c](https://github.com/crack00r/eidolon/commit/5ebae5ce643baf3cf5ad60ef0391a3a81d4f23c7))
+
 ## [0.1.10](https://github.com/crack00r/eidolon/compare/v0.1.9...v0.1.10) (2026-03-07)
 
 
