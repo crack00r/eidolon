@@ -123,12 +123,22 @@ export class DreamScheduler {
     const now = new Date();
     const { hours, minutes } = this.parseSchedule();
 
-    // Get current time in the configured timezone
-    const nowInTz = new Date(now.toLocaleString("en-US", { timeZone: this.config.timezone }));
-    const targetToday = new Date(nowInTz);
-    targetToday.setHours(hours, minutes, 0, 0);
+    // Get current hour/minute in the configured timezone using Intl.DateTimeFormat
+    // (avoids the anti-pattern of parsing toLocaleString which can produce wrong results
+    //  due to DST transitions and locale-dependent formatting)
+    const formatter = new Intl.DateTimeFormat("en-US", {
+      timeZone: this.config.timezone,
+      hour: "numeric",
+      minute: "numeric",
+      hour12: false,
+    });
+    const parts = formatter.formatToParts(now);
+    const tzHour = parseInt(parts.find((p) => p.type === "hour")?.value ?? "0", 10);
+    const tzMinute = parseInt(parts.find((p) => p.type === "minute")?.value ?? "0", 10);
 
-    let diffMs = targetToday.getTime() - nowInTz.getTime();
+    const nowMinutes = tzHour * 60 + tzMinute;
+    const targetMinutes = hours * 60 + minutes;
+    let diffMs = (targetMinutes - nowMinutes) * 60 * 1000;
     if (diffMs <= 0) {
       // Already past today's schedule, next is tomorrow
       diffMs += 24 * 60 * 60 * 1000;
@@ -142,12 +152,24 @@ export class DreamScheduler {
     const { hours, minutes } = this.parseSchedule();
     const now = new Date();
 
-    // Get current time in the configured timezone
-    const nowInTz = new Date(now.toLocaleString("en-US", { timeZone: this.config.timezone }));
-    const targetToday = new Date(nowInTz);
-    targetToday.setHours(hours, minutes, 0, 0);
+    // Get current hour/minute in the configured timezone using Intl.DateTimeFormat
+    const formatter = new Intl.DateTimeFormat("en-US", {
+      timeZone: this.config.timezone,
+      hour: "numeric",
+      minute: "numeric",
+      hour12: false,
+    });
+    const parts = formatter.formatToParts(now);
+    const tzHour = parseInt(parts.find((p) => p.type === "hour")?.value ?? "0", 10);
+    const tzMinute = parseInt(parts.find((p) => p.type === "minute")?.value ?? "0", 10);
 
-    const diffMs = Math.abs(nowInTz.getTime() - targetToday.getTime());
+    const nowMinutes = tzHour * 60 + tzMinute;
+    const targetMinutes = hours * 60 + minutes;
+    // Handle midnight wraparound: e.g., now=23:50 target=00:10 should be 20 min apart
+    const totalDayMinutes = 24 * 60;
+    const rawDiff = Math.abs(nowMinutes - targetMinutes);
+    const wrappedDiff = Math.min(rawDiff, totalDayMinutes - rawDiff);
+    const diffMs = wrappedDiff * 60 * 1000;
     return diffMs <= DREAM_WINDOW_MS;
   }
 

@@ -9,6 +9,9 @@ import type { Database } from "bun:sqlite";
 import { randomUUID } from "node:crypto";
 import type { EidolonError, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
+import { z } from "zod";
+
+const ConsentTypeSchema = z.enum(["memory_extraction", "data_processing"]);
 import type { Logger } from "../logging/logger.ts";
 
 // ---------------------------------------------------------------------------
@@ -80,7 +83,7 @@ export class ConsentManager {
       }
 
       return Ok({
-        consentType: row.consent_type as ConsentType,
+        consentType: ConsentTypeSchema.parse(row.consent_type),
         granted: row.granted === 1,
         grantedAt: row.granted_at,
         revokedAt: row.revoked_at,
@@ -97,23 +100,15 @@ export class ConsentManager {
   grantConsent(consentType: ConsentType): Result<void, EidolonError> {
     try {
       const now = Date.now();
-      const existing = this.db.query("SELECT id FROM user_consent WHERE consent_type = ?").get(consentType) as {
-        id: string;
-      } | null;
 
-      if (existing) {
-        this.db
-          .query(
-            "UPDATE user_consent SET granted = 1, granted_at = ?, revoked_at = NULL, updated_at = ? WHERE consent_type = ?",
-          )
-          .run(now, now, consentType);
-      } else {
-        this.db
-          .query(
-            "INSERT INTO user_consent (id, consent_type, granted, granted_at, revoked_at, updated_at) VALUES (?, ?, 1, ?, NULL, ?)",
-          )
-          .run(randomUUID(), consentType, now, now);
-      }
+      this.db
+        .query(
+          `INSERT INTO user_consent (id, consent_type, granted, granted_at, revoked_at, updated_at)
+           VALUES (?, ?, 1, ?, NULL, ?)
+           ON CONFLICT(consent_type) DO UPDATE SET
+             granted = 1, granted_at = excluded.granted_at, revoked_at = NULL, updated_at = excluded.updated_at`,
+        )
+        .run(randomUUID(), consentType, now, now);
 
       this.logger.info("consent", `Consent granted for ${consentType}`, { consentType, timestamp: now });
       return Ok(undefined);
@@ -128,21 +123,15 @@ export class ConsentManager {
   revokeConsent(consentType: ConsentType): Result<void, EidolonError> {
     try {
       const now = Date.now();
-      const existing = this.db.query("SELECT id FROM user_consent WHERE consent_type = ?").get(consentType) as {
-        id: string;
-      } | null;
 
-      if (existing) {
-        this.db
-          .query("UPDATE user_consent SET granted = 0, revoked_at = ?, updated_at = ? WHERE consent_type = ?")
-          .run(now, now, consentType);
-      } else {
-        this.db
-          .query(
-            "INSERT INTO user_consent (id, consent_type, granted, granted_at, revoked_at, updated_at) VALUES (?, ?, 0, NULL, ?, ?)",
-          )
-          .run(randomUUID(), consentType, now, now);
-      }
+      this.db
+        .query(
+          `INSERT INTO user_consent (id, consent_type, granted, granted_at, revoked_at, updated_at)
+           VALUES (?, ?, 0, NULL, ?, ?)
+           ON CONFLICT(consent_type) DO UPDATE SET
+             granted = 0, revoked_at = excluded.revoked_at, updated_at = excluded.updated_at`,
+        )
+        .run(randomUUID(), consentType, now, now);
 
       this.logger.info("consent", `Consent revoked for ${consentType}`, { consentType, timestamp: now });
       return Ok(undefined);

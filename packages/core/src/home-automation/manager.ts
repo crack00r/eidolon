@@ -41,6 +41,13 @@ import { HAEntityResolver } from "./resolver.ts";
 import { HASceneEngine } from "./scenes.ts";
 
 // ---------------------------------------------------------------------------
+// Validation
+// ---------------------------------------------------------------------------
+
+/** Safe pattern for HA identifiers (entity_id, domain, service). */
+const HA_IDENTIFIER_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,199}$/;
+
+// ---------------------------------------------------------------------------
 // Dependencies
 // ---------------------------------------------------------------------------
 
@@ -159,20 +166,24 @@ export class HAManager {
            synced_at = excluded.synced_at`,
       );
 
+      const upsertAll = this.db.transaction(() => {
+        for (const entity of entities) {
+          upsertStmt.run(
+            entity.entityId,
+            entity.domain,
+            entity.friendlyName,
+            entity.state,
+            JSON.stringify(entity.attributes),
+            entity.lastChanged,
+            now,
+          );
+        }
+      });
+      upsertAll();
+
       for (const entity of entities) {
         const previousState = this.previousStates.get(entity.entityId);
 
-        upsertStmt.run(
-          entity.entityId,
-          entity.domain,
-          entity.friendlyName,
-          entity.state,
-          JSON.stringify(entity.attributes),
-          entity.lastChanged,
-          now,
-        );
-
-        // Track state change
         if (previousState !== undefined && previousState !== entity.state) {
           changes.push({
             entityId: entity.entityId,
@@ -225,6 +236,17 @@ export class HAManager {
       data?: Record<string, unknown>,
     ) => Promise<Result<HAServiceResult, EidolonError>>,
   ): Promise<Result<HAServiceResult, EidolonError>> {
+    // Input validation: entity_id, domain, and service must match safe patterns
+    if (!HA_IDENTIFIER_PATTERN.test(entityId)) {
+      return Err(createError(ErrorCode.INVALID_INPUT, `Invalid entity ID format: ${entityId.slice(0, 100)}`));
+    }
+    if (!HA_IDENTIFIER_PATTERN.test(domain)) {
+      return Err(createError(ErrorCode.INVALID_INPUT, `Invalid domain format: ${domain.slice(0, 100)}`));
+    }
+    if (!HA_IDENTIFIER_PATTERN.test(service)) {
+      return Err(createError(ErrorCode.INVALID_INPUT, `Invalid service format: ${service.slice(0, 100)}`));
+    }
+
     // Policy check
     const policyResult = this.policyChecker.checkPolicy(domain, entityId, service);
     if (!policyResult.ok) return policyResult;
@@ -232,6 +254,11 @@ export class HAManager {
     const policy = policyResult.value;
     if (policy.level === "dangerous") {
       return Err(createError(ErrorCode.HA_POLICY_DENIED, `Action denied by policy: ${policy.reason}`));
+    }
+    if (policy.level === "needs_approval") {
+      return Err(
+        createError(ErrorCode.HA_POLICY_DENIED, `Action requires approval: ${policy.reason}`),
+      );
     }
 
     if (!executorFn) {

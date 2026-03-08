@@ -56,11 +56,7 @@ export function applyDecision(
       if (!decision.memoryId) {
         return Err(createError(ErrorCode.DB_QUERY_FAILED, "DELETE decision missing memoryId"));
       }
-      // Delete the old memory
-      const deleteResult = store.delete(decision.memoryId);
-      if (!deleteResult.ok) return Err(deleteResult.error);
-
-      // Add the replacement memory
+      // Wrap DELETE + ADD in a transaction to ensure atomicity
       const replaceInput: CreateMemoryInput = {
         type: extracted.type,
         layer: "short_term",
@@ -71,9 +67,19 @@ export function applyDecision(
         metadata: sessionId ? { sessionId, replacedMemoryId: decision.memoryId } : undefined,
         sensitive: extracted.sensitive,
       };
-      const createResult = store.create(replaceInput);
-      if (!createResult.ok) return Err(createResult.error);
-      return Ok(undefined);
+      const memoryId = decision.memoryId;
+      try {
+        const txnResult = store.runInTransaction(() => {
+          const deleteResult = store.delete(memoryId);
+          if (!deleteResult.ok) return Err(deleteResult.error);
+          const createResult = store.create(replaceInput);
+          if (!createResult.ok) return Err(createResult.error);
+          return Ok(undefined);
+        });
+        return txnResult;
+      } catch (cause) {
+        return Err(createError(ErrorCode.DB_QUERY_FAILED, "DELETE+ADD transaction failed", cause));
+      }
     }
 
     case "NOOP": {

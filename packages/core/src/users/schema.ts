@@ -111,7 +111,8 @@ export function rowToUser(row: UserRow): User {
   let channelMappings: ChannelMapping[];
   try {
     const parsed: unknown = JSON.parse(row.channel_mappings);
-    channelMappings = Array.isArray(parsed) ? (parsed as ChannelMapping[]) : [];
+    const result = z.array(ChannelMappingSchema).safeParse(parsed);
+    channelMappings = result.success ? result.data : [];
   } catch {
     channelMappings = [];
   }
@@ -119,8 +120,8 @@ export function rowToUser(row: UserRow): User {
   let preferences: UserPreferences;
   try {
     const parsed: unknown = JSON.parse(row.preferences);
-    preferences =
-      typeof parsed === "object" && parsed !== null && !Array.isArray(parsed) ? (parsed as UserPreferences) : {};
+    const result = UserPreferencesSchema.safeParse(parsed);
+    preferences = result.success ? result.data : {};
   } catch {
     preferences = {};
   }

@@ -534,4 +534,15 @@ export const OPERATIONAL_MIGRATIONS: ReadonlyArray<Migration> = [
       DROP TABLE IF EXISTS workflow_definitions;
     `,
   },
+  {
+    version: 16,
+    name: "add_scheduled_tasks_timezone",
+    database: "operational",
+    up: `
+      ALTER TABLE scheduled_tasks ADD COLUMN timezone TEXT;
+    `,
+    down: `
+      ALTER TABLE scheduled_tasks DROP COLUMN timezone;
+    `,
+  },
 ];

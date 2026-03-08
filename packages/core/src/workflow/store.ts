@@ -42,7 +42,7 @@ export class WorkflowStore {
       };
       if (count.c >= MAX_WORKFLOW_DEFINITIONS) {
         return Err(
-          createError(ErrorCode.DB_QUERY_FAILED, `Maximum ${MAX_WORKFLOW_DEFINITIONS} workflow definitions reached`),
+          createError(ErrorCode.INVALID_INPUT, `Maximum ${MAX_WORKFLOW_DEFINITIONS} workflow definitions reached`),
         );
       }
 
@@ -87,7 +87,7 @@ export class WorkflowStore {
         .query("SELECT * FROM workflow_definitions WHERE id = $id")
         .get({ $id: id }) as DefinitionRow | null;
       if (!row) {
-        return Err(createError(ErrorCode.DB_QUERY_FAILED, `Workflow definition not found: ${id}`));
+        return Err(createError(ErrorCode.INVALID_INPUT, `Workflow definition not found: ${id}`));
       }
       return Ok(rowToDefinition(row));
     } catch (err: unknown) {
@@ -112,7 +112,7 @@ export class WorkflowStore {
     try {
       const result = this.db.query("DELETE FROM workflow_definitions WHERE id = $id").run({ $id: id });
       if (result.changes === 0) {
-        return Err(createError(ErrorCode.DB_QUERY_FAILED, `Workflow definition not found: ${id}`));
+        return Err(createError(ErrorCode.INVALID_INPUT, `Workflow definition not found: ${id}`));
       }
       return Ok(undefined);
     } catch (err: unknown) {
@@ -127,7 +127,7 @@ export class WorkflowStore {
     try {
       const count = this.db.query("SELECT COUNT(*) as c FROM workflow_runs").get() as { c: number };
       if (count.c >= MAX_WORKFLOW_RUNS) {
-        return Err(createError(ErrorCode.DB_QUERY_FAILED, `Maximum ${MAX_WORKFLOW_RUNS} workflow runs reached`));
+        return Err(createError(ErrorCode.INVALID_INPUT, `Maximum ${MAX_WORKFLOW_RUNS} workflow runs reached`));
       }
 
       const now = Date.now();
@@ -176,7 +176,7 @@ export class WorkflowStore {
     try {
       const row = this.db.query("SELECT * FROM workflow_runs WHERE id = $id").get({ $id: id }) as RunRow | null;
       if (!row) {
-        return Err(createError(ErrorCode.DB_QUERY_FAILED, `Workflow run not found: ${id}`));
+        return Err(createError(ErrorCode.INVALID_INPUT, `Workflow run not found: ${id}`));
       }
       return Ok(rowToRun(row));
     } catch (err: unknown) {
@@ -195,13 +195,18 @@ export class WorkflowStore {
       const completedAt = status === "completed" || status === "failed" || status === "cancelled" ? now : null;
       const startedAt = status === "running" ? now : null;
 
+      // For currentStepId, distinguish between "not provided" (keep existing)
+      // and "explicitly set to null" (clear it). Use a sentinel approach:
+      // only include the SET clause when the caller provides the field.
+      const hasCurrentStepId = updates !== undefined && "currentStepId" in updates;
+
       this.db
         .query(
           `UPDATE workflow_runs SET
            status = $status,
-           current_step_id = COALESCE($currentStepId, current_step_id),
+           current_step_id = ${hasCurrentStepId ? "$currentStepId" : "current_step_id"},
            completed_at = COALESCE($completedAt, completed_at),
-           started_at = COALESCE($startedAt, started_at),
+           started_at = COALESCE(started_at, $startedAt),
            error = COALESCE($error, error),
            context = COALESCE($context, context)
          WHERE id = $id`,
@@ -209,7 +214,7 @@ export class WorkflowStore {
         .run({
           $id: id,
           $status: status,
-          $currentStepId: updates?.currentStepId ?? null,
+          $currentStepId: hasCurrentStepId ? (updates?.currentStepId ?? null) : null,
           $completedAt: completedAt,
           $startedAt: startedAt,
           $error: updates?.error ?? null,
@@ -280,11 +285,15 @@ export class WorkflowStore {
   ): Result<void, EidolonError> {
     try {
       const now = Date.now();
+      // Only set completed_at when the step reaches a terminal state
+      const isTerminal = updates.status === "completed" || updates.status === "failed";
       this.db
         .query(
           `UPDATE workflow_step_results
          SET status = $status, output = $output, error = $error,
-             completed_at = $completedAt, tokens_used = COALESCE($tokensUsed, tokens_used)
+             completed_at = ${isTerminal ? "$completedAt" : "completed_at"},
+             started_at = CASE WHEN $status = 'running' AND started_at IS NULL THEN $completedAt ELSE started_at END,
+             tokens_used = COALESCE($tokensUsed, tokens_used)
          WHERE id = $id`,
         )
         .run({
@@ -325,6 +334,37 @@ export class WorkflowStore {
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       return Err(createError(ErrorCode.DB_QUERY_FAILED, `Failed to get step result: ${msg}`, err));
+    }
+  }
+
+  cleanupOldWorkflows(olderThanDays: number): Result<number, EidolonError> {
+    try {
+      const cutoffMs = Date.now() - olderThanDays * 86_400_000;
+
+      const runIds = this.db
+        .query(
+          "SELECT id FROM workflow_runs WHERE status IN ('completed', 'failed', 'cancelled') AND completed_at < $cutoff",
+        )
+        .all({ $cutoff: cutoffMs }) as Array<{ id: string }>;
+
+      if (runIds.length === 0) {
+        return Ok(0);
+      }
+
+      const ids = runIds.map((r) => r.id);
+      const placeholders = ids.map(() => "?").join(", ");
+
+      const deleteInTransaction = this.db.transaction(() => {
+        this.db.query(`DELETE FROM workflow_step_results WHERE run_id IN (${placeholders})`).run(...ids);
+        return this.db.query(`DELETE FROM workflow_runs WHERE id IN (${placeholders})`).run(...ids);
+      });
+      const result = deleteInTransaction();
+
+      this.logger.info("workflow-store", `Cleaned up ${result.changes} old workflow runs`);
+      return Ok(result.changes);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return Err(createError(ErrorCode.DB_QUERY_FAILED, `Failed to cleanup old workflows: ${msg}`, err));
     }
   }
 }

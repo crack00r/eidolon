@@ -74,14 +74,18 @@ export function adjustSessionMemoryConfidence(
   const now = Date.now();
   let updated = 0;
 
-  for (const row of rows) {
-    const newConfidence = Math.max(0, Math.min(1, row.confidence + adjustment));
-    // Skip if the value would not actually change (already at boundary)
-    if (newConfidence === row.confidence) continue;
+  // Wrap all updates in a transaction for atomicity and performance
+  const runUpdates = memoryDb.transaction(() => {
+    for (const row of rows) {
+      const newConfidence = Math.max(0, Math.min(1, row.confidence + adjustment));
+      // Skip if the value would not actually change (already at boundary)
+      if (newConfidence === row.confidence) continue;
 
-    updateStmt.run(adjustment, now, row.id);
-    updated++;
-  }
+      updateStmt.run(adjustment, now, row.id);
+      updated++;
+    }
+  });
+  runUpdates();
 
   log.info("adjust", `Adjusted confidence for ${updated} memories`, {
     sessionId,

@@ -110,24 +110,42 @@ export function initVec0Table(db: Database, logger: Logger): boolean {
  * Backfill the vec0 table from existing embeddings in the memories table.
  * Called once when the vec0 table is first created on an existing database.
  */
+/** Batch size for backfilling the vec0 table. */
+const BACKFILL_BATCH_SIZE = 1000;
+
 function backfillVec0Table(db: Database, logger: Logger): void {
   try {
-    const rows = db.query("SELECT rowid, embedding FROM memories WHERE embedding IS NOT NULL").all() as Array<{
-      rowid: number;
-      embedding: Uint8Array;
-    }>;
-
-    if (rows.length === 0) return;
+    const countRow = db.query("SELECT COUNT(*) as count FROM memories WHERE embedding IS NOT NULL").get() as {
+      count: number;
+    };
+    if (countRow.count === 0) return;
 
     const insertStmt = db.prepare(`INSERT OR REPLACE INTO ${VEC0_TABLE_NAME}(rowid, embedding) VALUES (?, ?)`);
-    const transaction = db.transaction(() => {
-      for (const row of rows) {
-        insertStmt.run(row.rowid, row.embedding);
-      }
-    });
-    transaction();
+    let totalInserted = 0;
 
-    logger.info("backfillVec0", `Backfilled ${rows.length} embeddings into vec0 table`);
+    for (let offset = 0; offset < countRow.count; offset += BACKFILL_BATCH_SIZE) {
+      const rows = db
+        .query(
+          "SELECT rowid, embedding FROM memories WHERE embedding IS NOT NULL ORDER BY rowid LIMIT ? OFFSET ?",
+        )
+        .all(BACKFILL_BATCH_SIZE, offset) as Array<{
+        rowid: number;
+        embedding: Uint8Array;
+      }>;
+
+      if (rows.length === 0) break;
+
+      const transaction = db.transaction(() => {
+        for (const row of rows) {
+          insertStmt.run(row.rowid, row.embedding);
+        }
+      });
+      transaction();
+
+      totalInserted += rows.length;
+    }
+
+    logger.info("backfillVec0", `Backfilled ${totalInserted} embeddings into vec0 table`);
   } catch (cause) {
     logger.warn("backfillVec0", "Failed to backfill vec0 table", {
       error: cause instanceof Error ? cause.message : String(cause),
@@ -249,7 +267,7 @@ export function searchVectorBruteForce(
       if (rows.length === 0) break;
 
       for (const row of rows) {
-        const embedding = new Float32Array(new Uint8Array(row.embedding).buffer);
+        const embedding = new Float32Array(new Uint8Array(row.embedding).buffer.slice(0));
         if (embedding.length !== EXPECTED_DIMENSIONS) {
           logger.warn(
             "searchVectorBruteForce",
@@ -309,14 +327,23 @@ export function storeEmbedding(
   vec0Available: boolean,
   logger: Logger,
 ): Result<void, EidolonError> {
+  if (embedding.length !== EXPECTED_DIMENSIONS) {
+    return Err(
+      createError(
+        ErrorCode.DB_QUERY_FAILED,
+        `Embedding dimension mismatch: expected ${EXPECTED_DIMENSIONS}, got ${embedding.length} for memory ${memoryId}`,
+      ),
+    );
+  }
+
   try {
     const bytes = new Uint8Array(embedding.buffer, embedding.byteOffset, embedding.byteLength);
-    db.query("UPDATE memories SET embedding = ? WHERE id = ?").run(bytes, memoryId);
 
-    // Also insert into the vec0 table for ANN search (if available)
     if (vec0Available) {
-      try {
-        // Get the rowid for this memory
+      // Wrap UPDATE + vec0 INSERT in a transaction to keep them atomic
+      const txn = db.transaction(() => {
+        db.query("UPDATE memories SET embedding = ? WHERE id = ?").run(bytes, memoryId);
+
         const row = db.query("SELECT rowid FROM memories WHERE id = ?").get(memoryId) as {
           rowid: number;
         } | null;
@@ -324,13 +351,19 @@ export function storeEmbedding(
         if (row) {
           db.query(`INSERT OR REPLACE INTO ${VEC0_TABLE_NAME}(rowid, embedding) VALUES (?, ?)`).run(row.rowid, bytes);
         }
+      });
+      try {
+        txn();
       } catch (cause) {
-        // Non-fatal: vec0 sync failure should not block embedding storage
-        logger.warn("storeEmbedding", "Failed to sync embedding to vec0 table", {
+        // If the transaction fails due to vec0, fall back to just updating the embedding
+        logger.warn("storeEmbedding", "Transaction with vec0 sync failed, updating embedding only", {
           memoryId,
           error: cause instanceof Error ? cause.message : String(cause),
         });
+        db.query("UPDATE memories SET embedding = ? WHERE id = ?").run(bytes, memoryId);
       }
+    } else {
+      db.query("UPDATE memories SET embedding = ? WHERE id = ?").run(bytes, memoryId);
     }
 
     return Ok(undefined);
@@ -350,7 +383,7 @@ export function getEmbedding(db: Database, memoryId: string): Result<Float32Arra
       return Ok(null);
     }
 
-    const embedding = new Float32Array(new Uint8Array(row.embedding).buffer);
+    const embedding = new Float32Array(new Uint8Array(row.embedding).buffer.slice(0));
     return Ok(embedding);
   } catch (cause) {
     return Err(createError(ErrorCode.DB_QUERY_FAILED, `Failed to get embedding for memory ${memoryId}`, cause));

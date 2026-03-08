@@ -108,15 +108,39 @@ export class DatabaseManager {
     return Ok(undefined);
   }
 
-  /** Close all database connections. */
+  /** Close all database connections. Each close is independent so one failure does not leak the others. */
   close(): void {
-    this._memory?.close();
-    this._operational?.close();
-    this._audit?.close();
+    const errors: unknown[] = [];
+
+    try {
+      this._memory?.close();
+    } catch (err: unknown) {
+      errors.push(err);
+      this.logger.error("close", "Failed to close memory database", err);
+    }
     this._memory = null;
+
+    try {
+      this._operational?.close();
+    } catch (err: unknown) {
+      errors.push(err);
+      this.logger.error("close", "Failed to close operational database", err);
+    }
     this._operational = null;
+
+    try {
+      this._audit?.close();
+    } catch (err: unknown) {
+      errors.push(err);
+      this.logger.error("close", "Failed to close audit database", err);
+    }
     this._audit = null;
-    this.logger.info("close", "All databases closed");
+
+    if (errors.length > 0) {
+      this.logger.warn("close", `Databases closed with ${String(errors.length)} error(s)`);
+    } else {
+      this.logger.info("close", "All databases closed");
+    }
   }
 
   /** Get stats for all databases. */

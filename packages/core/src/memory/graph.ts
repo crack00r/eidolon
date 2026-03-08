@@ -176,6 +176,10 @@ export class GraphMemory {
     try {
       /** Upper bound on graph walk depth to prevent excessive traversal. */
       const MAX_GRAPH_WALK_DEPTH = 5;
+      /** Maximum total nodes to visit to prevent unbounded BFS expansion. */
+      const MAX_GRAPH_WALK_NODES = 500;
+      /** Maximum frontier size per hop to prevent exponential expansion. */
+      const MAX_FRONTIER_SIZE = 200;
       const clampedDepth = Math.max(0, Math.min(depth, MAX_GRAPH_WALK_DEPTH));
 
       const visited = new Map<string, number>();
@@ -190,10 +194,14 @@ export class GraphMemory {
         const nextFrontier: Array<{ id: string; weight: number }> = [];
 
         for (const { id, weight } of frontier) {
+          if (visited.size >= MAX_GRAPH_WALK_NODES) break;
+
           const edges = this.getAll(id);
           if (!edges.ok) continue;
 
           for (const edge of edges.value) {
+            if (visited.size >= MAX_GRAPH_WALK_NODES) break;
+
             const neighborId = edge.sourceId === id ? edge.targetId : edge.sourceId;
             const newWeight = weight * edge.weight * 0.5; // Decay by 50% per hop
 
@@ -205,7 +213,13 @@ export class GraphMemory {
           }
         }
 
-        frontier = nextFrontier;
+        // Cap frontier size: keep highest-weight nodes
+        if (nextFrontier.length > MAX_FRONTIER_SIZE) {
+          nextFrontier.sort((a, b) => b.weight - a.weight);
+          frontier = nextFrontier.slice(0, MAX_FRONTIER_SIZE);
+        } else {
+          frontier = nextFrontier;
+        }
       }
 
       // Remove seed IDs from results (they're already in the direct search results)

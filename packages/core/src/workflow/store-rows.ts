@@ -3,6 +3,7 @@
  * Extracted from store.ts to keep files under 300 lines.
  */
 
+import { z } from "zod";
 import type {
   StepResult,
   StepStatus,
@@ -11,6 +12,13 @@ import type {
   WorkflowRun,
   WorkflowStatus,
 } from "./types.ts";
+import { STEP_STATUSES, WORKFLOW_STATUSES } from "./types.ts";
+
+/** Zod schema for validating workflow status from DB. */
+const WorkflowStatusSchema = z.enum(WORKFLOW_STATUSES);
+
+/** Zod schema for validating step status from DB. */
+const StepStatusSchema = z.enum(STEP_STATUSES);
 
 // ---------------------------------------------------------------------------
 // DB row shapes (what SQLite returns)
@@ -63,26 +71,54 @@ export interface StepResultRow {
 // ---------------------------------------------------------------------------
 
 export function rowToDefinition(row: DefinitionRow): WorkflowDefinition {
-  const trigger = JSON.parse(row.trigger_config) as WorkflowDefinition["trigger"];
+  let trigger: WorkflowDefinition["trigger"];
+  try {
+    trigger = JSON.parse(row.trigger_config) as WorkflowDefinition["trigger"];
+  } catch {
+    trigger = { type: "manual" } as WorkflowDefinition["trigger"];
+  }
+
+  let steps: WorkflowDefinition["steps"];
+  try {
+    steps = JSON.parse(row.steps) as WorkflowDefinition["steps"];
+  } catch {
+    steps = [];
+  }
+
+  let onFailure: WorkflowDefinition["onFailure"];
+  try {
+    onFailure = JSON.parse(row.on_failure) as WorkflowDefinition["onFailure"];
+  } catch {
+    onFailure = { type: "abort" };
+  }
+
+  let metadata: Record<string, unknown>;
+  try {
+    metadata = JSON.parse(row.metadata) as Record<string, unknown>;
+  } catch {
+    metadata = {};
+  }
+
   return {
     id: row.id,
     name: row.name,
     description: row.description,
     trigger,
-    steps: JSON.parse(row.steps) as WorkflowDefinition["steps"],
-    onFailure: JSON.parse(row.on_failure) as WorkflowDefinition["onFailure"],
+    steps,
+    onFailure,
     createdAt: row.created_at,
     createdBy: row.created_by,
     maxDurationMs: row.max_duration_ms,
-    metadata: JSON.parse(row.metadata) as Record<string, unknown>,
+    metadata,
   };
 }
 
 export function rowToRun(row: RunRow): WorkflowRun {
+  const status = WorkflowStatusSchema.parse(row.status);
   return {
     id: row.id,
     definitionId: row.definition_id,
-    status: row.status as WorkflowStatus,
+    status,
     context: deserializeContext(row.context, row.id, row.definition_id, row.trigger_payload),
     currentStepId: row.current_step_id,
     startedAt: row.started_at,
@@ -94,11 +130,12 @@ export function rowToRun(row: RunRow): WorkflowRun {
 }
 
 export function rowToStepResult(row: StepResultRow): StepResult {
+  const status = StepStatusSchema.parse(row.status);
   return {
     id: row.id,
     runId: row.run_id,
     stepId: row.step_id,
-    status: row.status as StepStatus,
+    status,
     output: row.output ? JSON.parse(row.output) : null,
     error: row.error,
     attempt: row.attempt,

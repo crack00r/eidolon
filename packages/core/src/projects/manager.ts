@@ -60,29 +60,35 @@ export class ProjectManager {
       return Err(createError(ErrorCode.CONFIG_INVALID, `Path is not a git repository: ${parsed.data.repoPath}`));
     }
 
-    // Check for duplicate name
-    try {
-      const existing = this.db.query("SELECT id FROM projects WHERE name = ?").get(parsed.data.name) as {
-        id: string;
-      } | null;
-      if (existing) {
-        return Err(createError(ErrorCode.DB_QUERY_FAILED, `Project with name "${parsed.data.name}" already exists`));
-      }
-    } catch (cause) {
-      return Err(createError(ErrorCode.DB_QUERY_FAILED, "Failed to check for duplicate project", cause));
-    }
-
     try {
       const id = randomUUID();
       const now = Date.now();
       const description = parsed.data.description ?? "";
 
-      this.db
-        .query(
-          `INSERT INTO projects (id, name, repo_path, description, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?)`,
-        )
-        .run(id, parsed.data.name, parsed.data.repoPath, description, now, now);
+      // Use a transaction to atomically check for duplicates and insert,
+      // preventing TOCTOU race conditions.
+      const txn = this.db.transaction(() => {
+        const existing = this.db.query("SELECT id FROM projects WHERE name = ?").get(parsed.data.name) as {
+          id: string;
+        } | null;
+        if (existing) {
+          return { duplicate: true as const };
+        }
+
+        this.db
+          .query(
+            `INSERT INTO projects (id, name, repo_path, description, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?)`,
+          )
+          .run(id, parsed.data.name, parsed.data.repoPath, description, now, now);
+
+        return { duplicate: false as const };
+      });
+
+      const result = txn();
+      if (result.duplicate) {
+        return Err(createError(ErrorCode.DB_QUERY_FAILED, `Project with name "${parsed.data.name}" already exists`));
+      }
 
       const project: Project = {
         id,
@@ -97,6 +103,11 @@ export class ProjectManager {
       this.logger.info("create", `Project registered: ${parsed.data.name}`, { projectId: id });
       return Ok(project);
     } catch (cause) {
+      const msg = cause instanceof Error ? cause.message : String(cause);
+      // Handle UNIQUE constraint violation as a duplicate error
+      if (msg.includes("UNIQUE constraint failed")) {
+        return Err(createError(ErrorCode.DB_QUERY_FAILED, `Project with name "${parsed.data.name}" already exists`));
+      }
       return Err(createError(ErrorCode.DB_QUERY_FAILED, `Failed to create project: ${parsed.data.name}`, cause));
     }
   }
@@ -131,11 +142,20 @@ export class ProjectManager {
     }
   }
 
-  /** Update a project. */
-  update(id: string, input: UpdateProjectInput): Result<Project, EidolonError> {
+  /** Update a project. Validates repoPath if changed. */
+  async update(id: string, input: UpdateProjectInput): Promise<Result<Project, EidolonError>> {
     const parsed = UpdateProjectInputSchema.safeParse(input);
     if (!parsed.success) {
       return Err(createError(ErrorCode.CONFIG_INVALID, `Invalid update input: ${parsed.error.message}`));
+    }
+
+    // If repoPath is being changed, validate the new path is a git repo
+    if (parsed.data.repoPath !== undefined) {
+      const isRepo = await this.git.isGitRepo(parsed.data.repoPath);
+      if (!isRepo.ok) return isRepo;
+      if (!isRepo.value) {
+        return Err(createError(ErrorCode.CONFIG_INVALID, `Path is not a git repository: ${parsed.data.repoPath}`));
+      }
     }
 
     try {

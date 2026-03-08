@@ -153,6 +153,14 @@ export class ObsidianIndexer {
   ): Result<{ chunksStored: number; entitiesCreated: number; relationsCreated: number }, EidolonError> {
     try {
       const absPath = resolve(filePath);
+      const absVaultRoot = resolve(vaultRoot);
+
+      // Path containment check: ensure file is within the vault root
+      if (!absPath.startsWith(absVaultRoot + "/") && absPath !== absVaultRoot) {
+        return Err(
+          createError(ErrorCode.DB_QUERY_FAILED, `File path ${absPath} is outside vault root ${absVaultRoot}`),
+        );
+      }
 
       if (!existsSync(absPath)) {
         return Err(createError(ErrorCode.DB_QUERY_FAILED, `File not found: ${absPath}`));

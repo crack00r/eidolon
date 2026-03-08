@@ -10,6 +10,7 @@ import type { Database } from "bun:sqlite";
 import { randomUUID } from "node:crypto";
 import type { EidolonError, HAScene, HASceneAction, HAServiceResult, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
+import { z } from "zod";
 import type { Logger } from "../logging/logger.ts";
 import type { EventBus } from "../loop/event-bus.ts";
 
@@ -24,6 +25,29 @@ interface HASceneRow {
   created_at: number;
   last_executed_at: number | null;
 }
+
+// ---------------------------------------------------------------------------
+// Zod validation for parsed scene actions
+// ---------------------------------------------------------------------------
+
+const SceneActionSchema = z.object({
+  entityId: z.string(),
+  domain: z.string(),
+  service: z.string(),
+  data: z.record(z.string(), z.unknown()).optional(),
+});
+
+const SceneActionsArraySchema = z.array(SceneActionSchema);
+
+// ---------------------------------------------------------------------------
+// Limits
+// ---------------------------------------------------------------------------
+
+/** Maximum number of actions per scene. */
+const MAX_ACTIONS_PER_SCENE = 50;
+
+/** Maximum number of scenes. */
+const MAX_SCENES = 500;
 
 // ---------------------------------------------------------------------------
 // Service executor callback
@@ -61,27 +85,49 @@ export class HASceneEngine {
     try {
       const trimmedName = name.trim();
       if (trimmedName.length === 0) {
-        return Err(createError(ErrorCode.HA_SCENE_NOT_FOUND, "Scene name must not be empty"));
+        return Err(createError(ErrorCode.INVALID_INPUT, "Scene name must not be empty"));
       }
 
-      // Check for duplicate name
-      const existing = this.db.query("SELECT id FROM ha_scenes WHERE name = ?").get(trimmedName) as {
-        id: string;
-      } | null;
-      if (existing) {
-        return Err(createError(ErrorCode.HA_SCENE_NOT_FOUND, `Scene with name "${trimmedName}" already exists`));
+      if (actions.length > MAX_ACTIONS_PER_SCENE) {
+        return Err(
+          createError(ErrorCode.INVALID_INPUT, `Too many actions (${actions.length}, max ${MAX_ACTIONS_PER_SCENE})`),
+        );
       }
 
       const id = randomUUID();
       const now = Date.now();
       const actionsJson = JSON.stringify(actions);
 
-      this.db
-        .query(
-          `INSERT INTO ha_scenes (id, name, actions, created_at, last_executed_at)
-           VALUES (?, ?, ?, ?, NULL)`,
-        )
-        .run(id, trimmedName, actionsJson, now);
+      const insertScene = this.db.transaction(() => {
+        const countRow = this.db.query("SELECT COUNT(*) as cnt FROM ha_scenes").get() as { cnt: number } | null;
+        if ((countRow?.cnt ?? 0) >= MAX_SCENES) {
+          throw new Error(`LIMIT:Scene limit reached (max ${MAX_SCENES})`);
+        }
+
+        const existing = this.db.query("SELECT id FROM ha_scenes WHERE name = ?").get(trimmedName) as {
+          id: string;
+        } | null;
+        if (existing) {
+          throw new Error(`DUPLICATE:Scene with name "${trimmedName}" already exists`);
+        }
+
+        this.db
+          .query(
+            `INSERT INTO ha_scenes (id, name, actions, created_at, last_executed_at)
+             VALUES (?, ?, ?, ?, NULL)`,
+          )
+          .run(id, trimmedName, actionsJson, now);
+      });
+
+      try {
+        insertScene();
+      } catch (txErr: unknown) {
+        const msg = txErr instanceof Error ? txErr.message : String(txErr);
+        if (msg.startsWith("LIMIT:") || msg.startsWith("DUPLICATE:")) {
+          return Err(createError(ErrorCode.INVALID_INPUT, msg.slice(msg.indexOf(":") + 1)));
+        }
+        throw txErr;
+      }
 
       const scene: HAScene = {
         id,
@@ -135,13 +181,27 @@ export class HASceneEngine {
     }
 
     const results: HAServiceResult[] = [];
+    const failures: string[] = [];
     for (const action of scene.actions) {
       const result = await executeService(action.entityId, action.domain, action.service, action.data);
       if (!result.ok) {
-        this.logger.warn("executeScene", `Action failed in scene "${scene.name}": ${result.error.message}`);
-        return result;
+        this.logger.warn(
+          "executeScene",
+          `Action failed in scene "${scene.name}" (${action.entityId}/${action.service}): ${result.error.message}`,
+        );
+        failures.push(`${action.entityId}/${action.service}: ${result.error.message}`);
+        // Continue executing remaining actions for partial completion
+        results.push({ entityId: action.entityId, domain: action.domain, service: action.service, success: false });
+        continue;
       }
       results.push(result.value);
+    }
+
+    if (failures.length === scene.actions.length) {
+      // All actions failed
+      return Err(
+        createError(ErrorCode.HA_SERVICE_FAILED, `All ${failures.length} action(s) failed in scene "${scene.name}"`),
+      );
     }
 
     // Update last_executed_at
@@ -206,7 +266,7 @@ export class HASceneEngine {
           id: string;
         } | null;
         if (duplicate) {
-          return Err(createError(ErrorCode.HA_SCENE_NOT_FOUND, `Scene with name "${newName}" already exists`));
+          return Err(createError(ErrorCode.INVALID_INPUT, `Scene with name "${newName}" already exists`));
         }
       }
 
@@ -236,8 +296,9 @@ export class HASceneEngine {
 function parseActions(json: string): HASceneAction[] {
   try {
     const parsed: unknown = JSON.parse(json);
-    if (!Array.isArray(parsed)) return [];
-    return parsed as HASceneAction[];
+    const result = SceneActionsArraySchema.safeParse(parsed);
+    if (!result.success) return [];
+    return result.data;
   } catch {
     // Intentional: malformed JSON actions default to empty array
     return [];

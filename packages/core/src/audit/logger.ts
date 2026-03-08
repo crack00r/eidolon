@@ -105,29 +105,34 @@ export class AuditLogger {
       const timestamp = event.timestamp ?? Date.now();
       const metadata = JSON.stringify(event.details ?? {});
 
-      // Get the last integrity hash for chain continuity
-      const lastRow = this.db.query("SELECT integrity_hash FROM audit_log ORDER BY rowid DESC LIMIT 1").get() as {
-        integrity_hash: string;
-      } | null;
+      const insertWithHash = this.db.transaction(() => {
+        const lastRow = this.db.query("SELECT integrity_hash FROM audit_log ORDER BY rowid DESC LIMIT 1").get() as {
+          integrity_hash: string;
+        } | null;
 
-      const previousHash = lastRow?.integrity_hash ?? GENESIS_HASH;
+        const previousHash = lastRow?.integrity_hash ?? GENESIS_HASH;
 
-      const integrityHash = computeIntegrityHash(previousHash, {
-        id,
-        timestamp,
-        actor: event.actor,
-        action: event.action,
-        target: event.target,
-        result: event.result,
-        metadata,
+        const integrityHash = computeIntegrityHash(previousHash, {
+          id,
+          timestamp,
+          actor: event.actor,
+          action: event.action,
+          target: event.target,
+          result: event.result,
+          metadata,
+        });
+
+        this.db
+          .query(
+            `INSERT INTO audit_log (id, timestamp, actor, action, target, result, metadata, integrity_hash)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          )
+          .run(id, timestamp, event.actor, event.action, event.target, event.result, metadata, integrityHash);
+
+        return integrityHash;
       });
 
-      this.db
-        .query(
-          `INSERT INTO audit_log (id, timestamp, actor, action, target, result, metadata, integrity_hash)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        )
-        .run(id, timestamp, event.actor, event.action, event.target, event.result, metadata, integrityHash);
+      const integrityHash = insertWithHash();
 
       const entry: AuditEntry = {
         id,

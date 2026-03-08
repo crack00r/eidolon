@@ -33,25 +33,57 @@ export function findSimilarMemories(
     const MIN_SIMILARITY = minSimilarity ?? 0;
     const EXPECTED_DIMENSIONS = 384;
 
-    const rows = db.query("SELECT * FROM memories WHERE embedding IS NOT NULL LIMIT 10000").all() as Array<
-      MemoryRow & { embedding: Uint8Array }
-    >;
+    // Phase 1: scan embeddings only (id + embedding) in batches to find top candidates
+    const BATCH_SIZE = 2000;
+    const MAX_ROWS = 10000;
+    const topK: Array<{ memoryId: string; similarity: number }> = [];
+    let minTopKSimilarity = -Infinity;
 
+    for (let offset = 0; offset < MAX_ROWS; offset += BATCH_SIZE) {
+      const batchRows = db
+        .query("SELECT id, embedding FROM memories WHERE embedding IS NOT NULL ORDER BY rowid LIMIT ? OFFSET ?")
+        .all(BATCH_SIZE, offset) as Array<{ id: string; embedding: Uint8Array }>;
+
+      if (batchRows.length === 0) break;
+
+      for (const row of batchRows) {
+        const storedEmbedding = new Float32Array(new Uint8Array(row.embedding).buffer.slice(0));
+        if (storedEmbedding.length !== EXPECTED_DIMENSIONS) continue;
+        if (embedding.length !== EXPECTED_DIMENSIONS) continue;
+
+        const similarity = cosineSimilarity(embedding, storedEmbedding);
+        if (similarity < MIN_SIMILARITY) continue;
+
+        if (topK.length < limit) {
+          topK.push({ memoryId: row.id, similarity });
+          if (topK.length === limit) {
+            topK.sort((a, b) => b.similarity - a.similarity);
+            const last = topK[topK.length - 1];
+            minTopKSimilarity = last ? last.similarity : -Infinity;
+          }
+        } else if (similarity > minTopKSimilarity) {
+          topK[topK.length - 1] = { memoryId: row.id, similarity };
+          topK.sort((a, b) => b.similarity - a.similarity);
+          const last = topK[topK.length - 1];
+          minTopKSimilarity = last ? last.similarity : -Infinity;
+        }
+      }
+
+      if (batchRows.length < BATCH_SIZE) break;
+    }
+
+    topK.sort((a, b) => b.similarity - a.similarity);
+
+    // Phase 2: fetch full rows only for top candidates
     const scored: Array<{ memory: Memory; similarity: number }> = [];
-
-    for (const row of rows) {
-      const storedEmbedding = new Float32Array(new Uint8Array(row.embedding).buffer);
-      if (storedEmbedding.length !== EXPECTED_DIMENSIONS) continue;
-      if (embedding.length !== EXPECTED_DIMENSIONS) continue;
-
-      const similarity = cosineSimilarity(embedding, storedEmbedding);
-      if (similarity >= MIN_SIMILARITY) {
-        scored.push({ memory: rowToMemory(row), similarity });
+    for (const candidate of topK) {
+      const fullRow = db.query("SELECT * FROM memories WHERE id = ?").get(candidate.memoryId) as MemoryRow | null;
+      if (fullRow) {
+        scored.push({ memory: rowToMemory(fullRow), similarity: candidate.similarity });
       }
     }
 
-    scored.sort((a, b) => b.similarity - a.similarity);
-    return Ok(scored.slice(0, limit));
+    return Ok(scored);
   } catch (cause) {
     return Err(createError(ErrorCode.DB_QUERY_FAILED, "Failed to find similar memories", cause));
   }

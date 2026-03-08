@@ -48,6 +48,12 @@ export class MemoryStore {
     this.logger = logger.child("memory-store");
   }
 
+  /** Run a function inside a SQLite transaction. */
+  runInTransaction<T>(fn: () => T): T {
+    const txn = this.db.transaction(fn);
+    return txn();
+  }
+
   /** Create a new memory. Generates a UUID as the ID. */
   create(input: CreateMemoryInput): Result<Memory, EidolonError> {
     if (input.content.length > MAX_CONTENT_LENGTH) {
@@ -390,5 +396,14 @@ export class MemoryStore {
   /** Bulk create memories within a single transaction. */
   createBatch(inputs: readonly CreateMemoryInput[]): Result<Memory[], EidolonError> {
     return createMemoryBatch(this.db, this.logger, inputs);
+  }
+
+  /**
+   * Run a callback within a database transaction for atomicity.
+   * Supports nesting via SQLite savepoints.
+   */
+  withTransaction<T>(fn: () => T): T {
+    const txn = this.db.transaction(fn);
+    return txn();
   }
 }

@@ -5,7 +5,8 @@
  * All operations are read-only (never modifies the repo).
  */
 
-import { existsSync } from "node:fs";
+import { existsSync, statSync } from "node:fs";
+import { resolve } from "node:path";
 import type { EidolonError, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 import type { Logger } from "../logging/logger.ts";
@@ -19,14 +20,43 @@ const GIT_TIMEOUT_MS = 30_000;
 // Helpers
 // ---------------------------------------------------------------------------
 
+/**
+ * Validate that a repo path is safe to use as a cwd for git operations.
+ * Rejects paths containing ".." traversal and verifies the path is a directory.
+ */
+function validateRepoPath(repoPath: string): Result<string, EidolonError> {
+  const resolved = resolve(repoPath);
+
+  // Reject path traversal patterns in the original input
+  if (repoPath.includes("..")) {
+    return Err(createError(ErrorCode.SECURITY_BLOCKED, `Repo path contains traversal: ${repoPath}`));
+  }
+
+  // Verify the path exists and is a directory
+  try {
+    const stat = statSync(resolved);
+    if (!stat.isDirectory()) {
+      return Err(createError(ErrorCode.DB_QUERY_FAILED, `Repo path is not a directory: ${resolved}`));
+    }
+  } catch {
+    return Err(createError(ErrorCode.DB_QUERY_FAILED, `Repo path does not exist: ${resolved}`));
+  }
+
+  return Ok(resolved);
+}
+
 async function runGit(
   args: readonly string[],
   cwd: string,
   timeoutMs: number = GIT_TIMEOUT_MS,
 ): Promise<Result<string, EidolonError>> {
+  const pathResult = validateRepoPath(cwd);
+  if (!pathResult.ok) return pathResult;
+  const validatedCwd = pathResult.value;
+
   try {
     const proc = Bun.spawn(["git", ...args], {
-      cwd,
+      cwd: validatedCwd,
       stdout: "pipe",
       stderr: "pipe",
     });

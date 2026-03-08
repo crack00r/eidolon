@@ -96,7 +96,8 @@ export function findSimilarEntities(
   const threshold = getThresholdForType(type, resolvedThresholds);
 
   try {
-    const rows = db.query("SELECT * FROM kg_entities WHERE type = ?").all(type) as EntityRow[];
+    const MAX_ENTITY_CANDIDATES = 5000;
+    const rows = db.query("SELECT * FROM kg_entities WHERE type = ? LIMIT ?").all(type, MAX_ENTITY_CANDIDATES) as EntityRow[];
 
     const matches: Array<{ entity: KGEntity; similarity: number }> = [];
 
