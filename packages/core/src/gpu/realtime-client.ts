@@ -207,7 +207,7 @@ export class RealtimeVoiceClient {
   private async openConnection(): Promise<Result<void, EidolonError>> {
     return new Promise<Result<void, EidolonError>>((resolve) => {
       try {
-        const wsUrl = this.buildWsUrl(this.url, this.token);
+        const wsUrl = this.buildWsUrl(this.url);
         const socket = new WebSocket(wsUrl);
         socket.binaryType = "arraybuffer";
 
@@ -216,7 +216,17 @@ export class RealtimeVoiceClient {
         socket.onopen = (): void => {
           this.ws = socket;
           this.reconnectState.reconnectAttempts = 0;
-          startPing(this.ws, this.reconnectState, this.config);
+
+          // Send auth token as first message instead of in URL query parameter
+          // to avoid token leakage in server logs and proxy logs.
+          try {
+            socket.send(JSON.stringify({ type: "auth", token: this.token }));
+          } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err);
+            this.logger.error("auth", `Failed to send auth message: ${msg}`);
+          }
+
+          startPing(() => this.ws, this.reconnectState, this.config);
           this.logger.info("connect", "Realtime voice WebSocket connected", { url: this.url });
 
           if (!resolved) {
@@ -283,7 +293,7 @@ export class RealtimeVoiceClient {
     });
   }
 
-  private buildWsUrl(baseUrl: string, authToken: string): string {
+  private buildWsUrl(baseUrl: string): string {
     // Convert http(s) to ws(s) if needed
     let wsBase = baseUrl;
     if (wsBase.startsWith("http://")) {
@@ -299,7 +309,8 @@ export class RealtimeVoiceClient {
       wsBase = wsBase.slice(0, -1);
     }
 
-    return `${wsBase}/voice/realtime?token=${encodeURIComponent(authToken)}`;
+    // Auth token is sent as first message after connection, not in URL.
+    return `${wsBase}/voice/realtime`;
   }
 
   private handleMessage(event: MessageEvent): void {

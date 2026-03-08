@@ -52,6 +52,12 @@ export class VoicePipeline {
    * Each call gets its own AbortSignal, preventing shared mutable state issues.
    */
   async textToSpeechChunked(text: string): Promise<Result<Uint8Array[], EidolonError>> {
+    if (this.activeAbort !== null) {
+      return Err(
+        createError(ErrorCode.TTS_FAILED, "Voice pipeline is already processing a TTS request"),
+      );
+    }
+
     const sentences = VoicePipeline.splitSentences(text);
     if (sentences.length === 0) {
       return Ok([]);
@@ -104,15 +110,17 @@ export class VoicePipeline {
   async speechToText(audio: Uint8Array): Promise<Result<string, EidolonError>> {
     this.currentState = "listening";
 
-    const result = await this.stt.transcribe(audio);
+    try {
+      const result = await this.stt.transcribe(audio);
 
-    this.currentState = "idle";
+      if (!result.ok) {
+        return Err(result.error);
+      }
 
-    if (!result.ok) {
-      return Err(result.error);
+      return Ok(result.value.text);
+    } finally {
+      this.currentState = "idle";
     }
-
-    return Ok(result.value.text);
   }
 
   /**

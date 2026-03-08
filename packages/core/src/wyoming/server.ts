@@ -162,7 +162,9 @@ export class WyomingServer {
     this.logger.info("connection", `Satellite connected: ${connectionId}`);
 
     socket.on("data", (data: Buffer) => {
-      void this.handleData(connectionId, conn, new Uint8Array(data));
+      this.handleData(connectionId, conn, new Uint8Array(data)).catch((err: unknown) => {
+        this.logger.error("handleData", `Unhandled error processing data from ${connectionId}`, err);
+      });
     });
 
     socket.on("close", () => {
@@ -175,6 +177,9 @@ export class WyomingServer {
       this.logger.warn("connection", `Socket error from ${connectionId}: ${err.message}`);
       handler.reset();
       this.connections.delete(connectionId);
+      if (!socket.destroyed) {
+        socket.destroy();
+      }
     });
   }
 
@@ -213,7 +218,15 @@ export class WyomingServer {
       return true;
     }
 
-    // Check if satellite ID or remote address is in the allowlist
-    return this.config.allowedSatellites.some((allowed) => allowed === satelliteId || allowed === remoteAddress);
+    // Strip IPv4-mapped IPv6 prefix (e.g. "::ffff:192.168.1.1" -> "192.168.1.1")
+    // to prevent allowlist bypass via IPv4-mapped IPv6 addresses.
+    const normalizedAddress = remoteAddress.startsWith("::ffff:")
+      ? remoteAddress.slice(7)
+      : remoteAddress;
+
+    // Check if satellite ID or remote address (normalized) is in the allowlist
+    return this.config.allowedSatellites.some(
+      (allowed) => allowed === satelliteId || allowed === remoteAddress || allowed === normalizedAddress,
+    );
   }
 }

@@ -23,6 +23,7 @@ import type { StepExecutorRegistry } from "./executor-registry.ts";
 import { evaluateCondition } from "./executors/condition.ts";
 import { interpolateConfig } from "./interpolation.ts";
 import type { WorkflowStore } from "./store.ts";
+import { z } from "zod";
 import type {
   IWorkflowEngine,
   WorkflowContext,
@@ -35,12 +36,26 @@ import type {
 } from "./types.ts";
 import { DEFAULT_STEP_TIMEOUT_MS, MAX_CONCURRENT_WORKFLOWS } from "./types.ts";
 
+/** Zod schemas for event payload validation (replaces unsafe `as` casts). */
+const WorkflowTriggerPayloadSchema = z.object({
+  definitionId: z.string().min(1),
+  triggerPayload: z.unknown().optional(),
+});
+
+const WorkflowStepReadyPayloadSchema = z.object({
+  runId: z.string().min(1),
+  stepId: z.string().min(1),
+});
+
 // ---------------------------------------------------------------------------
 // WorkflowEngine
 // ---------------------------------------------------------------------------
 
 export class WorkflowEngine implements IWorkflowEngine {
+  /** Keyed by "runId:stepId" to avoid collisions when concurrent steps run in the same workflow. */
   private readonly abortControllers = new Map<string, AbortController>();
+  /** Retry timers keyed by "runId:stepId", cleared on cancel to prevent orphaned timers. */
+  private readonly retryTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
   constructor(
     private readonly store: WorkflowStore,
@@ -130,11 +145,20 @@ export class WorkflowEngine implements IWorkflowEngine {
       return Err(createError(ErrorCode.INVALID_TRANSITION, `Cannot cancel run in ${run.status} state`));
     }
 
-    // Abort any running step
-    const controller = this.abortControllers.get(runId);
-    if (controller) {
-      controller.abort();
-      this.abortControllers.delete(runId);
+    // Abort all running steps for this run
+    for (const [key, controller] of this.abortControllers) {
+      if (key.startsWith(`${runId}:`)) {
+        controller.abort();
+        this.abortControllers.delete(key);
+      }
+    }
+
+    // Clear any pending retry timers for this run
+    for (const [key, timer] of this.retryTimers) {
+      if (key.startsWith(`${runId}:`)) {
+        clearTimeout(timer);
+        this.retryTimers.delete(key);
+      }
     }
 
     const updateResult = this.store.updateRunStatus(runId, "cancelled");
@@ -222,7 +246,12 @@ export class WorkflowEngine implements IWorkflowEngine {
   // -- Private: Event Handlers ----------------------------------------------
 
   private handleTrigger(event: BusEvent): EventHandlerResult {
-    const payload = event.payload as WorkflowTriggerPayload;
+    const parsed = WorkflowTriggerPayloadSchema.safeParse(event.payload);
+    if (!parsed.success) {
+      this.logger.error("workflow-engine", `Invalid trigger payload: ${parsed.error.message}`);
+      return { success: false, tokensUsed: 0, error: `Invalid trigger payload: ${parsed.error.message}` };
+    }
+    const payload: WorkflowTriggerPayload = parsed.data;
     const result = this.startRun(payload.definitionId, payload.triggerPayload);
     if (!result.ok) {
       this.logger.error("workflow-engine", `Failed to start run: ${result.error.message}`);
@@ -232,7 +261,12 @@ export class WorkflowEngine implements IWorkflowEngine {
   }
 
   private async handleStepReady(event: BusEvent): Promise<EventHandlerResult> {
-    const payload = event.payload as WorkflowStepReadyPayload;
+    const parsed = WorkflowStepReadyPayloadSchema.safeParse(event.payload);
+    if (!parsed.success) {
+      this.logger.error("workflow-engine", `Invalid step_ready payload: ${parsed.error.message}`);
+      return { success: false, tokensUsed: 0, error: `Invalid step_ready payload: ${parsed.error.message}` };
+    }
+    const payload: WorkflowStepReadyPayload = parsed.data;
     const { runId, stepId } = payload;
 
     const runResult = this.store.getRun(runId);
@@ -305,7 +339,9 @@ export class WorkflowEngine implements IWorkflowEngine {
       );
       this.store.updateRunStatus(runId, "retrying");
 
-      setTimeout(() => {
+      const retryKey = `${runId}:${stepId}`;
+      const retryTimer = setTimeout(() => {
+        this.retryTimers.delete(retryKey);
         const newResultId = randomUUID();
         this.store.createStepResult({
           id: newResultId,
@@ -328,6 +364,7 @@ export class WorkflowEngine implements IWorkflowEngine {
           },
         );
       }, backoff);
+      this.retryTimers.set(retryKey, retryTimer);
 
       return { success: true, tokensUsed: 0 };
     }
@@ -351,7 +388,8 @@ export class WorkflowEngine implements IWorkflowEngine {
     const interpolatedConfig = interpolateConfig(stepDef.config, context);
 
     const controller = new AbortController();
-    this.abortControllers.set(runId, controller);
+    const abortKey = `${runId}:${stepDef.id}`;
+    this.abortControllers.set(abortKey, controller);
 
     // Update step result to running
     const existingResult = this.store.getStepResult(runId, stepDef.id);
@@ -367,7 +405,7 @@ export class WorkflowEngine implements IWorkflowEngine {
     try {
       const result = await executor.execute(interpolatedConfig, context, controller.signal);
       clearTimeout(timeoutId);
-      this.abortControllers.delete(runId);
+      this.abortControllers.delete(abortKey);
 
       if (result.ok) {
         if (existingResult.ok && existingResult.value) {
@@ -389,7 +427,7 @@ export class WorkflowEngine implements IWorkflowEngine {
       return Err(result.error);
     } catch (err: unknown) {
       clearTimeout(timeoutId);
-      this.abortControllers.delete(runId);
+      this.abortControllers.delete(abortKey);
       const msg = err instanceof Error ? err.message : String(err);
       if (existingResult.ok && existingResult.value) {
         this.store.updateStepResult(existingResult.value.id, {

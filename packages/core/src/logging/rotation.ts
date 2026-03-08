@@ -18,15 +18,33 @@ export interface RotationConfig {
 
 export class LogRotator {
   private readonly currentPath: string;
+  /** Promise-based mutex to serialize write+rotation under concurrent calls. */
+  private writeLock: Promise<void> = Promise.resolve();
 
   constructor(private readonly config: RotationConfig) {
     this.currentPath = join(config.directory, config.filename);
   }
 
-  /** Write a line to the log file, rotating if needed. */
+  /** Write a line to the log file, rotating if needed. Serialized via mutex. */
   async writeLine(line: string): Promise<void> {
-    this.checkRotation();
-    await appendFile(this.currentPath, `${line}\n`, "utf-8");
+    // Chain onto the existing lock to serialize concurrent writes
+    const prev = this.writeLock;
+    let releaseResolve: () => void;
+    this.writeLock = new Promise<void>((resolve) => {
+      releaseResolve = resolve;
+    });
+
+    try {
+      await prev;
+      try {
+        this.checkRotation();
+      } catch {
+        // Rotation failure must not prevent the current log line from being written.
+      }
+      await appendFile(this.currentPath, `${line}\n`, "utf-8");
+    } finally {
+      releaseResolve!();
+    }
   }
 
   /**

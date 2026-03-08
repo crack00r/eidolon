@@ -32,6 +32,9 @@ export interface CalDAVConfig {
 // CalDAVProvider
 // ---------------------------------------------------------------------------
 
+/** Request timeout for CalDAV HTTP calls (30 seconds). */
+const CALDAV_TIMEOUT_MS = 30_000;
+
 export class CalDAVProvider implements CalendarProvider {
   readonly id: string;
   readonly name: string;
@@ -102,6 +105,7 @@ export class CalDAVProvider implements CalendarProvider {
           "If-None-Match": "*",
         },
         body: icsData,
+        signal: AbortSignal.timeout(CALDAV_TIMEOUT_MS),
       });
 
       if (!response.ok) {
@@ -127,6 +131,7 @@ export class CalDAVProvider implements CalendarProvider {
       const response = await fetch(eventUrl, {
         method: "DELETE",
         headers: this.authHeaders(),
+        signal: AbortSignal.timeout(CALDAV_TIMEOUT_MS),
       });
 
       if (!response.ok && response.status !== 204 && response.status !== 404) {
@@ -176,7 +181,8 @@ export class CalDAVProvider implements CalendarProvider {
   }
 
   private authHeaders(): Record<string, string> {
-    const encoded = btoa(`${this.username}:${this.password}`);
+    // Use Buffer.from instead of btoa to support non-ASCII passwords
+    const encoded = Buffer.from(`${this.username}:${this.password}`).toString("base64");
     return { Authorization: `Basic ${encoded}` };
   }
 
@@ -197,6 +203,7 @@ export class CalDAVProvider implements CalendarProvider {
           Depth: String(depth),
         },
         body,
+        signal: AbortSignal.timeout(CALDAV_TIMEOUT_MS),
       });
 
       if (!response.ok && response.status !== 207) {
@@ -220,6 +227,7 @@ export class CalDAVProvider implements CalendarProvider {
           Depth: "1",
         },
         body,
+        signal: AbortSignal.timeout(CALDAV_TIMEOUT_MS),
       });
 
       if (!response.ok && response.status !== 207) {

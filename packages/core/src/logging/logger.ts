@@ -62,7 +62,13 @@ function redactSensitiveKeys(data: Record<string, unknown>): Record<string, unkn
   for (const [key, value] of Object.entries(data)) {
     if (SENSITIVE_KEY_PATTERNS.some((p) => p.test(key))) {
       result[key] = REDACTED;
-    } else if (value !== null && typeof value === "object" && !Array.isArray(value)) {
+    } else if (Array.isArray(value)) {
+      result[key] = value.map((item) =>
+        item !== null && typeof item === "object" && !Array.isArray(item)
+          ? redactSensitiveKeys(item as Record<string, unknown>)
+          : item,
+      );
+    } else if (value !== null && typeof value === "object") {
       result[key] = redactSensitiveKeys(value as Record<string, unknown>);
     } else {
       result[key] = value;

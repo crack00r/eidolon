@@ -107,12 +107,21 @@ export async function createBoltSlackClient(
     let eventHandler: ((event: SlackInboundEvent) => Promise<void>) | null = null;
     let connected = false;
 
-    // User info cache to avoid repeated API calls
+    // User info cache to avoid repeated API calls (bounded to prevent unbounded growth)
+    const USER_CACHE_MAX_SIZE = 1000;
     const userCache = new Map<string, SlackUser>();
 
     async function resolveUser(userId: string): Promise<SlackUser> {
       const cached = userCache.get(userId);
       if (cached) return cached;
+
+      // Evict oldest entries when cache exceeds max size
+      if (userCache.size >= USER_CACHE_MAX_SIZE) {
+        const firstKey = userCache.keys().next().value;
+        if (firstKey !== undefined) {
+          userCache.delete(firstKey);
+        }
+      }
 
       try {
         const result = await app.client.users.info({ user: userId });
@@ -125,8 +134,9 @@ export async function createBoltSlackClient(
           userCache.set(userId, user);
           return user;
         }
-      } catch {
-        // Fall through to default
+      } catch (err: unknown) {
+        // Log the failure but fall through to default user object
+        console.warn(`[eidolon:slack] Failed to look up Slack user ${userId}: ${err instanceof Error ? err.message : String(err)}`);
       }
 
       return { id: userId, username: userId, isBot: false };
@@ -245,6 +255,7 @@ export async function createBoltSlackClient(
           const response = await fetch(url, {
             headers: { Authorization: `Bearer ${config.botToken}` },
             signal: controller.signal,
+            redirect: "error",
           });
 
           if (!response.ok) {

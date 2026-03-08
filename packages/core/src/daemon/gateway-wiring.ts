@@ -10,6 +10,7 @@
 
 import { DiscoveryBroadcaster } from "../discovery/broadcaster.ts";
 import { TailscaleDetector } from "../discovery/tailscale.ts";
+import { GatewayChannel } from "../gateway/gateway-channel.ts";
 import { GatewayServer } from "../gateway/server.ts";
 import { GPUManager } from "../gpu/manager.ts";
 import type { GPUWorkerPoolConfig } from "../gpu/pool.ts";
@@ -131,6 +132,27 @@ export function buildGatewayInitSteps(
       });
       await modules.gatewayServer.start();
       logger.info("daemon", `GatewayServer started on ${config.gateway.host}:${config.gateway.port}`);
+    },
+  });
+
+  // 19-gw-channel. Register GatewayChannel with MessageRouter for outbound routing
+  steps.push({
+    name: "GatewayChannelWiring",
+    fn: () => {
+      const gatewayServer = modules.gatewayServer;
+      const messageRouter = modules.messageRouter;
+      const logger = modules.logger;
+
+      if (!gatewayServer || !messageRouter) {
+        logger?.debug("daemon", "GatewayChannel wiring skipped: missing gateway server or messageRouter");
+        return;
+      }
+
+      const gatewayChannel = new GatewayChannel();
+      gatewayChannel.setServer(gatewayServer);
+      messageRouter.registerChannel(gatewayChannel);
+
+      logger?.info("daemon", "GatewayChannel registered with MessageRouter (channel ID: gateway)");
     },
   });
 

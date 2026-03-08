@@ -192,11 +192,21 @@ export class SuggestionHistory {
 
   /** Record user feedback on a suggestion. Also triggers auto-suppression check. */
   recordFeedback(suggestionId: string, feedback: AnticipationFeedback): void {
-    this.db.query("UPDATE anticipation_history SET feedback = ? WHERE id = ?").run(feedback, suggestionId);
+    const now = Date.now();
+    this.db
+      .query("UPDATE anticipation_history SET feedback = ?, dismissed_at = ? WHERE id = ? AND dismissed_at IS NULL")
+      .run(feedback, now, suggestionId);
 
     if (feedback === "annoying") {
       this.checkAutoSuppression(suggestionId);
     }
+  }
+
+  /** Record that a suggestion was dismissed to prevent re-triggering. */
+  recordDismissed(suggestionId: string): void {
+    this.db
+      .query("UPDATE anticipation_history SET dismissed_at = ? WHERE id = ? AND dismissed_at IS NULL")
+      .run(Date.now(), suggestionId);
   }
 
   /** Record that user acted on a suggestion. */
@@ -204,8 +214,13 @@ export class SuggestionHistory {
     this.db.query("UPDATE anticipation_history SET acted_on_at = ? WHERE id = ?").run(Date.now(), suggestionId);
   }
 
-  /** Get active suppressions (not expired). */
+  /** Get active suppressions (not expired). Also cleans up expired entries. */
   getSuppressions(now: number): SuppressionRecord[] {
+    // Clean up expired suppressions first
+    this.db
+      .query("DELETE FROM anticipation_suppressions WHERE expires_at IS NOT NULL AND expires_at <= ?")
+      .run(now);
+
     const rows = this.db
       .query(
         `SELECT * FROM anticipation_suppressions
@@ -242,14 +257,25 @@ export class SuggestionHistory {
       .get(record.pattern_type, cutoff) as { cnt: number } | null;
 
     if ((countRow?.cnt ?? 0) >= AUTO_SUPPRESS_THRESHOLD) {
+      // Check if an active suppression already exists for this pattern type to avoid duplicates
+      const existing = this.db
+        .query(
+          `SELECT COUNT(*) as cnt FROM anticipation_suppressions
+           WHERE pattern_type = ? AND entity_key IS NULL AND (expires_at IS NULL OR expires_at > ?)`,
+        )
+        .get(record.pattern_type, Date.now()) as { cnt: number } | null;
+
+      if ((existing?.cnt ?? 0) > 0) return;
+
       const id = randomUUID();
-      const expiresAt = Date.now() + AUTO_SUPPRESS_EXPIRY_DAYS * 86_400_000;
+      const now = Date.now();
+      const expiresAt = now + AUTO_SUPPRESS_EXPIRY_DAYS * 86_400_000;
       this.db
         .query(
-          `INSERT OR IGNORE INTO anticipation_suppressions (id, pattern_type, entity_key, suppressed_at, expires_at, reason)
+          `INSERT INTO anticipation_suppressions (id, pattern_type, entity_key, suppressed_at, expires_at, reason)
            VALUES (?, ?, NULL, ?, ?, 'user_dismissed_3x')`,
         )
-        .run(id, record.pattern_type, Date.now(), expiresAt);
+        .run(id, record.pattern_type, now, expiresAt);
       this.logger.info("anticipation", `Auto-suppressed pattern: ${record.pattern_type} (3+ annoying feedbacks)`);
     }
   }

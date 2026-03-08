@@ -89,7 +89,13 @@ const ALL_CONFIG_SECTIONS: readonly string[] = [
   "llm",
 ];
 
-/** Check if a section value changed between old and new config. */
+/**
+ * Check if a section value changed between old and new config.
+ *
+ * JSON.stringify comparison is safe here because both oldConfig and newConfig
+ * are produced by Zod's .parse(), which always outputs properties in schema-
+ * declaration order. This guarantees consistent key ordering across comparisons.
+ */
 function sectionChanged(oldConfig: Record<string, unknown>, newConfig: Record<string, unknown>, path: string): boolean {
   const oldVal = getNestedValue(oldConfig, path);
   const newVal = getNestedValue(newConfig, path);

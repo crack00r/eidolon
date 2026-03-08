@@ -9,6 +9,14 @@ import type { EidolonError, Result, ScheduledTask, ScheduleType } from "@eidolon
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 import { z } from "zod";
 import type { Logger } from "../logging/logger.ts";
+import {
+  computeNextDowInTimezone,
+  computeNextTimeInTimezone,
+  validateCronExpression,
+  validateTimezone,
+} from "./cron-utils.ts";
+
+export { validateCronExpression } from "./cron-utils.ts";
 
 export interface CreateTaskInput {
   readonly name: string;
@@ -18,6 +26,8 @@ export interface CreateTaskInput {
   readonly condition?: string;
   readonly action: string;
   readonly payload?: Record<string, unknown>;
+  /** IANA timezone identifier (e.g. "Europe/Berlin"). Defaults to local time. */
+  readonly timezone?: string;
 }
 
 interface TaskRow {
@@ -33,6 +43,7 @@ interface TaskRow {
   last_run_at: number | null;
   next_run_at: number | null;
   created_at: number;
+  timezone: string | null;
 }
 
 /** Zod schema for validating task payload from DB. */
@@ -71,6 +82,7 @@ function rowToTask(row: TaskRow): ScheduledTask {
     lastRunAt: row.last_run_at ?? undefined,
     nextRunAt: row.next_run_at ?? undefined,
     createdAt: row.created_at,
+    timezone: row.timezone ?? undefined,
   };
 }
 
@@ -85,6 +97,22 @@ export class TaskScheduler {
 
   /** Create a new scheduled task. */
   create(input: CreateTaskInput): Result<ScheduledTask, EidolonError> {
+    // Validate cron expression if provided
+    if (input.cron) {
+      const cronError = validateCronExpression(input.cron);
+      if (cronError) {
+        return Err(createError(ErrorCode.CONFIG_INVALID, cronError));
+      }
+    }
+
+    // Validate timezone if provided
+    if (input.timezone) {
+      const tzError = validateTimezone(input.timezone);
+      if (tzError) {
+        return Err(createError(ErrorCode.CONFIG_INVALID, tzError));
+      }
+    }
+
     try {
       const id = crypto.randomUUID();
       const now = Date.now();
@@ -93,8 +121,8 @@ export class TaskScheduler {
 
       this.db
         .query(
-          `INSERT INTO scheduled_tasks (id, name, type, cron, run_at, condition, action, payload, enabled, next_run_at, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+          `INSERT INTO scheduled_tasks (id, name, type, cron, run_at, condition, action, payload, enabled, next_run_at, created_at, timezone)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)`,
         )
         .run(
           id,
@@ -107,6 +135,7 @@ export class TaskScheduler {
           payload,
           nextRunAt,
           now,
+          input.timezone ?? null,
         );
 
       const task: ScheduledTask = {
@@ -121,6 +150,7 @@ export class TaskScheduler {
         enabled: true,
         nextRunAt: nextRunAt ?? undefined,
         createdAt: now,
+        timezone: input.timezone,
       };
 
       this.logger.info("create", `Task created: ${input.name} (${input.type})`, { taskId: id });
@@ -201,8 +231,8 @@ export class TaskScheduler {
           .run(now, taskId);
         this.logger.info("markExecuted", `One-off task completed and disabled: ${task.name}`, { taskId });
       } else if (task.type === "recurring" && task.cron) {
-        // Recurring tasks compute the next run time
-        const nextRunAt = TaskScheduler.computeNextRun(task.cron, now);
+        // Recurring tasks compute the next run time (timezone-aware)
+        const nextRunAt = TaskScheduler.computeNextRun(task.cron, now, task.timezone);
         this.db
           .query("UPDATE scheduled_tasks SET last_run_at = ?, next_run_at = ? WHERE id = ?")
           .run(now, nextRunAt, taskId);
@@ -253,42 +283,29 @@ export class TaskScheduler {
   // - "HH:MM"     -- run daily at this time
   // - "*/N"       -- run every N minutes
   // - "HH:MM:dow" -- run at time on specific day (0=Sun..6=Sat)
-  static computeNextRun(cron: string, after?: number): number {
+  //
+  // When timezone is provided, HH:MM values are interpreted in that timezone.
+  // The "*/N" format is timezone-independent (always relative to `after`).
+  static computeNextRun(cron: string, after?: number, timezone?: string): number {
     const now = after ?? Date.now();
 
     // "HH:MM" format -- next occurrence of this time
     if (/^\d{2}:\d{2}$/.test(cron)) {
       const [hours, minutes] = cron.split(":").map(Number) as [number, number];
-      const next = new Date(now);
-      next.setHours(hours, minutes, 0, 0);
-      if (next.getTime() <= now) {
-        next.setDate(next.getDate() + 1);
-      }
-      return next.getTime();
+      return computeNextTimeInTimezone(hours, minutes, now, timezone);
     }
 
-    // "*/N" format -- every N minutes from now
+    // "*/N" format -- every N minutes from now (timezone-independent)
     if (/^\*\/\d+$/.test(cron)) {
-      const minutes = Number.parseInt(cron.slice(2), 10);
-      return now + minutes * 60_000;
+      const intervalMinutes = Number.parseInt(cron.slice(2), 10);
+      return now + intervalMinutes * 60_000;
     }
 
     // "HH:MM:dow" format -- at time on specific day of week
     if (/^\d{2}:\d{2}:\d$/.test(cron)) {
       const parts = cron.split(":").map(Number) as [number, number, number];
-      const [hours, minutes, dow] = parts;
-      const next = new Date(now);
-      next.setHours(hours, minutes, 0, 0);
-
-      // Advance to the target day of week
-      const currentDow = next.getDay();
-      let daysAhead = dow - currentDow;
-      if (daysAhead < 0 || (daysAhead === 0 && next.getTime() <= now)) {
-        daysAhead += 7;
-      }
-      next.setDate(next.getDate() + daysAhead);
-
-      return next.getTime();
+      const [hours, mins, dow] = parts;
+      return computeNextDowInTimezone(hours, mins, dow, now, timezone);
     }
 
     // Fallback: 1 hour from now
@@ -298,10 +315,6 @@ export class TaskScheduler {
   /**
    * Create a scheduled task from a natural language description.
    * Delegates parsing to AutomationEngine and stores as an automation task.
-   *
-   * @param input - Natural language schedule description
-   * @param defaultChannel - Default delivery channel (e.g., "telegram")
-   * @returns The created automation task, or an error if parsing fails
    */
   createFromNaturalLanguage(input: string, defaultChannel?: string): Result<ScheduledTask, EidolonError> {
     // Lazy import to avoid circular dependency at module load time
@@ -341,7 +354,7 @@ export class TaskScheduler {
       return input.runAt;
     }
     if (input.type === "recurring" && input.cron) {
-      return TaskScheduler.computeNextRun(input.cron);
+      return TaskScheduler.computeNextRun(input.cron, undefined, input.timezone);
     }
     // Conditional tasks don't have a fixed nextRunAt
     return null;

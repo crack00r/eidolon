@@ -5,12 +5,41 @@
  * Extracted from gateway-wiring.ts to keep each module under ~300 lines.
  */
 
+import { z } from "zod";
 import type { CalendarEvent } from "@eidolon/protocol";
 import { CalendarManager } from "../calendar/manager.ts";
 import { registerFeedbackHandlers } from "../feedback/gateway-handlers.ts";
 import { HAManager } from "../home-automation/manager.ts";
 import { wireMetrics } from "../metrics/wiring.ts";
 import type { InitializedModules } from "./types.ts";
+
+// ---------------------------------------------------------------------------
+// Validation schemas for RPC handler params
+// ---------------------------------------------------------------------------
+
+const CalendarCreateEventParamsSchema = z.object({
+  calendarId: z.string(),
+  title: z.string(),
+  startTime: z.number(),
+  endTime: z.number(),
+  description: z.string().optional(),
+  location: z.string().optional(),
+  allDay: z.boolean(),
+  recurrence: z.string().optional(),
+  reminders: z.array(z.number()),
+  source: z.enum(["google", "caldav", "manual"]),
+});
+
+const HAExecuteParamsSchema = z.object({
+  entityId: z.string().min(1),
+  domain: z.string().min(1),
+  service: z.string().min(1),
+  data: z.record(z.unknown()).optional(),
+});
+
+const PluginInfoParamsSchema = z.object({
+  name: z.string().min(1),
+});
 
 // ---------------------------------------------------------------------------
 // Init step type (matches gateway-wiring.ts convention)
@@ -78,7 +107,11 @@ export function buildCalendarSteps(modules: InitializedModules): InitStep[] {
       });
 
       gatewayServer.registerHandler("calendar.createEvent", async (params) => {
-        const event = params as Omit<CalendarEvent, "id" | "syncedAt">;
+        const parsed = CalendarCreateEventParamsSchema.safeParse(params);
+        if (!parsed.success) {
+          throw new Error(`Invalid calendar.createEvent params: ${parsed.error.issues.map((i) => i.message).join(", ")}`);
+        }
+        const event = parsed.data as Omit<CalendarEvent, "id" | "syncedAt">;
         const result = calendarManager.createEvent(event);
         if (!result.ok) throw new Error(result.error.message);
         return { event: result.value };
@@ -178,13 +211,11 @@ export function buildHASteps(modules: InitializedModules): InitStep[] {
       });
 
       gatewayServer.registerHandler("ha.execute", async (params) => {
-        const entityId = typeof params.entityId === "string" ? params.entityId : "";
-        const domain = typeof params.domain === "string" ? params.domain : "";
-        const service = typeof params.service === "string" ? params.service : "";
-        const data =
-          typeof params.data === "object" && params.data !== null
-            ? (params.data as Record<string, unknown>)
-            : undefined;
+        const parsed = HAExecuteParamsSchema.safeParse(params);
+        if (!parsed.success) {
+          throw new Error(`Invalid ha.execute params: ${parsed.error.issues.map((i) => i.message).join(", ")}`);
+        }
+        const { entityId, domain, service, data } = parsed.data;
         const result = await haManager.executeService(entityId, domain, service, data);
         if (!result.ok) throw new Error(result.error.message);
         return result.value;
@@ -266,10 +297,13 @@ export function buildMiscGatewaySteps(modules: InitializedModules): InitStep[] {
       // Plugin RPC handlers
       const registry = modules.pluginRegistry;
       if (registry) {
-        gateway.registerHandler("plugin.list" as never, async () => registry.getAll());
-        gateway.registerHandler("plugin.info" as never, async (params: unknown) => {
-          const { name } = params as { name: string };
-          return registry.get(name) ?? null;
+        gateway.registerHandler("plugin.list", async () => registry.getAll());
+        gateway.registerHandler("plugin.info", async (params: unknown) => {
+          const parsed = PluginInfoParamsSchema.safeParse(params);
+          if (!parsed.success) {
+            throw new Error(`Invalid plugin.info params: ${parsed.error.issues.map((i) => i.message).join(", ")}`);
+          }
+          return registry.get(parsed.data.name) ?? null;
         });
         logger.info("daemon", "Plugin RPC handlers wired to gateway");
       }
@@ -277,10 +311,10 @@ export function buildMiscGatewaySteps(modules: InitializedModules): InitStep[] {
       // LLM RPC handlers
       const router = modules.modelRouter;
       if (router) {
-        gateway.registerHandler("llm.providers" as never, async () =>
+        gateway.registerHandler("llm.providers", async () =>
           router.getAllProviders().map((p) => ({ type: p.type, name: p.name })),
         );
-        gateway.registerHandler("llm.models" as never, async () => {
+        gateway.registerHandler("llm.models", async () => {
           const result: Array<{ provider: string; models: readonly string[] }> = [];
           for (const p of router.getAllProviders()) {
             try {
@@ -329,7 +363,7 @@ export function buildMiscGatewaySteps(modules: InitializedModules): InitStep[] {
       }
 
       if (profileGenerator) {
-        gateway.registerHandler("profile.get" as never, async () => {
+        gateway.registerHandler("profile.get", async () => {
           const profile = profileGenerator.generateProfile();
           return { profile };
         });

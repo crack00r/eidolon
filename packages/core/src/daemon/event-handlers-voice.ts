@@ -19,7 +19,11 @@ export async function handleUserVoice(
   logger: Logger,
 ): Promise<EventHandlerResult> {
   try {
-    // Runtime-validate payload fields (UserVoicePayload shape)
+    // Runtime-validate payload exists and is an object before casting
+    if (typeof event.payload !== "object" || event.payload === null) {
+      logger.warn("loop-handler", "Voice event has missing or non-object payload", { eventId: event.id });
+      return { success: false, tokensUsed: 0, error: "Invalid voice event payload" };
+    }
     const rawPayload = event.payload as Record<string, unknown>;
     const channelId = typeof rawPayload.channelId === "string" ? rawPayload.channelId : "voice";
     const userId = typeof rawPayload.userId === "string" ? rawPayload.userId : "unknown";

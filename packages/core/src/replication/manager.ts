@@ -11,6 +11,7 @@
  * Phase 2: WAL streaming for near-realtime replication.
  */
 
+import { createHmac } from "node:crypto";
 import { hostname } from "node:os";
 import type { DatabaseManager } from "../database/manager.ts";
 import type { Logger } from "../logging/logger.ts";
@@ -39,6 +40,9 @@ import {
 
 /** Maximum age for snapshot files (2x the snapshot interval). */
 const SNAPSHOT_CLEANUP_MULTIPLIER = 2;
+
+/** HMAC algorithm used for message authentication. */
+const HMAC_ALGORITHM = "sha256";
 
 // ---------------------------------------------------------------------------
 // ReplicationManager
@@ -126,6 +130,35 @@ export class ReplicationManager {
     }
 
     this.logger.info("stop", "Replication stopped");
+  }
+
+  /**
+   * Compute an HMAC signature for the given message JSON.
+   * Returns empty string if no shared secret is configured.
+   */
+  computeHmac(json: string): string {
+    if (!this.config.sharedSecret) return "";
+    return createHmac(HMAC_ALGORITHM, this.config.sharedSecret).update(json).digest("hex");
+  }
+
+  /**
+   * Verify an HMAC signature on a raw message JSON string.
+   * Returns true if verification passes or if no shared secret is configured.
+   */
+  verifyHmac(json: string, hmac: string | undefined): boolean {
+    if (!this.config.sharedSecret) return true;
+    if (!hmac) {
+      this.logger.warn("hmac", "Message missing HMAC signature");
+      return false;
+    }
+    const expected = this.computeHmac(json);
+    // Constant-time comparison to prevent timing attacks
+    if (expected.length !== hmac.length) return false;
+    let result = 0;
+    for (let i = 0; i < expected.length; i++) {
+      result |= (expected.charCodeAt(i) ?? 0) ^ (hmac.charCodeAt(i) ?? 0);
+    }
+    return result === 0;
   }
 
   /** Handle an incoming replication message from the peer. */
@@ -220,8 +253,29 @@ export class ReplicationManager {
     this.send(createHeartbeat(this.nodeId, this.state.role, uptime));
   }
 
-  private handleHeartbeat(_msg: ReplicationMessage & { type: "heartbeat" }): void {
+  private handleHeartbeat(msg: ReplicationMessage & { type: "heartbeat" }): void {
     this.updatePeerConnected(true);
+
+    // Split-brain fencing: if both nodes believe they are primary,
+    // the node with the higher failoverCount demotes itself.
+    // On a tie, the node with the lexicographically higher nodeId demotes.
+    if (msg.role === "primary" && this.state.role === "primary") {
+      const peerNodeId = msg.nodeId;
+      const shouldDemoteSelf =
+        this.state.failoverCount > 0 ||
+        (this.state.failoverCount === 0 && this.nodeId > peerNodeId);
+
+      if (shouldDemoteSelf) {
+        this.logger.warn("split-brain", "Detected dual-primary, demoting self", {
+          myFailoverCount: this.state.failoverCount,
+          peerNodeId,
+        });
+        this.demote();
+        return;
+      }
+      // Otherwise the peer should demote itself when it receives our heartbeat.
+    }
+
     this.send(createHeartbeatAck(this.nodeId, this.state.role));
   }
 
@@ -377,6 +431,9 @@ export class ReplicationManager {
 
   private send(msg: ReplicationMessage): void {
     if (this.sendFn) {
+      // HMAC is computed by the transport layer using computeHmac()
+      // before serializing to the wire. The caller of handleMessage()
+      // must verify HMAC via verifyHmac() before dispatching.
       this.sendFn(msg);
     }
   }

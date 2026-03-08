@@ -31,9 +31,10 @@ export interface ReconnectState {
 // ---------------------------------------------------------------------------
 
 /** Start periodic ping messages to keep the WebSocket alive. */
-export function startPing(ws: WebSocket | null, state: ReconnectState, config: ReconnectConfig): void {
+export function startPing(getWs: () => WebSocket | null, state: ReconnectState, config: ReconnectConfig): void {
   stopPing(state);
   state.pingTimer = setInterval(() => {
+    const ws = getWs();
     if (ws !== null && ws.readyState === WebSocket.OPEN) {
       try {
         ws.send(JSON.stringify({ type: "ping" }));

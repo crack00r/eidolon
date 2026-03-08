@@ -96,19 +96,24 @@ export class GpuTtsProvider implements TtsFallbackProvider {
 // ---------------------------------------------------------------------------
 
 /** Detect the current platform's TTS command. */
-function detectSystemTtsCommand(): { command: string; args: string[] } | null {
+function detectSystemTtsCommand(): { command: string; args: string[]; useStdin: boolean } | null {
   const platform = typeof process !== "undefined" ? process.platform : "";
 
   if (platform === "darwin") {
-    return { command: "say", args: ["-o", "/dev/stdout", "--data-format=LEI16@22050"] };
+    // `--` separates flags from the text argument to prevent flag injection
+    return { command: "say", args: ["-o", "/dev/stdout", "--data-format=LEI16@22050", "--"], useStdin: false };
   }
 
   if (platform === "linux") {
-    return { command: "espeak-ng", args: ["--stdout"] };
+    // espeak-ng uses `-stdin` to read text from stdin, preventing flag injection
+    return { command: "espeak-ng", args: ["--stdout", "-stdin"], useStdin: true };
   }
 
   return null;
 }
+
+/** Timeout for system TTS subprocess in milliseconds. */
+const SYSTEM_TTS_TIMEOUT_MS = 30_000;
 
 export class SystemTtsProvider implements TtsFallbackProvider {
   readonly name = "system-tts";
@@ -153,13 +158,29 @@ export class SystemTtsProvider implements TtsFallbackProvider {
     }
 
     try {
-      const fullArgs = [...ttsCmd.args, text];
-      const proc = Bun.spawn([ttsCmd.command, ...fullArgs], {
+      const spawnArgs = ttsCmd.useStdin
+        ? [ttsCmd.command, ...ttsCmd.args]
+        : [ttsCmd.command, ...ttsCmd.args, text];
+      const proc = Bun.spawn(spawnArgs, {
         stdout: "pipe",
         stderr: "pipe",
+        stdin: ttsCmd.useStdin ? "pipe" : undefined,
       });
 
+      // For stdin-based commands (espeak-ng), write text via stdin
+      if (ttsCmd.useStdin && proc.stdin) {
+        proc.stdin.write(new TextEncoder().encode(text));
+        proc.stdin.end();
+      }
+
+      // Enforce a timeout to prevent runaway subprocesses
+      const timeoutId = setTimeout(() => {
+        proc.kill();
+      }, SYSTEM_TTS_TIMEOUT_MS);
+
       const exitCode = await proc.exited;
+      clearTimeout(timeoutId);
+
       if (exitCode !== 0) {
         const stderr = await new Response(proc.stderr).text();
         return Err(createError(ErrorCode.TTS_FAILED, `System TTS failed (exit ${exitCode}): ${stderr.slice(0, 200)}`));

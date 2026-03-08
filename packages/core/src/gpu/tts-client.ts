@@ -8,6 +8,14 @@ import type { EidolonError, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 import type { Logger } from "../logging/logger.ts";
 import type { GPUManager } from "./manager.ts";
+import {
+  MAX_TTS_TEXT_LENGTH,
+  MAX_VOICE_LENGTH,
+  MIN_TTS_SPEED,
+  MAX_TTS_SPEED,
+  VALID_TTS_FORMATS,
+  VOICE_PATTERN,
+} from "./pool-validation.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -25,25 +33,6 @@ export interface TtsResult {
   readonly format: string;
   readonly durationMs: number;
 }
-
-/** Maximum allowed text length for a single TTS request. */
-const MAX_TTS_TEXT_LENGTH = 10_000;
-
-/** Valid TTS speed range. */
-const MIN_TTS_SPEED = 0.25;
-const MAX_TTS_SPEED = 4.0;
-
-/** Valid TTS output formats. */
-const VALID_TTS_FORMATS: ReadonlySet<string> = new Set(["opus", "wav", "mp3"]);
-
-/** Maximum voice parameter length. */
-const MAX_VOICE_LENGTH = 64;
-
-/**
- * Allowed characters in voice parameter: alphanumeric, hyphens, underscores, dots.
- * Prevents injection of control characters or path traversal.
- */
-const VOICE_PATTERN = /^[a-zA-Z0-9_\-.]+$/;
 
 // ---------------------------------------------------------------------------
 // TTSClient

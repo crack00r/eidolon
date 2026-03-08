@@ -43,15 +43,9 @@ export class TriggerEvaluator {
     const suppressedTypes = new Set(suppressions.map((s) => s.patternType));
 
     for (const pattern of patterns) {
-      // 1. Suppression check
+      // 1. Suppression check (suppressedTypes is built from the DB query above)
       if (suppressedTypes.has(pattern.type)) {
         this.logger.debug("anticipation-trigger", `Pattern ${pattern.type} is suppressed`);
-        continue;
-      }
-
-      // Also check DB-level suppression (in case in-memory set is stale)
-      if (this.history.isSuppressed(pattern.type, now)) {
-        this.logger.debug("anticipation-trigger", `Pattern ${pattern.type} is suppressed (DB)`);
         continue;
       }
 
@@ -110,8 +104,13 @@ export function buildEntityKey(pattern: DetectedPattern): string | null {
     case "travel_prep":
       return pattern.calendarEventId ? `travel:${pattern.calendarEventId}` : null;
     case "health_nudge": {
+      // Use metadata date if available, otherwise derive UTC date from metadata.detectedAt or now
       const date =
-        typeof pattern.metadata.date === "string" ? pattern.metadata.date : new Date().toISOString().slice(0, 10);
+        typeof pattern.metadata.date === "string"
+          ? pattern.metadata.date
+          : new Date(typeof pattern.metadata.detectedAt === "number" ? pattern.metadata.detectedAt : Date.now())
+              .toISOString()
+              .slice(0, 10);
       return `health:${date}`;
     }
     case "follow_up":

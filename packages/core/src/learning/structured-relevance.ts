@@ -124,11 +124,15 @@ export function createStructuredRelevanceScorerFn(
     const result = await parser.parse(prompt, sessionOptions);
 
     if (!result.ok) {
-      logger.warn("structured-relevance", "Structured relevance scoring failed", {
+      logger.warn("structured-relevance", "Structured relevance scoring failed, returning default low score", {
         error: result.error.message,
         title,
       });
-      throw new Error(`Structured relevance scoring failed: ${result.error.message}`);
+      return {
+        score: 0,
+        reason: `Scoring failed: ${result.error.message}`,
+        matchedInterests: [],
+      };
     }
 
     return {

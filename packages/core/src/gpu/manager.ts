@@ -7,6 +7,7 @@
 
 import type { EidolonError, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
+import { z, type ZodType } from "zod";
 import type { Logger } from "../logging/logger.ts";
 import { injectTraceContext } from "../telemetry/propagation.ts";
 import type { ITracer } from "../telemetry/tracer.ts";
@@ -21,6 +22,31 @@ export interface GpuWorkerConfig {
   readonly url: string;
   readonly apiKey?: string;
   readonly timeoutMs?: number;
+  /** Allow connecting to private/internal network addresses. Defaults to true for GPU workers. */
+  readonly allowPrivateHosts?: boolean;
+}
+
+/** Hostnames that should always be blocked (cloud metadata endpoints). */
+const BLOCKED_GPU_HOSTNAMES = new Set(["metadata.google.internal", "instance-data"]);
+
+/** Validate a GPU manager URL at construction time. */
+function validateGpuManagerUrl(url: string, allowPrivate: boolean): void {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new Error(`Invalid GPU worker URL: ${url}`);
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new Error(`GPU worker URL must use http or https: ${url}`);
+  }
+  const hostname = parsed.hostname.replace(/^\[/, "").replace(/]$/, "").toLowerCase();
+  if (BLOCKED_GPU_HOSTNAMES.has(hostname)) {
+    throw new Error(`GPU worker URL rejected: ${hostname} is a blocked hostname (SSRF protection)`);
+  }
+  if (!allowPrivate && (hostname === "localhost" || /^127\./.test(hostname) || /^::1$/.test(hostname))) {
+    throw new Error(`GPU worker URL rejected: ${hostname} is a private address (SSRF protection)`);
+  }
 }
 
 export interface GpuHealth {
@@ -36,6 +62,21 @@ export interface GpuHealth {
   };
   readonly modelsLoaded: readonly string[];
 }
+
+/** Zod schema for validating GPU health check responses. */
+const GpuHealthSchema = z.object({
+  status: z.string(),
+  uptimeSeconds: z.number(),
+  gpu: z.object({
+    available: z.boolean(),
+    name: z.string().optional(),
+    vramTotalMb: z.number().optional(),
+    vramUsedMb: z.number().optional(),
+    temperatureC: z.number().optional(),
+    utilizationPct: z.number().optional(),
+  }),
+  modelsLoaded: z.array(z.string()),
+});
 
 /** Default timeout for GPU worker requests in ms. */
 const DEFAULT_TIMEOUT_MS = 30_000;
@@ -57,6 +98,7 @@ export class GPUManager {
   private available = false;
 
   constructor(config: GpuWorkerConfig, logger: Logger, tracer?: ITracer) {
+    validateGpuManagerUrl(config.url, config.allowPrivateHosts ?? true);
     this.config = config;
     this.logger = logger.child("gpu-manager");
     this.tracer = tracer ?? new NoopTracer();
@@ -77,7 +119,7 @@ export class GPUManager {
       "gpu.url": this.config.url,
     });
 
-    const result = await this.request<GpuHealth>("/health", { method: "GET" });
+    const result = await this.request<GpuHealth>("/health", { method: "GET" }, undefined, GpuHealthSchema);
 
     if (result.ok) {
       this.available = true;
@@ -164,8 +206,8 @@ export class GPUManager {
     return Ok({ audio, format: request.format ?? "opus", durationMs });
   }
 
-  /** Make an authenticated request to the worker. */
-  async request<T>(path: string, options?: RequestInit, timeoutOverrideMs?: number): Promise<Result<T, EidolonError>> {
+  /** Make an authenticated request to the worker. When a `schema` is provided, JSON responses are validated. */
+  async request<T>(path: string, options?: RequestInit, timeoutOverrideMs?: number, schema?: ZodType<T>): Promise<Result<T, EidolonError>> {
     const url = `${this.config.url}${path}`;
     const timeoutMs = timeoutOverrideMs ?? this.config.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
@@ -232,11 +274,27 @@ export class GPUManager {
         if (typeof data !== "object" || data === null) {
           return Err(createError(ErrorCode.GPU_UNAVAILABLE, "Invalid GPU response format"));
         }
+        if (schema) {
+          const parsed = schema.safeParse(data);
+          if (!parsed.success) {
+            return Err(createError(ErrorCode.GPU_UNAVAILABLE, `GPU response validation failed: ${parsed.error.message}`));
+          }
+          return Ok(parsed.data);
+        }
+        this.logger.warn("request", "Returning unvalidated GPU JSON response (no schema provided)", { path });
         return Ok(data as T);
       }
 
+      // Non-JSON response (e.g. audio): validate Content-Type and minimum size
+      if (!contentType || contentType === "application/octet-stream" || contentType.startsWith("audio/")) {
+        if (bodyBytes.value.byteLength < 1) {
+          return Err(createError(ErrorCode.GPU_UNAVAILABLE, "GPU returned empty binary response"));
+        }
+      } else {
+        return Err(createError(ErrorCode.GPU_UNAVAILABLE, `Unexpected GPU response Content-Type: ${contentType}`));
+      }
+
       // For non-JSON responses (e.g. audio bytes), return the raw ArrayBuffer
-      // Callers that expect binary should cast appropriately
       const data = bodyBytes.value.buffer.slice(
         bodyBytes.value.byteOffset,
         bodyBytes.value.byteOffset + bodyBytes.value.byteLength,

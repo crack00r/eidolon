@@ -81,7 +81,10 @@ export class ConfigWatcher {
   private scheduleReload(): void {
     if (this.debounceTimer) clearTimeout(this.debounceTimer);
     this.debounceTimer = setTimeout(() => {
-      void this.reload();
+      this.reload().catch((err: unknown) => {
+        const message = err instanceof Error ? err.message : String(err);
+        this.logger?.error("watcher", `Config reload failed unexpectedly: ${message}`, err);
+      });
     }, this.debounceMs);
   }
 

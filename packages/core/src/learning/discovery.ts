@@ -280,7 +280,7 @@ export class DiscoveryEngine {
         status: string;
       } | null;
       if (!currentRow) {
-        return Err(createError(ErrorCode.DB_QUERY_FAILED, `Discovery not found: ${id}`));
+        return Err(createError(ErrorCode.INVALID_INPUT, `Discovery not found: ${id}`));
       }
 
       const currentStatus = currentRow.status as DiscoveryStatus;

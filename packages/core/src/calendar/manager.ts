@@ -219,7 +219,9 @@ export class CalendarManager {
 
   /** Check upcoming events and publish reminder events. */
   checkReminders(): void {
-    const maxLookahead = Math.max(...(this.config.reminders.defaultMinutesBefore ?? [60]));
+    const minutesBefore = this.config.reminders.defaultMinutesBefore ?? [60];
+    if (minutesBefore.length === 0) return;
+    const maxLookahead = Math.max(...minutesBefore);
     const now = Date.now();
     const end = now + maxLookahead * 60_000;
 
@@ -254,6 +256,20 @@ export class CalendarManager {
       this.logger.warn("calendar", `Sync failed for ${providerId}: ${syncResult.error.message}`);
       return syncResult;
     }
+
+    // Persist synced events to local cache by fetching them from the provider
+    if (syncResult.value.added > 0 || syncResult.value.updated > 0) {
+      const now = Date.now();
+      const start = now - 30 * 86_400_000;
+      const end = now + 90 * 86_400_000;
+      const eventsResult = await provider.listEvents(start, end);
+      if (eventsResult.ok) {
+        for (const event of eventsResult.value) {
+          this.upsertEvent(event);
+        }
+      }
+    }
+
     this.logger.info(
       "calendar",
       `Synced ${providerId}: +${syncResult.value.added} ~${syncResult.value.updated} -${syncResult.value.deleted}`,

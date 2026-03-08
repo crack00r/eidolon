@@ -44,10 +44,50 @@ function extractIcsField(vevent: string, field: string): string | null {
   return match?.[1]?.trim() ?? null;
 }
 
-function parseIcsDate(value: string): number {
+/** Extract the TZID parameter from a DTSTART/DTEND line. */
+function extractTzid(vevent: string, field: string): string | null {
+  const regex = new RegExp(`^${field};[^:]*TZID=([^;:]+)`, "mi");
+  const match = regex.exec(vevent);
+  return match?.[1]?.trim() ?? null;
+}
+
+/**
+ * Convert a timezone-aware local time to a UTC timestamp.
+ * Uses Intl.DateTimeFormat to resolve the timezone offset.
+ */
+function localTimeToUtc(
+  year: number,
+  month: number,
+  day: number,
+  hour: number,
+  minute: number,
+  second: number,
+  tzid: string,
+): number | null {
+  try {
+    // Validate the timezone by attempting to format a date with it
+    const formatter = new Intl.DateTimeFormat("en-US", {
+      timeZone: tzid,
+      year: "numeric",
+    });
+    formatter.format(new Date());
+
+    // Construct a local date and compute the offset from the timezone
+    const isoStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}T${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:${String(second).padStart(2, "0")}`;
+    const localDate = new Date(isoStr);
+    const utcRepr = new Date(localDate.toLocaleString("en-US", { timeZone: "UTC" }));
+    const tzRepr = new Date(localDate.toLocaleString("en-US", { timeZone: tzid }));
+    const offsetMs = utcRepr.getTime() - tzRepr.getTime();
+    return localDate.getTime() + offsetMs;
+  } catch {
+    return null;
+  }
+}
+
+function parseIcsDate(value: string, tzid?: string | null): number {
   // Handle formats: YYYYMMDD, YYYYMMDDTHHmmss, YYYYMMDDTHHmmssZ
   if (value.length === 8) {
-    // YYYYMMDD
+    // YYYYMMDD -- all-day events, treat as local date
     const year = parseInt(value.substring(0, 4), 10);
     const month = parseInt(value.substring(4, 6), 10) - 1;
     const day = parseInt(value.substring(6, 8), 10);
@@ -65,6 +105,13 @@ function parseIcsDate(value: string): number {
 
   if (value.endsWith("Z")) {
     return Date.UTC(year, month, day, hour, minute, second);
+  }
+
+  // If TZID is present, convert using timezone-aware logic
+  if (tzid) {
+    const utcMs = localTimeToUtc(year, month, day, hour, minute, second, tzid);
+    if (utcMs !== null) return utcMs;
+    // Invalid timezone -- fall through to local time interpretation
   }
 
   return new Date(year, month, day, hour, minute, second).getTime();
@@ -108,12 +155,14 @@ export function parseIcsEvent(icsData: string, calendarPath: string): CalendarEv
   const dtstart = extractIcsField(vevent, "DTSTART");
   const dtend = extractIcsField(vevent, "DTEND");
   const rrule = extractIcsField(vevent, "RRULE");
+  const startTzid = extractTzid(vevent, "DTSTART");
+  const endTzid = extractTzid(vevent, "DTEND");
 
   if (!uid || !dtstart) return null;
 
   const allDay = dtstart.length === 8; // YYYYMMDD format
-  const startTime = parseIcsDate(dtstart);
-  const endTime = dtend ? parseIcsDate(dtend) : startTime + 3_600_000;
+  const startTime = parseIcsDate(dtstart, startTzid);
+  const endTime = dtend ? parseIcsDate(dtend, endTzid ?? startTzid) : startTime + 3_600_000;
 
   if (Number.isNaN(startTime) || Number.isNaN(endTime)) return null;
 

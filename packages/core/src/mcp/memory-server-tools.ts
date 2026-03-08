@@ -25,8 +25,8 @@ export const MemorySearchInputSchema = z.object({
 export const MemoryAddInputSchema = z.object({
   content: z.string().min(1).max(50000),
   type: z.enum(["fact", "preference", "decision", "episode", "skill", "relationship", "schema"]).default("fact"),
-  tags: z.array(z.string()).optional().default([]),
-  source: z.string().optional().default("mcp"),
+  tags: z.array(z.string().max(100)).max(50).optional().default([]),
+  source: z.string().max(200).optional().default("mcp"),
 });
 
 export const MemoryListInputSchema = z.object({

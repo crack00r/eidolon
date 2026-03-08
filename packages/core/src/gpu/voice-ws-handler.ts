@@ -60,6 +60,7 @@ export interface VoiceSessionConfig {
 }
 
 const DEFAULT_MAX_AUDIO_BUFFER = 1024 * 1024; // 1 MB
+const MAX_CHUNK_SIZE = 64 * 1024; // 64 KB per individual chunk
 
 // ---------------------------------------------------------------------------
 // VoiceWsHandler
@@ -143,6 +144,12 @@ export class VoiceWsHandler {
   // -------------------------------------------------------------------------
 
   private handleAudioChunk(chunk: Uint8Array): void {
+    // Reject oversized chunks to prevent memory abuse
+    if (chunk.byteLength > MAX_CHUNK_SIZE) {
+      this.sendError(`Audio chunk too large (${chunk.byteLength} bytes, max ${MAX_CHUNK_SIZE})`);
+      return;
+    }
+
     if (this.stateMachine.state !== "listening") {
       // Attempt to start listening if idle
       if (this.stateMachine.state === "idle") {
@@ -158,7 +165,9 @@ export class VoiceWsHandler {
 
     // Auto-flush if buffer is too large
     if (this.audioBufferSize >= this.config.maxAudioBufferBytes) {
-      void this.flushAudioForStt();
+      this.flushAudioForStt().catch((err: unknown) => {
+        this.logger.error("flush-error", "Unhandled error during auto-flush STT", err);
+      });
     }
   }
 
@@ -240,7 +249,9 @@ export class VoiceWsHandler {
         break;
 
       case "stop":
-        void this.flushAudioForStt();
+        this.flushAudioForStt().catch((err: unknown) => {
+          this.logger.error("flush-error", "Unhandled error during stop-flush STT", err);
+        });
         break;
 
       case "interrupt":

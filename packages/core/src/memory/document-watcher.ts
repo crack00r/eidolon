@@ -149,7 +149,10 @@ export class DocumentWatcher {
       fullPath,
       setTimeout(() => {
         this.debounceTimers.delete(fullPath);
-        void this.processFileChange(fullPath, baseDir);
+        this.processFileChange(fullPath, baseDir).catch((err: unknown) => {
+          const message = err instanceof Error ? err.message : String(err);
+          this.logger.error("file-changed", `Failed to process file change ${fullPath}: ${message}`, err);
+        });
       }, this.debounceMs),
     );
   }

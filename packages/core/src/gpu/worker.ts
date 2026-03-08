@@ -11,6 +11,7 @@
 
 import type { CircuitBreakerConfig, CircuitState, EidolonError, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
+import type { ZodType } from "zod";
 import { CircuitBreaker } from "../health/circuit-breaker.ts";
 import type { Logger } from "../logging/logger.ts";
 import type { GpuHealth } from "./manager.ts";
@@ -28,6 +29,31 @@ export interface GPUWorkerConfig {
   readonly timeoutMs?: number;
   readonly priority?: number;
   readonly maxConcurrent?: number;
+  /** Allow connecting to private/internal network addresses. Defaults to true for GPU workers. */
+  readonly allowPrivateHosts?: boolean;
+}
+
+/** Hostnames that should always be blocked (cloud metadata endpoints). */
+const BLOCKED_HOSTNAMES = new Set(["metadata.google.internal", "instance-data"]);
+
+/** Validate a GPU worker URL at construction time. */
+function validateGpuWorkerUrl(url: string, allowPrivate: boolean): void {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new Error(`Invalid GPU worker URL: ${url}`);
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new Error(`GPU worker URL must use http or https: ${url}`);
+  }
+  const hostname = parsed.hostname.replace(/^\[/, "").replace(/]$/, "").toLowerCase();
+  if (BLOCKED_HOSTNAMES.has(hostname)) {
+    throw new Error(`GPU worker URL rejected: ${hostname} is a blocked hostname (SSRF protection)`);
+  }
+  if (!allowPrivate && (hostname === "localhost" || /^127\./.test(hostname) || /^::1$/.test(hostname))) {
+    throw new Error(`GPU worker URL rejected: ${hostname} is a private address (SSRF protection)`);
+  }
 }
 
 /** Read-only snapshot of a worker's current state. */
@@ -68,6 +94,7 @@ export class GPUWorker {
   private readonly latencySamples: number[] = [];
 
   constructor(config: GPUWorkerConfig, logger: Logger) {
+    validateGpuWorkerUrl(config.url, config.allowPrivateHosts ?? true);
     this.config = config;
     this.logger = logger.child(`gpu-worker:${config.name}`);
 
@@ -142,11 +169,13 @@ export class GPUWorker {
   /**
    * Execute an authenticated request through the circuit breaker.
    * Tracks active requests and latency for load balancing.
+   * When a `schema` is provided, JSON responses are validated against it.
    */
   async executeRequest<T>(
     path: string,
     options?: RequestInit,
     timeoutOverrideMs?: number,
+    schema?: ZodType<T>,
   ): Promise<Result<T, EidolonError>> {
     if (!this.hasCapacity) {
       return Err(
@@ -162,7 +191,7 @@ export class GPUWorker {
 
     try {
       const cbResult = await this.circuitBreaker.execute(async () => {
-        return this.rawRequest<T>(path, options, timeoutOverrideMs);
+        return this.rawRequest<T>(path, options, timeoutOverrideMs, schema);
       });
 
       if (!cbResult.ok) {
@@ -191,6 +220,7 @@ export class GPUWorker {
     path: string,
     options?: RequestInit,
     timeoutOverrideMs?: number,
+    schema?: ZodType<T>,
   ): Promise<Result<T, EidolonError>> {
     const url = `${this.config.url}${path}`;
     const timeoutMs = timeoutOverrideMs ?? this.config.timeoutMs ?? DEFAULT_TIMEOUT_MS;
@@ -235,7 +265,24 @@ export class GPUWorker {
         if (typeof data !== "object" || data === null) {
           return Err(createError(ErrorCode.GPU_UNAVAILABLE, "Invalid GPU response format"));
         }
+        if (schema) {
+          const parsed = schema.safeParse(data);
+          if (!parsed.success) {
+            return Err(createError(ErrorCode.GPU_UNAVAILABLE, `GPU response validation failed: ${parsed.error.message}`));
+          }
+          return Ok(parsed.data);
+        }
+        this.logger.warn("rawRequest", "Returning unvalidated GPU JSON response (no schema provided)", { path });
         return Ok(data as T);
+      }
+
+      // Non-JSON response (e.g. audio): validate Content-Type and minimum size
+      if (!contentType || contentType === "application/octet-stream" || contentType.startsWith("audio/")) {
+        if (bodyBytes.value.byteLength < 1) {
+          return Err(createError(ErrorCode.GPU_UNAVAILABLE, "GPU returned empty binary response"));
+        }
+      } else {
+        return Err(createError(ErrorCode.GPU_UNAVAILABLE, `Unexpected GPU response Content-Type: ${contentType}`));
       }
 
       const data = bodyBytes.value.buffer.slice(

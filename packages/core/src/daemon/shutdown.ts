@@ -6,6 +6,7 @@
  */
 
 import type { Logger } from "../logging/logger.ts";
+import { flushWalCheckpoints, removePidFile } from "./lifecycle.ts";
 import { teardownModules } from "./teardown.ts";
 import type { InitializedModules } from "./types.ts";
 
@@ -133,7 +134,7 @@ export async function performShutdown(
     logger?.info("daemon", "Step 4: MetricsRegistry not available, skipping");
   }
 
-  // 5. Publish shutdown event for any remaining listeners (best-effort).
+  // 5. Publish shutdown event -- persisted for startup replay (best-effort).
   if (modules.eventBus) {
     try {
       modules.eventBus.publish(
@@ -161,6 +162,19 @@ export async function performShutdown(
   ]).catch((err: unknown) => {
     const message = err instanceof Error ? err.message : String(err);
     logger?.error("daemon", `Shutdown timeout: ${message} -- forcing exit`);
-    process.exit(1);
+
+    // Best-effort WAL flush and PID file removal before forced exit
+    try {
+      flushWalCheckpoints(modules.dbManager, logger);
+    } catch {
+      // Ignore -- we are about to force-exit anyway
+    }
+    try {
+      removePidFile(logger);
+    } catch {
+      // Ignore -- we are about to force-exit anyway
+    }
+
+    process.exitCode = 1;
   });
 }

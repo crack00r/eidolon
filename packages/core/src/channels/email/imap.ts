@@ -67,6 +67,14 @@ export interface ImapConfig {
 // IMAP response parsing helpers
 // ---------------------------------------------------------------------------
 
+/** Safe IMAP folder name pattern: alphanumeric, dots, hyphens, slashes, underscores. */
+const SAFE_FOLDER_PATTERN = /^[a-zA-Z0-9._\-/]+$/;
+
+/** Validate that an IMAP folder name is safe for use in commands. */
+function validateFolderName(folder: string): boolean {
+  return SAFE_FOLDER_PATTERN.test(folder) && folder.length <= 200 && !folder.includes("..");
+}
+
 /** Extract the text between the first `(` and its matching `)` in an IMAP line. */
 function _extractParenthesised(line: string): string | undefined {
   const start = line.indexOf("(");
@@ -139,6 +147,9 @@ function extractBodyText(raw: string): { text?: string; html?: string } {
  * This is deliberately simple. For production email at scale, a full
  * IMAP library should replace this implementation.
  */
+/** Maximum IMAP buffer size (10 MB). Disconnect if exceeded. */
+const MAX_BUFFER_SIZE = 10 * 1024 * 1024;
+
 export class BunImapClient implements IImapClient {
   private readonly config: ImapConfig;
   private socket: ReturnType<typeof Bun.connect> extends Promise<infer T> ? T : never;
@@ -170,6 +181,18 @@ export class BunImapClient implements IImapClient {
           data: (_socket, data) => {
             const text = new TextDecoder().decode(data);
             this.buffer += text;
+
+            // Guard against unbounded buffer accumulation
+            if (this.buffer.length > MAX_BUFFER_SIZE) {
+              this.buffer = "";
+              this.connected = false;
+              if (this.pendingResolve) {
+                this.pendingResolve("* BAD Buffer overflow: exceeded 10MB limit");
+                this.pendingResolve = null;
+              }
+              try { _socket.end(); } catch { /* best-effort */ }
+              return;
+            }
 
             // Check for server greeting
             if (onGreeting && this.buffer.includes("* OK")) {
@@ -215,7 +238,16 @@ export class BunImapClient implements IImapClient {
         return Err(createError("CHANNEL_AUTH_FAILED" as EidolonError["code"], `IMAP LOGIN failed: ${loginResult}`));
       }
 
-      // SELECT folder
+      // SELECT folder (validate folder name to prevent IMAP command injection)
+      if (!validateFolderName(this.config.folder)) {
+        socket.end();
+        return Err(
+          createError(
+            "CHANNEL_AUTH_FAILED" as EidolonError["code"],
+            `Unsafe IMAP folder name: ${this.config.folder}. Only alphanumeric, dots, hyphens, underscores, and slashes are allowed.`,
+          ),
+        );
+      }
       const selectResult = await this.sendCommand(`SELECT "${this.escapeImapStr(this.config.folder)}"`);
       if (!selectResult.includes(" OK")) {
         socket.end();
@@ -330,17 +362,22 @@ export class BunImapClient implements IImapClient {
     this.buffer = "";
 
     return new Promise<string>((resolve) => {
-      this.pendingResolve = resolve;
-      const line = `${tag} ${command}\r\n`;
-      this.socket.write(new TextEncoder().encode(line));
-
       // Timeout after 30 seconds
-      setTimeout(() => {
-        if (this.pendingResolve === resolve) {
+      const timer = setTimeout(() => {
+        if (this.pendingResolve === wrappedResolve) {
           this.pendingResolve = null;
           resolve(`${tag} BAD Timeout`);
         }
       }, 30_000);
+
+      const wrappedResolve = (data: string): void => {
+        clearTimeout(timer);
+        resolve(data);
+      };
+
+      this.pendingResolve = wrappedResolve;
+      const line = `${tag} ${command}\r\n`;
+      this.socket.write(new TextEncoder().encode(line));
     });
   }
 

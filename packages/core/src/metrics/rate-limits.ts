@@ -175,8 +175,10 @@ export class RateLimitTracker {
         .get(accountName, hourBucket) as { tokens_used: number } | null;
 
       tokensUsedCurrentHour = row?.tokens_used ?? 0;
-    } catch {
-      // If the query fails, default to 0
+    } catch (err: unknown) {
+      this.logger.warn("getAccountStatus", `DB query failed for account ${accountName}, defaulting to 0`, {
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
 
     const max = this.maxTokensPerHour.get(accountName) ?? 0;
@@ -217,8 +219,10 @@ export class RateLimitTracker {
       for (const row of rows) {
         accountNames.add(row.account_name);
       }
-    } catch {
-      // If query fails, continue with in-memory state
+    } catch (err: unknown) {
+      this.logger.warn("getAllAccountStatuses", "DB query failed, continuing with in-memory state only", {
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
 
     // Also include accounts from in-memory state
@@ -253,8 +257,10 @@ export class RateLimitTracker {
         hour: row.hour_bucket,
         tokens: row.tokens_used,
       }));
-    } catch {
-      // Intentional: DB query failure returns empty history rather than crashing
+    } catch (err: unknown) {
+      this.logger.warn("getHourlyUsage", `DB query failed for account ${accountName}, returning empty history`, {
+        error: err instanceof Error ? err.message : String(err),
+      });
       return [];
     }
   }

@@ -62,7 +62,7 @@ function validateBackupPath(filePath: string, backupRoot: string): Result<string
   if (!canonical.startsWith(`${canonicalRoot}/`) && canonical !== canonicalRoot) {
     return Err(
       createError(
-        ErrorCode.DB_QUERY_FAILED,
+        ErrorCode.INVALID_INPUT,
         `Backup path escapes allowed directory: ${canonical} is not under ${canonicalRoot}`,
       ),
     );
@@ -71,7 +71,7 @@ function validateBackupPath(filePath: string, backupRoot: string): Result<string
   // Reject paths with SQL injection characters
   if (FORBIDDEN_PATH_CHARS.test(canonical)) {
     return Err(
-      createError(ErrorCode.DB_QUERY_FAILED, "Backup path contains forbidden characters (potential SQL injection)"),
+      createError(ErrorCode.INVALID_INPUT, "Backup path contains forbidden characters (potential SQL injection)"),
     );
   }
 
@@ -252,7 +252,7 @@ export class BackupManager {
   pruneOldBackups(keepDays: number): Result<number, EidolonError> {
     // Validate keepDays to prevent unexpected behavior with negative or non-finite values
     if (!Number.isFinite(keepDays) || keepDays < MIN_KEEP_DAYS) {
-      return Err(createError(ErrorCode.DB_QUERY_FAILED, "Invalid keepDays value: must be a non-negative number"));
+      return Err(createError(ErrorCode.INVALID_INPUT, "Invalid keepDays value: must be a non-negative number"));
     }
 
     try {

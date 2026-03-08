@@ -28,12 +28,14 @@ import { ConditionConfigSchema } from "../types.ts";
 export function evaluateCondition(expression: string, context: WorkflowContext): boolean {
   const trimmed = expression.trim();
 
-  // Try compound expressions with && and ||
-  if (trimmed.includes(" && ")) {
-    return trimmed.split(" && ").every((part) => evaluateCondition(part.trim(), context));
-  }
+  // Try compound expressions: split on || first (lower precedence),
+  // then && (higher precedence) -- this gives standard operator precedence
+  // since the first split binds loosest.
   if (trimmed.includes(" || ")) {
     return trimmed.split(" || ").some((part) => evaluateCondition(part.trim(), context));
+  }
+  if (trimmed.includes(" && ")) {
+    return trimmed.split(" && ").every((part) => evaluateCondition(part.trim(), context));
   }
 
   // Parse single comparison: find the operator

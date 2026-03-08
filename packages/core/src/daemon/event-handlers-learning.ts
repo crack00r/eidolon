@@ -34,8 +34,12 @@ export async function handleResearchStarted(
     }
 
     // Parse sources from payload (string array or default)
+    const ALLOWED_SOURCES = new Set(["web", "academic", "github", "hackernews", "reddit"]);
     const rawSources = Array.isArray(rawPayload.sources) ? rawPayload.sources : ["web"];
-    const sources = rawSources.filter((s): s is string => typeof s === "string");
+    const sources = rawSources.filter(
+      (s): s is "web" | "academic" | "github" | "hackernews" | "reddit" =>
+        typeof s === "string" && ALLOWED_SOURCES.has(s),
+    );
 
     const maxSources =
       typeof rawPayload.maxSources === "number" && rawPayload.maxSources > 0 ? rawPayload.maxSources : 10;
@@ -51,7 +55,7 @@ export async function handleResearchStarted(
     // Run the research
     const result = await researchEngine.research({
       query,
-      sources: sources as ReadonlyArray<"web" | "academic" | "github" | "hackernews" | "reddit">,
+      sources,
       maxSources,
       deliverTo,
     });

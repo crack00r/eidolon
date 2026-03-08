@@ -253,9 +253,15 @@ export class EmailChannel implements Channel {
 
   private startPolling(): void {
     if (this.pollTimer) return;
-    void this.pollForMessages();
+    this.pollForMessages().catch((err: unknown) => {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.error("email", `Poll failed unexpectedly: ${message}`, err);
+    });
     this.pollTimer = setInterval(() => {
-      void this.pollForMessages();
+      this.pollForMessages().catch((err: unknown) => {
+        const message = err instanceof Error ? err.message : String(err);
+        this.logger.error("email", `Poll failed unexpectedly: ${message}`, err);
+      });
     }, this.config.imap.pollIntervalMs);
   }
 

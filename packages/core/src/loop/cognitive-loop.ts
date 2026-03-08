@@ -296,13 +296,15 @@ export class CognitiveLoop {
     if (this.handler) {
       try {
         const result = await this.handler(event, priority);
-        tokensUsed = result.tokensUsed || this.defaultTokenEstimate;
+        tokensUsed = result.tokensUsed ?? this.defaultTokenEstimate;
         if (!result.success) {
           handlerSucceeded = false;
+          tokensUsed = 0;
           this.logger.warn("loop", `Handler failed for ${event.type}: ${result.error}`);
         }
       } catch (err: unknown) {
         handlerSucceeded = false;
+        tokensUsed = 0;
         const errorMessage = err instanceof Error ? err.message : String(err);
         this.logger.error("loop", `Handler threw for ${event.type}: ${errorMessage}`);
       }
@@ -313,6 +315,8 @@ export class CognitiveLoop {
       this.eventBus.markProcessed(event.id);
     } else {
       this.eventBus.defer(event.id);
+      // Prevent tight retry loop: delay before continuing to the next cycle
+      await this.sleep(ERROR_RETRY_DELAY_MS);
     }
 
     // 4. REFLECT

@@ -8,6 +8,7 @@
 
 import { z } from "zod";
 import type { GatewayServer } from "../gateway/server.ts";
+import { RpcValidationError } from "../gateway/rpc-schemas.ts";
 import type { Logger } from "../logging/logger.ts";
 import type { EventBus } from "../loop/event-bus.ts";
 import type { FeedbackStore } from "./store.ts";
@@ -53,12 +54,12 @@ export function registerFeedbackHandlers(deps: {
     const parsed = FeedbackSubmitParamsSchema.safeParse(params);
     if (!parsed.success) {
       const issues = parsed.error.issues.map((i: z.ZodIssue) => i.message).join(", ");
-      throw new Error(`Invalid feedback.submit params: ${issues}`);
+      throw new RpcValidationError(`Invalid feedback.submit params: ${issues}`);
     }
 
     const result = feedbackStore.submit(parsed.data);
     if (!result.ok) {
-      throw new Error(result.error.message);
+      throw new RpcValidationError(result.error.message);
     }
 
     // Emit event for downstream processing (confidence adjustment, dashboards)
@@ -88,12 +89,12 @@ export function registerFeedbackHandlers(deps: {
     const parsed = FeedbackListParamsSchema.safeParse(params);
     if (!parsed.success) {
       const issues = parsed.error.issues.map((i: z.ZodIssue) => i.message).join(", ");
-      throw new Error(`Invalid feedback.list params: ${issues}`);
+      throw new RpcValidationError(`Invalid feedback.list params: ${issues}`);
     }
 
     const result = feedbackStore.list(parsed.data);
     if (!result.ok) {
-      throw new Error(result.error.message);
+      throw new RpcValidationError(result.error.message);
     }
 
     return { entries: result.value };

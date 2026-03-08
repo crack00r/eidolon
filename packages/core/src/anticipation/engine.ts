@@ -14,8 +14,7 @@ import type { KGEntityStore } from "../memory/knowledge-graph/entities.ts";
 import type { KGRelationStore } from "../memory/knowledge-graph/relations.ts";
 import type { UserProfileGenerator } from "../memory/profile.ts";
 import type { MemorySearch } from "../memory/search.ts";
-import type { ComposedSuggestion } from "./composer.ts";
-import { ActionComposer } from "./composer.ts";
+import { type ComposedSuggestion, ActionComposer } from "./composer.ts";
 import {
   BirthdayDetector,
   FollowUpDetector,
@@ -117,15 +116,22 @@ export class AnticipationEngine {
       // 4. Enrich context
       const enriched = await this.enricher.enrichAll(triggered);
 
-      // 5. Compose notifications
-      const suggestions = await this.composer.composeAll(enriched);
-
-      // 6. Record and publish
-      for (let i = 0; i < suggestions.length; i++) {
-        const suggestion = suggestions[i];
-        if (!suggestion) continue;
+      // 5. Compose notifications (pair each enriched context with its trigger)
+      const composed: ComposedSuggestion[] = [];
+      for (let i = 0; i < enriched.length; i++) {
+        const ctx = enriched[i];
+        if (!ctx) continue;
         const pattern = triggered[i];
         if (!pattern) continue;
+
+        let suggestion: ComposedSuggestion;
+        try {
+          suggestion = await this.composer.compose(ctx);
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err);
+          this.logger.warn("anticipation", `Failed to compose ${pattern.type}: ${msg}`);
+          continue;
+        }
 
         const entityKey = buildEntityKey(pattern);
 
@@ -158,10 +164,11 @@ export class AnticipationEngine {
           priority: suggestion.priority === "critical" ? "high" : "normal",
           source: "anticipation",
         });
+        composed.push(suggestion);
       }
 
-      this.logger.info("anticipation", `Published ${suggestions.length} suggestion(s)`);
-      return suggestions;
+      this.logger.info("anticipation", `Published ${composed.length} suggestion(s)`);
+      return composed;
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       this.logger.error("anticipation", `Anticipation check failed: ${msg}`);

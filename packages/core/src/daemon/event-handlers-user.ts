@@ -23,6 +23,12 @@ export async function handleUserMessage(
 ): Promise<EventHandlerResult> {
   try {
     // Runtime-validate payload fields (event.payload is typed as unknown)
+    if (typeof event.payload !== "object" || event.payload === null) {
+      logger.warn("loop-handler", "Invalid user:message payload: expected object", {
+        eventId: event.id,
+      });
+      return { success: false, tokensUsed: 0, error: "Invalid payload: expected object" };
+    }
     const rawPayload = event.payload as Record<string, unknown>;
     const channelId = typeof rawPayload.channelId === "string" ? rawPayload.channelId : undefined;
     const userId = typeof rawPayload.userId === "string" ? rawPayload.userId : undefined;
@@ -159,6 +165,13 @@ export async function handleUserMessage(
             }
             break;
           }
+          case "tool_result": {
+            // Tool results may contain text that should be part of the response
+            if (typeof streamEvent.toolResult === "string" && streamEvent.toolResult.length > 0) {
+              responseChunks.push(streamEvent.toolResult);
+            }
+            break;
+          }
           case "error": {
             logger.error("loop-handler", `Claude stream error: ${streamEvent.error ?? "unknown"}`, undefined, {
               sessionId,
@@ -178,6 +191,17 @@ export async function handleUserMessage(
 
       if (responseText.length === 0) {
         logger.warn("loop-handler", "Claude returned empty response", { sessionId });
+        // Send an error message back to the channel so the UI clears the "Thinking..." state
+        if (messageRouter) {
+          await messageRouter.routeOutbound({
+            id: `resp-${randomUUID()}`,
+            channelId,
+            text: "I wasn't able to generate a response. Please try again.",
+            format: "text",
+            replyToId: event.id,
+            userId,
+          });
+        }
         return { success: true, tokensUsed: 0 };
       }
 
@@ -188,6 +212,7 @@ export async function handleUserMessage(
         text: responseText,
         format: "markdown",
         replyToId: event.id,
+        userId,
       });
 
       if (!outboundResult.ok) {
@@ -247,6 +272,22 @@ export async function handleUserMessage(
     } catch (claudeErr: unknown) {
       const errMsg = claudeErr instanceof Error ? claudeErr.message : String(claudeErr);
       logger.error("loop-handler", `Message processing failed: ${errMsg}`);
+      // Send an error message back to the channel so the UI clears the "Thinking..." state
+      if (messageRouter) {
+        try {
+          const userFacingError = sanitizeErrorMessage(errMsg);
+          await messageRouter.routeOutbound({
+            id: `resp-${randomUUID()}`,
+            channelId,
+            text: `Sorry, I encountered an error: ${userFacingError}. Please try again.`,
+            format: "text",
+            replyToId: event.id,
+            userId,
+          });
+        } catch {
+          // Best-effort -- don't mask the original error
+        }
+      }
       return { success: false, tokensUsed: 0, error: errMsg };
     } finally {
       // 7. Always clean up workspace, even on error
@@ -257,4 +298,35 @@ export async function handleUserMessage(
     logger.error("loop-handler", `user:message handler failed: ${errMsg}`);
     return { success: false, tokensUsed: 0, error: errMsg };
   }
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/** Maximum length of the sanitized error shown to the user. */
+const MAX_SANITIZED_LENGTH = 200;
+
+/**
+ * Strip internal details (file paths, tokens, stack traces) from an error
+ * message before sending it to the user. Only the high-level description
+ * is preserved.
+ */
+function sanitizeErrorMessage(raw: string): string {
+  let msg = raw
+    // Remove Unix-style absolute paths
+    .replace(/\/[^\s:]+\.[a-z]+/gi, "[path]")
+    // Remove Windows-style absolute paths
+    .replace(/[A-Z]:\\[^\s:]+\.[a-z]+/gi, "[path]")
+    // Remove stack trace lines
+    .replace(/\n\s+at\s+.*/g, "")
+    // Remove anything that looks like a token/key (32+ hex or base64 chars)
+    .replace(/[A-Za-z0-9+/=_-]{32,}/g, "[redacted]")
+    .trim();
+
+  if (msg.length > MAX_SANITIZED_LENGTH) {
+    msg = `${msg.slice(0, MAX_SANITIZED_LENGTH)}...`;
+  }
+
+  return msg || "Unknown error";
 }

@@ -17,6 +17,7 @@ import {
   MAX_PAYLOAD_SIZE,
   MAX_REPLAY_BATCH_SIZE,
   MAX_RETRIES,
+  MAX_RETRIES_BY_TYPE,
   rowToEvent,
 } from "./event-utils.ts";
 
@@ -82,7 +83,11 @@ export class EventBus {
       );
     }
 
-    // ERR-005: Persist with retry on transient SQLite errors (e.g. SQLITE_BUSY)
+    // ERR-005: Persist with retry on transient SQLite errors (e.g. SQLITE_BUSY).
+    // Note: the SQLite connection already sets PRAGMA busy_timeout (see connection.ts),
+    // which provides kernel-level backoff for SQLITE_BUSY. The retry loop here is an
+    // additional safety net; no explicit delay is needed between attempts because
+    // busy_timeout already blocks internally before returning SQLITE_BUSY.
     const MAX_PERSIST_RETRIES = 3;
     let lastCause: unknown;
     for (let attempt = 0; attempt < MAX_PERSIST_RETRIES; attempt++) {
@@ -102,6 +107,11 @@ export class EventBus {
           break;
         }
         this.logger.warn("event-bus", `Publish retry ${attempt + 1}/${MAX_PERSIST_RETRIES} for ${type}: ${msg}`);
+        // Sync delay between retries to reduce contention pressure.
+        // Uses Atomics.wait on a dummy buffer for a true sleep without spinning.
+        // Supplements the kernel-level busy_timeout set in connection.ts.
+        const delay = new Int32Array(new SharedArrayBuffer(4));
+        Atomics.wait(delay, 0, 0, 50);
       }
     }
     if (lastCause !== undefined) {
@@ -225,16 +235,26 @@ export class EventBus {
       this.db.query("UPDATE events SET retry_count = retry_count + 1, claimed_at = NULL WHERE id = ?").run(eventId);
 
       // Check if max retries exceeded -> dead letter
-      const row = this.db.query("SELECT retry_count FROM events WHERE id = ?").get(eventId) as {
+      // Use per-type retry limits when available, otherwise fall back to global MAX_RETRIES
+      const row = this.db.query("SELECT retry_count, type FROM events WHERE id = ?").get(eventId) as {
         retry_count: number;
+        type: string;
       } | null;
 
-      if (row && row.retry_count >= MAX_RETRIES) {
-        this.logger.warn("event-bus", `Event ${eventId} exceeded max retries (${MAX_RETRIES}), moving to dead letter`, {
-          retryCount: row.retry_count,
-        });
-        this.db.query("UPDATE events SET processed_at = ? WHERE id = ?").run(Date.now(), eventId);
-        return Ok(undefined);
+      if (row) {
+        const maxRetries = MAX_RETRIES_BY_TYPE[row.type] ?? MAX_RETRIES;
+        if (row.retry_count >= maxRetries) {
+          this.logger.warn(
+            "event-bus",
+            `Event ${eventId} (${row.type}) exceeded max retries (${maxRetries}), moving to dead letter`,
+            {
+              retryCount: row.retry_count,
+              eventType: row.type,
+            },
+          );
+          this.db.query("UPDATE events SET processed_at = ? WHERE id = ?").run(Date.now(), eventId);
+          return Ok(undefined);
+        }
       }
 
       this.logger.debug("event-bus", `Deferred event: ${eventId}`);
@@ -257,9 +277,9 @@ export class EventBus {
   }
 
   /** Replay all unprocessed events (for crash recovery).
-   *  After notifying subscribers, each replayed event is marked as processed
-   *  to prevent infinite replay on restart. */
-  replayUnprocessed(): Result<BusEvent[], EidolonError> {
+   *  Awaits async handler completion before marking each event as processed.
+   *  If a handler rejects, the event is deferred instead. */
+  async replayUnprocessed(): Promise<Result<BusEvent[], EidolonError>> {
     try {
       const rows = this.db
         .query(
@@ -287,15 +307,24 @@ export class EventBus {
       }
 
       for (const event of events) {
-        this.notifySubscribers(event);
-        // ERR-005: Mark each replayed event as processed; log and continue on failure
-        const markResult = this.markProcessed(event.id);
-        if (!markResult.ok) {
+        try {
+          await this.notifySubscribersAsync(event);
+          // ERR-005: Mark each replayed event as processed only after handlers complete
+          const markResult = this.markProcessed(event.id);
+          if (!markResult.ok) {
+            this.logger.error(
+              "event-bus",
+              `Failed to mark replayed event ${event.id} as processed: ${markResult.error.message}`,
+              { eventId: event.id, type: event.type },
+            );
+          }
+        } catch (handlerErr) {
           this.logger.error(
             "event-bus",
-            `Failed to mark replayed event ${event.id} as processed: ${markResult.error.message}`,
-            { eventId: event.id, type: event.type },
+            `Handler threw during replay for event ${event.id} (${event.type}), deferring`,
+            handlerErr,
           );
+          this.defer(event.id);
         }
       }
 
@@ -312,7 +341,7 @@ export class EventBus {
    */
   drain(): Result<BusEvent[], EidolonError> {
     try {
-      const claimToken = Date.now();
+      const claimToken = randomUUID();
       let rows: EventRow[] = [];
 
       const drainFn = this.db.transaction(() => {
@@ -372,6 +401,20 @@ export class EventBus {
     }
   }
 
+  /**
+   * Invoke a single handler safely and return a Promise that settles
+   * when the handler completes (including async handlers).
+   * Used by replayUnprocessed to await completion before marking processed.
+   */
+  private async safeInvokeAsync(handler: EventHandler, event: BusEvent, label: string): Promise<void> {
+    try {
+      await handler(event);
+    } catch (err) {
+      this.logger.error("event-bus", `${label} error for ${event.type}`, err);
+      throw err; // Re-throw so replayUnprocessed can defer instead of marking processed
+    }
+  }
+
   /** Notify in-memory subscribers (type-specific + wildcard). */
   private notifySubscribers(event: BusEvent): void {
     const typeHandlers = this.subscribers.get(event.type);
@@ -387,5 +430,29 @@ export class EventBus {
         this.safeInvoke(handler, event, "Wildcard handler");
       }
     }
+  }
+
+  /**
+   * Notify in-memory subscribers and await all handler completions.
+   * Used by replayUnprocessed to ensure handlers finish before marking processed.
+   */
+  private async notifySubscribersAsync(event: BusEvent): Promise<void> {
+    const promises: Promise<void>[] = [];
+
+    const typeHandlers = this.subscribers.get(event.type);
+    if (typeHandlers) {
+      for (const handler of typeHandlers) {
+        promises.push(this.safeInvokeAsync(handler, event, "Handler"));
+      }
+    }
+
+    const wildcardHandlers = this.subscribers.get("*");
+    if (wildcardHandlers) {
+      for (const handler of wildcardHandlers) {
+        promises.push(this.safeInvokeAsync(handler, event, "Wildcard handler"));
+      }
+    }
+
+    await Promise.all(promises);
   }
 }

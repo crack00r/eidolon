@@ -11,6 +11,7 @@
 import type { Database } from "bun:sqlite";
 import { createHash } from "node:crypto";
 import {
+  appendFileSync,
   chmodSync,
   existsSync,
   mkdirSync,
@@ -21,7 +22,7 @@ import {
   unlinkSync,
   writeFileSync,
 } from "node:fs";
-import { join } from "node:path";
+import { join, resolve, sep } from "node:path";
 import type { EidolonError, Result } from "@eidolon/protocol";
 import {
   AUDIT_DB_FILENAME,
@@ -43,6 +44,28 @@ export const REPLICATED_DB_FILES = [MEMORY_DB_FILENAME, OPERATIONAL_DB_FILENAME,
 
 /** Restrictive file permissions for snapshot files (owner read/write only). */
 const SNAPSHOT_FILE_PERMISSIONS = 0o600;
+
+/**
+ * Characters forbidden in snapshot paths to prevent SQL injection via VACUUM INTO.
+ * Matches the pattern used in backup/manager.ts.
+ */
+const FORBIDDEN_PATH_CHARS = /['\0\\;]/;
+
+/**
+ * Validate that a resolved path stays within the expected directory.
+ * Prevents path traversal attacks from peer-supplied file names.
+ */
+function validateSnapshotPath(fileName: string, baseDir: string): Result<string, EidolonError> {
+  const resolved = resolve(baseDir, fileName);
+  const canonicalBase = resolve(baseDir);
+  if (!resolved.startsWith(canonicalBase + sep)) {
+    return Err(createError(ErrorCode.DB_QUERY_FAILED, `Snapshot path traversal rejected: ${fileName}`));
+  }
+  if (FORBIDDEN_PATH_CHARS.test(resolved)) {
+    return Err(createError(ErrorCode.DB_QUERY_FAILED, `Snapshot path contains forbidden characters: ${fileName}`));
+  }
+  return Ok(resolved);
+}
 
 // ---------------------------------------------------------------------------
 // Snapshot Creation (Primary)
@@ -92,14 +115,12 @@ export function createSnapshot(
     ];
 
     for (const { name, fileName, db } of databases) {
-      const snapshotPath = join(snapshotDir, `${timestamp}_${fileName}`);
+      const pathResult = validateSnapshotPath(`${timestamp}_${fileName}`, snapshotDir);
+      if (!pathResult.ok) return Err(pathResult.error);
+      const snapshotPath = pathResult.value;
 
-      // Validate path against injection
-      if (snapshotPath.includes("'") || snapshotPath.includes("\0")) {
-        return Err(createError(ErrorCode.DB_QUERY_FAILED, `Invalid snapshot path: ${snapshotPath}`));
-      }
-
-      // Use VACUUM INTO for a consistent point-in-time copy
+      // VACUUM INTO requires a literal path in SQL. validateSnapshotPath()
+      // rejects ' \ ; NUL via FORBIDDEN_PATH_CHARS, making injection impossible.
       db.exec(`VACUUM INTO '${snapshotPath}'`);
 
       // Set restrictive permissions
@@ -172,10 +193,20 @@ export interface SnapshotReceiver {
   readonly inProgress: boolean;
 }
 
-/** Create a snapshot receiver that writes chunks to the given directory. */
+/** Tracking state for each file being received. */
+interface FileReceiveState {
+  readonly tmpPath: string;
+  readonly totalChunks: number;
+  receivedCount: number;
+  readonly received: Set<number>;
+  /** Buffered chunks keyed by index -- written in order during finalize. */
+  readonly chunks: Map<number, Buffer>;
+}
+
+/** Create a snapshot receiver that writes chunks directly to disk. */
 export function createSnapshotReceiver(snapshotDir: string, logger: Logger): SnapshotReceiver {
   let receiving = false;
-  const fileBuffers: Map<string, Buffer[]> = new Map();
+  const fileStates: Map<string, FileReceiveState> = new Map();
 
   if (!existsSync(snapshotDir)) {
     mkdirSync(snapshotDir, { recursive: true });
@@ -188,19 +219,35 @@ export function createSnapshotReceiver(snapshotDir: string, logger: Logger): Sna
 
     begin(totalFiles: number, totalBytes: number): void {
       receiving = true;
-      fileBuffers.clear();
+      fileStates.clear();
       logger.info("snapshot", `Receiving snapshot: ${totalFiles} files, ${totalBytes} bytes`);
     },
 
     receiveChunk(fileName: string, chunkIndex: number, totalChunks: number, data: string): void {
       if (!receiving) return;
 
-      let chunks = fileBuffers.get(fileName);
-      if (!chunks) {
-        chunks = new Array<Buffer>(totalChunks);
-        fileBuffers.set(fileName, chunks);
+      // Validate fileName against path traversal
+      const pathResult = validateSnapshotPath(fileName, snapshotDir);
+      if (!pathResult.ok) {
+        logger.warn("snapshot", `Rejected chunk with invalid fileName: ${fileName}`);
+        return;
       }
-      chunks[chunkIndex] = Buffer.from(data, "base64");
+
+      let state = fileStates.get(fileName);
+      if (!state) {
+        const tmpPath = `${pathResult.value}.incoming`;
+        state = { tmpPath, totalChunks, receivedCount: 0, received: new Set(), chunks: new Map() };
+        fileStates.set(fileName, state);
+      }
+
+      if (!state.received.has(chunkIndex)) {
+        // Buffer chunks in memory keyed by index -- they are written
+        // in order during finalize() to avoid corruption from
+        // out-of-order delivery.
+        state.chunks.set(chunkIndex, Buffer.from(data, "base64"));
+        state.received.add(chunkIndex);
+        state.receivedCount++;
+      }
     },
 
     finalize(checksums: Record<string, string>): Result<void, EidolonError> {
@@ -209,18 +256,43 @@ export function createSnapshotReceiver(snapshotDir: string, logger: Logger): Sna
       }
 
       try {
-        for (const [fileName, chunks] of fileBuffers) {
-          // biome-ignore lint/complexity/useIndexOf: indexOf(undefined) rejected by TypeScript for Buffer[]
-          const missing = chunks.findIndex((c) => c === undefined);
-          if (missing >= 0) {
-            return Err(createError(ErrorCode.DB_QUERY_FAILED, `Missing chunk ${missing} for ${fileName}`));
+        for (const [fileName, state] of fileStates) {
+          if (state.receivedCount < state.totalChunks) {
+            cleanupIncomingFiles(fileStates);
+            receiving = false;
+            fileStates.clear();
+            return Err(
+              createError(
+                ErrorCode.DB_QUERY_FAILED,
+                `Missing chunks for ${fileName}: got ${state.receivedCount}/${state.totalChunks}`,
+              ),
+            );
           }
 
-          const fullData = Buffer.concat(chunks);
+          // Write chunks in order to the temp file to prevent corruption
+          // from out-of-order chunk delivery.
+          writeFileSync(state.tmpPath, Buffer.alloc(0));
+          for (let i = 0; i < state.totalChunks; i++) {
+            const chunk = state.chunks.get(i);
+            if (!chunk) {
+              cleanupIncomingFiles(fileStates);
+              receiving = false;
+              fileStates.clear();
+              return Err(
+                createError(ErrorCode.DB_QUERY_FAILED, `Missing chunk ${i} for ${fileName}`),
+              );
+            }
+            appendFileSync(state.tmpPath, chunk);
+          }
+
           const expectedChecksum = checksums[fileName];
           if (expectedChecksum) {
-            const actualChecksum = createHash("sha256").update(fullData).digest("hex");
+            const fileData = readFileSync(state.tmpPath);
+            const actualChecksum = createHash("sha256").update(fileData).digest("hex");
             if (actualChecksum !== expectedChecksum) {
+              cleanupIncomingFiles(fileStates);
+              receiving = false;
+              fileStates.clear();
               return Err(
                 createError(
                   ErrorCode.DB_QUERY_FAILED,
@@ -230,25 +302,49 @@ export function createSnapshotReceiver(snapshotDir: string, logger: Logger): Sna
             }
           }
 
-          // Atomic write: temp file + rename
-          const targetPath = join(snapshotDir, fileName);
-          const tmpPath = `${targetPath}.tmp`;
-          writeFileSync(tmpPath, fullData);
-          renameSync(tmpPath, targetPath);
-          logger.debug("snapshot", `Received ${fileName}: ${fullData.length} bytes`);
+          // Atomic rename to final path
+          const pathResult = validateSnapshotPath(fileName, snapshotDir);
+          if (!pathResult.ok) {
+            cleanupIncomingFiles(fileStates);
+            receiving = false;
+            fileStates.clear();
+            return Err(pathResult.error);
+          }
+
+          renameSync(state.tmpPath, pathResult.value);
+          const size = statSync(pathResult.value).size;
+          logger.debug("snapshot", `Received ${fileName}: ${size} bytes`);
         }
 
         receiving = false;
-        fileBuffers.clear();
+        fileStates.clear();
         logger.info("snapshot", "Snapshot received and verified successfully");
         return Ok(undefined);
       } catch (cause) {
+        cleanupIncomingFiles(fileStates);
         receiving = false;
-        fileBuffers.clear();
+        fileStates.clear();
         return Err(createError(ErrorCode.DB_QUERY_FAILED, "Failed to finalize snapshot", cause));
       }
     },
   };
+}
+
+// ---------------------------------------------------------------------------
+// Incoming file cleanup helper
+// ---------------------------------------------------------------------------
+
+/** Remove all .incoming temp files tracked by the file states map. */
+function cleanupIncomingFiles(states: ReadonlyMap<string, FileReceiveState>): void {
+  for (const [, state] of states) {
+    try {
+      if (existsSync(state.tmpPath)) {
+        unlinkSync(state.tmpPath);
+      }
+    } catch {
+      // Best-effort cleanup -- ignore errors
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -267,7 +363,7 @@ export function cleanupOldSnapshots(snapshotDir: string, maxAgeMs: number, logge
     for (const file of files) {
       const filePath = join(snapshotDir, file);
 
-      if (file.endsWith(".tmp")) {
+      if (file.endsWith(".tmp") || file.endsWith(".incoming")) {
         unlinkSync(filePath);
         removed++;
         continue;

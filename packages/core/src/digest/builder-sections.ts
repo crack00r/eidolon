@@ -17,6 +17,18 @@ import type { DigestSection } from "./builder.ts";
 const TWENTY_FOUR_HOURS_MS = 86_400_000;
 
 // ---------------------------------------------------------------------------
+// Sanitization
+// ---------------------------------------------------------------------------
+
+/** Sanitize external content for safe markdown rendering. */
+function sanitize(text: string): string {
+  return text
+    .replace(/\n/g, " ")
+    .replace(/[#*\->`[\]\\`<]/g, (ch) => `\\${ch}`)
+    .slice(0, 500);
+}
+
+// ---------------------------------------------------------------------------
 // Section Builders
 // ---------------------------------------------------------------------------
 
@@ -106,7 +118,7 @@ export function buildLearningSummary(operationalDb: Database, since: number): Di
     lines.push("**Top discoveries:**");
     for (const d of top) {
       const score = Math.round(d.relevance_score * 100);
-      lines.push(`- [${d.source_type}] ${d.title} (relevance: ${score}%, status: ${d.status})`);
+      lines.push(`- [${sanitize(d.source_type)}] ${sanitize(d.title)} (relevance: ${score}%, status: ${sanitize(d.status)})`);
     }
   }
 
@@ -187,7 +199,7 @@ export function buildSchedule(
 
   for (const task of rows) {
     const timeStr = formatTimeFn(task.next_run_at);
-    lines.push(`- ${timeStr} -- ${task.name} (${task.type})`);
+    lines.push(`- ${timeStr} -- ${sanitize(task.name)} (${sanitize(task.type)})`);
   }
 
   return { title: "Schedule", content: lines.join("\n") };
@@ -230,7 +242,7 @@ export function buildMetrics(operationalDb: Database, since: number): DigestSect
     lines.push("");
     lines.push("**By model:**");
     for (const row of byModel) {
-      lines.push(`- ${row.model}: $${row.cost.toFixed(4)}`);
+      lines.push(`- ${sanitize(row.model)}: $${row.cost.toFixed(4)}`);
     }
   }
 
@@ -261,7 +273,7 @@ export function buildActionItems(operationalDb: Database): DigestSection | null 
 
   for (const item of pendingDiscoveries.slice(0, 10)) {
     const score = Math.round(item.relevance_score * 100);
-    lines.push(`- [${item.source_type}] ${item.title} (relevance: ${score}%)`);
+    lines.push(`- [${sanitize(item.source_type)}] ${sanitize(item.title)} (relevance: ${score}%)`);
   }
 
   if (pendingDiscoveries.length > 10) {

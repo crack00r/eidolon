@@ -272,7 +272,20 @@ export function buildMemorySteps(modules: InitializedModules): InitStep[] {
       }
 
       try {
-        modules.claudeManager = new ClaudeCodeManager(logger);
+        // Find the first enabled account (prefer api-key, fall back to oauth)
+        const enabledAccount = accounts.find((a: { type: string; enabled?: boolean }) => a.enabled !== false);
+        let apiKey: string | undefined;
+        if (enabledAccount && enabledAccount.type === "api-key") {
+          // Only pass apiKey for api-key accounts; for oauth accounts, leave it
+          // undefined so ClaudeCodeManager lets the CLI use its stored OAuth session.
+          const cred = enabledAccount.credential as string | { $secret: string };
+          if (typeof cred === "string") {
+            apiKey = cred;
+          }
+          // Note: { $secret: "..." } refs are resolved elsewhere; we only handle plain strings here
+        }
+
+        modules.claudeManager = new ClaudeCodeManager(logger, { apiKey });
         logger.info("daemon", "ClaudeCodeManager initialized");
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);
@@ -325,12 +338,14 @@ export function buildMemorySteps(modules: InitializedModules): InitStep[] {
         const pluginDir = config.plugins.directory || "";
         const loaded = await discoverPlugins(pluginDir, logger);
 
+        // Use lazy getters so plugins access gateway/messageRouter when
+        // they actually need them, not at init time (they may be undefined here).
         const sandboxDeps: SandboxDeps = {
           logger,
           config,
-          eventBus: modules.eventBus,
-          gateway: modules.gatewayServer,
-          messageRouter: modules.messageRouter,
+          get eventBus() { return modules.eventBus; },
+          get gateway() { return modules.gatewayServer; },
+          get messageRouter() { return modules.messageRouter; },
         };
 
         const lifecycle = new PluginLifecycleManager(registry, config.plugins, sandboxDeps, logger, modules.eventBus);
@@ -365,7 +380,7 @@ export function buildMemorySteps(modules: InitializedModules): InitStep[] {
 
       const ollamaConfig = llmConfig.providers?.ollama;
       if (ollamaConfig?.enabled) {
-        const ollama = new OllamaProvider(ollamaConfig, logger);
+        const ollama = new OllamaProvider(ollamaConfig, logger, ollamaConfig.allowPrivateHosts);
         const available = await ollama.isAvailable();
         if (available) {
           router.registerProvider(ollama);

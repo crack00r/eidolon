@@ -77,12 +77,29 @@ export const VALID_EVENT_TYPES = new Set<string>([
   "plugin:error",
   "llm:provider_available",
   "llm:provider_unavailable",
+  "anticipation:check",
+  "anticipation:suggestion",
+  "anticipation:dismissed",
+  "anticipation:acted",
+  "workflow:trigger",
+  "workflow:step_ready",
+  "workflow:step_completed",
+  "workflow:step_failed",
+  "workflow:completed",
+  "workflow:failed",
+  "workflow:cancelled",
 ]);
 
 export const VALID_PRIORITIES = new Set<string>(["critical", "high", "normal", "low"]);
 
 /** Maximum number of retries before an event is sent to the dead letter queue. */
 export const MAX_RETRIES = 10;
+
+/** Per-event-type retry limits. Events not listed here use MAX_RETRIES. */
+export const MAX_RETRIES_BY_TYPE: Readonly<Record<string, number>> = {
+  "user:message": 2,
+  "user:voice": 2,
+};
 
 /** Maximum number of events returned in a single replay or drain operation. */
 export const MAX_REPLAY_BATCH_SIZE = 1000;
@@ -110,22 +127,26 @@ export function sanitizePayload(value: unknown): unknown {
     return value.map(sanitizePayload);
   }
   const obj = value as Record<string, unknown>;
+  const cleaned: Record<string, unknown> = {};
   for (const key of Object.keys(obj)) {
-    if (POISON_KEYS.has(key)) {
-      Reflect.deleteProperty(obj, key);
-    } else {
-      obj[key] = sanitizePayload(obj[key]);
+    if (!POISON_KEYS.has(key)) {
+      cleaned[key] = sanitizePayload(obj[key]);
     }
   }
-  return obj;
+  return cleaned;
 }
 
 // ---------------------------------------------------------------------------
 // Validation
 // ---------------------------------------------------------------------------
 
-export function validateEnum<T extends string>(value: unknown, valid: Set<string>, fallback: T): T {
-  return valid.has(String(value)) ? (String(value) as T) : fallback;
+export function validateEnum<T extends string>(value: unknown, valid: Set<string>, fallback: T, logger?: Logger): T {
+  const str = String(value);
+  if (valid.has(str)) return str as T;
+  if (logger) {
+    logger.warn("event-utils", `Unknown enum value "${str}", falling back to "${fallback}"`);
+  }
+  return fallback;
 }
 
 // ---------------------------------------------------------------------------
@@ -142,11 +163,11 @@ export function rowToEvent(row: EventRow, logger?: Logger): BusEvent {
         id: row.id,
       });
     }
-    payload = { _corrupted: true, raw: row.payload.slice(0, 200) };
+    payload = { _corrupted: true };
   }
   return {
     id: row.id,
-    type: validateEnum<EventType>(row.type, VALID_EVENT_TYPES, "system:health_check"),
+    type: validateEnum<EventType>(row.type, VALID_EVENT_TYPES, "system:health_check", logger),
     priority: validateEnum<EventPriority>(row.priority, VALID_PRIORITIES, "normal"),
     payload,
     source: row.source,

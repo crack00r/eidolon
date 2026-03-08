@@ -8,6 +8,11 @@ import type { EidolonError, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 import type { Logger } from "../logging/logger.ts";
 import type { GPUManager } from "./manager.ts";
+import {
+  ALLOWED_STT_MIME_TYPES,
+  MAX_STT_AUDIO_BYTES,
+  STT_UPLOAD_TIMEOUT_MS,
+} from "./pool-validation.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -19,30 +24,6 @@ export interface SttResult {
   readonly confidence: number;
   readonly durationSeconds: number;
 }
-
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-
-/** Timeout for STT upload requests (60 seconds). */
-const STT_UPLOAD_TIMEOUT_MS = 60_000;
-
-/** Maximum allowed audio size for a single STT request: 25 MB. */
-const MAX_STT_AUDIO_BYTES = 25 * 1024 * 1024;
-
-/** Supported MIME types for STT audio input. */
-const ALLOWED_STT_MIME_TYPES: ReadonlySet<string> = new Set([
-  "audio/wav",
-  "audio/wave",
-  "audio/x-wav",
-  "audio/mp3",
-  "audio/mpeg",
-  "audio/ogg",
-  "audio/opus",
-  "audio/webm",
-  "audio/flac",
-  "audio/x-flac",
-]);
 
 // ---------------------------------------------------------------------------
 // STTClient
