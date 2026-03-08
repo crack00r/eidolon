@@ -41,11 +41,27 @@ export async function searchMemory(query: string): Promise<void> {
   errorStore.set(null);
 
   try {
-    const response = await client.call<{ items: MemoryItem[] }>("memory.search", {
+    const response = await client.call<{
+      results: Array<Record<string, unknown>>;
+      total: number;
+    }>("memory.search", {
       query,
       limit: 50,
     });
-    resultsStore.set(response.items);
+    // Map backend response shape to frontend MemoryItem interface.
+    // Backend returns `confidence` (0-1 float); frontend expects `importance`.
+    // Backend returns `layer` alongside `type`; `metadata` is not returned.
+    const items: MemoryItem[] = response.results.map((r) => ({
+      id: String(r.id ?? ""),
+      type: (["episodic", "semantic", "procedural", "working", "meta"].includes(r.type as string)
+        ? r.type
+        : "semantic") as MemoryItem["type"],
+      content: String(r.content ?? ""),
+      importance: typeof r.confidence === "number" ? r.confidence : (typeof r.importance === "number" ? r.importance : 0),
+      createdAt: typeof r.createdAt === "number" ? r.createdAt : 0,
+      metadata: typeof r.metadata === "object" && r.metadata !== null ? r.metadata as Record<string, unknown> : undefined,
+    }));
+    resultsStore.set(items);
   } catch (err) {
     clientLog("error", "memory", "searchMemory failed", err);
     const msg = sanitizeErrorForDisplay(err, "Search failed");
@@ -68,7 +84,6 @@ export function clearSearch(): void {
 }
 
 const deletingStore = writable(false);
-const editingStore = writable(false);
 
 export async function deleteMemory(id: string): Promise<boolean> {
   const client = getClient();
@@ -95,40 +110,9 @@ export async function deleteMemory(id: string): Promise<boolean> {
   }
 }
 
-export async function editMemory(
-  id: string,
-  updates: { content?: string; importance?: number },
-): Promise<boolean> {
-  const client = getClient();
-  if (!client || client.state !== "connected") {
-    errorStore.set("Not connected to gateway");
-    return false;
-  }
-
-  editingStore.set(true);
-  errorStore.set(null);
-
-  try {
-    const response = await client.call<{ item: MemoryItem }>("memory.update", { id, ...updates });
-    resultsStore.update((items) =>
-      items.map((item) => (item.id === id ? response.item : item)),
-    );
-    selectedStore.update((selected) => (selected?.id === id ? response.item : selected));
-    return true;
-  } catch (err) {
-    clientLog("error", "memory", "editMemory failed", err);
-    const msg = sanitizeErrorForDisplay(err, "Update failed");
-    errorStore.set(msg);
-    return false;
-  } finally {
-    editingStore.set(false);
-  }
-}
-
 export const memoryResults = { subscribe: resultsStore.subscribe };
 export const memoryQuery = { subscribe: queryStore.subscribe };
 export const isSearching = { subscribe: searchingStore.subscribe };
 export const memoryError = { subscribe: errorStore.subscribe };
 export const selectedMemory = { subscribe: selectedStore.subscribe };
 export const isDeleting = { subscribe: deletingStore.subscribe };
-export const isEditing = { subscribe: editingStore.subscribe };

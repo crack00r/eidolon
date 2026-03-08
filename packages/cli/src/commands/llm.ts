@@ -7,10 +7,16 @@
  *   test <provider> -- test connectivity to a specific provider
  */
 
+import { z } from "zod";
 import { loadConfig } from "@eidolon/core";
 import type { LLMConfig } from "@eidolon/protocol";
 import type { Command } from "commander";
 import { formatTable } from "../utils/formatter.ts";
+
+/** Zod schema for Ollama /api/tags response. */
+const OllamaTagsResponseSchema = z.object({
+  models: z.array(z.object({ name: z.string() }).passthrough()).default([]),
+});
 
 // ---------------------------------------------------------------------------
 // Types
@@ -135,8 +141,9 @@ async function testProvider(providerType: string, config: LLMConfig): Promise<{ 
     try {
       const response = await fetch(url, { signal: AbortSignal.timeout(5_000) });
       if (response.ok) {
-        const body = (await response.json()) as { models?: readonly { name: string }[] };
-        const modelCount = Array.isArray(body.models) ? body.models.length : 0;
+        const raw: unknown = await response.json();
+        const parsed = OllamaTagsResponseSchema.safeParse(raw);
+        const modelCount = parsed.success ? parsed.data.models.length : 0;
         return { ok: true, message: `Connected. ${modelCount} model${modelCount !== 1 ? "s" : ""} available.` };
       }
       return { ok: false, message: `Server responded with status ${response.status}.` };

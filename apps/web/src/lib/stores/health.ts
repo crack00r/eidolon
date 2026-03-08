@@ -86,6 +86,8 @@ function parseHealthData(raw: Record<string, unknown>): HealthData {
       : [],
     eventQueueDepth: typeof raw.eventQueueDepth === "number" ? raw.eventQueueDepth : 0,
     memoryStats: typeof raw.memoryStats === "object" && raw.memoryStats !== null
+      && typeof (raw.memoryStats as Record<string, unknown>).totalMemories === "number"
+      && typeof (raw.memoryStats as Record<string, unknown>).recentExtractions === "number"
       ? (raw.memoryStats as HealthData["memoryStats"])
       : { totalMemories: 0, recentExtractions: 0 },
     errorRate: typeof raw.errorRate === "number" ? raw.errorRate : 0,

@@ -48,7 +48,8 @@ export interface ExportData {
 function safeSelectAll(db: Database, sql: string): unknown[] {
   try {
     return db.query(sql).all();
-  } catch {
+  } catch (err) {
+    console.warn(`[privacy-export] safeSelectAll failed: ${err instanceof Error ? err.message : String(err)}`);
     return [];
   }
 }

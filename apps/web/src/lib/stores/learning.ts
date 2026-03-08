@@ -50,23 +50,35 @@ export async function fetchPendingItems(): Promise<void> {
 export async function approveItem(id: string): Promise<void> {
   const client = getClient();
   if (!client || client.state !== "connected") {
-    throw new Error("Not connected to gateway");
+    errorStore.set("Not connected to gateway");
+    return;
   }
 
-  await client.call("learning.approve", { id });
+  try {
+    await client.call("learning.approve", { id });
 
-  itemsStore.update((items) => items.map((item) => (item.id === id ? { ...item, status: "approved" as const } : item)));
+    itemsStore.update((items) => items.map((item) => (item.id === id ? { ...item, status: "approved" as const } : item)));
+  } catch (err) {
+    clientLog("error", "learning", "approveItem failed", err);
+    errorStore.set(sanitizeErrorForDisplay(err, "Failed to approve item"));
+  }
 }
 
 export async function rejectItem(id: string): Promise<void> {
   const client = getClient();
   if (!client || client.state !== "connected") {
-    throw new Error("Not connected to gateway");
+    errorStore.set("Not connected to gateway");
+    return;
   }
 
-  await client.call("learning.reject", { id });
+  try {
+    await client.call("learning.reject", { id });
 
-  itemsStore.update((items) => items.map((item) => (item.id === id ? { ...item, status: "rejected" as const } : item)));
+    itemsStore.update((items) => items.map((item) => (item.id === id ? { ...item, status: "rejected" as const } : item)));
+  } catch (err) {
+    clientLog("error", "learning", "rejectItem failed", err);
+    errorStore.set(sanitizeErrorForDisplay(err, "Failed to reject item"));
+  }
 }
 
 export const learningItems = { subscribe: itemsStore.subscribe };

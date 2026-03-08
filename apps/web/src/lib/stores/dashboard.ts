@@ -91,8 +91,12 @@ function addEvent(
 }
 
 function parseStatus(raw: Record<string, unknown>): SystemStatus {
-  const energy = raw.energy as { current?: number; max?: number } | undefined;
-  const clients = raw.connectedClients as Array<{ id?: string; platform?: string }> | undefined;
+  const energy = typeof raw.energy === "object" && raw.energy !== null
+    ? (raw.energy as { current?: number; max?: number })
+    : undefined;
+  const clients = Array.isArray(raw.connectedClients)
+    ? (raw.connectedClients as Array<{ id?: string; platform?: string }>)
+    : undefined;
 
   return {
     cognitiveState: (raw.cognitiveState as CognitiveState) ?? "idle",
@@ -126,13 +130,21 @@ async function fetchStatus(): Promise<void> {
     const status = parseStatus({ ...result, latencyMs });
 
     store.update((s) => {
-      // Detect state changes and add events
+      // Detect state changes and build event inline (avoid nested store.update)
+      let events = s.events;
       if (s.status.cognitiveState !== status.cognitiveState) {
-        addEvent("state_change", `State changed: ${s.status.cognitiveState} → ${status.cognitiveState}`);
+        const event: DashboardEvent = {
+          id: nextEventId(),
+          timestamp: Date.now(),
+          type: "state_change",
+          description: `State changed: ${s.status.cognitiveState} → ${status.cognitiveState}`,
+        };
+        events = [event, ...s.events].slice(0, MAX_EVENTS);
       }
       return {
         ...s,
         status,
+        events,
         lastUpdated: Date.now(),
         loading: false,
         error: null,
@@ -154,25 +166,42 @@ function handlePush(method: string, params: Record<string, unknown>): void {
 
   const status = parseStatus(params);
   store.update((s) => {
+    let events = s.events;
+
+    // Detect state change
     if (s.status.cognitiveState !== status.cognitiveState) {
-      addEvent("state_change", `State changed: ${s.status.cognitiveState} → ${status.cognitiveState}`);
+      const event: DashboardEvent = {
+        id: nextEventId(),
+        timestamp: Date.now(),
+        type: "state_change",
+        description: `State changed: ${s.status.cognitiveState} → ${status.cognitiveState}`,
+      };
+      events = [event, ...events].slice(0, MAX_EVENTS);
     }
+
+    // Add any events the server sent along
+    if (Array.isArray(params.recentEvents)) {
+      for (const evt of params.recentEvents as Array<Record<string, unknown>>) {
+        if (typeof evt.type === "string" && typeof evt.description === "string") {
+          const event: DashboardEvent = {
+            id: nextEventId(),
+            timestamp: Date.now(),
+            type: evt.type as DashboardEvent["type"],
+            description: evt.description,
+          };
+          events = [event, ...events].slice(0, MAX_EVENTS);
+        }
+      }
+    }
+
     return {
       ...s,
       status,
+      events,
       lastUpdated: Date.now(),
       error: null,
     };
   });
-
-  // Add any events the server sent along
-  if (Array.isArray(params.recentEvents)) {
-    for (const evt of params.recentEvents as Array<Record<string, unknown>>) {
-      if (typeof evt.type === "string" && typeof evt.description === "string") {
-        addEvent(evt.type as DashboardEvent["type"], evt.description);
-      }
-    }
-  }
 }
 
 export function startDashboard(): void {

@@ -26,6 +26,7 @@ export type ConnectionState = "disconnected" | "connecting" | "authenticating" |
 /** Known push notification types from the server. */
 export type PushEventType =
   | "push.stateChange"
+  // Reserved for future use -- not currently emitted by the backend
   | "push.taskStarted"
   | "push.taskCompleted"
   | "push.memoryCreated"
@@ -35,6 +36,9 @@ export type PushEventType =
   | "push.clientConnected"
   | "push.clientDisconnected"
   | "push.executeCommand"
+  | "push.chatMessage"
+  | "push.approvalRequested"
+  | "push.approvalResolved"
   | "system.statusUpdate";
 
 type PushEventHandler = (params: Record<string, unknown>) => void;
@@ -369,6 +373,7 @@ export class GatewayClient {
 
     const timer = setTimeout(() => {
       this.pendingRequests.delete(id);
+      this.shouldReconnect = false;
       this.setState("error");
       this.ws?.close(4001, "Auth timeout");
     }, DEFAULT_TIMEOUT_MS);
@@ -378,6 +383,7 @@ export class GatewayClient {
         this.setState("connected");
       },
       reject: (err: Error) => {
+        this.shouldReconnect = false;
         this.setState("error");
         clientLog("error", "gateway", "Authentication failed", { error: err.message });
         this.ws?.close(4002, "Auth failed");

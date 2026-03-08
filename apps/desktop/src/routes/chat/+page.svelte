@@ -2,8 +2,10 @@
 import { clientLog } from "../../lib/logger";
 import { clearMessages, isStreaming, messages, rateMessage, sendMessage } from "../../lib/stores/chat";
 import { isConnected } from "../../lib/stores/connection";
+import { sanitizeErrorForDisplay } from "../../lib/utils";
 
 let inputValue = $state("");
+let sendError = $state<string | null>(null);
 let messagesContainer: HTMLDivElement | undefined = $state();
 
 function scrollToBottom(): void {
@@ -24,21 +26,34 @@ async function handleRate(msgId: string, rating: number): Promise<void> {
 
 async function handleSend(): Promise<void> {
   const content = inputValue.trim();
-  if (!content || $isStreaming || !$isConnected) return;
+  sendError = null;
 
-  inputValue = "";
+  if (!$isConnected) {
+    sendError = "Not connected to gateway";
+    return;
+  }
+  if ($isStreaming) {
+    sendError = "Please wait for the current response to finish";
+    return;
+  }
+  if (!content) return;
+
   try {
     await sendMessage(content);
+    inputValue = "";
   } catch (err) {
     clientLog("error", "chat-page", "handleSend failed", err);
+    sendError = sanitizeErrorForDisplay(err);
   }
-  scrollToBottom();
+  // scrollToBottom is handled by the $effect watching $messages
 }
 
 function handleKeydown(event: KeyboardEvent): void {
   if (event.key === "Enter" && !event.shiftKey) {
     event.preventDefault();
     handleSend();
+  } else if (sendError) {
+    sendError = null;
   }
 }
 
@@ -81,7 +96,7 @@ $effect(() => {
                so there is no XSS risk here. Do NOT change this to {@html msg.content} without
                first adding DOMPurify sanitization. If markdown rendering is added later, pipe
                the output through DOMPurify.sanitize() before using {@html}. -->
-          <div class="message-content" aria-busy={msg.streaming ? "true" : undefined}>
+          <div class="message-content" class:markdown={msg.format === "markdown"} aria-busy={msg.streaming ? "true" : undefined}>
             {#if msg.streaming}
               <span>{msg.content}</span><span class="cursor" aria-hidden="true">|</span>
             {:else}
@@ -106,6 +121,13 @@ $effect(() => {
       {/each}
     {/if}
   </div>
+
+  {#if sendError}
+    <div class="send-error" role="alert">
+      <span>{sendError}</span>
+      <button class="dismiss-error" onclick={() => (sendError = null)} aria-label="Dismiss error">x</button>
+    </div>
+  {/if}
 
   <div class="input-area" role="form" aria-label="Send a message">
     <textarea
@@ -242,6 +264,12 @@ $effect(() => {
     line-height: 1.5;
   }
 
+  .message-content.markdown {
+    white-space: pre-wrap;
+    tab-size: 4;
+    font-variant-ligatures: none;
+  }
+
   .message-feedback {
     display: flex;
     gap: 4px;
@@ -280,6 +308,30 @@ $effect(() => {
     50% {
       opacity: 0;
     }
+  }
+
+  .send-error {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 20px;
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    font-size: 13px;
+    border-top: 1px solid var(--border);
+  }
+
+  .dismiss-error {
+    padding: 2px 8px;
+    border-radius: var(--radius);
+    background: none;
+    color: var(--text-secondary);
+    font-size: 14px;
+    cursor: pointer;
+  }
+
+  .dismiss-error:hover {
+    color: var(--text-primary);
   }
 
   .input-area {

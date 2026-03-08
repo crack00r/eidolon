@@ -63,42 +63,60 @@ export async function fetchScenes(enabledOnly?: boolean): Promise<void> {
 export async function createScene(input: string, deliverTo?: string): Promise<void> {
   const client = getClient();
   if (!client || client.state !== "connected") {
-    throw new Error("Not connected to gateway");
+    errorStore.set("Not connected to gateway");
+    return;
   }
 
-  await client.call("automation.create", {
-    input,
-    ...(deliverTo ? { deliverTo } : {}),
-  });
+  try {
+    await client.call("automation.create", {
+      input,
+      ...(deliverTo ? { deliverTo } : {}),
+    });
 
-  // Re-fetch to get the server-generated scene
-  await fetchScenes();
+    // Re-fetch to get the server-generated scene
+    await fetchScenes();
+  } catch (err) {
+    clientLog("error", "automations", "createScene failed", err);
+    errorStore.set(sanitizeErrorForDisplay(err, "Failed to create scene"));
+  }
 }
 
 export async function deleteScene(automationId: string): Promise<void> {
   const client = getClient();
   if (!client || client.state !== "connected") {
-    throw new Error("Not connected to gateway");
+    errorStore.set("Not connected to gateway");
+    return;
   }
 
-  await client.call("automation.delete", { automationId });
+  try {
+    await client.call("automation.delete", { automationId });
 
-  scenesStore.update((scenes) =>
-    scenes.filter((s) => s.id !== automationId),
-  );
+    scenesStore.update((scenes) =>
+      scenes.filter((s) => s.id !== automationId),
+    );
+  } catch (err) {
+    clientLog("error", "automations", "deleteScene failed", err);
+    errorStore.set(sanitizeErrorForDisplay(err, "Failed to delete scene"));
+  }
 }
 
 export async function executeScene(automationId: string): Promise<void> {
   const client = getClient();
   if (!client || client.state !== "connected") {
-    throw new Error("Not connected to gateway");
+    errorStore.set("Not connected to gateway");
+    return;
   }
 
-  // Use brain.triggerAction to execute a scene
-  await client.call("brain.triggerAction", {
-    action: "ha_scene",
-    args: { automationId },
-  });
+  try {
+    // Use brain.triggerAction to execute a scene
+    await client.call("brain.triggerAction", {
+      action: "ha_scene",
+      args: { automationId },
+    });
+  } catch (err) {
+    clientLog("error", "automations", "executeScene failed", err);
+    errorStore.set(sanitizeErrorForDisplay(err, "Failed to execute scene"));
+  }
 }
 
 export const automationScenes = { subscribe: scenesStore.subscribe };

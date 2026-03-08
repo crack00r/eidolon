@@ -141,7 +141,11 @@ async function onboardServer(ask: AskFn): Promise<ServerSetupResult> {
   // Gateway setup
   console.log("\n--- Gateway Setup ---\n");
   const portInput = await ask("Gateway port [8419]: ");
-  const gatewayPort = Number.parseInt(portInput, 10) || 8419;
+  let gatewayPort = Number.parseInt(portInput, 10) || 8419;
+  if (gatewayPort < 1 || gatewayPort > 65535) {
+    console.log(`  Invalid port ${gatewayPort}. Using default 8419.`);
+    gatewayPort = 8419;
+  }
 
   const tokenChoice = await ask("Auth token (auto-generate or enter manually) [auto]: ");
   const gatewayToken = tokenChoice || generateAuthToken();

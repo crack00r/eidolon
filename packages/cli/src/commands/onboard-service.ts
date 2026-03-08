@@ -98,6 +98,11 @@ function ensureLogDir(): string {
 // macOS LaunchAgent
 // ---------------------------------------------------------------------------
 
+/** Shell-escape a string for use inside single quotes in sh -c commands. */
+function shellEscape(s: string): string {
+  return s.replace(/'/g, "'\\''");
+}
+
 function buildPlistContent(envFilePath?: string): string {
   const bunPath = detectBunPath();
   const logDir = ensureLogDir();
@@ -106,11 +111,12 @@ function buildPlistContent(envFilePath?: string): string {
   // Instead, use a wrapper script that sources the env file before launching.
   // LaunchAgent does not natively support EnvironmentFile, so we reference the
   // env file via a shell wrapper in ProgramArguments.
+  // SEC: Shell-escape paths to prevent command injection via crafted filenames.
   const programArgs = envFilePath
     ? `    <array>
         <string>/bin/sh</string>
         <string>-c</string>
-        <string>. ${envFilePath} &amp;&amp; exec ${bunPath} run eidolon daemon start --foreground</string>
+        <string>. '${shellEscape(envFilePath)}' &amp;&amp; exec '${shellEscape(bunPath)}' run eidolon daemon start --foreground</string>
     </array>`
     : `    <array>
         <string>${bunPath}</string>

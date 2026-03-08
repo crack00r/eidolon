@@ -37,7 +37,8 @@ function safeDelete(db: Database, sql: string, ...params: string[]): number {
   try {
     const result = db.query(sql).run(...params);
     return result.changes;
-  } catch {
+  } catch (err) {
+    console.warn(`[privacy-forget] safeDelete failed: ${err instanceof Error ? err.message : String(err)}`);
     return 0;
   }
 }
@@ -98,6 +99,14 @@ export function forgetEntity(dbManager: DatabaseManager, entity: string): Deleti
 
   // --- operational.db ---
   const operationalTx = dbManager.operational.transaction(() => {
+    // token_usage must be deleted BEFORE sessions, because the subquery
+    // references rows in sessions that will be removed below.
+    deletedCounts.token_usage = safeDelete(
+      dbManager.operational,
+      "DELETE FROM token_usage WHERE session_id IN (SELECT id FROM sessions WHERE metadata LIKE ? ESCAPE '\\')",
+      pattern,
+    );
+
     deletedCounts.sessions = safeDelete(
       dbManager.operational,
       "DELETE FROM sessions WHERE metadata LIKE ? ESCAPE '\\' OR id LIKE ? ESCAPE '\\'",
@@ -116,12 +125,6 @@ export function forgetEntity(dbManager: DatabaseManager, entity: string): Deleti
       dbManager.operational,
       "DELETE FROM scheduled_tasks WHERE payload LIKE ? ESCAPE '\\' OR name LIKE ? ESCAPE '\\'",
       pattern,
-      pattern,
-    );
-
-    deletedCounts.token_usage = safeDelete(
-      dbManager.operational,
-      "DELETE FROM token_usage WHERE session_id IN (SELECT id FROM sessions WHERE metadata LIKE ? ESCAPE '\\')",
       pattern,
     );
 

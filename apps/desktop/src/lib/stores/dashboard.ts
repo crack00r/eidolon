@@ -75,41 +75,60 @@ function nextEventId(): string {
   return `evt-${Date.now()}-${++eventCounter}`;
 }
 
-function addEvent(
+function createEvent(
   type: DashboardEvent["type"],
   description: string,
-): void {
-  store.update((s) => {
-    const event: DashboardEvent = {
-      id: nextEventId(),
-      timestamp: Date.now(),
-      type,
-      description,
-    };
-    const events = [event, ...s.events].slice(0, MAX_EVENTS);
-    return { ...s, events };
-  });
+): DashboardEvent {
+  return {
+    id: nextEventId(),
+    timestamp: Date.now(),
+    type,
+    description,
+  };
+}
+
+/** Prepend new events to an existing event list, returning the merged array (capped). */
+function mergeEvents(existing: DashboardEvent[], newEvents: DashboardEvent[]): DashboardEvent[] {
+  return [...newEvents, ...existing].slice(0, MAX_EVENTS);
 }
 
 function parseStatus(raw: Record<string, unknown>): SystemStatus {
   const energy = raw.energy as { current?: number; max?: number } | undefined;
-  const clients = raw.connectedClients as Array<{ id?: string; platform?: string }> | undefined;
+  const clientsRaw = raw.connectedClients;
+
+  // Backend may return `state` (string like "running") instead of `cognitiveState` (PEAR enum).
+  // Map known backend states to our CognitiveState type.
+  const VALID_COGNITIVE_STATES = new Set<string>(["idle", "perceiving", "evaluating", "acting", "reflecting", "dreaming"]);
+  const rawState = (raw.cognitiveState ?? raw.state ?? "idle") as string;
+  const cognitiveState: CognitiveState = VALID_COGNITIVE_STATES.has(rawState)
+    ? rawState as CognitiveState
+    : "idle";
+
+  // Backend may return connectedClients as a number (count) or as an array of objects.
+  let connectedClients: Array<{ id: string; platform: string }> = [];
+  if (Array.isArray(clientsRaw)) {
+    connectedClients = (clientsRaw as Array<Record<string, unknown>>).map((c) => ({
+      id: typeof c.id === "string" ? c.id : "unknown",
+      platform: typeof c.platform === "string" ? c.platform : "unknown",
+    }));
+  } else if (typeof clientsRaw === "number" && clientsRaw > 0) {
+    // Synthesize placeholder entries from the count so the UI shows a number
+    connectedClients = Array.from({ length: clientsRaw }, (_, i) => ({
+      id: `client-${i}`,
+      platform: "unknown",
+    }));
+  }
 
   return {
-    cognitiveState: (raw.cognitiveState as CognitiveState) ?? "idle",
+    cognitiveState,
     energy: {
       current: typeof energy?.current === "number" ? energy.current : 0,
       max: typeof energy?.max === "number" ? energy.max : 100,
     },
     activeTasks: typeof raw.activeTasks === "number" ? raw.activeTasks : 0,
     memoryCount: typeof raw.memoryCount === "number" ? raw.memoryCount : 0,
-    uptimeMs: typeof raw.uptimeMs === "number" ? raw.uptimeMs : 0,
-    connectedClients: Array.isArray(clients)
-      ? clients.map((c) => ({
-          id: typeof c.id === "string" ? c.id : "unknown",
-          platform: typeof c.platform === "string" ? c.platform : "unknown",
-        }))
-      : [],
+    uptimeMs: typeof raw.uptime === "number" ? raw.uptime : 0,
+    connectedClients,
     serverVersion: typeof raw.serverVersion === "string" ? raw.serverVersion : "unknown",
     connectedSince: typeof raw.connectedSince === "number" ? raw.connectedSince : 0,
     latencyMs: typeof raw.latencyMs === "number" ? raw.latencyMs : 0,
@@ -127,13 +146,15 @@ async function fetchStatus(): Promise<void> {
     const status = parseStatus({ ...result, latencyMs });
 
     store.update((s) => {
-      // Detect state changes and add events
+      // Detect state changes and collect events atomically (no nested store.update)
+      const newEvents: DashboardEvent[] = [];
       if (s.status.cognitiveState !== status.cognitiveState) {
-        addEvent("state_change", `State changed: ${s.status.cognitiveState} → ${status.cognitiveState}`);
+        newEvents.push(createEvent("state_change", `State changed: ${s.status.cognitiveState} → ${status.cognitiveState}`));
       }
       return {
         ...s,
         status,
+        events: newEvents.length > 0 ? mergeEvents(s.events, newEvents) : s.events,
         lastUpdated: Date.now(),
         loading: false,
         error: null,
@@ -154,26 +175,32 @@ function handlePush(method: string, params: Record<string, unknown>): void {
   if (method !== "system.statusUpdate") return;
 
   const status = parseStatus(params);
-  store.update((s) => {
-    if (s.status.cognitiveState !== status.cognitiveState) {
-      addEvent("state_change", `State changed: ${s.status.cognitiveState} → ${status.cognitiveState}`);
+
+  // Collect all events (state change + server-sent) to apply in a single atomic update
+  const serverEvents: DashboardEvent[] = [];
+  if (Array.isArray(params.recentEvents)) {
+    for (const evt of params.recentEvents as Array<Record<string, unknown>>) {
+      if (typeof evt.type === "string" && typeof evt.description === "string") {
+        serverEvents.push(createEvent(evt.type as DashboardEvent["type"], evt.description));
+      }
     }
+  }
+
+  store.update((s) => {
+    const newEvents: DashboardEvent[] = [];
+    if (s.status.cognitiveState !== status.cognitiveState) {
+      newEvents.push(createEvent("state_change", `State changed: ${s.status.cognitiveState} → ${status.cognitiveState}`));
+    }
+    newEvents.push(...serverEvents);
+
     return {
       ...s,
       status,
+      events: newEvents.length > 0 ? mergeEvents(s.events, newEvents) : s.events,
       lastUpdated: Date.now(),
       error: null,
     };
   });
-
-  // Add any events the server sent along
-  if (Array.isArray(params.recentEvents)) {
-    for (const evt of params.recentEvents as Array<Record<string, unknown>>) {
-      if (typeof evt.type === "string" && typeof evt.description === "string") {
-        addEvent(evt.type as DashboardEvent["type"], evt.description);
-      }
-    }
-  }
 }
 
 export function startDashboard(): void {
@@ -197,10 +224,12 @@ export function startDashboard(): void {
     // Request subscription (fire-and-forget)
     trySubscribe();
 
-    // Retry on reconnect
+    // Retry on reconnect -- also fetch status immediately so the dashboard
+    // doesn't show stale defaults until the next polling cycle (M-7 fix).
     const unsubscribeState = client.onStateChange((state) => {
       if (state === "connected") {
         trySubscribe();
+        fetchStatus();
       }
     });
 

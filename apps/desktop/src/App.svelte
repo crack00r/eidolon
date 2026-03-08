@@ -11,7 +11,8 @@ import SettingsPage from "./routes/settings/+page.svelte";
 import RoleSelect from "./routes/onboarding/RoleSelect.svelte";
 import ServerSetup from "./routes/onboarding/ServerSetup.svelte";
 import ClientSetup from "./routes/onboarding/ClientSetup.svelte";
-import { connect } from "./lib/stores/connection";
+import { connect, getClient, onNewClient } from "./lib/stores/connection";
+import { setupChatPushHandlers } from "./lib/stores/chat";
 import { updateSettings } from "./lib/stores/settings";
 import { clientLog } from "./lib/logger";
 
@@ -26,6 +27,12 @@ let appState = $state<AppState>("loading");
 let currentRoute = $state("dashboard");
 let loadError = $state<string | null>(null);
 let daemonError = $state<string | null>(null);
+let daemonRestarting = $state(false);
+
+// Track daemon restart attempts to prevent crash loops (max 3 within 5 minutes)
+const daemonRestartTimestamps: number[] = [];
+const MAX_RESTART_ATTEMPTS = 3;
+const RESTART_WINDOW_MS = 5 * 60 * 1000; // 5 minutes
 
 function navigate(route: string): void {
   currentRoute = route;
@@ -46,7 +53,15 @@ function handleOnboardingBack(): void {
 async function autoConnect(role: string): Promise<void> {
   try {
     if (role === "server") {
-      updateSettings({ host: "127.0.0.1", port: 8419, useTls: false });
+      const gwConfig = await invoke<{ port: number; token: string; tls: boolean }>(
+        "get_server_gateway_config"
+      );
+      updateSettings({
+        host: "127.0.0.1",
+        port: gwConfig.port ?? 8419,
+        useTls: gwConfig.tls ?? false,
+        ...(gwConfig.token ? { token: gwConfig.token } : {}),
+      });
       connect();
     } else {
       const config = await invoke<{ host: string; port: number; token?: string; tls?: boolean }>(
@@ -72,6 +87,37 @@ async function startDaemonWithConfig(): Promise<void> {
   await invoke("start_daemon", { configPath });
 }
 
+/** Check if we can attempt a daemon restart (rate-limited to prevent crash loops). */
+function canRestartDaemon(): boolean {
+  const now = Date.now();
+  // Remove timestamps outside the window
+  while (daemonRestartTimestamps.length > 0 && now - daemonRestartTimestamps[0]! > RESTART_WINDOW_MS) {
+    daemonRestartTimestamps.shift();
+  }
+  return daemonRestartTimestamps.length < MAX_RESTART_ATTEMPTS;
+}
+
+async function restartDaemon(): Promise<void> {
+  if (daemonRestarting) return;
+  daemonRestarting = true;
+  daemonError = null;
+  try {
+    daemonRestartTimestamps.push(Date.now());
+    await startDaemonWithConfig();
+    clientLog("info", "app", "Daemon restarted successfully");
+    // Reconnect after restart
+    const role = await invoke<string>("get_config_role");
+    await autoConnect(role);
+    wireChatPushHandlers();
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    daemonError = `Failed to restart daemon: ${msg}`;
+    clientLog("error", "app", `Daemon restart failed: ${msg}`);
+  } finally {
+    daemonRestarting = false;
+  }
+}
+
 async function handleOnboardingComplete(): Promise<void> {
   let role: string;
   try {
@@ -85,14 +131,38 @@ async function handleOnboardingComplete(): Promise<void> {
     return;
   }
   appState = "running";
-  autoConnect(role);
+  await autoConnect(role);
+  wireChatPushHandlers();
 }
 
 // Daemon-exit event listener cleanup
 let unlistenDaemonExit: (() => void) | null = null;
+// Chat push handler cleanup
+let unsubChatPush: (() => void) | null = null;
+// onNewClient callback cleanup
+let unsubNewClient: (() => void) | null = null;
+
+function wireChatPushHandlers(): void {
+  // Clean up any previous subscription
+  unsubChatPush?.();
+  unsubChatPush = null;
+
+  const client = getClient();
+  if (client) {
+    unsubChatPush = setupChatPushHandlers(client);
+  }
+}
+
+// Re-register push handlers whenever a new GatewayClient is created (M-2 fix).
+unsubNewClient = onNewClient((client) => {
+  unsubChatPush?.();
+  unsubChatPush = setupChatPushHandlers(client);
+});
 
 onDestroy(() => {
   unlistenDaemonExit?.();
+  unsubChatPush?.();
+  unsubNewClient?.();
 });
 
 onMount(async () => {
@@ -101,11 +171,28 @@ onMount(async () => {
     const { code, message } = event.payload;
     daemonError = `Daemon exited unexpectedly (code ${code ?? "unknown"}): ${message}`;
     clientLog("error", "app", `Daemon exit: code=${code ?? "unknown"} message=${message}`);
+
+    // Auto-restart on unexpected exit (non-zero code or signal), rate-limited
+    const isUnexpected = code !== 0;
+    if (isUnexpected && appState === "running" && canRestartDaemon()) {
+      clientLog("info", "app", "Attempting automatic daemon restart in 3 seconds...");
+      setTimeout(() => {
+        restartDaemon();
+      }, 3000);
+    }
   });
 
   try {
     const configExists = await invoke<boolean>("check_config_exists");
     if (!configExists) {
+      appState = "onboarding-role";
+      return;
+    }
+
+    // Validate config completeness
+    const validation = await invoke<{ valid: boolean; issues: string[] }>("validate_config");
+    if (!validation.valid) {
+      console.warn("Config incomplete:", validation.issues);
       appState = "onboarding-role";
       return;
     }
@@ -120,7 +207,10 @@ onMount(async () => {
       }
     }
     appState = "running";
-    autoConnect(role);
+    if (!daemonError) {
+      await autoConnect(role);
+      wireChatPushHandlers();
+    }
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     loadError = msg;
@@ -148,6 +238,13 @@ onMount(async () => {
     {#if daemonError}
       <div class="daemon-error-banner" role="alert">
         <strong>Daemon error:</strong> {daemonError}
+        <button
+          class="daemon-error-restart"
+          onclick={() => restartDaemon()}
+          disabled={daemonRestarting}
+        >
+          {daemonRestarting ? "Restarting..." : "Restart"}
+        </button>
         <button class="daemon-error-dismiss" onclick={() => (daemonError = null)}>Dismiss</button>
       </div>
     {/if}
@@ -202,8 +299,28 @@ onMount(async () => {
     margin: 8px 16px;
   }
 
-  .daemon-error-dismiss {
+  .daemon-error-restart {
     margin-left: auto;
+    background: none;
+    border: 1px solid currentColor;
+    border-radius: 4px;
+    color: inherit;
+    padding: 4px 10px;
+    font-size: var(--ed-text-xs);
+    cursor: pointer;
+    font-weight: 600;
+  }
+
+  .daemon-error-restart:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+
+  .daemon-error-restart:hover:not(:disabled) {
+    opacity: 0.8;
+  }
+
+  .daemon-error-dismiss {
     background: none;
     border: 1px solid currentColor;
     border-radius: 4px;

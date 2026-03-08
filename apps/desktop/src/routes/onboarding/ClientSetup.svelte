@@ -68,6 +68,7 @@ async function discoverServers(): Promise<void> {
 function parsePairingUrl(url: string): { host: string; port: number; token: string; tls: boolean } | null {
   try {
     // eidolon://host:port?token=xxx&tls=true
+    if (!url.startsWith("eidolon://")) return null;
     const cleaned = url.replace("eidolon://", "https://");
     const parsed = new URL(cleaned);
     const host = parsed.hostname;
@@ -81,9 +82,35 @@ function parsePairingUrl(url: string): { host: string; port: number; token: stri
   }
 }
 
+/** Reject hosts that resolve to private/internal IP ranges to prevent SSRF. */
+function isUnsafeHost(host: string): boolean {
+  // Block metadata endpoints and link-local
+  const BLOCKED_PREFIXES = [
+    "169.254.", // Link-local / cloud metadata
+    "127.",     // Loopback
+    "0.",       // Current network
+  ];
+  const BLOCKED_EXACT = ["localhost", "0.0.0.0", "[::]", "[::1]"];
+
+  const lower = host.toLowerCase().trim();
+  if (BLOCKED_EXACT.includes(lower)) return true;
+  for (const prefix of BLOCKED_PREFIXES) {
+    if (lower.startsWith(prefix)) return true;
+  }
+  // Block IPv6 loopback
+  if (lower === "::1" || lower === "[::1]") return true;
+  return false;
+}
+
 async function connectToServer(host: string, port: number, token: string, tls: boolean = false): Promise<void> {
   connecting = true;
   connectError = null;
+
+  if (isUnsafeHost(host)) {
+    connectError = "Connection to localhost or link-local addresses is not allowed for client mode.";
+    connecting = false;
+    return;
+  }
 
   try {
     // Test the connection

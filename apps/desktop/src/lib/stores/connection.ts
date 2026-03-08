@@ -6,10 +6,24 @@
 import { derived, get, writable } from "svelte/store";
 import { type ConnectionState, GatewayClient, type GatewayConfig } from "../api";
 import { settingsStore } from "./settings";
+import { clearStreamingState } from "./chat";
 
 const clientStore = writable<GatewayClient | null>(null);
 const stateStore = writable<ConnectionState>("disconnected");
 const errorStore = writable<string | null>(null);
+
+/** Callbacks to run when a new client instance is created. */
+const onNewClientCallbacks: Array<(client: GatewayClient) => void> = [];
+
+/** Register a callback that fires when a new GatewayClient is created (e.g., to re-register push handlers).
+ * Returns an unsubscribe function to remove the callback. */
+export function onNewClient(callback: (client: GatewayClient) => void): () => void {
+  onNewClientCallbacks.push(callback);
+  return () => {
+    const idx = onNewClientCallbacks.indexOf(callback);
+    if (idx !== -1) onNewClientCallbacks.splice(idx, 1);
+  };
+}
 
 function createClient(config: GatewayConfig): GatewayClient {
   const client = new GatewayClient(config);
@@ -17,11 +31,21 @@ function createClient(config: GatewayConfig): GatewayClient {
   client.onStateChange((state) => {
     stateStore.set(state);
     if (state === "error") {
-      errorStore.set("Connection failed");
+      errorStore.set("Connection failed. Check that the server is running and reachable.");
+      // Clear streaming state so UI is not stuck on "Thinking..."
+      clearStreamingState();
+    } else if (state === "disconnected") {
+      // Clear streaming state on disconnect
+      clearStreamingState();
     } else if (state === "connected") {
       errorStore.set(null);
     }
   });
+
+  // Notify listeners (e.g., chat push handler registration)
+  for (const cb of onNewClientCallbacks) {
+    cb(client);
+  }
 
   return client;
 }

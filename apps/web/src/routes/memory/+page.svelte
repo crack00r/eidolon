@@ -23,6 +23,7 @@ let deleteTargetId = $state<string | null>(null);
 let editMode = $state(false);
 let editContent = $state("");
 let editImportance = $state(0);
+let modalDialogRef = $state<HTMLDivElement | null>(null);
 
 function handleInput(): void {
   if (debounceTimer) clearTimeout(debounceTimer);
@@ -100,6 +101,10 @@ async function saveEdit(): Promise<void> {
 function confirmDelete(id: string): void {
   deleteTargetId = id;
   showDeleteConfirm = true;
+  // Focus the dialog element after Svelte renders it
+  queueMicrotask(() => {
+    modalDialogRef?.focus();
+  });
 }
 
 async function executeDelete(): Promise<void> {
@@ -233,7 +238,7 @@ function cancelDelete(): void {
     {#if showDeleteConfirm}
       <div
         class="modal-overlay"
-        role="presentation"
+        role="none"
         onclick={cancelDelete}
         onkeydown={(e) => { if (e.key === "Escape") cancelDelete(); }}
       >
@@ -244,6 +249,7 @@ function cancelDelete(): void {
           aria-labelledby="delete-modal-title"
           aria-describedby="delete-modal-desc"
           tabindex="-1"
+          bind:this={modalDialogRef}
           onclick={(e) => e.stopPropagation()}
           onkeydown={(e) => e.stopPropagation()}
         >

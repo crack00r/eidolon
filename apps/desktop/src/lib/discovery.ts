@@ -15,9 +15,6 @@ import { clientLog } from "./logger";
 // Constants
 // ---------------------------------------------------------------------------
 
-/** UDP broadcast port matching the server's DiscoveryBroadcaster. */
-const DISCOVERY_PORT = 41920;
-
 /** Maximum time (ms) to wait during a discovery scan. */
 const DEFAULT_SCAN_TIMEOUT_MS = 6_000;
 
@@ -212,7 +209,6 @@ async function tryUdpDiscovery(timeoutMs: number): Promise<DiscoveredServer[]> {
     }
 
     const result: unknown = await invoke("discover_servers", {
-      port: DISCOVERY_PORT,
       timeoutMs,
     });
 
@@ -223,7 +219,7 @@ async function tryUdpDiscovery(timeoutMs: number): Promise<DiscoveredServer[]> {
       if (typeof item !== "object" || item === null) continue;
       const obj = item as Record<string, unknown>;
 
-      // Parse beacon from Rust-side result
+      // First try parsing as a beacon (matching the protocol's DiscoveryBeacon shape)
       const beacon = extractBeacon(obj);
       if (beacon) {
         servers.push({
@@ -233,6 +229,24 @@ async function tryUdpDiscovery(timeoutMs: number): Promise<DiscoveredServer[]> {
           version: beacon.version,
           ...(beacon.tailscaleIp ? { tailscaleIp: beacon.tailscaleIp } : {}),
           tls: beacon.tls,
+        });
+        continue;
+      }
+
+      // Fall back to Rust DiscoveredServer struct shape:
+      // { service, version, host, port, hostname, name, tailscaleIp, tls }
+      if (
+        typeof obj.host === "string" &&
+        typeof obj.port === "number" &&
+        typeof obj.service === "string"
+      ) {
+        servers.push({
+          name: typeof obj.name === "string" ? obj.name : (typeof obj.hostname === "string" ? obj.hostname : obj.host),
+          host: obj.host,
+          port: obj.port,
+          version: typeof obj.version === "string" ? obj.version : "unknown",
+          ...(typeof obj.tailscaleIp === "string" ? { tailscaleIp: obj.tailscaleIp } : {}),
+          tls: typeof obj.tls === "boolean" ? obj.tls : false,
         });
       }
     }

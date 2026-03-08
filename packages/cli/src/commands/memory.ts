@@ -39,6 +39,22 @@ const MEMORY_TYPES: readonly MemoryType[] = [
   "schema",
 ];
 
+const MEMORY_LAYERS: readonly MemoryLayer[] = [
+  "working",
+  "short_term",
+  "long_term",
+  "episodic",
+  "procedural",
+];
+
+function isValidMemoryType(value: string): value is MemoryType {
+  return (MEMORY_TYPES as readonly string[]).includes(value);
+}
+
+function isValidMemoryLayer(value: string): value is MemoryLayer {
+  return (MEMORY_LAYERS as readonly string[]).includes(value);
+}
+
 // ---------------------------------------------------------------------------
 // Init helper
 // ---------------------------------------------------------------------------
@@ -177,8 +193,18 @@ export function registerMemoryCommand(program: Command): void {
       const sys = await initMemorySystem();
       if (!sys) return;
       try {
-        const types = options.type ? [options.type as MemoryType] : undefined;
-        const layers = options.layer ? [options.layer as MemoryLayer] : undefined;
+        if (options.type && !isValidMemoryType(options.type)) {
+          console.error(`Error: invalid memory type '${options.type}'. Valid types: ${MEMORY_TYPES.join(", ")}`);
+          process.exitCode = 1;
+          return;
+        }
+        if (options.layer && !isValidMemoryLayer(options.layer)) {
+          console.error(`Error: invalid memory layer '${options.layer}'. Valid layers: ${MEMORY_LAYERS.join(", ")}`);
+          process.exitCode = 1;
+          return;
+        }
+        const types: MemoryType[] | undefined = options.type ? [options.type as MemoryType] : undefined;
+        const layers: MemoryLayer[] | undefined = options.layer ? [options.layer as MemoryLayer] : undefined;
 
         const result = sys.store.list({
           types,
@@ -246,9 +272,15 @@ export function registerMemoryCommand(program: Command): void {
             return;
           }
 
+          if (!isValidMemoryType(options.type)) {
+            console.error(`Error: invalid memory type '${options.type}'. Valid types: ${MEMORY_TYPES.join(", ")}`);
+            process.exitCode = 1;
+            return;
+          }
+
           const tags = options.tags ? options.tags.split(",").map((t) => t.trim()) : undefined;
           const result = sys.store.create({
-            type: options.type as MemoryType,
+            type: options.type,
             layer: "long_term",
             content,
             confidence,

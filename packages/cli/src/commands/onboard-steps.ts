@@ -104,17 +104,9 @@ export async function setupMasterKey(ask: AskFn): Promise<string | undefined> {
   let masterKey: string;
   if (useGenerated) {
     masterKey = generateMasterKey();
-    console.log("\nMaster key generated.");
-    try {
-      const dataDir = getDataDir();
-      if (!existsSync(dataDir)) mkdirSync(dataDir, { recursive: true });
-      const keyFilePath = join(dataDir, ".master-key-setup");
-      writeFileSync(keyFilePath, `EIDOLON_MASTER_KEY=${masterKey}\n`, { mode: 0o600 });
-      console.log(`  Key saved to: ${keyFilePath} (mode 0600)`);
-      console.log("  Add it to your shell profile, then delete the file.");
-    } catch {
-      console.log("  Warning: Could not write key file.");
-    }
+    console.log("\nMaster key generated. Copy it now -- it will NOT be shown again.\n");
+    console.log(`  EIDOLON_MASTER_KEY=${masterKey}\n`);
+    console.log("  Add the line above to your shell profile (e.g. ~/.bashrc or ~/.zshrc).");
   } else {
     masterKey = await ask("Enter master key (hex string or passphrase): ");
     if (!masterKey) {
@@ -169,6 +161,9 @@ export async function setupClaudeAccount(ask: AskFn): Promise<{ type: "oauth" | 
     if (!apiKey) {
       console.log("  No API key provided. Falling back to OAuth.");
       return { type: "oauth" };
+    }
+    if (!apiKey.startsWith("sk-ant-") && !apiKey.startsWith("sk-")) {
+      console.log('  Warning: API key does not start with "sk-ant-" or "sk-". It may be invalid.');
     }
     return { type: "api-key", apiKey };
   }
@@ -229,7 +224,11 @@ export async function setupGpuWorker(ask: AskFn): Promise<GpuSetupResult> {
   }
 
   const portInput = await ask("GPU worker port [8420]: ");
-  const port = Number.parseInt(portInput, 10) || 8420;
+  let port = Number.parseInt(portInput, 10) || 8420;
+  if (port < 1 || port > 65535) {
+    console.log(`  Invalid port ${port}. Using default 8420.`);
+    port = 8420;
+  }
 
   // Test connection
   let reachable = false;

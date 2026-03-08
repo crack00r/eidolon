@@ -29,13 +29,34 @@ pub fn create_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
             "quit" => {
-                // Gracefully stop daemon before exiting
+                // Gracefully stop daemon before exiting.
+                // Send SIGTERM and spawn an async task to wait for exit,
+                // avoiding blocking the main thread (M-2 fix).
                 if let Some(state) = app.try_state::<DaemonState>() {
                     crate::graceful_stop_daemon(&state);
                 }
-                // Give daemon a moment to shut down gracefully
-                std::thread::sleep(std::time::Duration::from_millis(500));
-                app.exit(0);
+                let app_handle = app.clone();
+                tauri::async_runtime::spawn(async move {
+                    let start = std::time::Instant::now();
+                    let timeout = std::time::Duration::from_secs(5);
+                    loop {
+                        if start.elapsed() >= timeout {
+                            break;
+                        }
+                        let is_done = app_handle
+                            .try_state::<DaemonState>()
+                            .map(|state| {
+                                let daemon = state.0.lock().unwrap_or_else(|e| e.into_inner());
+                                daemon.is_none()
+                            })
+                            .unwrap_or(true);
+                        if is_done {
+                            break;
+                        }
+                        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                    }
+                    app_handle.exit(0);
+                });
             }
             _ => {}
         })

@@ -15,23 +15,43 @@ use tauri_plugin_shell::process::CommandChild;
 pub struct DaemonState(pub Mutex<Option<CommandChild>>);
 
 /// Gracefully stop the daemon process (SIGTERM on Unix, kill on Windows).
+/// Sends the signal but does NOT take the child from state, so the monitor task
+/// can detect the exit and clean up properly. The caller should poll
+/// `daemon_running()` or the state to confirm the daemon has exited.
 pub fn graceful_stop_daemon(state: &DaemonState) {
-    if let Ok(mut daemon) = state.0.lock() {
-        if let Some(child) = daemon.take() {
-            let pid = child.pid();
-            #[cfg(unix)]
-            {
-                // SAFETY: libc::kill with a valid PID and SIGTERM signal
+    let daemon = state.0.lock().unwrap_or_else(|e| {
+        eprintln!("[eidolon] WARNING: DaemonState mutex was poisoned in graceful_stop_daemon, recovering");
+        e.into_inner()
+    });
+    if let Some(ref child) = *daemon {
+        let pid = child.pid();
+        #[cfg(unix)]
+        {
+            // Guard: PID must be > 0 to avoid killing the entire process group (PID 0)
+            // or all processes (PID -1).
+            if (pid as i32) > 0 {
+                // SAFETY: libc::kill with a validated positive PID and SIGTERM signal.
+                // Mutex is held during kill to prevent PID reuse races.
                 unsafe {
                     libc::kill(pid as i32, libc::SIGTERM);
                 }
+            } else {
+                eprintln!("[eidolon] WARNING: refusing to send SIGTERM to invalid PID {}", pid);
             }
-            #[cfg(windows)]
-            {
+        }
+        #[cfg(windows)]
+        {
+            // On Windows, we need to take ownership to call kill
+            drop(daemon);
+            let mut daemon = state.0.lock().unwrap_or_else(|e| {
+                eprintln!("[eidolon] WARNING: DaemonState mutex was poisoned in graceful_stop_daemon (windows), recovering");
+                e.into_inner()
+            });
+            if let Some(child) = daemon.take() {
                 let _ = child.kill();
             }
-            let _ = pid; // suppress unused on Windows
         }
+        let _ = pid; // suppress unused on Windows
     }
 }
 
@@ -50,12 +70,17 @@ pub fn run() {
             commands::stop_daemon,
             commands::daemon_running,
             commands::check_config_exists,
+            commands::validate_config,
             commands::get_config_role,
+            commands::get_server_gateway_config,
             commands::get_os_username,
             commands::get_config_path,
             commands::onboard_setup_server,
             commands::save_client_config,
             commands::get_client_config,
+            commands::setup_claude_token,
+            commands::read_claude_token,
+            commands::has_claude_token,
         ])
         .setup(|app| {
             tray::create_tray(app.handle())?;

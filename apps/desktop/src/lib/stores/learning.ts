@@ -36,8 +36,37 @@ export async function fetchPendingItems(): Promise<void> {
   errorStore.set(null);
 
   try {
-    const response = await client.call<{ items: LearningItem[] }>("learning.listPending");
-    itemsStore.set(response.items);
+    const response = await client.call<{
+      discoveries: Array<{
+        id: string;
+        title: string;
+        sourceType: string;
+        url: string;
+        relevanceScore: number;
+        safetyLevel: string;
+        status: string;
+        createdAt: number;
+      }>;
+      total: number;
+    }>("learning.list");
+    const items: LearningItem[] = response.discoveries.map((d) => ({
+      id: d.id,
+      title: d.title,
+      description: d.url,
+      source: d.sourceType,
+      relevanceScore: d.relevanceScore,
+      safety: (d.safetyLevel === "safe" || d.safetyLevel === "review" || d.safetyLevel === "unsafe"
+        ? d.safetyLevel
+        : "review") as SafetyClassification,
+      discoveredAt: d.createdAt,
+      // Backend uses "new"/"evaluated" for pending items; map to frontend's "pending" status
+      status: (d.status === "approved"
+        ? "approved"
+        : d.status === "rejected"
+          ? "rejected"
+          : "pending") as "pending" | "approved" | "rejected",
+    }));
+    itemsStore.set(items);
   } catch (err) {
     clientLog("error", "learning", "fetchPendingItems failed", err);
     const msg = sanitizeErrorForDisplay(err, "Failed to fetch items");
@@ -53,7 +82,7 @@ export async function approveItem(id: string): Promise<void> {
     throw new Error("Not connected to gateway");
   }
 
-  await client.call("learning.approve", { id });
+  await client.call("learning.approve", { discoveryId: id });
 
   itemsStore.update((items) => items.map((item) => (item.id === id ? { ...item, status: "approved" as const } : item)));
 }
@@ -64,7 +93,7 @@ export async function rejectItem(id: string): Promise<void> {
     throw new Error("Not connected to gateway");
   }
 
-  await client.call("learning.reject", { id });
+  await client.call("learning.reject", { discoveryId: id });
 
   itemsStore.update((items) => items.map((item) => (item.id === id ? { ...item, status: "rejected" as const } : item)));
 }

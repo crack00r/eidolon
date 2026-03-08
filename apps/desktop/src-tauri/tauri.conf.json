@@ -22,7 +22,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self'; connect-src *; style-src 'self' 'unsafe-inline'"
+      "csp": "default-src 'self'; script-src 'self'; connect-src 'self' ws: wss: http://127.0.0.1:* https://127.0.0.1:* ipc: http://ipc.localhost; style-src 'self' 'unsafe-inline'"
     },
     "trayIcon": {
       "iconPath": "icons/icon.png",

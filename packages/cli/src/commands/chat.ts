@@ -177,8 +177,13 @@ export function registerChatCommand(program: Command): void {
       // Create logger
       const logger = createLogger(config.logging);
 
-      // Create Claude Code manager
-      const manager = new ClaudeCodeManager(logger);
+      // Create Claude Code manager with API key from config
+      const apiKeyAccount = config.brain.accounts.find(
+        (a: { type: string; enabled?: boolean }) => a.type === "api-key" && a.enabled !== false,
+      );
+      const apiKey =
+        apiKeyAccount && typeof apiKeyAccount.credential === "string" ? apiKeyAccount.credential : undefined;
+      const manager = new ClaudeCodeManager(logger, { apiKey });
 
       // Verify Claude CLI is available
       const available = await manager.isAvailable();
@@ -229,10 +234,15 @@ export function registerChatCommand(program: Command): void {
         dbManager.close();
       };
 
+      // Track whether SIGINT triggered cleanup so the finally block doesn't double-clean
+      let sigintHandled = false;
       process.on("SIGINT", () => {
         process.stdout.write("\n");
+        sigintHandled = true;
         cleanup();
-        process.exit(0);
+        // Set exit code and let the event loop drain naturally
+        // instead of calling process.exit() which bypasses the finally block
+        process.exitCode = 0;
       });
 
       try {
@@ -279,7 +289,9 @@ export function registerChatCommand(program: Command): void {
           );
         }
       } finally {
-        cleanup();
+        if (!sigintHandled) {
+          cleanup();
+        }
       }
     });
 }

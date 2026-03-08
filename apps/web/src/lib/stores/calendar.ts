@@ -37,14 +37,33 @@ const errorStore = writable<string | null>(null);
 
 let refreshTimer: ReturnType<typeof setInterval> | null = null;
 
+function isCalendarEvent(item: unknown): item is CalendarEvent {
+  if (typeof item !== "object" || item === null) return false;
+  const obj = item as Record<string, unknown>;
+  return (
+    typeof obj.id === "string" &&
+    typeof obj.title === "string" &&
+    typeof obj.startTime === "number" &&
+    typeof obj.endTime === "number"
+  );
+}
+
 function parseEvents(raw: unknown): CalendarEvent[] {
   if (!Array.isArray(raw)) return [];
-  return raw as CalendarEvent[];
+  return raw.filter(isCalendarEvent);
 }
 
 function parseConflicts(raw: unknown): CalendarConflict[] {
   if (!Array.isArray(raw)) return [];
-  return raw as CalendarConflict[];
+  return raw.filter((item): item is CalendarConflict => {
+    if (typeof item !== "object" || item === null) return false;
+    const obj = item as Record<string, unknown>;
+    return (
+      isCalendarEvent(obj.eventA) &&
+      isCalendarEvent(obj.eventB) &&
+      typeof obj.overlapMinutes === "number"
+    );
+  });
 }
 
 export async function fetchCalendarEvents(start: number, end: number): Promise<void> {

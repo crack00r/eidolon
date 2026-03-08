@@ -59,8 +59,15 @@ onMount(async () => {
   }
 });
 
-function handleSave(): void {
+async function handleSave(): Promise<void> {
   updateSettings({ host, port, token, useTls });
+  // Persist to config file so settings survive app restart
+  try {
+    await invoke("save_client_config", { host, port, token, tls: useTls });
+  } catch (err) {
+    // Log but don't block -- browser storage is the primary store during the session
+    console.warn("Failed to persist settings to config file:", err);
+  }
   saved = true;
   setTimeout(() => {
     saved = false;
@@ -75,8 +82,8 @@ function handleReset(): void {
   useTls = false;
 }
 
-function handleConnect(): void {
-  handleSave();
+async function handleConnect(): Promise<void> {
+  await handleSave();
   connect();
 }
 

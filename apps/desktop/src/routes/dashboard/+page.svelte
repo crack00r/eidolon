@@ -14,6 +14,7 @@ import {
   connectedSince,
   latencyMs,
   dashboardError,
+  dashboardLoading,
   type CognitiveState,
   type DashboardEvent,
 } from "../../lib/stores/dashboard";
@@ -124,6 +125,22 @@ function platformIcon(platform: string): string {
   }
 }
 
+// ---- Error dismiss ----
+
+let errorDismissed = $state(false);
+
+// Reset dismissed state when the error message changes
+$effect(() => {
+  // Subscribe to the error value so this effect re-runs on change
+  if ($dashboardError !== undefined) {
+    errorDismissed = false;
+  }
+});
+
+function dismissError(): void {
+  errorDismissed = true;
+}
+
 // ---- Lifecycle ----
 
 onMount(() => {
@@ -178,8 +195,14 @@ onDestroy(() => {
         Not connected ({$connectionState})
       </div>
     {/if}
-    {#if $dashboardError}
-      <div class="error-banner" role="alert">{$dashboardError}</div>
+    {#if $dashboardError && !errorDismissed}
+      <div class="error-banner" role="alert">
+        <span>{$dashboardError}</span>
+        <button class="dismiss-btn" onclick={dismissError} aria-label="Dismiss error">x</button>
+      </div>
+    {/if}
+    {#if $dashboardLoading}
+      <div class="loading-banner" role="status">Loading dashboard...</div>
     {/if}
   </header>
 
@@ -383,6 +406,38 @@ onDestroy(() => {
     border: 1px solid var(--warning);
     border-radius: var(--radius);
     color: var(--warning);
+    font-size: 13px;
+    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  .dismiss-btn {
+    background: none;
+    border: none;
+    color: var(--warning);
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 700;
+    padding: 0 4px;
+    line-height: 1;
+    opacity: 0.7;
+    transition: opacity 0.15s ease;
+  }
+
+  .dismiss-btn:hover {
+    opacity: 1;
+  }
+
+  .loading-banner {
+    width: 100%;
+    padding: 8px 12px;
+    background: rgba(52, 152, 219, 0.1);
+    border: 1px solid var(--accent);
+    border-radius: var(--radius);
+    color: var(--accent);
     font-size: 13px;
     text-align: center;
   }

@@ -4,9 +4,7 @@ import { isConnected } from "../../lib/stores/connection";
 import {
   clearSearch,
   deleteMemory,
-  editMemory,
   isDeleting,
-  isEditing,
   isSearching,
   type MemoryItem,
   memoryError,
@@ -21,9 +19,6 @@ let searchInput = $state("");
 let debounceTimer: ReturnType<typeof setTimeout> | undefined;
 let showDeleteConfirm = $state(false);
 let deleteTargetId = $state<string | null>(null);
-let editMode = $state(false);
-let editContent = $state("");
-let editImportance = $state(0);
 let modalCancelRef: HTMLButtonElement | undefined = $state();
 
 function handleModalKeydown(event: KeyboardEvent): void {
@@ -79,30 +74,6 @@ function formatDate(timestamp: number): string {
 function importanceBar(score: number): string {
   const pct = Math.round(score * 100);
   return `${pct}%`;
-}
-
-function startEdit(item: MemoryItem): void {
-  editMode = true;
-  editContent = item.content;
-  editImportance = item.importance;
-}
-
-function cancelEdit(): void {
-  editMode = false;
-  editContent = "";
-  editImportance = 0;
-}
-
-async function saveEdit(): Promise<void> {
-  const item = $selectedMemory;
-  if (!item) return;
-  const success = await editMemory(item.id, {
-    content: editContent,
-    importance: editImportance,
-  });
-  if (success) {
-    editMode = false;
-  }
 }
 
 function confirmDelete(id: string): void {
@@ -196,7 +167,7 @@ onDestroy(() => {
           <span class="type-badge" style="color: {typeColor($selectedMemory.type)}">
             {typeLabel($selectedMemory.type)}
           </span>
-          <button class="close-detail" onclick={() => { selectMemoryItem(null); cancelEdit(); }} aria-label="Close detail panel">Close</button>
+          <button class="close-detail" onclick={() => selectMemoryItem(null)} aria-label="Close detail panel">Close</button>
         </div>
         <div class="detail-meta">
           <div class="meta-row">
@@ -219,34 +190,18 @@ onDestroy(() => {
           </div>
         </div>
 
-        {#if editMode}
-          <div class="edit-form">
-            <label class="edit-label" for="edit-content">Content</label>
-            <textarea id="edit-content" class="edit-textarea" bind:value={editContent} rows="6"></textarea>
-            <label class="edit-label" for="edit-importance">Importance ({Math.round(editImportance * 100)}%)</label>
-            <input id="edit-importance" type="range" min="0" max="1" step="0.01" bind:value={editImportance} class="edit-slider" />
-            <div class="edit-actions">
-              <button class="action-btn save-btn" onclick={saveEdit} disabled={$isEditing}>
-                {$isEditing ? "Saving..." : "Save"}
-              </button>
-              <button class="action-btn cancel-btn" onclick={cancelEdit}>Cancel</button>
-            </div>
-          </div>
-        {:else}
-          <div class="detail-content">
-            {$selectedMemory.content}
-          </div>
-          <div class="detail-actions">
-            <button class="action-btn edit-btn" onclick={() => startEdit($selectedMemory)}>Edit</button>
-            <button
-              class="action-btn delete-btn"
-              onclick={() => confirmDelete($selectedMemory.id)}
-              disabled={$isDeleting}
-            >
-              {$isDeleting ? "Deleting..." : "Delete"}
-            </button>
-          </div>
-        {/if}
+        <div class="detail-content">
+          {$selectedMemory.content}
+        </div>
+        <div class="detail-actions">
+          <button
+            class="action-btn delete-btn"
+            onclick={() => { if ($selectedMemory?.id) confirmDelete($selectedMemory.id); }}
+            disabled={$isDeleting || !$selectedMemory?.id}
+          >
+            {$isDeleting ? "Deleting..." : "Delete"}
+          </button>
+        </div>
       </div>
     {/if}
 
@@ -260,7 +215,7 @@ onDestroy(() => {
           aria-describedby="delete-modal-message"
           tabindex="-1"
           onclick={(e) => e.stopPropagation()}
-          onkeydown={(e) => e.stopPropagation()}
+          onkeydown={(e) => { if (e.key === "Escape") { cancelDelete(); } else { e.stopPropagation(); } }}
         >
           <h3 class="modal-title" id="delete-modal-title">Delete Memory</h3>
           <p class="modal-message" id="delete-modal-message">Are you sure you want to permanently delete this memory? This action cannot be undone.</p>
@@ -499,16 +454,6 @@ onDestroy(() => {
     cursor: default;
   }
 
-  .edit-btn {
-    background: var(--bg-tertiary);
-    color: var(--text-primary);
-  }
-
-  .edit-btn:hover:not(:disabled) {
-    background: var(--accent);
-    color: #fff;
-  }
-
   .delete-btn {
     background: rgba(231, 76, 60, 0.15);
     color: var(--error);
@@ -519,15 +464,6 @@ onDestroy(() => {
     color: #fff;
   }
 
-  .save-btn {
-    background: var(--accent);
-    color: #fff;
-  }
-
-  .save-btn:hover:not(:disabled) {
-    background: var(--accent-hover);
-  }
-
   .cancel-btn {
     background: var(--bg-tertiary);
     color: var(--text-secondary);
@@ -535,38 +471,6 @@ onDestroy(() => {
 
   .cancel-btn:hover {
     color: var(--text-primary);
-  }
-
-  .edit-form {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-
-  .edit-label {
-    font-size: 11px;
-    color: var(--text-secondary);
-    font-weight: 600;
-    text-transform: uppercase;
-  }
-
-  .edit-textarea {
-    width: 100%;
-    resize: vertical;
-    min-height: 80px;
-    font-size: 13px;
-    line-height: 1.5;
-  }
-
-  .edit-slider {
-    width: 100%;
-    accent-color: var(--accent);
-  }
-
-  .edit-actions {
-    display: flex;
-    gap: 8px;
-    margin-top: 8px;
   }
 
   .modal-overlay {

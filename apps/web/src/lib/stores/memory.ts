@@ -23,6 +23,9 @@ const searchingStore = writable(false);
 const errorStore = writable<string | null>(null);
 const selectedStore = writable<MemoryItem | null>(null);
 
+/** Monotonic counter to prevent stale search results from overwriting fresh ones. */
+let searchRequestId = 0;
+
 export async function searchMemory(query: string): Promise<void> {
   const client = getClient();
   if (!client || client.state !== "connected") {
@@ -37,6 +40,7 @@ export async function searchMemory(query: string): Promise<void> {
     return;
   }
 
+  const requestId = ++searchRequestId;
   searchingStore.set(true);
   errorStore.set(null);
 
@@ -45,14 +49,20 @@ export async function searchMemory(query: string): Promise<void> {
       query,
       limit: 50,
     });
+    // Only apply results if no newer search has been issued
+    if (requestId !== searchRequestId) return;
     resultsStore.set(response.items);
   } catch (err) {
+    // Only apply error if no newer search has been issued
+    if (requestId !== searchRequestId) return;
     clientLog("error", "memory", "searchMemory failed", err);
     const msg = sanitizeErrorForDisplay(err, "Search failed");
     errorStore.set(msg);
     resultsStore.set([]);
   } finally {
-    searchingStore.set(false);
+    if (requestId === searchRequestId) {
+      searchingStore.set(false);
+    }
   }
 }
 
