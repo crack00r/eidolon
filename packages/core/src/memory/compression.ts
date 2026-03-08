@@ -250,7 +250,13 @@ export class MemoryCompressor {
     allTags.add("compressed");
 
     // Find the highest confidence among the source memories
-    const maxConfidence = Math.max(...memories.map((m) => m.confidence));
+    // (manual loop instead of Math.max spread to avoid stack overflow on large arrays)
+    let maxConfidence = -Infinity;
+    for (const mem of memories) {
+      if (mem.confidence > maxConfidence) {
+        maxConfidence = mem.confidence;
+      }
+    }
 
     // Create the compressed summary memory
     const input: CreateMemoryInput = {
@@ -267,27 +273,32 @@ export class MemoryCompressor {
       },
     };
 
-    const createResult = this.store.create(input);
-    if (!createResult.ok) {
-      return Err(createResult.error);
-    }
-
-    // Delete the originals
-    const removedIds: string[] = [];
-    for (const mem of memories) {
-      const deleteResult = this.store.delete(mem.id);
-      if (deleteResult.ok) {
-        removedIds.push(mem.id);
-      } else {
-        this.logger.warn("summarizeAndReplace", `Failed to delete memory ${mem.id}: ${deleteResult.error.message}`);
+    // Wrap create + deletes in a single transaction for atomicity:
+    // if any delete fails, the entire operation is rolled back.
+    const result = this.store.withTransaction(() => {
+      const createResult = this.store.create(input);
+      if (!createResult.ok) {
+        return Err(createResult.error);
       }
-    }
 
-    return Ok({
-      memoriesCompressed: removedIds.length,
-      summariesCreated: 1,
-      removedMemoryIds: removedIds,
+      const removedIds: string[] = [];
+      for (const mem of memories) {
+        const deleteResult = this.store.delete(mem.id);
+        if (deleteResult.ok) {
+          removedIds.push(mem.id);
+        } else {
+          this.logger.warn("summarizeAndReplace", `Failed to delete memory ${mem.id}: ${deleteResult.error.message}`);
+        }
+      }
+
+      return Ok({
+        memoriesCompressed: removedIds.length,
+        summariesCreated: 1,
+        removedMemoryIds: removedIds,
+      });
     });
+
+    return result;
   }
 
   /**

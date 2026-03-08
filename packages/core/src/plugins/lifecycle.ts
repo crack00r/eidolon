@@ -2,7 +2,7 @@
  * Plugin lifecycle manager -- initializes, starts, stops, and destroys plugins.
  */
 
-import type { EidolonPlugin, EventType, PluginConfig, PluginPermission } from "@eidolon/protocol";
+import type { EidolonPlugin, PluginConfig, PluginPermission } from "@eidolon/protocol";
 import type { Logger } from "../logging/logger.ts";
 import type { EventBus } from "../loop/event-bus.ts";
 import type { LoadedPlugin } from "./loader.ts";
@@ -59,7 +59,7 @@ export class PluginLifecycleManager {
         this.registry.updateState(name, "error", String(err));
         this.logger.error("plugins:lifecycle", `Plugin ${name} init failed`, err);
         this.eventBus?.publish(
-          "plugin:error" as EventType,
+          "plugin:error",
           { plugin: name, error: String(err) },
           { source: "plugin:lifecycle" },
         );
@@ -73,12 +73,12 @@ export class PluginLifecycleManager {
       try {
         await instance.start?.();
         this.registry.updateState(name, "started");
-        this.eventBus?.publish("plugin:started" as EventType, { plugin: name }, { source: "plugin:lifecycle" });
+        this.eventBus?.publish("plugin:started", { plugin: name }, { source: "plugin:lifecycle" });
       } catch (err) {
         this.registry.updateState(name, "error", String(err));
         this.logger.error("plugins:lifecycle", `Plugin ${name} start failed`, err);
         this.eventBus?.publish(
-          "plugin:error" as EventType,
+          "plugin:error",
           { plugin: name, error: String(err) },
           { source: "plugin:lifecycle" },
         );
@@ -92,7 +92,7 @@ export class PluginLifecycleManager {
       try {
         await instance.stop?.();
         this.registry.updateState(name, "stopped");
-        this.eventBus?.publish("plugin:stopped" as EventType, { plugin: name }, { source: "plugin:lifecycle" });
+        this.eventBus?.publish("plugin:stopped", { plugin: name }, { source: "plugin:lifecycle" });
       } catch (err) {
         this.logger.error("plugins:lifecycle", `Plugin ${name} stop failed`, err);
       }

@@ -42,21 +42,25 @@ export function injectTraceContext(tracer: ITracer, headers: Record<string, stri
 // ---------------------------------------------------------------------------
 
 /**
- * Extract trace context from incoming HTTP or WebSocket message headers.
+ * Extract trace context from incoming HTTP or WebSocket message headers
+ * and run `fn` within that context.
  *
  * Used when Gateway receives WebSocket messages that include trace context
- * from desktop/mobile clients.
+ * from desktop/mobile clients.  Any spans created inside `fn` will be
+ * correctly parented to the extracted trace.
  *
  * @param tracer  - The ITracer instance.
  * @param headers - Incoming headers (case-insensitive lookup performed).
+ * @param fn      - Callback to run within the extracted context.
+ * @returns The return value of `fn`.
  */
-export function extractTraceContext(tracer: ITracer, headers: Record<string, string>): void {
+export function extractTraceContext<T>(tracer: ITracer, headers: Record<string, string>, fn: () => T): T {
   // Normalize header keys to lowercase for case-insensitive matching
   const normalized: Record<string, string> = {};
   for (const [key, value] of Object.entries(headers)) {
     normalized[key.toLowerCase()] = value;
   }
-  tracer.extractContext(normalized);
+  return tracer.withExtractedContext(normalized, fn);
 }
 
 // ---------------------------------------------------------------------------

@@ -96,7 +96,7 @@ export class ChannelResolver {
     const userResult = this.userManager.get(userId);
     if (!userResult.ok) return userResult;
     if (userResult.value === null) {
-      return Err(createError(ErrorCode.DB_QUERY_FAILED, `User ${userId} not found`));
+      return Err(createError(ErrorCode.INVALID_INPUT, `User ${userId} not found`));
     }
 
     const user = userResult.value;
@@ -122,7 +122,7 @@ export class ChannelResolver {
     const result = this.userManager.get(DEFAULT_USER_ID);
     if (!result.ok) return result;
     if (result.value === null) {
-      return Err(createError(ErrorCode.DB_QUERY_FAILED, "Default user not found -- was ensureDefaultUser() called?"));
+      return Err(createError(ErrorCode.INVALID_STATE, "Default user not found -- was ensureDefaultUser() called?"));
     }
     return Ok(result.value);
   }

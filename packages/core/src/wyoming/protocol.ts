@@ -147,8 +147,13 @@ export interface WyomingEvent {
 // Header schema (the JSON line)
 // ---------------------------------------------------------------------------
 
+/** Set of valid Wyoming event types for fast lookup. */
+const VALID_EVENT_TYPES: ReadonlySet<string> = new Set(WYOMING_EVENT_TYPES);
+
 const WyomingHeaderSchema = z.object({
-  type: z.string(),
+  type: z.string().refine((t) => VALID_EVENT_TYPES.has(t), {
+    message: "Unknown Wyoming event type",
+  }),
   data: z.record(z.unknown()).optional(),
   data_length: z.number().int().min(0).optional(),
   payload_length: z.number().int().min(0).max(MAX_PAYLOAD_SIZE).optional(),
@@ -197,7 +202,9 @@ export type ParseResult = Result<WyomingEvent, EidolonError>;
  * Handles partial reads and binary payloads correctly.
  */
 export class WyomingParser {
-  private buffer: Uint8Array = new Uint8Array(0);
+  /** Buffer list pattern: chunks are accumulated without copying until parsing needs a contiguous view. */
+  private chunks: Uint8Array[] = [];
+  private totalBytes = 0;
   private readonly events: WyomingEvent[] = [];
 
   /** Pending header waiting for its binary payload. */
@@ -205,19 +212,46 @@ export class WyomingParser {
 
   /** Feed raw bytes from the TCP socket. */
   feed(data: Uint8Array): Result<void, EidolonError> {
-    // Append data to buffer
-    const newBuffer = new Uint8Array(this.buffer.byteLength + data.byteLength);
-    newBuffer.set(this.buffer, 0);
-    newBuffer.set(data, this.buffer.byteLength);
-    this.buffer = newBuffer;
+    // Accumulate chunk without copying (avoids quadratic buffer growth)
+    this.chunks.push(data);
+    this.totalBytes += data.byteLength;
 
     // Guard against oversized buffers
-    if (this.buffer.byteLength > MAX_HEADER_SIZE + MAX_PAYLOAD_SIZE) {
+    if (this.totalBytes > MAX_HEADER_SIZE + MAX_PAYLOAD_SIZE) {
       return Err(createError(ErrorCode.WYOMING_PROTOCOL_ERROR, "Wyoming buffer exceeded maximum size"));
     }
 
+    // Compact chunks into a single buffer only when we need to parse
+    this.compactBuffer();
+
     // Parse as many complete events as possible
     return this.parseBuffer();
+  }
+
+  /** Compact the chunk list into a single contiguous Uint8Array for parsing. */
+  private compactBuffer(): void {
+    if (this.chunks.length <= 1) return;
+    const buffer = new Uint8Array(this.totalBytes);
+    let offset = 0;
+    for (const chunk of this.chunks) {
+      buffer.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    this.chunks = [buffer];
+  }
+
+  /** Get the current contiguous buffer for parsing. */
+  private get buffer(): Uint8Array {
+    if (this.chunks.length === 0) return new Uint8Array(0);
+    const first = this.chunks[0];
+    if (first === undefined) return new Uint8Array(0);
+    return first;
+  }
+
+  /** Replace the current buffer with a new one (after slicing off consumed bytes). */
+  private setBuffer(buf: Uint8Array): void {
+    this.chunks = buf.byteLength > 0 ? [buf] : [];
+    this.totalBytes = buf.byteLength;
   }
 
   /** Take all parsed events, clearing the internal queue. */
@@ -236,8 +270,9 @@ export class WyomingParser {
           return Ok(undefined); // Need more data
         }
 
-        const payload = this.buffer.slice(0, this.pendingHeader.payloadLength);
-        this.buffer = this.buffer.slice(this.pendingHeader.payloadLength);
+        const buf = this.buffer;
+        const payload = buf.slice(0, this.pendingHeader.payloadLength);
+        this.setBuffer(buf.slice(this.pendingHeader.payloadLength));
 
         this.events.push({
           type: this.pendingHeader.type as WyomingEventType,
@@ -257,8 +292,9 @@ export class WyomingParser {
         return Ok(undefined); // Need more data
       }
 
-      const headerLine = new TextDecoder().decode(this.buffer.slice(0, nlIndex));
-      this.buffer = this.buffer.slice(nlIndex + 1);
+      const buf = this.buffer;
+      const headerLine = new TextDecoder().decode(buf.slice(0, nlIndex));
+      this.setBuffer(buf.slice(nlIndex + 1));
 
       // Skip empty lines
       if (headerLine.trim().length === 0) continue;

@@ -33,6 +33,13 @@ const NOOP_HANDLE: MetricsBridgeHandle = {
 
 const DEFAULT_SYNC_INTERVAL_MS = 10_000;
 
+/**
+ * Maximum number of unique label values (model names, account names) to report.
+ * Beyond this threshold, new label values are silently dropped to prevent
+ * cardinality explosion that can overwhelm monitoring backends.
+ */
+const MAX_LABEL_CARDINALITY = 100;
+
 // ---------------------------------------------------------------------------
 // createMetricsBridge
 // ---------------------------------------------------------------------------
@@ -97,8 +104,11 @@ export async function createMetricsBridge(
       description: "Total tokens used by model",
     });
     tokensCounter.addCallback((result) => {
+      let count = 0;
       for (const [model, value] of registry.tokensUsed.values.entries()) {
+        if (count >= MAX_LABEL_CARDINALITY) break;
         result.observe(value, { model });
+        count++;
       }
     });
 
@@ -116,21 +126,63 @@ export async function createMetricsBridge(
       result.observe(registry.loopCycleTime.sum);
     });
 
-    logger.info("telemetry", "MetricsBridge initialized", { syncIntervalMs });
+    // Account-level metrics
+    const accountTokensUsed = meter.createObservableGauge("eidolon.account_tokens_used", {
+      description: "Tokens used in the current hour by account",
+    });
+    accountTokensUsed.addCallback((result) => {
+      let count = 0;
+      for (const [account, value] of registry.accountTokensUsed.values.entries()) {
+        if (count >= MAX_LABEL_CARDINALITY) break;
+        result.observe(value, { account_name: account });
+        count++;
+      }
+    });
 
-    // The OTel SDK handles periodic collection via the MetricReader,
-    // so we don't need our own sync interval. The observable callbacks
-    // above are invoked by the SDK at export time. We keep a timer
-    // reference so dispose() can be a clean no-op.
-    const intervalId = setInterval(() => {
-      // Intentional no-op: observable callbacks handle sync.
-      // This interval exists solely so dispose() has something to clear,
-      // and to keep the bridge "alive" in the event loop.
-    }, syncIntervalMs);
+    const accountTokensRemaining = meter.createObservableGauge("eidolon.account_tokens_remaining", {
+      description: "Tokens remaining in the current hour by account",
+    });
+    accountTokensRemaining.addCallback((result) => {
+      let count = 0;
+      for (const [account, value] of registry.accountTokensRemaining.values.entries()) {
+        if (count >= MAX_LABEL_CARDINALITY) break;
+        result.observe(value, { account_name: account });
+        count++;
+      }
+    });
+
+    const accountCooldownActive = meter.createObservableGauge("eidolon.account_cooldown_active", {
+      description: "Whether an account is currently in cooldown (1=yes, 0=no)",
+    });
+    accountCooldownActive.addCallback((result) => {
+      let count = 0;
+      for (const [account, value] of registry.accountCooldownActive.values.entries()) {
+        if (count >= MAX_LABEL_CARDINALITY) break;
+        result.observe(value, { account_name: account });
+        count++;
+      }
+    });
+
+    const accountErrorsTotal = meter.createObservableCounter("eidolon.account_errors_total", {
+      description: "Total errors encountered by account",
+    });
+    accountErrorsTotal.addCallback((result) => {
+      let count = 0;
+      for (const [account, value] of registry.accountErrorsTotal.values.entries()) {
+        if (count >= MAX_LABEL_CARDINALITY) break;
+        result.observe(value, { account_name: account });
+        count++;
+      }
+    });
+
+    logger.info("telemetry", "MetricsBridge initialized");
+
+    // The OTel SDK handles periodic collection via the MetricReader.
+    // The observable callbacks above are invoked by the SDK at export time.
+    // No interval needed -- the SDK manages the collection schedule.
 
     return {
       dispose: () => {
-        clearInterval(intervalId);
         logger.info("telemetry", "MetricsBridge disposed");
       },
     };

@@ -16,7 +16,9 @@ export const WhatsAppConfigSchema = z.object({
   accessToken: SecretRefSchema.or(z.string()),
   verifyToken: SecretRefSchema.or(z.string()),
   appSecret: SecretRefSchema.or(z.string()),
-  allowedPhoneNumbers: z.array(z.string()), // E.164 format
+  allowedPhoneNumbers: z.array(
+    z.string().regex(/^\+\d{7,15}$/, "Phone number must be in E.164 format (e.g., +491234567890)"),
+  ),
   notifyOnDiscovery: z.boolean().default(true),
   dndSchedule: z
     .object({
@@ -31,7 +33,7 @@ export const EmailConfigSchema = z
     enabled: z.boolean().default(false),
     imap: z.object({
       host: z.string(),
-      port: z.number().int().positive().default(993),
+      port: z.number().int().min(1).max(65535).default(993),
       tls: z.boolean().default(true),
       user: z.string(),
       password: SecretRefSchema.or(z.string()),
@@ -40,7 +42,7 @@ export const EmailConfigSchema = z
     }),
     smtp: z.object({
       host: z.string(),
-      port: z.number().int().positive().default(587),
+      port: z.number().int().min(1).max(65535).default(587),
       tls: z.boolean().default(true),
       user: z.string(),
       password: SecretRefSchema.or(z.string()),
@@ -113,8 +115,8 @@ export const WebhookEndpointSchema = z.object({
 });
 
 export const GatewayConfigSchema = z.object({
-  host: z.string().default("127.0.0.1"),
-  port: z.number().int().positive().default(8419),
+  host: z.string().max(253).default("127.0.0.1"),
+  port: z.number().int().min(1).max(65535).default(8419),
   tls: z
     .object({
       enabled: z.boolean().default(false),
@@ -160,7 +162,7 @@ export const GatewayConfigSchema = z.object({
 export const GpuWorkerSchema = z.object({
   name: z.string(),
   host: z.string(),
-  port: z.number().int().positive().default(8420),
+  port: z.number().int().min(1).max(65535).default(8420),
   token: stringOrSecret(),
   capabilities: z.array(z.enum(["tts", "stt", "realtime"])).default(["tts", "stt"]),
   priority: z.number().int().min(1).max(100).default(50),

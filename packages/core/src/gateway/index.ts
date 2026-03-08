@@ -1,6 +1,7 @@
 // Gateway -- WebSocket server for client communication via JSON-RPC 2.0
 
 export { certExists, generateSelfSignedCert } from "./cert-manager.ts";
+export { GatewayChannel } from "./gateway-channel.ts";
 export { handleOpenAIRequest, type OpenAICompatDeps } from "./openai-compat.ts";
 export {
   createJsonRpcError,

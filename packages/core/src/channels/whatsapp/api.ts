@@ -245,8 +245,11 @@ export class WhatsAppCloudApi implements WhatsAppApiClient {
           return Err(createError(code, `WhatsApp API ${response.status}: ${errorBody}`));
         }
 
-        const data = (await response.json()) as T;
-        return Ok(data);
+        const data: unknown = await response.json();
+        if (typeof data !== "object" || data === null) {
+          return Err(createError(ErrorCode.WHATSAPP_API_ERROR, "WhatsApp API returned non-object response"));
+        }
+        return Ok(data as T);
       } finally {
         clearTimeout(timer);
       }
@@ -257,17 +260,26 @@ export class WhatsAppCloudApi implements WhatsAppApiClient {
 
   private isTransientError(error: EidolonError): boolean {
     if (error.code === ErrorCode.WHATSAPP_RATE_LIMITED) return true;
-    const msg = error.message.toLowerCase();
-    return (
-      msg.includes("500") ||
-      msg.includes("502") ||
-      msg.includes("503") ||
-      msg.includes("504") ||
-      msg.includes("econnreset") ||
-      msg.includes("etimedout") ||
-      msg.includes("network") ||
-      msg.includes("abort")
-    );
+
+    // Check HTTP status code from the error message prefix "WhatsApp API NNN:"
+    const statusMatch = error.message.match(/WhatsApp API (\d{3}):/);
+    if (statusMatch) {
+      const status = Number(statusMatch[1]);
+      return status >= 500 && status <= 599;
+    }
+
+    // Network-level errors (no HTTP status) are transient
+    const cause = error.cause;
+    if (cause instanceof Error) {
+      const name = cause.name;
+      if (name === "AbortError" || name === "TypeError") return true;
+      const code = (cause as unknown as Record<string, unknown>).code;
+      if (typeof code === "string" && (code === "ECONNRESET" || code === "ETIMEDOUT" || code === "ECONNREFUSED")) {
+        return true;
+      }
+    }
+
+    return false;
   }
 }
 

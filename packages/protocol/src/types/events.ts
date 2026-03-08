@@ -51,6 +51,10 @@ export type EventType =
   | "ha:state_changed"
   | "ha:anomaly_detected"
   | "ha:scene_executed"
+  | "plugin:loaded"
+  | "plugin:started"
+  | "plugin:stopped"
+  | "plugin:error"
   | "anticipation:check"
   | "anticipation:suggestion"
   | "anticipation:dismissed"
@@ -202,7 +206,7 @@ export interface AnticipationSuggestionPayload {
   readonly title: string;
   readonly body: string;
   readonly channelId: string;
-  readonly priority: "critical" | "normal" | "low";
+  readonly priority: "critical" | "high" | "normal" | "low";
   readonly actionable: boolean;
   readonly suggestedAction?: string;
   readonly calendarEventId?: string;

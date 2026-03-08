@@ -4,6 +4,7 @@
 
 import { z } from "zod";
 import type { CoreRpcDeps } from "./rpc-handlers.ts";
+import { RpcValidationError } from "./rpc-schemas.ts";
 import type { MethodHandler } from "./server.ts";
 
 // ---------------------------------------------------------------------------
@@ -32,17 +33,6 @@ const LearningRejectParamsSchema = z.object({
   discoveryId: z.string().min(1).max(256),
   reason: z.string().max(1024).optional(),
 });
-
-// ---------------------------------------------------------------------------
-// Validation error
-// ---------------------------------------------------------------------------
-
-class RpcValidationError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "RpcValidationError";
-  }
-}
 
 // ---------------------------------------------------------------------------
 // Session handlers

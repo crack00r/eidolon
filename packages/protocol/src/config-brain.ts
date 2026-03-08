@@ -67,6 +67,10 @@ export const LoopConfigSchema = z.object({
           learning: z.number().min(0).max(1).default(0.2),
           dreaming: z.number().min(0).max(1).default(0.1),
         })
+        .refine(
+          (c) => Math.abs(c.user + c.tasks + c.learning + c.dreaming - 1.0) <= 0.01,
+          { message: "Energy budget categories must sum to 1.0 (within 0.01 tolerance)" },
+        )
         .default({}),
     })
     .default({}),

@@ -65,8 +65,8 @@ export class WyomingHandler {
   private readonly eventBus: EventBus;
   private readonly logger: Logger;
 
-  /** Active audio session per satellite (identified by socket writer reference). */
-  private audioSession: AudioSession | null = null;
+  /** Active audio sessions keyed by satellite ID to isolate concurrent satellites. */
+  private readonly audioSessions: Map<string, AudioSession> = new Map();
 
   constructor(deps: WyomingHandlerDeps) {
     this.stt = deps.stt;
@@ -84,9 +84,9 @@ export class WyomingHandler {
       case "describe":
         return this.handleDescribe();
       case "audio-start":
-        return this.handleAudioStart(event);
+        return this.handleAudioStart(event, satelliteId);
       case "audio-chunk":
-        return this.handleAudioChunk(event);
+        return this.handleAudioChunk(event, satelliteId);
       case "audio-stop":
         return this.handleAudioStop(satelliteId);
       case "synthesize":
@@ -138,7 +138,7 @@ export class WyomingHandler {
   }
 
   /** Start a new audio recording session. */
-  private handleAudioStart(event: WyomingEvent): Result<readonly Uint8Array[], EidolonError> {
+  private handleAudioStart(event: WyomingEvent, satelliteId: string): Result<readonly Uint8Array[], EidolonError> {
     const parseResult = AudioStartDataSchema.safeParse(event.data);
     if (!parseResult.success) {
       return Err(
@@ -146,15 +146,16 @@ export class WyomingHandler {
       );
     }
 
-    this.audioSession = {
+    this.audioSessions.set(satelliteId, {
       rate: parseResult.data.rate,
       width: parseResult.data.width,
       channels: parseResult.data.channels,
       chunks: [],
       totalBytes: 0,
-    };
+    });
 
     this.logger.debug("handleAudioStart", "Audio session started", {
+      satelliteId,
       rate: parseResult.data.rate,
       width: parseResult.data.width,
       channels: parseResult.data.channels,
@@ -164,8 +165,9 @@ export class WyomingHandler {
   }
 
   /** Append an audio chunk to the current session. */
-  private handleAudioChunk(event: WyomingEvent): Result<readonly Uint8Array[], EidolonError> {
-    if (this.audioSession === null) {
+  private handleAudioChunk(event: WyomingEvent, satelliteId: string): Result<readonly Uint8Array[], EidolonError> {
+    const session = this.audioSessions.get(satelliteId);
+    if (!session) {
       return Err(createError(ErrorCode.WYOMING_PROTOCOL_ERROR, "Received audio-chunk without audio-start"));
     }
 
@@ -176,33 +178,36 @@ export class WyomingHandler {
       return Ok([]);
     }
 
-    const newTotal = this.audioSession.totalBytes + event.payload.byteLength;
+    const newTotal = session.totalBytes + event.payload.byteLength;
     if (newTotal > MAX_AUDIO_SESSION_BYTES) {
-      this.audioSession = null;
+      this.audioSessions.delete(satelliteId);
       return Err(createError(ErrorCode.WYOMING_PROTOCOL_ERROR, `Audio session too large: ${newTotal} bytes`));
     }
 
-    this.audioSession.chunks.push(event.payload);
-    this.audioSession.totalBytes = newTotal;
+    session.chunks.push(event.payload);
+    session.totalBytes = newTotal;
 
     return Ok([]);
   }
 
   /** Finalize audio recording, run STT, publish to EventBus, run TTS, return response audio. */
   private async handleAudioStop(satelliteId: string): Promise<Result<readonly Uint8Array[], EidolonError>> {
-    if (this.audioSession === null) {
+    const session = this.audioSessions.get(satelliteId);
+    if (!session) {
       return Err(createError(ErrorCode.WYOMING_PROTOCOL_ERROR, "Received audio-stop without audio-start"));
     }
 
-    const session = this.audioSession;
-    this.audioSession = null;
+    this.audioSessions.delete(satelliteId);
 
     if (session.totalBytes === 0) {
       return Ok([]);
     }
 
-    // Concatenate audio chunks
-    const audioData = concatChunks(session.chunks, session.totalBytes);
+    // Concatenate audio chunks (raw PCM)
+    const rawPcm = concatChunks(session.chunks, session.totalBytes);
+
+    // Wrap raw PCM in a WAV container so the STT service receives valid audio/wav
+    const audioData = wrapPcmInWav(rawPcm, session.rate, session.channels, session.width);
 
     this.logger.info("handleAudioStop", "Processing audio from satellite", {
       satelliteId,
@@ -318,7 +323,7 @@ export class WyomingHandler {
 
   /** Reset handler state (e.g., on disconnect). */
   reset(): void {
-    this.audioSession = null;
+    this.audioSessions.clear();
   }
 }
 
@@ -338,4 +343,36 @@ function concatChunks(chunks: readonly Uint8Array[], totalBytes: number): Uint8A
     offset += chunk.byteLength;
   }
   return result;
+}
+
+/** Prepend a standard 44-byte WAV header to raw PCM data. */
+function wrapPcmInWav(pcm: Uint8Array, sampleRate: number, channels: number, bytesPerSample: number): Uint8Array {
+  const dataSize = pcm.byteLength;
+  const headerSize = 44;
+  const wav = new Uint8Array(headerSize + dataSize);
+  const view = new DataView(wav.buffer);
+
+  // RIFF header
+  wav.set([0x52, 0x49, 0x46, 0x46], 0); // "RIFF"
+  view.setUint32(4, 36 + dataSize, true); // File size - 8
+  wav.set([0x57, 0x41, 0x56, 0x45], 8); // "WAVE"
+
+  // fmt sub-chunk
+  wav.set([0x66, 0x6d, 0x74, 0x20], 12); // "fmt "
+  view.setUint32(16, 16, true); // Sub-chunk size (16 for PCM)
+  view.setUint16(20, 1, true); // Audio format (1 = PCM)
+  view.setUint16(22, channels, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * channels * bytesPerSample, true); // Byte rate
+  view.setUint16(32, channels * bytesPerSample, true); // Block align
+  view.setUint16(34, bytesPerSample * 8, true); // Bits per sample
+
+  // data sub-chunk
+  wav.set([0x64, 0x61, 0x74, 0x61], 36); // "data"
+  view.setUint32(40, dataSize, true);
+
+  // PCM data
+  wav.set(pcm, headerSize);
+
+  return wav;
 }

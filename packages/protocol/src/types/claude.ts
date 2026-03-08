@@ -13,6 +13,7 @@ export interface StreamEvent {
   readonly toolInput?: Record<string, unknown>;
   readonly toolResult?: unknown;
   readonly error?: string;
+  readonly errorCode?: string;
   readonly timestamp: number;
 }
 

@@ -62,6 +62,7 @@ const COSINE_EPSILON = 1e-10;
 export class EmbeddingModel {
   private extractionPipeline: FeatureExtractionPipeline | null = null;
   private initialized = false;
+  private initializePromise: Promise<Result<void, EidolonError>> | null = null;
   private readonly modelId: string;
   private readonly dimensions: number;
   private readonly cacheDir: string;
@@ -80,6 +81,16 @@ export class EmbeddingModel {
       return Ok(undefined);
     }
 
+    // Mutex: if another caller is already initializing, wait for that promise
+    if (this.initializePromise) {
+      return this.initializePromise;
+    }
+
+    this.initializePromise = this.doInitialize();
+    return this.initializePromise;
+  }
+
+  private async doInitialize(): Promise<Result<void, EidolonError>> {
     const startMs = performance.now();
 
     try {
@@ -103,6 +114,15 @@ export class EmbeddingModel {
         dtype: "fp32",
       });
 
+      if (typeof pipe !== "function") {
+        this.initializePromise = null;
+        return Err(
+          createError(
+            ErrorCode.EMBEDDING_FAILED,
+            `Embedding pipeline is not callable (got ${typeof pipe}). Model: ${this.modelId}`,
+          ),
+        );
+      }
       this.extractionPipeline = pipe as unknown as FeatureExtractionPipeline;
       this.initialized = true;
 
@@ -115,6 +135,7 @@ export class EmbeddingModel {
 
       return Ok(undefined);
     } catch (cause) {
+      this.initializePromise = null; // Allow retry on failure
       this.logger.error("initialize", `Failed to load embedding model: ${this.modelId}`, cause);
       return Err(
         createError(ErrorCode.EMBEDDING_FAILED, `Failed to initialize embedding model: ${this.modelId}`, cause),

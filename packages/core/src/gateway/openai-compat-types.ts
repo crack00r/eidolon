@@ -6,6 +6,7 @@
 
 import type { BrainConfig } from "@eidolon/protocol";
 import type { ModelRouter } from "../llm/router.ts";
+import { constantTimeCompare } from "./server-helpers.ts";
 
 // ---------------------------------------------------------------------------
 // OpenAI-format response types
@@ -94,7 +95,7 @@ export function extractBearerToken(req: Request): string | undefined {
 export function checkAuth(req: Request, expectedToken: string | undefined): Response | null {
   if (!expectedToken) return null;
   const provided = extractBearerToken(req);
-  if (!provided || provided !== expectedToken) {
+  if (!provided || !constantTimeCompare(provided, expectedToken)) {
     return openAIError("Invalid or missing authentication token", "authentication_error", "invalid_api_key", 401);
   }
   return null;

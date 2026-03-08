@@ -140,6 +140,10 @@ export function registerBuiltinHandlers(deps: BuiltinHandlerDeps): void {
 function registerBrainHandlers(deps: BuiltinHandlerDeps): void {
   const { logger, eventBus, registerHandler, pushToSubscribers } = deps;
 
+  // NOTE: brain.pause, brain.resume, and brain.triggerAction intentionally have
+  // no authorization check beyond WebSocket authentication. Eidolon is a single-user
+  // system where all authenticated gateway clients are trusted to control the brain.
+  // If multi-user role-based access is added, these handlers should check roles.
   registerHandler("brain.pause", async (_params, clientId) => {
     logger.info("brain.pause", `Client ${clientId} requested cognitive loop pause`);
     eventBus.publish(

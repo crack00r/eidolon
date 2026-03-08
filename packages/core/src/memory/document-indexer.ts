@@ -103,11 +103,13 @@ export class DocumentIndexer {
         return Err(createError(ErrorCode.DB_QUERY_FAILED, `Refusing to index symlink: ${absPath}`));
       }
 
-      // If a base directory constraint is provided, verify the real path is within it
+      // If a base directory constraint is provided, verify the real path is within it.
+      // Check startsWith(realBase + "/") to prevent prefix confusion
+      // (e.g., /home/user/docs-evil matching /home/user/docs).
       if (baseDir) {
         const realPath = realpathSync(absPath);
         const realBase = realpathSync(baseDir);
-        if (!realPath.startsWith(realBase)) {
+        if (realPath !== realBase && !realPath.startsWith(realBase + "/")) {
           return Err(createError(ErrorCode.DB_QUERY_FAILED, `File is outside base directory: ${absPath}`));
         }
       }
@@ -257,10 +259,16 @@ export class DocumentIndexer {
       // Use a variable to prevent TypeScript from resolving the module statically.
       const moduleName = "pdf-parse";
       const pdfParseModule = await import(/* @vite-ignore */ moduleName);
-      const pdfParse: PdfParseFn =
-        typeof pdfParseModule.default === "function"
-          ? (pdfParseModule.default as PdfParseFn)
-          : (pdfParseModule as unknown as PdfParseFn);
+      let pdfParse: PdfParseFn;
+      if (typeof pdfParseModule.default === "function") {
+        pdfParse = pdfParseModule.default as PdfParseFn;
+      } else if (typeof pdfParseModule === "function") {
+        pdfParse = pdfParseModule as unknown as PdfParseFn;
+      } else {
+        return Err(
+          createError(ErrorCode.DB_QUERY_FAILED, "pdf-parse module does not export a callable function"),
+        );
+      }
 
       const dataBuffer = readFileSync(filePath);
       const parsed = await pdfParse(Buffer.from(dataBuffer));
@@ -293,7 +301,7 @@ export class DocumentIndexer {
     if (baseDir) {
       const realPath = realpathSync(absPath);
       const realBase = realpathSync(baseDir);
-      if (!realPath.startsWith(realBase)) {
+      if (realPath !== realBase && !realPath.startsWith(realBase + "/")) {
         return Err(createError(ErrorCode.DB_QUERY_FAILED, `File is outside base directory: ${absPath}`));
       }
     }

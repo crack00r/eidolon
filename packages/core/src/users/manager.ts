@@ -117,7 +117,7 @@ export class UserManager {
 
       const updated = txn();
       if (!updated) {
-        return Err(createError(ErrorCode.DB_QUERY_FAILED, `User ${id} not found`));
+        return Err(createError(ErrorCode.INVALID_INPUT, `User ${id} not found`));
       }
       return Ok(rowToUser(updated));
     } catch (cause) {
@@ -128,7 +128,7 @@ export class UserManager {
   /** Delete a user by ID. Cannot delete the default user. */
   delete(id: string): Result<void, EidolonError> {
     if (id === DEFAULT_USER_ID) {
-      return Err(createError(ErrorCode.DB_QUERY_FAILED, "Cannot delete the default user"));
+      return Err(createError(ErrorCode.INVALID_INPUT, "Cannot delete the default user"));
     }
     try {
       const txn = this.db.transaction(() => {
@@ -140,7 +140,7 @@ export class UserManager {
 
       const deleted = txn();
       if (!deleted) {
-        return Err(createError(ErrorCode.DB_QUERY_FAILED, `User ${id} not found`));
+        return Err(createError(ErrorCode.INVALID_INPUT, `User ${id} not found`));
       }
       this.logger.info("delete", `Deleted user ${id}`);
       return Ok(undefined);
@@ -167,10 +167,15 @@ export class UserManager {
     try {
       // Search through all users' channel mappings
       // Since channel_mappings is stored as JSON, we use a LIKE search
-      // then verify in application code for correctness
+      // then verify in application code for correctness.
+      // Escape LIKE wildcards (%, _) and backslash in user input to prevent injection.
+      const escapedId = externalUserId
+        .replace(/\\/g, "\\\\")
+        .replace(/%/g, "\\%")
+        .replace(/_/g, "\\_");
       const rows = this.db
-        .query("SELECT * FROM users WHERE channel_mappings LIKE ?")
-        .all(`%${externalUserId}%`) as UserRow[];
+        .query("SELECT * FROM users WHERE channel_mappings LIKE ? ESCAPE '\\'")
+        .all(`%${escapedId}%`) as UserRow[];
 
       for (const row of rows) {
         const user = rowToUser(row);

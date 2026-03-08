@@ -55,6 +55,9 @@ type GoogleEvent = z.infer<typeof GoogleEventSchema>;
 // Config
 // ---------------------------------------------------------------------------
 
+/** Callback invoked when an access token is refreshed, so the caller can persist it. */
+export type OnTokenRefreshCallback = (newAccessToken: string) => void;
+
 export interface GoogleCalendarConfig {
   /** OAuth2 access token (from secret store). */
   readonly accessToken: string;
@@ -66,10 +69,15 @@ export interface GoogleCalendarConfig {
   readonly clientSecret: string;
   /** Calendar ID to sync (defaults to "primary"). */
   readonly calendarId?: string;
+  /** Optional callback for persisting refreshed tokens. */
+  readonly onTokenRefresh?: OnTokenRefreshCallback;
 }
 
 const GOOGLE_API_BASE = "https://www.googleapis.com/calendar/v3";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
+
+/** Request timeout for Google Calendar API calls (30 seconds). */
+const GOOGLE_TIMEOUT_MS = 30_000;
 
 // ---------------------------------------------------------------------------
 // GoogleCalendarProvider
@@ -85,6 +93,7 @@ export class GoogleCalendarProvider implements CalendarProvider {
   private readonly clientSecret: string;
   private readonly calendarId: string;
   private readonly logger: Logger;
+  private readonly onTokenRefresh: OnTokenRefreshCallback | null;
 
   constructor(config: GoogleCalendarConfig, logger: Logger, name?: string) {
     this.id = `google-${config.calendarId ?? "primary"}`;
@@ -95,6 +104,7 @@ export class GoogleCalendarProvider implements CalendarProvider {
     this.clientSecret = config.clientSecret;
     this.calendarId = config.calendarId ?? "primary";
     this.logger = logger;
+    this.onTokenRefresh = config.onTokenRefresh ?? null;
   }
 
   async connect(): Promise<Result<void, EidolonError>> {
@@ -163,6 +173,7 @@ export class GoogleCalendarProvider implements CalendarProvider {
       const response = await fetch(`${GOOGLE_API_BASE}${url}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${this.accessToken}` },
+        signal: AbortSignal.timeout(GOOGLE_TIMEOUT_MS),
       });
 
       if (response.status === 401) {
@@ -171,6 +182,7 @@ export class GoogleCalendarProvider implements CalendarProvider {
         const retryResponse = await fetch(`${GOOGLE_API_BASE}${url}`, {
           method: "DELETE",
           headers: { Authorization: `Bearer ${this.accessToken}` },
+          signal: AbortSignal.timeout(GOOGLE_TIMEOUT_MS),
         });
         if (!retryResponse.ok && retryResponse.status !== 204) {
           return Err(createError(ErrorCode.CALENDAR_PROVIDER_ERROR, `Delete failed: ${retryResponse.status}`));
@@ -285,6 +297,7 @@ export class GoogleCalendarProvider implements CalendarProvider {
     try {
       let response = await fetch(`${GOOGLE_API_BASE}${path}`, {
         headers: { Authorization: `Bearer ${this.accessToken}` },
+        signal: AbortSignal.timeout(GOOGLE_TIMEOUT_MS),
       });
 
       if (response.status === 401) {
@@ -292,6 +305,7 @@ export class GoogleCalendarProvider implements CalendarProvider {
         if (!refreshResult.ok) return refreshResult;
         response = await fetch(`${GOOGLE_API_BASE}${path}`, {
           headers: { Authorization: `Bearer ${this.accessToken}` },
+          signal: AbortSignal.timeout(GOOGLE_TIMEOUT_MS),
         });
       }
 
@@ -303,6 +317,9 @@ export class GoogleCalendarProvider implements CalendarProvider {
       }
 
       const data: unknown = await response.json();
+      if (typeof data !== "object" || data === null) {
+        return Err(createError(ErrorCode.CALENDAR_PROVIDER_ERROR, "Google API returned non-object response"));
+      }
       return Ok(data);
     } catch (cause) {
       return Err(createError(ErrorCode.CALENDAR_PROVIDER_ERROR, "Google API request failed", cause));
@@ -318,6 +335,7 @@ export class GoogleCalendarProvider implements CalendarProvider {
           "Content-Type": "application/json",
         },
         body: JSON.stringify(body),
+        signal: AbortSignal.timeout(GOOGLE_TIMEOUT_MS),
       });
 
       if (response.status === 401) {
@@ -330,6 +348,7 @@ export class GoogleCalendarProvider implements CalendarProvider {
             "Content-Type": "application/json",
           },
           body: JSON.stringify(body),
+          signal: AbortSignal.timeout(GOOGLE_TIMEOUT_MS),
         });
       }
 
@@ -344,6 +363,9 @@ export class GoogleCalendarProvider implements CalendarProvider {
       }
 
       const data: unknown = await response.json();
+      if (typeof data !== "object" || data === null) {
+        return Err(createError(ErrorCode.CALENDAR_PROVIDER_ERROR, "Google API POST returned non-object response"));
+      }
       return Ok(data);
     } catch (cause) {
       return Err(createError(ErrorCode.CALENDAR_PROVIDER_ERROR, "Google API POST request failed", cause));
@@ -355,6 +377,7 @@ export class GoogleCalendarProvider implements CalendarProvider {
       const response = await fetch(GOOGLE_TOKEN_URL, {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        signal: AbortSignal.timeout(GOOGLE_TIMEOUT_MS),
         body: new URLSearchParams({
           client_id: this.clientId,
           client_secret: this.clientSecret,
@@ -375,6 +398,14 @@ export class GoogleCalendarProvider implements CalendarProvider {
       }
 
       this.accessToken = parsed.data.access_token;
+      // Notify caller so the refreshed token can be persisted to the secret store
+      if (this.onTokenRefresh) {
+        try {
+          this.onTokenRefresh(this.accessToken);
+        } catch {
+          this.logger.warn("calendar", "Failed to persist refreshed token via callback");
+        }
+      }
       this.logger.debug("calendar", "Google access token refreshed");
       return Ok(undefined);
     } catch (cause) {

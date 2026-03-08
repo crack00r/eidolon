@@ -8,6 +8,9 @@
 import type { Database } from "bun:sqlite";
 import type { CostSummary, EidolonError, Result, SessionType, TokenUsage } from "@eidolon/protocol";
 import { createError, DEFAULT_MODEL_PRICING, Err, ErrorCode, MODEL_PRICING, Ok } from "@eidolon/protocol";
+import { z } from "zod";
+
+const SessionTypeSchema = z.enum(["main", "task", "learning", "dream", "voice", "review"]);
 import type { Logger } from "../logging/logger.ts";
 
 /** Period durations in milliseconds. */
@@ -116,7 +119,10 @@ export class TokenTracker {
       const bySessionType: Partial<Record<SessionType, number>> = {};
       for (const row of byTypeRaw) {
         if (typeof row.session_type === "string" && typeof row.cost === "number") {
-          bySessionType[row.session_type as SessionType] = row.cost;
+          const parsed = SessionTypeSchema.safeParse(row.session_type);
+          if (parsed.success) {
+            bySessionType[parsed.data] = row.cost;
+          }
         }
       }
 
@@ -152,7 +158,7 @@ export class TokenTracker {
         )
         .all(sessionId) as Array<{
         session_id: string;
-        session_type: SessionType;
+        session_type: string;
         model: string;
         input_tokens: number;
         output_tokens: number;
@@ -164,7 +170,7 @@ export class TokenTracker {
 
       const usages: TokenUsage[] = rows.map((row) => ({
         sessionId: row.session_id,
-        sessionType: row.session_type,
+        sessionType: SessionTypeSchema.parse(row.session_type),
         model: row.model,
         inputTokens: row.input_tokens,
         outputTokens: row.output_tokens,

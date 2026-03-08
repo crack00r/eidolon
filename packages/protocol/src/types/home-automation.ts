@@ -65,6 +65,7 @@ export interface HAStateChange {
 // ---------------------------------------------------------------------------
 
 export interface HAAnomalyRule {
+  /** Glob pattern matched against entity IDs (e.g. "light.*", "sensor.temperature_*"). Uses glob matching, NOT regex. */
   readonly entityPattern: string;
   readonly condition: string;
   readonly message: string;

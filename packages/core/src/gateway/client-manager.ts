@@ -8,6 +8,7 @@ import type { Logger } from "../logging/logger.ts";
 import type { EventBus } from "../loop/event-bus.ts";
 import type { ITracer } from "../telemetry/tracer.ts";
 import { handleClientAuth } from "./client-manager-auth.ts";
+import { cleanupVoiceSessionForClient } from "./rpc-handlers-voice.ts";
 import {
   createJsonRpcError,
   createJsonRpcResponse,
@@ -19,7 +20,15 @@ import {
 } from "./protocol.ts";
 import type { AuthRateLimiter } from "./rate-limiter.ts";
 import { RpcValidationError } from "./rpc-schemas.ts";
-import { AUTH_TIMEOUT_MS, anonymizeIp, type ClientState, type MethodHandler, type ServerWS } from "./server-helpers.ts";
+import {
+  AUTH_TIMEOUT_MS,
+  MAX_MESSAGES_PER_SECOND,
+  MESSAGE_RATE_WINDOW_MS,
+  anonymizeIp,
+  type ClientState,
+  type MethodHandler,
+  type ServerWS,
+} from "./server-helpers.ts";
 
 // ---------------------------------------------------------------------------
 // ClientManager -- manages connected WebSocket clients
@@ -31,6 +40,7 @@ export class ClientManager {
   /** ERR-001: Track auth timeout timers per client for proper cleanup. */
   private readonly authTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
   private broadcastFailureCount = 0;
+  private cleanupTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(
     private readonly logger: Logger,
@@ -40,6 +50,36 @@ export class ClientManager {
     private readonly handlers: Map<GatewayMethod, MethodHandler>,
     private readonly getAuthConfig: () => { type: string; token?: string | Record<string, unknown> },
   ) {}
+
+  startCleanup(): void {
+    if (this.cleanupTimer) return;
+    this.cleanupTimer = setInterval(() => {
+      this.sweepStaleClients();
+    }, 300_000);
+    this.cleanupTimer.unref();
+  }
+
+  private sweepStaleClients(): void {
+    const now = Date.now();
+    const staleThresholdMs = 300_000;
+    for (const [id, client] of this.clients) {
+      if (!client.authenticated && now - client.connectedAt > staleThresholdMs) {
+        this.logger.info("sweep", `Removing stale unauthenticated client ${id}`);
+        try {
+          client.ws.close(4003, "Stale connection");
+        } catch {
+          // Already disconnected
+        }
+        this.clients.delete(id);
+        this.statusSubscribers.delete(id);
+        const authTimer = this.authTimers.get(id);
+        if (authTimer) {
+          clearTimeout(authTimer);
+          this.authTimers.delete(id);
+        }
+      }
+    }
+  }
 
   get size(): number {
     return this.clients.size;
@@ -212,6 +252,20 @@ export class ClientManager {
       return;
     }
 
+    // SEC-M4: Per-message rate limiting
+    const now = Date.now();
+    if (now - client.messageWindowStart >= MESSAGE_RATE_WINDOW_MS) {
+      client.messageCount = 0;
+      client.messageWindowStart = now;
+    }
+    client.messageCount++;
+    if (client.messageCount > MAX_MESSAGES_PER_SECOND) {
+      this.logger.warn("rate-limit", `Client ${clientId} exceeded message rate limit`);
+      const errResp = createJsonRpcError(null, -32000, "Rate limit exceeded: too many messages per second");
+      this.safeSend(ws, JSON.stringify(errResp));
+      return;
+    }
+
     const result = parseJsonRpcRequest(text);
     if (!result.ok) {
       this.safeSend(ws, JSON.stringify(result.error));
@@ -266,6 +320,7 @@ export class ClientManager {
 
     this.clients.delete(clientId);
     this.statusSubscribers.delete(clientId);
+    cleanupVoiceSessionForClient(clientId);
     this.logger.info("close", `Client ${clientId} disconnected`, { code, reason: reason || "none" });
     this.eventBus.publish("gateway:client_disconnected", { clientId, code, reason }, { source: "gateway" });
     this.pushToSubscribers("push.clientDisconnected", {
@@ -278,6 +333,11 @@ export class ClientManager {
 
   /** Clean up all timers and connections (called during server stop). */
   dispose(): void {
+    if (this.cleanupTimer) {
+      clearInterval(this.cleanupTimer);
+      this.cleanupTimer = null;
+    }
+
     for (const timer of this.authTimers.values()) {
       clearTimeout(timer);
     }

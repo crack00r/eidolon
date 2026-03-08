@@ -17,6 +17,8 @@ export interface ScheduledTask {
   readonly lastRunAt?: number;
   readonly nextRunAt?: number;
   readonly createdAt: number;
+  /** IANA timezone identifier (e.g. "Europe/Berlin"). Undefined means UTC. */
+  readonly timezone?: string;
 }
 
 // ---------------------------------------------------------------------------

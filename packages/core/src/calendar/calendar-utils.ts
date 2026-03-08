@@ -6,7 +6,10 @@
  */
 
 import type { CalendarConfig, CalendarEvent, CalendarProviderType } from "@eidolon/protocol";
+import { z } from "zod";
 import type { EventBus } from "../loop/event-bus.ts";
+
+const CalendarProviderTypeSchema = z.enum(["google", "caldav", "manual"]);
 
 // ---------------------------------------------------------------------------
 // DB row type
@@ -67,7 +70,7 @@ export function rowToCalendarEvent(row: CalendarEventRow): CalendarEvent {
     allDay: row.all_day === 1,
     recurrence: row.recurrence ?? undefined,
     reminders,
-    source: row.provider as CalendarProviderType,
+    source: CalendarProviderTypeSchema.catch("manual").parse(row.provider),
     syncedAt: row.synced_at,
   };
 }
@@ -127,12 +130,26 @@ export function buildScheduleContext(events: readonly CalendarEvent[]): string {
 // ---------------------------------------------------------------------------
 
 /**
+ * Track fired reminders to prevent duplicates across periodic calls.
+ * Key: "eventId:minutesBefore:startTime", evicted when older than 2 hours.
+ */
+const firedReminders = new Set<string>();
+const REMINDER_EVICTION_MS = 7_200_000;
+let lastReminderEviction = 0;
+
+/**
  * Check upcoming events and publish reminder events.
- * Called periodically by the daemon.
+ * Called periodically by the daemon. Deduplicates to avoid firing the same reminder twice.
  */
 export function checkReminders(events: readonly CalendarEvent[], config: CalendarConfig, eventBus: EventBus): void {
   const now = Date.now();
   const reminderMinutes = config.reminders.defaultMinutesBefore ?? [15, 60];
+
+  // Periodically evict old entries to prevent unbounded growth
+  if (now - lastReminderEviction > REMINDER_EVICTION_MS) {
+    firedReminders.clear();
+    lastReminderEviction = now;
+  }
 
   for (const event of events) {
     const minutesUntil = Math.floor((event.startTime - now) / 60_000);
@@ -140,6 +157,10 @@ export function checkReminders(events: readonly CalendarEvent[], config: Calenda
     for (const reminderBefore of reminderMinutes) {
       // Fire reminder if we are within 1 minute of the reminder time
       if (Math.abs(minutesUntil - reminderBefore) < 1) {
+        const dedupKey = `${event.id}:${reminderBefore}:${event.startTime}`;
+        if (firedReminders.has(dedupKey)) continue;
+        firedReminders.add(dedupKey);
+
         eventBus.publish(
           "calendar:event_upcoming",
           {

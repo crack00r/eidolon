@@ -14,10 +14,33 @@
  */
 
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { z } from "zod";
 import type { DiscoveryBeacon } from "@eidolon/protocol";
 import type { Logger } from "../logging/logger.ts";
 import type { SignedBeacon } from "./broadcaster.ts";
 import { DISCOVERY_PORT } from "./broadcaster.ts";
+
+// ---------------------------------------------------------------------------
+// Zod schemas for beacon validation
+// ---------------------------------------------------------------------------
+
+const DiscoveryBeaconSchema = z.object({
+  service: z.literal("eidolon"),
+  version: z.string(),
+  hostname: z.string(),
+  host: z.string(),
+  port: z.number(),
+  tailscaleIp: z.string().optional(),
+  tls: z.boolean(),
+  role: z.literal("server"),
+  startedAt: z.number(),
+});
+
+const SignedBeaconSchema = z.object({
+  beacon: DiscoveryBeaconSchema,
+  nonce: z.string(),
+  hmac: z.string(),
+});
 
 // ---------------------------------------------------------------------------
 // Types
@@ -56,6 +79,12 @@ const EXPIRY_CHECK_INTERVAL_MS = 5_000;
 /** Maximum beacon payload size accepted (same as broadcaster). */
 const MAX_BEACON_SIZE = 2048;
 
+/** Maximum beacons per source IP within the rate limit window before dropping. */
+const BEACON_RATE_LIMIT_MAX = 10;
+
+/** Rate limit window in milliseconds. */
+const BEACON_RATE_LIMIT_WINDOW_MS = 60_000;
+
 // ---------------------------------------------------------------------------
 // DiscoveryListener
 // ---------------------------------------------------------------------------
@@ -69,6 +98,7 @@ export class DiscoveryListener {
   private readonly servers: Map<string, DiscoveredServer> = new Map();
   private readonly onFoundHandlers: Set<ServerFoundHandler> = new Set();
   private readonly onLostHandlers: Set<ServerLostHandler> = new Set();
+  private readonly beaconTimestamps: Map<string, number[]> = new Map();
 
   constructor(deps: {
     logger: Logger;
@@ -144,6 +174,7 @@ export class DiscoveryListener {
     }
 
     this.servers.clear();
+    this.beaconTimestamps.clear();
     this.logger.info("stop", "Discovery listener stopped");
   }
 
@@ -155,6 +186,11 @@ export class DiscoveryListener {
   private handleBeacon(buf: Buffer, addr: string): void {
     if (buf.length > MAX_BEACON_SIZE) {
       this.logger.debug("beacon", "Oversized beacon dropped", { bytes: buf.length });
+      return;
+    }
+
+    if (this.isBeaconRateLimited(addr)) {
+      this.logger.debug("beacon", "Rate limited beacon dropped", { addr });
       return;
     }
 
@@ -183,9 +219,11 @@ export class DiscoveryListener {
     let verified = false;
 
     if ("beacon" in obj && "hmac" in obj && "nonce" in obj) {
-      // Signed beacon
-      const signed = obj as unknown as SignedBeacon;
-      if (!isValidBeacon(signed.beacon)) return;
+      // Signed beacon -- validate with Zod
+      const signedResult = SignedBeaconSchema.safeParse(obj);
+      if (!signedResult.success) return;
+
+      const signed = signedResult.data;
 
       if (this.beaconKey) {
         if (!verifyBeaconHmac(signed, this.beaconKey)) {
@@ -196,18 +234,35 @@ export class DiscoveryListener {
       }
       beacon = signed.beacon;
     } else {
-      // Plain (unsigned) beacon
-      if (!isValidBeacon(obj as unknown as DiscoveryBeacon)) return;
+      // Plain (unsigned) beacon -- validate with Zod
+      const beaconResult = DiscoveryBeaconSchema.safeParse(obj);
+      if (!beaconResult.success) return;
 
       // If we require verification, reject unsigned beacons
       if (this.beaconKey) {
         this.logger.debug("beacon", "Unsigned beacon rejected (key configured)", { addr });
         return;
       }
-      beacon = obj as unknown as DiscoveryBeacon;
+      beacon = beaconResult.data;
     }
 
     this.processBeacon(beacon, addr, verified);
+  }
+
+  private isBeaconRateLimited(addr: string): boolean {
+    const now = Date.now();
+    const timestamps = this.beaconTimestamps.get(addr);
+
+    if (!timestamps) {
+      this.beaconTimestamps.set(addr, [now]);
+      return false;
+    }
+
+    const recent = timestamps.filter((t) => now - t < BEACON_RATE_LIMIT_WINDOW_MS);
+    recent.push(now);
+    this.beaconTimestamps.set(addr, recent);
+
+    return recent.length > BEACON_RATE_LIMIT_MAX;
   }
 
   /** Process a validated beacon and update the server list. */
@@ -275,24 +330,8 @@ export class DiscoveryListener {
 }
 
 // ---------------------------------------------------------------------------
-// Validation helpers
+// HMAC verification
 // ---------------------------------------------------------------------------
-
-/** Validate that an object looks like a valid DiscoveryBeacon. */
-function isValidBeacon(obj: unknown): obj is DiscoveryBeacon {
-  if (typeof obj !== "object" || obj === null) return false;
-  const b = obj as Record<string, unknown>;
-  return (
-    b.service === "eidolon" &&
-    typeof b.version === "string" &&
-    typeof b.hostname === "string" &&
-    typeof b.host === "string" &&
-    typeof b.port === "number" &&
-    typeof b.tls === "boolean" &&
-    b.role === "server" &&
-    typeof b.startedAt === "number"
-  );
-}
 
 /**
  * Verify the HMAC signature on a signed beacon.

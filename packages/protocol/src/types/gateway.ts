@@ -70,14 +70,9 @@ export type GatewayMethod =
   // Plugin methods
   | "plugin.list"
   | "plugin.info"
-  | "plugin.install"
-  | "plugin.uninstall"
-  | "plugin.enable"
-  | "plugin.disable"
   // LLM provider methods
   | "llm.providers"
-  | "llm.models"
-  | "llm.complete";
+  | "llm.models";
 
 // ---------------------------------------------------------------------------
 // Push notification types (server → client, no response expected)
@@ -85,6 +80,7 @@ export type GatewayMethod =
 
 export type GatewayPushType =
   | "push.stateChange"
+  // Reserved for future use -- not currently emitted by the backend
   | "push.taskStarted"
   | "push.taskCompleted"
   | "push.memoryCreated"
@@ -96,6 +92,7 @@ export type GatewayPushType =
   | "push.executeCommand"
   | "push.approvalRequested"
   | "push.approvalResolved"
+  | "push.chatMessage"
   | "system.statusUpdate";
 
 // ---------------------------------------------------------------------------
@@ -111,7 +108,7 @@ export interface GatewayRequest {
 
 export interface GatewayResponse {
   readonly jsonrpc: "2.0";
-  readonly id: string;
+  readonly id: string | null;
   readonly result?: unknown;
   readonly error?: {
     readonly code: number;
@@ -122,7 +119,7 @@ export interface GatewayResponse {
 
 export interface GatewayPushEvent {
   readonly jsonrpc: "2.0";
-  readonly method: string;
+  readonly method: GatewayPushType;
   readonly params: Record<string, unknown>;
 }
 
@@ -171,6 +168,11 @@ export interface CommandResultParams {
 
 // ---------------------------------------------------------------------------
 // Push event payloads
+//
+// These types define the expected shape of push notification payloads.
+// They are exported for use by gateway consumers (clients, dashboards, tests)
+// that need to type-check incoming push events. The gateway server itself
+// constructs payloads inline; consumers should cast/validate against these.
 // ---------------------------------------------------------------------------
 
 export interface PushStateChangePayload {
@@ -219,6 +221,14 @@ export interface PushClientEventPayload {
   readonly clientId: string;
   readonly platform: string;
   readonly version: string;
+  readonly timestamp: number;
+}
+
+export interface PushChatMessagePayload {
+  readonly id: string;
+  readonly text: string;
+  readonly format: "text" | "markdown" | "html";
+  readonly replyToId?: string;
   readonly timestamp: number;
 }
 

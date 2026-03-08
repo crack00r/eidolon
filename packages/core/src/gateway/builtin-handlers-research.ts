@@ -126,8 +126,7 @@ export function registerMiscHandlers(deps: BuiltinHandlerDeps): void {
       { source: "gateway", priority: "high" },
     );
 
-    const pushType = action === "approve" ? "push.approvalResolved" : "push.approvalResolved";
-    pushToSubscribers(pushType, {
+    pushToSubscribers("push.approvalResolved", {
       approvalId,
       action,
       respondedBy: clientId,

@@ -28,4 +28,6 @@ export interface OutboundMessage {
   readonly format?: "text" | "markdown" | "html";
   readonly replyToId?: string;
   readonly attachments?: readonly MessageAttachment[];
+  /** Target client ID for directed delivery (e.g., gateway client that sent the original message). */
+  readonly userId?: string;
 }

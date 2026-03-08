@@ -17,6 +17,7 @@ export const HADomainPolicySchema = z.object({
 });
 
 export const HAAnomalyRuleSchema = z.object({
+  /** Glob pattern matched against entity IDs (e.g. "light.*", "sensor.temperature_*"). Uses glob matching, NOT regex. */
   entityPattern: z.string(),
   condition: z.string(),
   message: z.string(),
@@ -35,7 +36,7 @@ export const HASceneConfigSchema = z.object({
 
 export const HomeAutomationConfigSchema = z.object({
   enabled: z.boolean().default(false),
-  haUrl: z.string().optional(),
+  haUrl: z.string().max(2048).optional(),
   haToken: SecretRefSchema.or(z.string()).optional(),
   syncIntervalMinutes: z.number().int().positive().default(5),
   domainPolicies: z.array(HADomainPolicySchema).default([
@@ -180,7 +181,7 @@ export const DigestConfigSchema = z.object({
 
 export const TelemetryConfigSchema = z.object({
   enabled: z.boolean().default(false),
-  endpoint: z.string().default("http://localhost:4318"),
+  endpoint: z.string().max(2048).default("http://localhost:4318"),
   protocol: z.enum(["grpc", "http"]).default("http"),
   serviceName: z.string().default("eidolon-core"),
   sampleRate: z.number().min(0).max(1).default(1.0),
@@ -206,8 +207,10 @@ export const PluginConfigSchema = z.object({
 
 export const OllamaProviderSchema = z.object({
   enabled: z.boolean().default(false),
-  host: z.string().default("http://localhost:11434"),
+  host: z.string().max(2048).default("http://localhost:11434"),
   defaultModel: z.string().default("llama3.2"),
+  /** Allow connections to private/internal network addresses (localhost, 10.x, etc.). Defaults to true for backward compatibility since Ollama is typically a local service. */
+  allowPrivateHosts: z.boolean().default(true),
   models: z
     .record(
       z.string(),
@@ -225,7 +228,7 @@ export const LlamaCppProviderSchema = z.object({
   modelPath: z.string().default(""),
   gpuLayers: z.number().int().min(0).default(0),
   contextLength: z.number().int().positive().default(8192),
-  port: z.number().int().positive().default(8421),
+  port: z.number().int().min(1).max(65535).default(8421),
 });
 
 export const LLMConfigSchema = z.object({
@@ -295,7 +298,7 @@ export const ReplicationConfigSchema = z.object({
   /** This node's initial role. */
   role: z.enum(["primary", "secondary"]).default("primary"),
   /** Tailscale or LAN address of the peer node (host:port). */
-  peerAddress: z.string().default(""),
+  peerAddress: z.string().max(253).default(""),
   /** Port this node listens on for replication protocol. */
   listenPort: z.number().int().min(1).max(65535).default(9820),
   /** Heartbeat interval in milliseconds. */
@@ -306,4 +309,6 @@ export const ReplicationConfigSchema = z.object({
   snapshotIntervalMs: z.number().int().positive().default(300_000),
   /** Directory for storing received snapshots on the secondary. */
   snapshotDir: z.string().default(""),
+  /** Shared secret for HMAC message authentication between nodes. Must match on both peers. */
+  sharedSecret: z.string().default(""),
 });

@@ -5,6 +5,7 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { CoreRpcDeps } from "./rpc-handlers.ts";
+import { RpcValidationError } from "./rpc-schemas.ts";
 import type { MethodHandler } from "./server.ts";
 
 // ---------------------------------------------------------------------------
@@ -19,17 +20,6 @@ const VoiceStartParamsSchema = z.object({
 const VoiceStopParamsSchema = z.object({
   sessionId: z.string().min(1).max(256),
 });
-
-// ---------------------------------------------------------------------------
-// Validation error
-// ---------------------------------------------------------------------------
-
-class RpcValidationError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "RpcValidationError";
-  }
-}
 
 // ---------------------------------------------------------------------------
 // Active voice session tracking
@@ -52,6 +42,14 @@ export function getActiveVoiceSessionCount(): number {
  */
 export function clearActiveVoiceSessions(): void {
   activeVoiceSessions.clear();
+}
+
+/**
+ * Clean up voice session for a disconnected client.
+ * Should be called from client disconnect handling to prevent memory leaks.
+ */
+export function cleanupVoiceSessionForClient(clientId: string): boolean {
+  return activeVoiceSessions.delete(clientId);
 }
 
 // ---------------------------------------------------------------------------
@@ -95,6 +93,15 @@ export function createVoiceStartHandler(deps: CoreRpcDeps): MethodHandler {
       deps.logger.warn("voice.start", `Client ${clientId} requested voice but no GPU workers are available`);
       throw new RpcValidationError(
         "No GPU workers available for voice. Ensure at least one GPU worker with TTS or STT capability is online.",
+      );
+    }
+
+    // Re-check for active session to guard against concurrent requests
+    // (another request may have set a session during the async gap above)
+    const raceCheck = activeVoiceSessions.get(clientId);
+    if (raceCheck) {
+      throw new RpcValidationError(
+        `Client ${clientId} already has an active voice session: ${raceCheck.sessionId}. Stop it first.`,
       );
     }
 

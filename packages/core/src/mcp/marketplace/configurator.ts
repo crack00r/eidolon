@@ -8,12 +8,28 @@
  */
 
 import { readFileSync, writeFileSync } from "node:fs";
+import { z } from "zod";
 import type { EidolonError, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 import type { Logger } from "../../logging/logger.ts";
 import { getMcpTemplate, type McpTemplate, templateToConfigEntry } from "../templates.ts";
 import type { MarketplaceRegistry } from "./registry.ts";
 import type { McpConfigStatus } from "./types.ts";
+
+/**
+ * Zod schema for the subset of config structure we read/write.
+ * We only require `brain.mcpServers` to be a record of objects.
+ */
+const ConfigFileSchema = z
+  .object({
+    brain: z
+      .object({
+        mcpServers: z.record(z.record(z.unknown())).default({}),
+      })
+      .passthrough()
+      .default({}),
+  })
+  .passthrough();
 
 // ---------------------------------------------------------------------------
 // Types
@@ -81,18 +97,23 @@ export class McpConfigurator {
 
     const name = serverName ?? templateId;
 
-    // Read existing config
-    let config: Record<string, unknown>;
+    // Read and validate existing config
+    let config: z.infer<typeof ConfigFileSchema>;
     try {
       const raw = readFileSync(configPath, "utf-8");
-      config = JSON.parse(raw) as Record<string, unknown>;
+      const parsed: unknown = JSON.parse(raw);
+      const validated = ConfigFileSchema.safeParse(parsed);
+      if (!validated.success) {
+        return Err(createError(ErrorCode.CONFIG_PARSE_ERROR, `Invalid config structure at ${configPath}: ${validated.error.message}`));
+      }
+      config = validated.data;
     } catch (cause) {
       return Err(createError(ErrorCode.CONFIG_PARSE_ERROR, `Failed to read config at ${configPath}`, cause));
     }
 
     // Navigate to brain.mcpServers
-    const brain = (config.brain ?? {}) as Record<string, unknown>;
-    const mcpServers = (brain.mcpServers ?? {}) as Record<string, unknown>;
+    const brain = config.brain;
+    const mcpServers = brain.mcpServers;
 
     // Check if already exists
     if (name in mcpServers) {
@@ -140,16 +161,21 @@ export class McpConfigurator {
    * Remove a server from the config file (from brain.mcpServers).
    */
   removeFromConfig(configPath: string, serverName: string): Result<boolean, EidolonError> {
-    let config: Record<string, unknown>;
+    let config: z.infer<typeof ConfigFileSchema>;
     try {
       const raw = readFileSync(configPath, "utf-8");
-      config = JSON.parse(raw) as Record<string, unknown>;
+      const parsed: unknown = JSON.parse(raw);
+      const validated = ConfigFileSchema.safeParse(parsed);
+      if (!validated.success) {
+        return Err(createError(ErrorCode.CONFIG_PARSE_ERROR, `Invalid config structure at ${configPath}: ${validated.error.message}`));
+      }
+      config = validated.data;
     } catch (cause) {
       return Err(createError(ErrorCode.CONFIG_PARSE_ERROR, `Failed to read config at ${configPath}`, cause));
     }
 
-    const brain = (config.brain ?? {}) as Record<string, unknown>;
-    const mcpServers = (brain.mcpServers ?? {}) as Record<string, unknown>;
+    const brain = config.brain;
+    const mcpServers = brain.mcpServers;
 
     if (!(serverName in mcpServers)) {
       return Ok(false);

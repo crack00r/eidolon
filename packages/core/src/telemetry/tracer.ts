@@ -45,8 +45,14 @@ export interface ITracer {
   /** Get W3C traceparent headers for propagating context to external services. */
   getTraceHeaders(): Record<string, string>;
 
-  /** Extract trace context from incoming headers into the current context. */
-  extractContext(headers: Record<string, string>): void;
+  /**
+   * Extract trace context from incoming headers and run `fn` within that context.
+   *
+   * OTel's `propagation.extract()` returns a NEW context -- it does not mutate
+   * the active one.  This method uses `context.with()` so that any spans
+   * created inside `fn` are correctly parented to the extracted trace.
+   */
+  withExtractedContext<T>(headers: Record<string, string>, fn: () => T): T;
 }
 
 // ---------------------------------------------------------------------------
@@ -89,8 +95,8 @@ export class NoopTracer implements ITracer {
     return {};
   }
 
-  extractContext(_headers: Record<string, string>): void {
-    /* no-op */
+  withExtractedContext<T>(_headers: Record<string, string>, fn: () => T): T {
+    return fn();
   }
 }
 
@@ -168,7 +174,8 @@ export class OTelTracer implements ITracer {
     return headers;
   }
 
-  extractContext(headers: Record<string, string>): void {
-    propagation.extract(context.active(), headers);
+  withExtractedContext<T>(headers: Record<string, string>, fn: () => T): T {
+    const extracted = propagation.extract(context.active(), headers);
+    return context.with(extracted, fn);
   }
 }

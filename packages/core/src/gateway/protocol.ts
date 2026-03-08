@@ -3,7 +3,7 @@
  * for the Gateway WebSocket server.
  */
 
-import type { GatewayMethod, GatewayPushEvent, GatewayRequest, GatewayResponse, Result } from "@eidolon/protocol";
+import type { GatewayMethod, GatewayPushEvent, GatewayPushType, GatewayRequest, GatewayResponse, Result } from "@eidolon/protocol";
 import { Err, Ok } from "@eidolon/protocol";
 
 // ---------------------------------------------------------------------------
@@ -84,14 +84,9 @@ const VALID_METHODS: ReadonlySet<string> = new Set<GatewayMethod>([
   // Plugin methods
   "plugin.list",
   "plugin.info",
-  "plugin.install",
-  "plugin.uninstall",
-  "plugin.enable",
-  "plugin.disable",
   // LLM provider methods
   "llm.providers",
   "llm.models",
-  "llm.complete",
 ]);
 
 // ---------------------------------------------------------------------------
@@ -110,11 +105,11 @@ export function parseJsonRpcRequest(data: string): Result<GatewayRequest, Gatewa
     parsed = JSON.parse(data);
   } catch {
     // Intentional: malformed JSON returns JSON-RPC parse error
-    return Err(createJsonRpcError("null", JSON_RPC_PARSE_ERROR, "Parse error: invalid JSON"));
+    return Err(createJsonRpcError(null, JSON_RPC_PARSE_ERROR, "Parse error: invalid JSON"));
   }
 
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-    return Err(createJsonRpcError("null", JSON_RPC_INVALID_REQUEST, "Invalid request: not an object"));
+    return Err(createJsonRpcError(null, JSON_RPC_INVALID_REQUEST, "Invalid request: not an object"));
   }
 
   const obj = parsed as Record<string, unknown>;
@@ -122,7 +117,7 @@ export function parseJsonRpcRequest(data: string): Result<GatewayRequest, Gatewa
   if (obj.jsonrpc !== "2.0") {
     return Err(
       createJsonRpcError(
-        typeof obj.id === "string" ? obj.id : "null",
+        typeof obj.id === "string" ? obj.id : null,
         JSON_RPC_INVALID_REQUEST,
         'Invalid request: missing or wrong "jsonrpc" field',
       ),
@@ -130,7 +125,7 @@ export function parseJsonRpcRequest(data: string): Result<GatewayRequest, Gatewa
   }
 
   if (typeof obj.id !== "string" || obj.id.length === 0 || obj.id.length > 256) {
-    return Err(createJsonRpcError("null", JSON_RPC_INVALID_REQUEST, "Invalid id field"));
+    return Err(createJsonRpcError(null, JSON_RPC_INVALID_REQUEST, "Invalid id field"));
   }
 
   if (typeof obj.method !== "string" || obj.method.length === 0 || obj.method.length > 256) {
@@ -179,7 +174,7 @@ export function createJsonRpcResponse(id: string, result: unknown): GatewayRespo
 /**
  * Create a JSON-RPC 2.0 error response.
  */
-export function createJsonRpcError(id: string, code: number, message: string, data?: unknown): GatewayResponse {
+export function createJsonRpcError(id: string | null, code: number, message: string, data?: unknown): GatewayResponse {
   return {
     jsonrpc: "2.0",
     id,
@@ -194,6 +189,6 @@ export function createJsonRpcError(id: string, code: number, message: string, da
 /**
  * Create a JSON-RPC 2.0 push event (notification — no id field).
  */
-export function createPushEvent(method: string, params: Record<string, unknown>): GatewayPushEvent {
+export function createPushEvent(method: GatewayPushType, params: Record<string, unknown>): GatewayPushEvent {
   return { jsonrpc: "2.0", method, params };
 }
