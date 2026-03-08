@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.1.13](https://github.com/crack00r/eidolon/compare/v0.1.12...v0.1.13) (2026-03-08)
+
+
+### Bug Fixes
+
+* comprehensive bugfix across desktop, protocol, core, CLI, and CI ([6615af4](https://github.com/crack00r/eidolon/commit/6615af40d7554acf43b5358138671431f9b15843))
+
+
+### Miscellaneous
+
+* release main ([08dd818](https://github.com/crack00r/eidolon/commit/08dd81847eae3f72d9710ca97db36d34afb3435f))
+* release main ([cdc0c13](https://github.com/crack00r/eidolon/commit/cdc0c13a074be2639e9979371ef030dc99573bab))
+
 ## [0.1.12](https://github.com/crack00r/eidolon/compare/v0.1.11...v0.1.12) (2026-03-07)
 
 

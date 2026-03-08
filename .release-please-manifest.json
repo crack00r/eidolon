@@ -1,8 +1,8 @@
 {
-  ".": "0.1.13",
-  "packages/protocol": "0.1.12",
-  "packages/core": "0.1.12",
-  "packages/cli": "0.1.12",
+  ".": "0.1.14",
+  "packages/protocol": "0.1.13",
+  "packages/core": "0.1.13",
+  "packages/cli": "0.1.13",
   "packages/test-utils": "0.1.6",
-  "apps/desktop": "0.1.13"
+  "apps/desktop": "0.1.14"
 }

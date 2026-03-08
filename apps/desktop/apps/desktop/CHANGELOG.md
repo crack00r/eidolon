@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.1.14](https://github.com/crack00r/eidolon/compare/v0.1.13...v0.1.14) (2026-03-08)
+
+
+### Bug Fixes
+
+* comprehensive bugfix across desktop, protocol, core, CLI, and CI ([6615af4](https://github.com/crack00r/eidolon/commit/6615af40d7554acf43b5358138671431f9b15843))
+* critical bugfixes for chat, credentials, onboarding, and daemon ([858f4a8](https://github.com/crack00r/eidolon/commit/858f4a87b615b84f41ed0303df9604b064218e3d))
+* **desktop:** configure real updater signing keys and fix workflow ([95cea29](https://github.com/crack00r/eidolon/commit/95cea29564f78b8ce9c6f57f62f7a7bfff090703))
+* **desktop:** use Tauri sidecar API instead of manual path resolution ([de0457d](https://github.com/crack00r/eidolon/commit/de0457d2739b688f35737b20b05f0e665783bee2))
+
 ## [0.1.13](https://github.com/crack00r/eidolon/compare/v0.1.12...v0.1.13) (2026-03-07)
 
 
