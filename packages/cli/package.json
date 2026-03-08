@@ -42,7 +42,8 @@
   "dependencies": {
     "@eidolon/core": "workspace:*",
     "@eidolon/protocol": "workspace:*",
-    "commander": "^13"
+    "commander": "^13",
+    "zod": "^3.24"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.0.0",

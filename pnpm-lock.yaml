@@ -84,6 +84,9 @@ importers:
       commander:
         specifier: ^13
         version: 13.1.0
+      zod:
+        specifier: ^3.24
+        version: 3.25.76
     devDependencies:
       '@biomejs/biome':
         specifier: ^2.0.0
