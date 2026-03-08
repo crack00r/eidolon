@@ -1,16 +1,37 @@
 {
   "identifier": "default",
-  "description": "Default capabilities for Eidolon desktop app — principle of least privilege. Each permission must have a documented justification. Do not add shell:allow-execute or broad fs:allow-* permissions.",
+  "description": "Default capabilities for Eidolon desktop app — principle of least privilege. Each permission must have a documented justification.",
   "windows": ["main"],
   "permissions": [
     "core:default",
     "shell:allow-open",
     "updater:default",
-    "process:allow-restart"
+    "process:allow-restart",
+    {
+      "identifier": "shell:allow-execute",
+      "allow": [
+        {
+          "name": "binaries/eidolon-cli",
+          "sidecar": true,
+          "args": true
+        }
+      ]
+    },
+    {
+      "identifier": "shell:allow-spawn",
+      "allow": [
+        {
+          "name": "binaries/eidolon-cli",
+          "sidecar": true,
+          "args": true
+        }
+      ]
+    }
   ],
   "_comments": {
     "core:default": "Base Tauri IPC — required for all window/event communication",
     "shell:allow-open": "Open external URLs in the default browser (e.g. GitHub links). Restricted by regex in tauri.conf.json plugins.shell.open to https?:// only",
+    "shell:allow-execute / shell:allow-spawn": "Launch the eidolon-cli sidecar binary for the daemon process. Scoped to only the bundled sidecar with any args.",
     "updater:default": "Check for and install application updates from the configured endpoint",
     "process:allow-restart": "Restart the app after applying an update"
   }

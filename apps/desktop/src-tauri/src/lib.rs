@@ -1,9 +1,9 @@
 mod commands;
 mod tray;
 
-use std::process::Child;
 use std::sync::Mutex;
 use tauri::Manager;
+use tauri_plugin_shell::process::CommandChild;
 
 // SECURITY: The updater pubkey in tauri.conf.json MUST be replaced with a real Ed25519
 // public key before any production release. Generate a key pair with:
@@ -13,7 +13,7 @@ use tauri::Manager;
 // arbitrary code execution via malicious update payloads.
 
 /// Managed state for the daemon child process.
-pub struct DaemonState(pub Mutex<Option<Child>>);
+pub struct DaemonState(pub Mutex<Option<CommandChild>>);
 
 pub fn run() {
     tauri::Builder::default()
@@ -45,9 +45,8 @@ pub fn run() {
             if let tauri::WindowEvent::Destroyed = event {
                 if let Some(state) = window.try_state::<DaemonState>() {
                     if let Ok(mut daemon) = state.0.lock() {
-                        if let Some(mut child) = daemon.take() {
+                        if let Some(child) = daemon.take() {
                             let _ = child.kill();
-                            let _ = child.wait();
                         }
                     }
                 }

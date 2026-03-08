@@ -4,7 +4,8 @@ use std::collections::HashMap;
 use std::net::UdpSocket;
 use std::process::Command;
 use std::time::{Duration, Instant};
-use tauri::{Manager, State};
+use tauri::State;
+use tauri_plugin_shell::ShellExt;
 
 use crate::DaemonState;
 
@@ -177,13 +178,7 @@ pub fn start_daemon(
         return Err("Daemon already running".into());
     }
 
-    // Resolve the sidecar binary path
-    let sidecar_path = app
-        .path()
-        .resolve("binaries/eidolon-cli", tauri::path::BaseDirectory::Resource)
-        .map_err(|e| format!("Failed to resolve sidecar path: {}", e))?;
-
-    let mut args = vec![
+    let mut args: Vec<String> = vec![
         "daemon".to_string(),
         "start".to_string(),
         "--foreground".to_string(),
@@ -193,17 +188,17 @@ pub fn start_daemon(
         args.push(config_path);
     }
 
-    let child = Command::new(&sidecar_path)
-        .args(&args)
-        .spawn()
-        .map_err(|e| {
-            format!(
-                "Failed to start daemon: {}. Sidecar path: {:?}",
-                e, sidecar_path
-            )
-        })?;
+    let sidecar_command = app
+        .shell()
+        .sidecar("eidolon-cli")
+        .map_err(|e| format!("Failed to create sidecar command: {}", e))?
+        .args(&args);
 
-    let pid = child.id();
+    let (_rx, child) = sidecar_command
+        .spawn()
+        .map_err(|e| format!("Failed to spawn sidecar: {}", e))?;
+
+    let pid = child.pid();
     *daemon = Some(child);
     Ok(pid)
 }
@@ -211,11 +206,10 @@ pub fn start_daemon(
 #[tauri::command]
 pub fn stop_daemon(state: State<DaemonState>) -> Result<(), String> {
     let mut daemon = state.0.lock().map_err(|e| e.to_string())?;
-    if let Some(mut child) = daemon.take() {
+    if let Some(child) = daemon.take() {
         child
             .kill()
             .map_err(|e| format!("Failed to stop daemon: {}", e))?;
-        let _ = child.wait();
     }
     Ok(())
 }
