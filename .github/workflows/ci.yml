@@ -51,7 +51,7 @@ jobs:
 
       - name: Prepare SvelteKit (generate tsconfig)
         if: steps.check-packages.outputs.has_packages == 'true'
-        run: pnpm --filter @eidolon/web exec svelte-kit sync || true
+        run: pnpm --filter @eidolon/web exec svelte-kit sync 2>&1 || echo "::warning::SvelteKit sync failed (non-fatal)"
 
       - name: Typecheck
         if: steps.check-packages.outputs.has_packages == 'true'
@@ -71,7 +71,12 @@ jobs:
           sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@631a55b12751854ce901bb631d5902ceb48146f7 # stable
+
+      - name: Cache Rust dependencies
+        uses: swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2
+        with:
+          workspaces: apps/desktop/src-tauri -> target
 
       - name: Cargo check (Desktop)
         run: |
@@ -80,6 +85,11 @@ jobs:
           mkdir -p binaries
           touch binaries/eidolon-cli-x86_64-unknown-linux-gnu
           cargo check 2>&1
+
+      - name: Cargo clippy (Desktop)
+        run: |
+          cd apps/desktop/src-tauri
+          cargo clippy -- -W clippy::all 2>&1
 
       - name: Version sync check
         run: |

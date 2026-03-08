@@ -1,4 +1,5 @@
 <script lang="ts">
+import { onDestroy } from "svelte";
 import { isConnected } from "../../lib/stores/connection";
 import {
   clearSearch,
@@ -125,6 +126,10 @@ $effect(() => {
   if (showDeleteConfirm && modalCancelRef) {
     modalCancelRef.focus();
   }
+});
+
+onDestroy(() => {
+  if (debounceTimer) clearTimeout(debounceTimer);
 });
 </script>
 

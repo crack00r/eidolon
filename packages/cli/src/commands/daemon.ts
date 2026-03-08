@@ -141,10 +141,16 @@ export function registerDaemonCommand(program: Command): void {
       const lines = Number.parseInt(opts.lines, 10) || 50;
       console.log(`Tailing ${logFile} (last ${lines} lines)...\n`);
 
-      const proc = Bun.spawn(["tail", "-n", String(lines), "-f", logFile], {
-        stdout: "inherit",
-        stderr: "inherit",
-      });
+      const proc =
+        process.platform === "win32"
+          ? Bun.spawn(["powershell", "-Command", `Get-Content -Path '${logFile}' -Tail ${lines} -Wait`], {
+              stdout: "inherit",
+              stderr: "inherit",
+            })
+          : Bun.spawn(["tail", "-n", String(lines), "-f", logFile], {
+              stdout: "inherit",
+              stderr: "inherit",
+            });
 
       // Forward SIGINT/SIGTERM to tail process for clean exit
       const handler = (): void => {

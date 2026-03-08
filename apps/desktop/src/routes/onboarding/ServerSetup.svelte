@@ -55,31 +55,44 @@ function startSetup(): void {
 async function runSetup(): Promise<void> {
   setupError = null;
 
-  // Animate checklist items sequentially
-  for (let i = 0; i < checklist.length; i++) {
-    checklist[i].status = "running";
-    // Small delay so the user sees the animation
-    await new Promise((r) => setTimeout(r, 400));
+  // Set all to pending initially
+  for (const item of checklist) {
+    item.status = "pending";
   }
 
+  // Mark first item as running
+  checklist[0].status = "running";
+
   try {
-    const result = await invoke<{ pairingUrl: string }>("onboard_setup_server", {
+    const rawResult = await invoke<string>("onboard_setup_server", {
       name: name.trim(),
       credentialType,
       apiKey: credentialType === "apikey" ? apiKey : undefined,
     });
 
-    // Mark all done
+    // Mark all as done on success
     for (const item of checklist) {
       item.status = "done";
     }
 
-    pairingUrl = result.pairingUrl;
+    // Parse the result -- backend may return a JSON string or an object
+    const result = typeof rawResult === "string" ? JSON.parse(rawResult) as Record<string, unknown> : rawResult as Record<string, unknown>;
+
+    // Construct pairing URL from result fields
+    if (result.tailscaleIp || result.host) {
+      const host = (result.tailscaleIp || result.host || "127.0.0.1") as string;
+      const port = (result.port || 8419) as number;
+      const token = (result.token || "") as string;
+      pairingUrl = `eidolon://${host}:${port}?token=${token}`;
+    } else {
+      pairingUrl = "eidolon://127.0.0.1:8419";
+    }
+
     step = "ready";
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     setupError = msg;
-    // Mark current running item as error, rest stay pending
+    // Mark first running item as error, rest stay pending
     for (const item of checklist) {
       if (item.status === "running") {
         item.status = "error";

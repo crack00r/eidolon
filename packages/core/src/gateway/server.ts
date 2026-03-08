@@ -131,33 +131,42 @@ export class GatewayServer {
     const tlsConfig =
       this.config.tls.enabled && tlsCert && tlsKey ? { cert: Bun.file(tlsCert), key: Bun.file(tlsKey) } : undefined;
 
-    this.server = Bun.serve<WSData>({
-      port,
-      hostname: host,
-      ...(tlsConfig ? { tls: tlsConfig } : {}),
+    try {
+      this.server = Bun.serve<WSData>({
+        port,
+        hostname: host,
+        ...(tlsConfig ? { tls: tlsConfig } : {}),
 
-      async fetch(req, server) {
-        return self.handleFetch(req, server);
-      },
-
-      websocket: {
-        maxPayloadLength: self.config.maxMessageBytes,
-        idleTimeout: WS_IDLE_TIMEOUT_SECONDS,
-        open(ws) {
-          self.clientManager.handleOpen(ws);
+        async fetch(req, server) {
+          return self.handleFetch(req, server);
         },
-        message(ws, message) {
-          self.clientManager.handleMessage(ws, message).catch((err: unknown) => {
-            self.logger.error("message", "Unhandled error in message handler", err, {
-              clientId: ws.data.clientId,
+
+        websocket: {
+          maxPayloadLength: self.config.maxMessageBytes,
+          idleTimeout: WS_IDLE_TIMEOUT_SECONDS,
+          open(ws) {
+            self.clientManager.handleOpen(ws);
+          },
+          message(ws, message) {
+            self.clientManager.handleMessage(ws, message).catch((err: unknown) => {
+              self.logger.error("message", "Unhandled error in message handler", err, {
+                clientId: ws.data.clientId,
+              });
             });
-          });
+          },
+          close(ws, code, reason) {
+            self.clientManager.handleClose(ws, code, reason);
+          },
         },
-        close(ws, code, reason) {
-          self.clientManager.handleClose(ws, code, reason);
-        },
-      },
-    });
+      });
+    } catch (err: unknown) {
+      if (err instanceof Error && err.message.includes("EADDRINUSE")) {
+        const msg = `Port ${port} is already in use. Another Eidolon instance may be running.`;
+        this.logger.error("start", msg);
+        throw new Error(msg, { cause: err });
+      }
+      throw err;
+    }
 
     this.startTime = Date.now();
     const scheme = this.config.tls.enabled ? "wss" : "ws";

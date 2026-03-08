@@ -186,12 +186,30 @@ export function startDashboard(): void {
   if (client) {
     unsubscribePush = client.onPush(handlePush);
 
+    const trySubscribe = (): void => {
+      if (client.state === "connected") {
+        client.call("system.subscribe").catch((err) => {
+          clientLog("warn", "dashboard", "Failed to subscribe to system updates", err);
+        });
+      }
+    };
+
     // Request subscription (fire-and-forget)
-    if (client.state === "connected") {
-      client.call("system.subscribe").catch((err) => {
-        clientLog("warn", "dashboard", "Failed to subscribe to system updates", err);
-      });
-    }
+    trySubscribe();
+
+    // Retry on reconnect
+    const unsubscribeState = client.onStateChange((state) => {
+      if (state === "connected") {
+        trySubscribe();
+      }
+    });
+
+    // Chain unsubscribe for state change handler
+    const originalUnsubscribePush = unsubscribePush;
+    unsubscribePush = () => {
+      originalUnsubscribePush();
+      unsubscribeState();
+    };
   }
 
   // Initial fetch

@@ -72,7 +72,7 @@ function handleReset(): void {
   host = "127.0.0.1";
   port = 8419;
   token = "";
-  useTls = true;
+  useTls = false;
 }
 
 function handleConnect(): void {

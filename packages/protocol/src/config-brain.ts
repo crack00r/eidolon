@@ -24,16 +24,20 @@ export const ClaudeAccountSchema = z.object({
 
 export const BrainConfigSchema = z.object({
   accounts: z.array(ClaudeAccountSchema).min(1),
-  model: z.object({
-    default: z.string().default("claude-sonnet-4-20250514"),
-    complex: z.string().default("claude-opus-4-20250514"),
-    fast: z.string().default("claude-haiku-3-20250414"),
-  }),
-  session: z.object({
-    maxTurns: z.number().int().positive().default(50),
-    compactAfter: z.number().int().positive().default(40),
-    timeoutMs: z.number().int().positive().default(300_000),
-  }),
+  model: z
+    .object({
+      default: z.string().default("claude-sonnet-4-20250514"),
+      complex: z.string().default("claude-opus-4-20250514"),
+      fast: z.string().default("claude-haiku-3-20250414"),
+    })
+    .default({}),
+  session: z
+    .object({
+      maxTurns: z.number().int().positive().default(50),
+      compactAfter: z.number().int().positive().default(40),
+      timeoutMs: z.number().int().positive().default(300_000),
+    })
+    .default({}),
   mcpServers: z
     .record(
       z.string(),
@@ -53,52 +57,60 @@ export const BrainConfigSchema = z.object({
 // ---------------------------------------------------------------------------
 
 export const LoopConfigSchema = z.object({
-  energyBudget: z.object({
-    maxTokensPerHour: z.number().int().positive().default(100_000),
-    categories: z.object({
-      user: z.number().min(0).max(1).default(0.5),
-      tasks: z.number().min(0).max(1).default(0.2),
-      learning: z.number().min(0).max(1).default(0.2),
-      dreaming: z.number().min(0).max(1).default(0.1),
-    }),
-  }),
-  rest: z.object({
-    activeMinMs: z.number().int().positive().default(2_000),
-    idleMinMs: z.number().int().positive().default(30_000),
-    maxMs: z.number().int().positive().default(300_000),
-    nightModeStartHour: z.number().int().min(0).max(23).default(23),
-    nightModeEndHour: z.number().int().min(0).max(23).default(7),
-    nightModeMultiplier: z.number().min(1).max(10).default(3),
-  }),
-  businessHours: z.object({
-    start: z
-      .string()
-      .regex(/^\d{2}:\d{2}$/, "Must be in HH:MM format")
-      .refine(
-        (v) => {
-          const parts = v.split(":").map(Number);
-          const h = parts[0] ?? -1;
-          const m = parts[1] ?? -1;
-          return h >= 0 && h <= 23 && m >= 0 && m <= 59;
-        },
-        { message: "Invalid time: hours must be 00-23, minutes must be 00-59" },
-      )
-      .default("07:00"),
-    end: z
-      .string()
-      .regex(/^\d{2}:\d{2}$/, "Must be in HH:MM format")
-      .refine(
-        (v) => {
-          const parts = v.split(":").map(Number);
-          const h = parts[0] ?? -1;
-          const m = parts[1] ?? -1;
-          return h >= 0 && h <= 23 && m >= 0 && m <= 59;
-        },
-        { message: "Invalid time: hours must be 00-23, minutes must be 00-59" },
-      )
-      .default("23:00"),
-    timezone: z.string().default("Europe/Berlin"),
-  }),
+  energyBudget: z
+    .object({
+      maxTokensPerHour: z.number().int().positive().default(100_000),
+      categories: z
+        .object({
+          user: z.number().min(0).max(1).default(0.5),
+          tasks: z.number().min(0).max(1).default(0.2),
+          learning: z.number().min(0).max(1).default(0.2),
+          dreaming: z.number().min(0).max(1).default(0.1),
+        })
+        .default({}),
+    })
+    .default({}),
+  rest: z
+    .object({
+      activeMinMs: z.number().int().positive().default(2_000),
+      idleMinMs: z.number().int().positive().default(30_000),
+      maxMs: z.number().int().positive().default(300_000),
+      nightModeStartHour: z.number().int().min(0).max(23).default(23),
+      nightModeEndHour: z.number().int().min(0).max(23).default(7),
+      nightModeMultiplier: z.number().min(1).max(10).default(3),
+    })
+    .default({}),
+  businessHours: z
+    .object({
+      start: z
+        .string()
+        .regex(/^\d{2}:\d{2}$/, "Must be in HH:MM format")
+        .refine(
+          (v) => {
+            const parts = v.split(":").map(Number);
+            const h = parts[0] ?? -1;
+            const m = parts[1] ?? -1;
+            return h >= 0 && h <= 23 && m >= 0 && m <= 59;
+          },
+          { message: "Invalid time: hours must be 00-23, minutes must be 00-59" },
+        )
+        .default("07:00"),
+      end: z
+        .string()
+        .regex(/^\d{2}:\d{2}$/, "Must be in HH:MM format")
+        .refine(
+          (v) => {
+            const parts = v.split(":").map(Number);
+            const h = parts[0] ?? -1;
+            const m = parts[1] ?? -1;
+            return h >= 0 && h <= 23 && m >= 0 && m <= 59;
+          },
+          { message: "Invalid time: hours must be 00-23, minutes must be 00-59" },
+        )
+        .default("23:00"),
+      timezone: z.string().default("Europe/Berlin"),
+    })
+    .default({}),
 });
 
 // ---------------------------------------------------------------------------
@@ -106,10 +118,12 @@ export const LoopConfigSchema = z.object({
 // ---------------------------------------------------------------------------
 
 export const MemoryConfigSchema = z.object({
-  extraction: z.object({
-    strategy: z.enum(["llm", "rule-based", "hybrid"]).default("hybrid"),
-    minConfidence: z.number().min(0).max(1).default(0.7),
-  }),
+  extraction: z
+    .object({
+      strategy: z.enum(["llm", "rule-based", "hybrid"]).default("hybrid"),
+      minConfidence: z.number().min(0).max(1).default(0.7),
+    })
+    .default({}),
   consolidation: z
     .object({
       /** Whether consolidation is enabled. When false, all extractions are ADD. */
@@ -126,32 +140,42 @@ export const MemoryConfigSchema = z.object({
       compressionThreshold: z.number().int().positive().default(10),
     })
     .default({}),
-  dreaming: z.object({
-    enabled: z.boolean().default(true),
-    schedule: z.string().default("02:00"),
-    maxDurationMinutes: z.number().int().positive().default(30),
-  }),
-  search: z.object({
-    maxResults: z.number().int().positive().default(20),
-    rrfK: z.number().int().positive().default(60),
-    bm25Weight: z.number().min(0).max(1).default(0.4),
-    vectorWeight: z.number().min(0).max(1).default(0.4),
-    graphWeight: z.number().min(0).max(1).default(0.2),
-  }),
-  embedding: z.object({
-    model: z.string().default("Xenova/multilingual-e5-small"),
-    dimensions: z.number().int().positive().default(384),
-    batchSize: z.number().int().positive().default(32),
-  }),
-  retention: z.object({
-    shortTermDays: z.number().int().positive().default(90),
-    decayRate: z.number().min(0).max(1).default(0.01),
-  }),
-  entityResolution: z.object({
-    personThreshold: z.number().min(0).max(1).default(0.95),
-    technologyThreshold: z.number().min(0).max(1).default(0.9),
-    conceptThreshold: z.number().min(0).max(1).default(0.85),
-  }),
+  dreaming: z
+    .object({
+      enabled: z.boolean().default(true),
+      schedule: z.string().default("02:00"),
+      maxDurationMinutes: z.number().int().positive().default(30),
+    })
+    .default({}),
+  search: z
+    .object({
+      maxResults: z.number().int().positive().default(20),
+      rrfK: z.number().int().positive().default(60),
+      bm25Weight: z.number().min(0).max(1).default(0.4),
+      vectorWeight: z.number().min(0).max(1).default(0.4),
+      graphWeight: z.number().min(0).max(1).default(0.2),
+    })
+    .default({}),
+  embedding: z
+    .object({
+      model: z.string().default("Xenova/multilingual-e5-small"),
+      dimensions: z.number().int().positive().default(384),
+      batchSize: z.number().int().positive().default(32),
+    })
+    .default({}),
+  retention: z
+    .object({
+      shortTermDays: z.number().int().positive().default(90),
+      decayRate: z.number().min(0).max(1).default(0.01),
+    })
+    .default({}),
+  entityResolution: z
+    .object({
+      personThreshold: z.number().min(0).max(1).default(0.95),
+      technologyThreshold: z.number().min(0).max(1).default(0.9),
+      conceptThreshold: z.number().min(0).max(1).default(0.85),
+    })
+    .default({}),
   obsidian: z
     .object({
       enabled: z.boolean().default(false),
@@ -199,17 +223,23 @@ export const LearningConfigSchema = z.object({
       }),
     )
     .default([]),
-  relevance: z.object({
-    minScore: z.number().min(0).max(1).default(0.6),
-    userInterests: z.array(z.string()).default([]),
-  }),
-  autoImplement: z.object({
-    enabled: z.boolean().default(false),
-    requireApproval: z.boolean().default(true),
-    allowedScopes: z.array(z.string()).default([]),
-  }),
-  budget: z.object({
-    maxTokensPerDay: z.number().int().positive().default(50_000),
-    maxDiscoveriesPerDay: z.number().int().positive().default(20),
-  }),
+  relevance: z
+    .object({
+      minScore: z.number().min(0).max(1).default(0.6),
+      userInterests: z.array(z.string()).default([]),
+    })
+    .default({}),
+  autoImplement: z
+    .object({
+      enabled: z.boolean().default(false),
+      requireApproval: z.boolean().default(true),
+      allowedScopes: z.array(z.string()).default([]),
+    })
+    .default({}),
+  budget: z
+    .object({
+      maxTokensPerDay: z.number().int().positive().default(50_000),
+      maxDiscoveriesPerDay: z.number().int().positive().default(20),
+    })
+    .default({}),
 });

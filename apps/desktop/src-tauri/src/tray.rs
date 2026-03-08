@@ -4,6 +4,8 @@ use tauri::{
     Manager, AppHandle,
 };
 
+use crate::DaemonState;
+
 pub fn create_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
     let show_item = MenuItem::with_id(app, "show", "Show Window", true, None::<&str>)?;
     let hide_item = MenuItem::with_id(app, "hide", "Hide Window", true, None::<&str>)?;
@@ -27,6 +29,12 @@ pub fn create_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
             "quit" => {
+                // Gracefully stop daemon before exiting
+                if let Some(state) = app.try_state::<DaemonState>() {
+                    crate::graceful_stop_daemon(&state);
+                }
+                // Give daemon a moment to shut down gracefully
+                std::thread::sleep(std::time::Duration::from_millis(500));
                 app.exit(0);
             }
             _ => {}

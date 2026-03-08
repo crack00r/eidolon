@@ -167,13 +167,15 @@ export function buildServiceSteps(modules: InitializedModules, options?: DaemonO
       const logger = modules.logger;
       if (!checker || !logger) return;
 
+      const config = modules.config;
+      const healthPort = config?.gateway?.port ? config.gateway.port + 1000 : 9419;
       modules.healthServer = createHealthServer({
-        port: 9419,
+        port: healthPort,
         checker,
         logger,
       });
       modules.healthServer.start();
-      logger.info("daemon", "Health server started on port 9419");
+      logger.info("daemon", `Health server started on port ${healthPort}`);
     },
   });
 

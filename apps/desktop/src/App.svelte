@@ -12,6 +12,7 @@ import ServerSetup from "./routes/onboarding/ServerSetup.svelte";
 import ClientSetup from "./routes/onboarding/ClientSetup.svelte";
 import { connect } from "./lib/stores/connection";
 import { updateSettings } from "./lib/stores/settings";
+import { clientLog } from "./lib/logger";
 
 type AppState =
   | "loading"
@@ -54,8 +55,10 @@ async function autoConnect(role: string): Promise<void> {
       });
       connect();
     }
-  } catch {
-    // Non-fatal -- dashboard will show connection status
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    clientLog("error", "app", `Auto-connect failed: ${msg}`);
+    daemonError = `Connection failed: ${msg}`;
   }
 }
 

@@ -93,10 +93,10 @@ $effect(() => {
               {#if msg.rating}
                 <span class="feedback-done">{msg.rating >= 4 ? "Rated positively" : "Rated negatively"}</span>
               {:else}
-                <button class="feedback-btn" class:active={msg.rating === 5} onclick={() => handleRate(msg.id, 5)} aria-label="Good response">
+                <button class="feedback-btn" onclick={() => handleRate(msg.id, 5)} aria-label="Good response">
                   +
                 </button>
-                <button class="feedback-btn" class:active={msg.rating === 1} onclick={() => handleRate(msg.id, 1)} aria-label="Poor response">
+                <button class="feedback-btn" onclick={() => handleRate(msg.id, 1)} aria-label="Poor response">
                   -
                 </button>
               {/if}

@@ -206,18 +206,22 @@ describe("BrainConfigSchema", () => {
     expect(result.success).toBe(false);
   });
 
-  test("missing model or session section fails", () => {
+  test("model and session default when omitted", () => {
     const noModel = BrainConfigSchema.safeParse({
       accounts: [{ type: "api-key", name: "a", credential: "k" }],
       session: {},
     });
-    expect(noModel.success).toBe(false);
+    expect(noModel.success).toBe(true);
+    if (!noModel.success) return;
+    expect(noModel.data.model.default).toBe("claude-sonnet-4-20250514");
 
     const noSession = BrainConfigSchema.safeParse({
       accounts: [{ type: "api-key", name: "a", credential: "k" }],
       model: {},
     });
-    expect(noSession.success).toBe(false);
+    expect(noSession.success).toBe(true);
+    if (!noSession.success) return;
+    expect(noSession.data.session.maxTurns).toBe(50);
   });
 
   test("account priority bounds (1-100)", () => {
@@ -285,9 +289,13 @@ describe("LoopConfigSchema", () => {
     expect(result.success).toBe(true);
   });
 
-  test("missing nested objects fails", () => {
+  test("empty object succeeds with defaults", () => {
     const result = LoopConfigSchema.safeParse({});
-    expect(result.success).toBe(false);
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.energyBudget.maxTokensPerHour).toBe(100_000);
+    expect(result.data.rest.activeMinMs).toBe(2_000);
+    expect(result.data.businessHours.start).toBe("07:00");
   });
 
   test("business hours with valid HH:MM format", () => {
@@ -396,9 +404,13 @@ describe("MemoryConfigSchema", () => {
     expect(result.success).toBe(true);
   });
 
-  test("missing nested objects fails", () => {
+  test("empty object succeeds with defaults", () => {
     const result = MemoryConfigSchema.safeParse({});
-    expect(result.success).toBe(false);
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.extraction.strategy).toBe("hybrid");
+    expect(result.data.embedding.model).toBe("Xenova/multilingual-e5-small");
+    expect(result.data.retention.shortTermDays).toBe(90);
   });
 
   test("extraction strategy must be valid enum", () => {
@@ -472,9 +484,13 @@ describe("LearningConfigSchema", () => {
     expect(result.success).toBe(true);
   });
 
-  test("missing nested objects fails", () => {
+  test("empty object succeeds with defaults", () => {
     const result = LearningConfigSchema.safeParse({});
-    expect(result.success).toBe(false);
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.enabled).toBe(false);
+    expect(result.data.relevance.minScore).toBe(0.6);
+    expect(result.data.budget.maxTokensPerDay).toBe(50_000);
   });
 
   test("valid learning source types", () => {
@@ -681,9 +697,13 @@ describe("GpuConfigSchema", () => {
     expect(result.success).toBe(true);
   });
 
-  test("missing nested objects fails", () => {
+  test("empty object succeeds with defaults", () => {
     const result = GpuConfigSchema.safeParse({});
-    expect(result.success).toBe(false);
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.tts.model).toBe("Qwen/Qwen3-TTS-1.7B");
+    expect(result.data.stt.model).toBe("large-v3");
+    expect(result.data.workers).toEqual([]);
   });
 
   test("gpu worker with capabilities", () => {
@@ -736,9 +756,13 @@ describe("SecurityConfigSchema", () => {
     expect(result.success).toBe(true);
   });
 
-  test("missing nested objects fails", () => {
+  test("empty object succeeds with defaults", () => {
     const result = SecurityConfigSchema.safeParse({});
-    expect(result.success).toBe(false);
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.policies.shellExecution).toBe("needs_approval");
+    expect(result.data.approval.defaultAction).toBe("deny");
+    expect(result.data.audit.enabled).toBe(true);
   });
 
   test("policy values must be valid enum", () => {

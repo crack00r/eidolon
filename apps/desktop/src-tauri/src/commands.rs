@@ -4,7 +4,8 @@ use std::collections::HashMap;
 use std::net::UdpSocket;
 use std::process::Command;
 use std::time::{Duration, Instant};
-use tauri::State;
+use tauri::{Emitter, Manager, State};
+use tauri_plugin_shell::process::CommandEvent;
 use tauri_plugin_shell::ShellExt;
 
 use crate::DaemonState;
@@ -22,6 +23,7 @@ pub struct DiscoveredServer {
     pub host: String,
     pub port: u16,
     pub hostname: String,
+    pub name: String,
     #[serde(rename = "tailscaleIp", skip_serializing_if = "Option::is_none")]
     pub tailscale_ip: Option<String>,
     pub tls: bool,
@@ -114,6 +116,12 @@ pub async fn discover_servers(timeout_ms: u64) -> Result<Vec<DiscoveredServer>, 
                                 continue;
                             }
 
+                            let hostname = json
+                                .get("hostname")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("unknown")
+                                .to_string();
+
                             let server = DiscoveredServer {
                                 service: "eidolon".to_string(),
                                 version: json
@@ -123,11 +131,8 @@ pub async fn discover_servers(timeout_ms: u64) -> Result<Vec<DiscoveredServer>, 
                                     .to_string(),
                                 host,
                                 port,
-                                hostname: json
-                                    .get("hostname")
-                                    .and_then(|v| v.as_str())
-                                    .unwrap_or("unknown")
-                                    .to_string(),
+                                name: hostname.clone(),
+                                hostname,
                                 tailscale_ip: json
                                     .get("tailscaleIp")
                                     .and_then(|v| v.as_str())
@@ -194,12 +199,43 @@ pub fn start_daemon(
         .map_err(|e| format!("Failed to create sidecar command: {}", e))?
         .args(&args);
 
-    let (_rx, child) = sidecar_command
+    let (rx, child) = sidecar_command
         .spawn()
         .map_err(|e| format!("Failed to spawn sidecar: {}", e))?;
 
     let pid = child.pid();
     *daemon = Some(child);
+
+    // Spawn task to monitor daemon output and exit
+    let app_handle = app.clone();
+    tauri::async_runtime::spawn(async move {
+        use tokio::sync::mpsc::Receiver;
+        let mut rx: Receiver<CommandEvent> = rx;
+        while let Some(event) = rx.recv().await {
+            match event {
+                CommandEvent::Stdout(line) => {
+                    let text = String::from_utf8_lossy(&line);
+                    let _ = app_handle.emit("daemon-log", text.to_string());
+                }
+                CommandEvent::Stderr(line) => {
+                    let text = String::from_utf8_lossy(&line);
+                    let _ = app_handle.emit("daemon-error", text.to_string());
+                }
+                CommandEvent::Terminated(status) => {
+                    let _ = app_handle.emit("daemon-exit", format!("{:?}", status));
+                    // Clear the daemon state so daemon_running() returns false
+                    if let Some(state) = app_handle.try_state::<DaemonState>() {
+                        if let Ok(mut daemon) = state.0.lock() {
+                            *daemon = None;
+                        }
+                    }
+                    break;
+                }
+                _ => {}
+            }
+        }
+    });
+
     Ok(pid)
 }
 
@@ -207,9 +243,21 @@ pub fn start_daemon(
 pub fn stop_daemon(state: State<DaemonState>) -> Result<(), String> {
     let mut daemon = state.0.lock().map_err(|e| e.to_string())?;
     if let Some(child) = daemon.take() {
-        child
-            .kill()
-            .map_err(|e| format!("Failed to stop daemon: {}", e))?;
+        let pid = child.pid();
+        // Send SIGTERM for graceful shutdown on Unix, SIGKILL on Windows
+        #[cfg(unix)]
+        {
+            // SAFETY: libc::kill with a valid PID and SIGTERM signal
+            unsafe {
+                libc::kill(pid as i32, libc::SIGTERM);
+            }
+        }
+        #[cfg(windows)]
+        {
+            child
+                .kill()
+                .map_err(|e| format!("Failed to stop daemon: {}", e))?;
+        }
     }
     Ok(())
 }
@@ -217,6 +265,8 @@ pub fn stop_daemon(state: State<DaemonState>) -> Result<(), String> {
 #[tauri::command]
 pub fn daemon_running(state: State<DaemonState>) -> bool {
     let daemon = state.0.lock().unwrap_or_else(|e| e.into_inner());
+    // With the event monitor task (FIX 3), state is cleared on process exit,
+    // so is_some() accurately reflects whether the daemon is running.
     daemon.is_some()
 }
 
@@ -268,6 +318,43 @@ pub async fn get_config_path() -> String {
     get_config_path_internal()
 }
 
+/// Set restrictive file permissions on Unix (0o600 = owner read/write only).
+fn set_config_permissions(path: &str) {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600));
+    }
+    // On Windows, file permissions are handled by ACLs; no action needed.
+    #[cfg(not(unix))]
+    {
+        let _ = path; // suppress unused warning
+    }
+}
+
+/// Build the complete skeleton config sections that both server and client configs share.
+/// This matches the structure produced by `buildServerConfig()` and `buildClientConfig()`
+/// in `packages/core/src/onboarding/setup-finalize.ts`.
+fn build_skeleton_sections() -> serde_json::Value {
+    serde_json::json!({
+        "loop": { "energyBudget": { "categories": {} }, "rest": {}, "businessHours": {} },
+        "memory": {
+            "extraction": {},
+            "dreaming": {},
+            "search": {},
+            "embedding": {},
+            "retention": {},
+            "entityResolution": {}
+        },
+        "learning": { "relevance": {}, "autoImplement": {}, "budget": {} },
+        "channels": {},
+        "gpu": { "tts": {}, "stt": {}, "fallback": {} },
+        "security": { "policies": {}, "approval": {}, "sandbox": {}, "audit": {} },
+        "logging": {},
+        "daemon": {}
+    })
+}
+
 #[tauri::command]
 pub async fn save_client_config(host: String, port: u16, token: String) -> Result<(), String> {
     let config_path = get_config_path_internal();
@@ -277,18 +364,39 @@ pub async fn save_client_config(host: String, port: u16, token: String) -> Resul
         std::fs::create_dir_all(parent).map_err(|e| format!("Failed to create config dir: {}", e))?;
     }
 
-    let config = serde_json::json!({
+    // Build the complete client config matching buildClientConfig() in setup-finalize.ts
+    let skeleton = build_skeleton_sections();
+    let skeleton_obj = skeleton.as_object().unwrap();
+
+    let mut config = serde_json::json!({
         "role": "client",
         "server": {
             "host": host,
             "port": port,
             "token": token,
             "tls": false
-        }
+        },
+        "identity": { "name": "Eidolon", "ownerName": "Client" },
+        "brain": {
+            "accounts": [{ "type": "oauth", "name": "primary", "credential": "oauth" }],
+            "model": {},
+            "session": {}
+        },
+        "gateway": { "auth": { "type": "none" } },
+        "database": {}
     });
+
+    // Merge skeleton sections into config
+    if let Some(config_obj) = config.as_object_mut() {
+        for (key, value) in skeleton_obj {
+            config_obj.insert(key.clone(), value.clone());
+        }
+    }
 
     std::fs::write(&config_path, serde_json::to_string_pretty(&config).unwrap())
         .map_err(|e| format!("Failed to write config: {}", e))?;
+
+    set_config_permissions(&config_path);
 
     Ok(())
 }
@@ -379,13 +487,11 @@ pub async fn onboard_setup_server(
     let token = random_hex(16); // 32 hex chars
     let tailscale_ip = detect_tailscale_ip();
 
-    let (data_dir, log_dir) = get_platform_dirs();
+    let (data_dir, _log_dir) = get_platform_dirs();
 
-    // Ensure data and log directories exist
+    // Ensure data directory exists
     std::fs::create_dir_all(&data_dir)
         .map_err(|e| format!("Failed to create data dir: {}", e))?;
-    std::fs::create_dir_all(&log_dir)
-        .map_err(|e| format!("Failed to create log dir: {}", e))?;
 
     // Build credential object
     let cred_value = api_key.unwrap_or_else(|| "oauth".to_string());
@@ -395,32 +501,38 @@ pub async fn onboard_setup_server(
         "credential": cred_value
     });
 
-    let config = serde_json::json!({
+    // Build the skeleton sections matching buildServerConfig() in setup-finalize.ts
+    let skeleton = build_skeleton_sections();
+    let skeleton_obj = skeleton.as_object().unwrap();
+
+    let mut config = serde_json::json!({
         "role": "server",
         "identity": {
             "name": "Eidolon",
             "ownerName": name
         },
+        "brain": {
+            "accounts": [credential],
+            "model": {},
+            "session": {}
+        },
         "gateway": {
+            "host": "0.0.0.0",
             "port": 8419,
-            "auth": { "type": "none" },
+            "auth": { "type": "token", "token": token },
             "tls": { "enabled": false }
         },
         "database": {
-            "directory": data_dir,
-            "walMode": true
-        },
-        "logging": {
-            "level": "info",
-            "format": "pretty",
-            "directory": log_dir,
-            "maxSizeMb": 50,
-            "maxFiles": 10
-        },
-        "brain": {
-            "claudeAccounts": [credential]
+            "directory": data_dir
         }
     });
+
+    // Merge skeleton sections into config
+    if let Some(config_obj) = config.as_object_mut() {
+        for (key, value) in skeleton_obj {
+            config_obj.insert(key.clone(), value.clone());
+        }
+    }
 
     // Write config file
     let config_path = get_config_path_internal();
@@ -433,6 +545,8 @@ pub async fn onboard_setup_server(
         serde_json::to_string_pretty(&config).unwrap(),
     )
     .map_err(|e| format!("Failed to write config: {}", e))?;
+
+    set_config_permissions(&config_path);
 
     let result = serde_json::json!({
         "ok": true,

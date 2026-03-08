@@ -16,10 +16,14 @@ let { onComplete }: Props = $props();
 type Step = "discover" | "connected";
 
 interface DiscoveredServer {
-  name: string;
+  service: string;
+  version: string;
   host: string;
   port: number;
-  version: string;
+  hostname: string;
+  name: string;
+  tailscaleIp?: string;
+  tls: boolean;
 }
 
 let step = $state<Step>("discover");
@@ -56,28 +60,30 @@ async function discoverServers(): Promise<void> {
   }
 }
 
-function parsePairingUrl(url: string): { host: string; port: number; token: string } | null {
+function parsePairingUrl(url: string): { host: string; port: number; token: string; tls: boolean } | null {
   try {
-    // eidolon://host:port?token=xxx
+    // eidolon://host:port?token=xxx&tls=true
     const cleaned = url.replace("eidolon://", "https://");
     const parsed = new URL(cleaned);
     const host = parsed.hostname;
     const port = Number.parseInt(parsed.port || "8419", 10);
     const token = parsed.searchParams.get("token") || "";
+    const tls = parsed.searchParams.get("tls") === "true";
     if (!host) return null;
-    return { host, port, token };
+    return { host, port, token, tls };
   } catch {
     return null;
   }
 }
 
-async function connectToServer(host: string, port: number, token: string): Promise<void> {
+async function connectToServer(host: string, port: number, token: string, tls: boolean = false): Promise<void> {
   connecting = true;
   connectError = null;
 
   try {
     // Test the connection
-    const response = await fetch(`http://${host}:${port}/health`, {
+    const scheme = tls ? "https" : "http";
+    const response = await fetch(`${scheme}://${host}:${port}/health`, {
       signal: AbortSignal.timeout(5000),
     });
     if (!response.ok) {
@@ -85,7 +91,7 @@ async function connectToServer(host: string, port: number, token: string): Promi
     }
 
     // Persist client config via Tauri
-    await invoke("save_client_config", { host, port, token });
+    await invoke("save_client_config", { host, port, token, tls });
 
     connectedServer = { host, port, name: `${host}:${port}` };
     step = "connected";
@@ -103,7 +109,7 @@ function connectFromUrl(): void {
     connectError = "Invalid pairing URL format. Expected: eidolon://host:port?token=xxx";
     return;
   }
-  connectToServer(parsed.host, parsed.port, parsed.token);
+  connectToServer(parsed.host, parsed.port, parsed.token, parsed.tls);
 }
 
 function connectManual(): void {
@@ -112,7 +118,7 @@ function connectManual(): void {
 }
 
 function connectToDiscovered(server: DiscoveredServer): void {
-  connectToServer(server.host, server.port, "");
+  connectToServer(server.host, server.port, "", server.tls ?? false);
 }
 </script>
 
@@ -142,7 +148,7 @@ function connectToDiscovered(server: DiscoveredServer): void {
           <div class="server-list">
             {#each servers as server}
               <button class="server-card" onclick={() => connectToDiscovered(server)}>
-                <span class="server-name">{server.name}</span>
+                <span class="server-name">{server.name || server.hostname}</span>
                 <span class="server-addr">{server.host}:{server.port}</span>
                 <span class="server-version">v{server.version}</span>
               </button>

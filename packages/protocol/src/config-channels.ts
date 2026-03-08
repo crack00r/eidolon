@@ -141,6 +141,7 @@ export const GatewayConfigSchema = z.object({
       type: z.enum(["token", "none"]).default("none"),
       token: SecretRefSchema.or(z.string()).optional(),
     })
+    .default({})
     .refine((auth) => auth.type !== "token" || auth.token !== undefined, {
       message: "Token value is required when auth type is 'token'",
     }),
@@ -175,17 +176,23 @@ export const GpuPoolSchema = z.object({
 export const GpuConfigSchema = z.object({
   workers: z.array(GpuWorkerSchema).default([]),
   pool: GpuPoolSchema.default({}),
-  tts: z.object({
-    model: z.string().default("Qwen/Qwen3-TTS-1.7B"),
-    defaultSpeaker: z.string().default("Chelsie"),
-    sampleRate: z.number().int().positive().default(24_000),
-  }),
-  stt: z.object({
-    model: z.string().default("large-v3"),
-    language: z.string().default("auto"),
-  }),
-  fallback: z.object({
-    cpuTts: z.boolean().default(true),
-    systemTts: z.boolean().default(true),
-  }),
+  tts: z
+    .object({
+      model: z.string().default("Qwen/Qwen3-TTS-1.7B"),
+      defaultSpeaker: z.string().default("Chelsie"),
+      sampleRate: z.number().int().positive().default(24_000),
+    })
+    .default({}),
+  stt: z
+    .object({
+      model: z.string().default("large-v3"),
+      language: z.string().default("auto"),
+    })
+    .default({}),
+  fallback: z
+    .object({
+      cpuTts: z.boolean().default(true),
+      systemTts: z.boolean().default(true),
+    })
+    .default({}),
 });

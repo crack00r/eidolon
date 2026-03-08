@@ -289,7 +289,7 @@ export class GatewayClient {
       return;
     }
 
-    const scheme = this.config.useTls !== false ? "wss" : "ws";
+    const scheme = this.config.useTls === true ? "wss" : "ws";
     const url = `${scheme}://${this.config.host}:${this.config.port}/ws`;
 
     try {

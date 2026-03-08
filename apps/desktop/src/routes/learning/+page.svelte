@@ -48,7 +48,7 @@ async function handleApprove(id: string): Promise<void> {
   try {
     await approveItem(id);
   } catch (err) {
-    console.error("Failed to approve item:", err);
+    clientLog("error", "learning-page", `Failed to approve item: ${err}`);
   }
 }
 
@@ -56,7 +56,7 @@ async function handleReject(id: string): Promise<void> {
   try {
     await rejectItem(id);
   } catch (err) {
-    console.error("Failed to reject item:", err);
+    clientLog("error", "learning-page", `Failed to reject item: ${err}`);
   }
 }
 

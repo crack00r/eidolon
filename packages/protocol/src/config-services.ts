@@ -62,36 +62,44 @@ export const HomeAutomationConfigSchema = z.object({
 // ---------------------------------------------------------------------------
 
 export const SecurityConfigSchema = z.object({
-  policies: z.object({
-    shellExecution: z.enum(["safe", "needs_approval", "dangerous"]).default("needs_approval"),
-    fileModification: z.enum(["safe", "needs_approval", "dangerous"]).default("needs_approval"),
-    networkAccess: z.enum(["safe", "needs_approval", "dangerous"]).default("safe"),
-    secretAccess: z.enum(["safe", "needs_approval", "dangerous"]).default("dangerous"),
-  }),
-  approval: z.object({
-    timeout: z.number().int().positive().default(300_000),
-    defaultAction: z.enum(["deny", "allow"]).default("deny"),
-    escalation: z
-      .array(
-        z.object({
-          timeoutMs: z.number().int().positive(),
-          action: z.enum(["deny", "approve", "escalate"]),
-          escalateTo: z.string().optional(),
-          maxEscalations: z.number().int().positive().default(3),
-        }),
-      )
-      .default([]),
-    /** How often to check for timed-out approval requests (ms). */
-    checkIntervalMs: z.number().int().positive().default(10_000),
-  }),
-  sandbox: z.object({
-    enabled: z.boolean().default(false),
-    runtime: z.enum(["none", "docker", "bubblewrap"]).default("none"),
-  }),
-  audit: z.object({
-    enabled: z.boolean().default(true),
-    retentionDays: z.number().int().positive().default(365),
-  }),
+  policies: z
+    .object({
+      shellExecution: z.enum(["safe", "needs_approval", "dangerous"]).default("needs_approval"),
+      fileModification: z.enum(["safe", "needs_approval", "dangerous"]).default("needs_approval"),
+      networkAccess: z.enum(["safe", "needs_approval", "dangerous"]).default("safe"),
+      secretAccess: z.enum(["safe", "needs_approval", "dangerous"]).default("dangerous"),
+    })
+    .default({}),
+  approval: z
+    .object({
+      timeout: z.number().int().positive().default(300_000),
+      defaultAction: z.enum(["deny", "allow"]).default("deny"),
+      escalation: z
+        .array(
+          z.object({
+            timeoutMs: z.number().int().positive(),
+            action: z.enum(["deny", "approve", "escalate"]),
+            escalateTo: z.string().optional(),
+            maxEscalations: z.number().int().positive().default(3),
+          }),
+        )
+        .default([]),
+      /** How often to check for timed-out approval requests (ms). */
+      checkIntervalMs: z.number().int().positive().default(10_000),
+    })
+    .default({}),
+  sandbox: z
+    .object({
+      enabled: z.boolean().default(false),
+      runtime: z.enum(["none", "docker", "bubblewrap"]).default("none"),
+    })
+    .default({}),
+  audit: z
+    .object({
+      enabled: z.boolean().default(true),
+      retentionDays: z.number().int().positive().default(365),
+    })
+    .default({}),
 });
 
 // ---------------------------------------------------------------------------

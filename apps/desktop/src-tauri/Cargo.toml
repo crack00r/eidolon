@@ -19,6 +19,9 @@ tokio = { version = "1", features = ["rt"] }
 whoami = "1"
 rand = "0.8"
 
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
 [features]
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]
