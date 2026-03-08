@@ -239,7 +239,16 @@ pub fn start_daemon(
                     let _ = app_handle.emit("daemon-error", text.to_string());
                 }
                 CommandEvent::Terminated(status) => {
-                    let _ = app_handle.emit("daemon-exit", format!("{:?}", status));
+                    let exit_payload = serde_json::json!({
+                        "code": status.code,
+                        "signal": status.signal,
+                        "message": match (status.code, status.signal) {
+                            (Some(c), _) => format!("Process exited with code {}", c),
+                            (_, Some(s)) => format!("Process killed by signal {}", s),
+                            _ => "Process terminated".to_string(),
+                        }
+                    });
+                    let _ = app_handle.emit("daemon-exit", exit_payload);
                     // Clear the daemon state so daemon_running() returns false
                     if let Some(state) = app_handle.try_state::<DaemonState>() {
                         if let Ok(mut daemon) = state.0.lock() {

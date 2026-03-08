@@ -40,11 +40,11 @@ jobs:
           - name: Windows
             runner: windows-latest
             rust-target: x86_64-pc-windows-msvc
-            bundles: nsis,msi
+            bundles: nsis,updater
           - name: Linux (x64)
             runner: ubuntu-latest
             rust-target: x86_64-unknown-linux-gnu
-            bundles: deb,appimage
+            bundles: deb,appimage,updater
 
     runs-on: ${{ matrix.config.runner }}
     timeout-minutes: 60

@@ -97,10 +97,10 @@ onDestroy(() => {
 
 onMount(async () => {
   // Listen for daemon-exit events from the Rust backend
-  unlistenDaemonExit = await listen<{ code: number; message: string }>("daemon-exit", (event) => {
+  unlistenDaemonExit = await listen<{ code: number | null; signal: number | null; message: string }>("daemon-exit", (event) => {
     const { code, message } = event.payload;
-    daemonError = `Daemon exited unexpectedly (code ${code}): ${message}`;
-    clientLog("error", "app", `Daemon exit: code=${code} message=${message}`);
+    daemonError = `Daemon exited unexpectedly (code ${code ?? "unknown"}): ${message}`;
+    clientLog("error", "app", `Daemon exit: code=${code ?? "unknown"} message=${message}`);
   });
 
   try {
