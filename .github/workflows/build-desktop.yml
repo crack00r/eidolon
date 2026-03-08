@@ -37,10 +37,6 @@ jobs:
             runner: macos-latest
             rust-target: aarch64-apple-darwin
             bundles: dmg,updater
-          - name: macOS (Intel)
-            runner: macos-13
-            rust-target: x86_64-apple-darwin
-            bundles: dmg,updater
           - name: Windows
             runner: windows-latest
             rust-target: x86_64-pc-windows-msvc
@@ -128,6 +124,8 @@ jobs:
           # Required for updater -- signing key must be configured in repository secrets
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD || '' }}
+          # Required for Linux AppImage builds -- FUSE is not available in GitHub Actions containers
+          APPIMAGE_EXTRACT_AND_RUN: '1'
         with:
           projectPath: apps/desktop
           tauriScript: pnpm tauri
