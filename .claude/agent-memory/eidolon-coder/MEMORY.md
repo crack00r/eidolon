@@ -105,14 +105,33 @@
 - Module: `packages/core/src/anticipation/` (14 files, ~1225 LOC)
 - Config: `AnticipationConfigSchema` in `packages/protocol/src/config-anticipation.ts`
 - 5 detectors: MeetingPrep, TravelPrep, HealthNudge, FollowUp, Birthday
-- Pipeline: detect -> trigger evaluate -> enrich -> compose -> publish events
+- Pipeline: detect -> trigger evaluate -> enrich -> compose (per item, not batch) -> publish events
 - DB: `anticipation_history` + `anticipation_suppressions` tables in operational.db (migration v14)
 - Event types: `anticipation:check`, `anticipation:suggestion`, `anticipation:dismissed`, `anticipation:acted`
+- `SuggestionHistory.recordDismissed()` sets dismissed_at timestamp
+- `SuggestionHistory.recordFeedback()` also sets dismissed_at
+- Auto-suppression checks for existing active suppression before INSERT to avoid duplicates
+- TriggerEvaluator uses in-memory suppressedTypes set (from getSuppressions), no redundant isSuppressed DB call
 - Templates in German (user preference), template mode is default (zero LLM tokens)
 - AnticipationEngine init in `init-loop.ts` step 17c (after DigestBuilder)
 - Event handlers in `event-handlers-anticipation.ts`
 - 45 tests across 10 test files, all passing
-- Pre-existing type errors in `replication/`, `users/`, `workflow/` modules are NOT from anticipation
+
+## Round 5 Audit Fixes Applied
+- HA `executeService` now blocks `needs_approval` (not just `dangerous`)
+- HA `matchesPattern` uses string matching instead of regex to prevent ReDoS
+- HA `executeService` validates entityId/domain/service against `HA_IDENTIFIER_PATTERN`
+- HA `parseActions` uses Zod validation instead of unsafe `as` cast
+- HA scenes: MAX_ACTIONS_PER_SCENE=50, MAX_SCENES=500 limits enforced
+- HA scene execution continues on partial failure (only fails if ALL actions fail)
+- CalDAV `authHeaders` uses `Buffer.from().toString("base64")` instead of `btoa()`
+- CalDAV ICS parser extracts TZID and uses Intl.DateTimeFormat for timezone-aware parsing
+- CalendarManager.syncProvider persists events to local cache after sync
+- Google Calendar `onTokenRefresh` callback for persisting refreshed access tokens
+- Digest builder-sections sanitizes external content (titles, model names, etc.)
+- Calendar reminder deduplication via module-level firedReminders Set
+- ProjectManager.update() is now async, validates repoPath changes via git.isGitRepo
+- Wyoming handler wraps raw PCM in WAV header before sending to STT
 
 ## Agentic Workflows
 - Module: `packages/core/src/workflow/` (15 source files + 6 test files, ~2800 LOC)

@@ -61,6 +61,12 @@
   - New events: anticipation:check, anticipation:suggestion, anticipation:dismissed, anticipation:acted
   - 14 new files (~1,225 lines), 10 modified files (~150 lines)
 
+## Desktop App Audit Findings (2026-03-08)
+- Round 1: 3C/4H/7M/9L -- ALL critical/high/medium FIXED
+- Round 2: 0C/2H/7M/6L -- see docs/audit-round-2.md
+- Top remaining: streaming flag lifecycle, blocking async in Rust, double-encoded JSON
+- Tests: 3112 pass, 6 skip, 0 fail after Round 1 fixes
+
 ## Patterns Learned
 - Always compare plan docs against actual code
 - Gateway defaults to 127.0.0.1 (more secure than plan's 0.0.0.0)
