@@ -343,9 +343,15 @@ export function buildMemorySteps(modules: InitializedModules): InitStep[] {
         const sandboxDeps: SandboxDeps = {
           logger,
           config,
-          get eventBus() { return modules.eventBus; },
-          get gateway() { return modules.gatewayServer; },
-          get messageRouter() { return modules.messageRouter; },
+          get eventBus() {
+            return modules.eventBus;
+          },
+          get gateway() {
+            return modules.gatewayServer;
+          },
+          get messageRouter() {
+            return modules.messageRouter;
+          },
         };
 
         const lifecycle = new PluginLifecycleManager(registry, config.plugins, sandboxDeps, logger, modules.eventBus);

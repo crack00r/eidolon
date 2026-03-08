@@ -217,9 +217,7 @@ export class SuggestionHistory {
   /** Get active suppressions (not expired). Also cleans up expired entries. */
   getSuppressions(now: number): SuppressionRecord[] {
     // Clean up expired suppressions first
-    this.db
-      .query("DELETE FROM anticipation_suppressions WHERE expires_at IS NOT NULL AND expires_at <= ?")
-      .run(now);
+    this.db.query("DELETE FROM anticipation_suppressions WHERE expires_at IS NOT NULL AND expires_at <= ?").run(now);
 
     const rows = this.db
       .query(

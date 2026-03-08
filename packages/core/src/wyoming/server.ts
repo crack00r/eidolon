@@ -220,9 +220,7 @@ export class WyomingServer {
 
     // Strip IPv4-mapped IPv6 prefix (e.g. "::ffff:192.168.1.1" -> "192.168.1.1")
     // to prevent allowlist bypass via IPv4-mapped IPv6 addresses.
-    const normalizedAddress = remoteAddress.startsWith("::ffff:")
-      ? remoteAddress.slice(7)
-      : remoteAddress;
+    const normalizedAddress = remoteAddress.startsWith("::ffff:") ? remoteAddress.slice(7) : remoteAddress;
 
     // Check if satellite ID or remote address (normalized) is in the allowlist
     return this.config.allowedSatellites.some(

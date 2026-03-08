@@ -190,7 +190,11 @@ export class BunImapClient implements IImapClient {
                 this.pendingResolve("* BAD Buffer overflow: exceeded 10MB limit");
                 this.pendingResolve = null;
               }
-              try { _socket.end(); } catch { /* best-effort */ }
+              try {
+                _socket.end();
+              } catch {
+                /* best-effort */
+              }
               return;
             }
 

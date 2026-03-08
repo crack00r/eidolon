@@ -9,6 +9,7 @@
 import { randomUUID } from "node:crypto";
 import type { BusEvent, EidolonError, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
+import { z } from "zod";
 import type { Logger } from "../logging/logger.ts";
 import type { EventHandlerResult } from "../loop/cognitive-loop.ts";
 import type { EventBus } from "../loop/event-bus.ts";
@@ -23,7 +24,6 @@ import type { StepExecutorRegistry } from "./executor-registry.ts";
 import { evaluateCondition } from "./executors/condition.ts";
 import { interpolateConfig } from "./interpolation.ts";
 import type { WorkflowStore } from "./store.ts";
-import { z } from "zod";
 import type {
   IWorkflowEngine,
   WorkflowContext,

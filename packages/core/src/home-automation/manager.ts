@@ -256,9 +256,7 @@ export class HAManager {
       return Err(createError(ErrorCode.HA_POLICY_DENIED, `Action denied by policy: ${policy.reason}`));
     }
     if (policy.level === "needs_approval") {
-      return Err(
-        createError(ErrorCode.HA_POLICY_DENIED, `Action requires approval: ${policy.reason}`),
-      );
+      return Err(createError(ErrorCode.HA_POLICY_DENIED, `Action requires approval: ${policy.reason}`));
     }
 
     if (!executorFn) {

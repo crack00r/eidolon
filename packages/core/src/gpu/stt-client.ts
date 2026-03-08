@@ -8,11 +8,7 @@ import type { EidolonError, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 import type { Logger } from "../logging/logger.ts";
 import type { GPUManager } from "./manager.ts";
-import {
-  ALLOWED_STT_MIME_TYPES,
-  MAX_STT_AUDIO_BYTES,
-  STT_UPLOAD_TIMEOUT_MS,
-} from "./pool-validation.ts";
+import { ALLOWED_STT_MIME_TYPES, MAX_STT_AUDIO_BYTES, STT_UPLOAD_TIMEOUT_MS } from "./pool-validation.ts";
 
 // ---------------------------------------------------------------------------
 // Types

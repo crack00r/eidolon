@@ -265,9 +265,7 @@ export class DocumentIndexer {
       } else if (typeof pdfParseModule === "function") {
         pdfParse = pdfParseModule as unknown as PdfParseFn;
       } else {
-        return Err(
-          createError(ErrorCode.DB_QUERY_FAILED, "pdf-parse module does not export a callable function"),
-        );
+        return Err(createError(ErrorCode.DB_QUERY_FAILED, "pdf-parse module does not export a callable function"));
       }
 
       const dataBuffer = readFileSync(filePath);

@@ -14,8 +14,8 @@
  */
 
 import { createHmac, timingSafeEqual } from "node:crypto";
-import { z } from "zod";
 import type { DiscoveryBeacon } from "@eidolon/protocol";
+import { z } from "zod";
 import type { Logger } from "../logging/logger.ts";
 import type { SignedBeacon } from "./broadcaster.ts";
 import { DISCOVERY_PORT } from "./broadcaster.ts";

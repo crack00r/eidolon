@@ -7,10 +7,10 @@
  *   test <provider> -- test connectivity to a specific provider
  */
 
-import { z } from "zod";
 import { loadConfig } from "@eidolon/core";
 import type { LLMConfig } from "@eidolon/protocol";
 import type { Command } from "commander";
+import { z } from "zod";
 import { formatTable } from "../utils/formatter.ts";
 
 /** Zod schema for Ollama /api/tags response. */

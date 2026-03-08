@@ -8,7 +8,6 @@ import type { Logger } from "../logging/logger.ts";
 import type { EventBus } from "../loop/event-bus.ts";
 import type { ITracer } from "../telemetry/tracer.ts";
 import { handleClientAuth } from "./client-manager-auth.ts";
-import { cleanupVoiceSessionForClient } from "./rpc-handlers-voice.ts";
 import {
   createJsonRpcError,
   createJsonRpcResponse,
@@ -19,13 +18,14 @@ import {
   parseJsonRpcRequest,
 } from "./protocol.ts";
 import type { AuthRateLimiter } from "./rate-limiter.ts";
+import { cleanupVoiceSessionForClient } from "./rpc-handlers-voice.ts";
 import { RpcValidationError } from "./rpc-schemas.ts";
 import {
   AUTH_TIMEOUT_MS,
-  MAX_MESSAGES_PER_SECOND,
-  MESSAGE_RATE_WINDOW_MS,
   anonymizeIp,
   type ClientState,
+  MAX_MESSAGES_PER_SECOND,
+  MESSAGE_RATE_WINDOW_MS,
   type MethodHandler,
   type ServerWS,
 } from "./server-helpers.ts";

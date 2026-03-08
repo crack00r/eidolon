@@ -169,10 +169,7 @@ export class UserManager {
       // Since channel_mappings is stored as JSON, we use a LIKE search
       // then verify in application code for correctness.
       // Escape LIKE wildcards (%, _) and backslash in user input to prevent injection.
-      const escapedId = externalUserId
-        .replace(/\\/g, "\\\\")
-        .replace(/%/g, "\\%")
-        .replace(/_/g, "\\_");
+      const escapedId = externalUserId.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
       const rows = this.db
         .query("SELECT * FROM users WHERE channel_mappings LIKE ? ESCAPE '\\'")
         .all(`%${escapedId}%`) as UserRow[];

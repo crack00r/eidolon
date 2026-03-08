@@ -125,9 +125,7 @@ function backfillVec0Table(db: Database, logger: Logger): void {
 
     for (let offset = 0; offset < countRow.count; offset += BACKFILL_BATCH_SIZE) {
       const rows = db
-        .query(
-          "SELECT rowid, embedding FROM memories WHERE embedding IS NOT NULL ORDER BY rowid LIMIT ? OFFSET ?",
-        )
+        .query("SELECT rowid, embedding FROM memories WHERE embedding IS NOT NULL ORDER BY rowid LIMIT ? OFFSET ?")
         .all(BACKFILL_BATCH_SIZE, offset) as Array<{
         rowid: number;
         embedding: Uint8Array;

@@ -53,9 +53,7 @@ export class VoicePipeline {
    */
   async textToSpeechChunked(text: string): Promise<Result<Uint8Array[], EidolonError>> {
     if (this.activeAbort !== null) {
-      return Err(
-        createError(ErrorCode.TTS_FAILED, "Voice pipeline is already processing a TTS request"),
-      );
+      return Err(createError(ErrorCode.TTS_FAILED, "Voice pipeline is already processing a TTS request"));
     }
 
     const sentences = VoicePipeline.splitSentences(text);

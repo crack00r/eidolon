@@ -58,11 +58,7 @@ export class PluginLifecycleManager {
         this.registry.register(loaded, "error");
         this.registry.updateState(name, "error", String(err));
         this.logger.error("plugins:lifecycle", `Plugin ${name} init failed`, err);
-        this.eventBus?.publish(
-          "plugin:error",
-          { plugin: name, error: String(err) },
-          { source: "plugin:lifecycle" },
-        );
+        this.eventBus?.publish("plugin:error", { plugin: name, error: String(err) }, { source: "plugin:lifecycle" });
       }
     }
   }
@@ -77,11 +73,7 @@ export class PluginLifecycleManager {
       } catch (err) {
         this.registry.updateState(name, "error", String(err));
         this.logger.error("plugins:lifecycle", `Plugin ${name} start failed`, err);
-        this.eventBus?.publish(
-          "plugin:error",
-          { plugin: name, error: String(err) },
-          { source: "plugin:lifecycle" },
-        );
+        this.eventBus?.publish("plugin:error", { plugin: name, error: String(err) }, { source: "plugin:lifecycle" });
       }
     }
   }

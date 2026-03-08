@@ -136,7 +136,9 @@ export async function createBoltSlackClient(
         }
       } catch (err: unknown) {
         // Log the failure but fall through to default user object
-        console.warn(`[eidolon:slack] Failed to look up Slack user ${userId}: ${err instanceof Error ? err.message : String(err)}`);
+        console.warn(
+          `[eidolon:slack] Failed to look up Slack user ${userId}: ${err instanceof Error ? err.message : String(err)}`,
+        );
       }
 
       return { id: userId, username: userId, isBot: false };

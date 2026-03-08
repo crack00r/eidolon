@@ -12,6 +12,7 @@ import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 import { z } from "zod";
 
 const ConsentTypeSchema = z.enum(["memory_extraction", "data_processing"]);
+
 import type { Logger } from "../logging/logger.ts";
 
 // ---------------------------------------------------------------------------

@@ -268,7 +268,9 @@ export class GPUWorker {
         if (schema) {
           const parsed = schema.safeParse(data);
           if (!parsed.success) {
-            return Err(createError(ErrorCode.GPU_UNAVAILABLE, `GPU response validation failed: ${parsed.error.message}`));
+            return Err(
+              createError(ErrorCode.GPU_UNAVAILABLE, `GPU response validation failed: ${parsed.error.message}`),
+            );
           }
           return Ok(parsed.data);
         }

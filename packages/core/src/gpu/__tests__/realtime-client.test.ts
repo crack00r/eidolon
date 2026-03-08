@@ -225,9 +225,7 @@ describe("RealtimeVoiceClient", () => {
 
       // Token sent as first message, not in URL
       expect(ws.url).not.toContain("token=");
-      expect(ws.send).toHaveBeenCalledWith(
-        JSON.stringify({ type: "auth", token: "key with spaces&special=chars" }),
-      );
+      expect(ws.send).toHaveBeenCalledWith(JSON.stringify({ type: "auth", token: "key with spaces&special=chars" }));
 
       await client.disconnect();
     });

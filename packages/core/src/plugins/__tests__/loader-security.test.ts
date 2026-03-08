@@ -16,9 +16,7 @@ describe("PluginManifestSchema", () => {
     description: "A test plugin",
     eidolonVersion: "0.1.0",
     permissions: ["events:listen", "events:emit"],
-    extensionPoints: [
-      { type: "event-listener", name: "my-listener" },
-    ],
+    extensionPoints: [{ type: "event-listener", name: "my-listener" }],
     main: "index.js",
   };
 
@@ -88,9 +86,16 @@ describe("PluginManifestSchema", () => {
 
   test("accepts all valid permission types", () => {
     const allPermissions = [
-      "events:listen", "events:emit", "memory:read", "memory:write",
-      "config:read", "config:write", "gateway:register", "channel:register",
-      "shell:execute", "filesystem:write",
+      "events:listen",
+      "events:emit",
+      "memory:read",
+      "memory:write",
+      "config:read",
+      "config:write",
+      "gateway:register",
+      "channel:register",
+      "shell:execute",
+      "filesystem:write",
     ];
     const result = PluginManifestSchema.safeParse({
       ...validManifest,

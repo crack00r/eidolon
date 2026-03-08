@@ -8,9 +8,9 @@
  */
 
 import { readFileSync, writeFileSync } from "node:fs";
-import { z } from "zod";
 import type { EidolonError, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
+import { z } from "zod";
 import type { Logger } from "../../logging/logger.ts";
 import { getMcpTemplate, type McpTemplate, templateToConfigEntry } from "../templates.ts";
 import type { MarketplaceRegistry } from "./registry.ts";
@@ -104,7 +104,12 @@ export class McpConfigurator {
       const parsed: unknown = JSON.parse(raw);
       const validated = ConfigFileSchema.safeParse(parsed);
       if (!validated.success) {
-        return Err(createError(ErrorCode.CONFIG_PARSE_ERROR, `Invalid config structure at ${configPath}: ${validated.error.message}`));
+        return Err(
+          createError(
+            ErrorCode.CONFIG_PARSE_ERROR,
+            `Invalid config structure at ${configPath}: ${validated.error.message}`,
+          ),
+        );
       }
       config = validated.data;
     } catch (cause) {
@@ -167,7 +172,12 @@ export class McpConfigurator {
       const parsed: unknown = JSON.parse(raw);
       const validated = ConfigFileSchema.safeParse(parsed);
       if (!validated.success) {
-        return Err(createError(ErrorCode.CONFIG_PARSE_ERROR, `Invalid config structure at ${configPath}: ${validated.error.message}`));
+        return Err(
+          createError(
+            ErrorCode.CONFIG_PARSE_ERROR,
+            `Invalid config structure at ${configPath}: ${validated.error.message}`,
+          ),
+        );
       }
       config = validated.data;
     } catch (cause) {

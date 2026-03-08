@@ -83,7 +83,11 @@ describe("OllamaProvider schema validation", () => {
 
   function createProvider(): OllamaProvider {
     const host = `http://localhost:${server.port}`;
-    return new OllamaProvider({ enabled: true, host, defaultModel: "test", allowPrivateHosts: true, models: {} }, logger, true);
+    return new OllamaProvider(
+      { enabled: true, host, defaultModel: "test", allowPrivateHosts: true, models: {} },
+      logger,
+      true,
+    );
   }
 
   test("listModels returns empty array on malformed tags response", async () => {

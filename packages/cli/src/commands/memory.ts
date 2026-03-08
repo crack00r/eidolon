@@ -39,13 +39,7 @@ const MEMORY_TYPES: readonly MemoryType[] = [
   "schema",
 ];
 
-const MEMORY_LAYERS: readonly MemoryLayer[] = [
-  "working",
-  "short_term",
-  "long_term",
-  "episodic",
-  "procedural",
-];
+const MEMORY_LAYERS: readonly MemoryLayer[] = ["working", "short_term", "long_term", "episodic", "procedural"];
 
 function isValidMemoryType(value: string): value is MemoryType {
   return (MEMORY_TYPES as readonly string[]).includes(value);

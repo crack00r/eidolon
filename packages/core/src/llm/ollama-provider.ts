@@ -27,23 +27,19 @@ import {
 
 /** IPv4 patterns for private/internal networks. */
 const PRIVATE_IP_PATTERNS = [
-  /^127\./,          // loopback
-  /^10\./,           // Class A private
-  /^192\.168\./,     // Class C private
+  /^127\./, // loopback
+  /^10\./, // Class A private
+  /^192\.168\./, // Class C private
   /^172\.(1[6-9]|2\d|3[01])\./, // Class B private (172.16-31.x)
-  /^169\.254\./,     // link-local
-  /^0\./,            // current network
-  /^::1$/,           // IPv6 loopback
-  /^fc/i,            // IPv6 unique local
-  /^fd/i,            // IPv6 unique local
-  /^fe80/i,          // IPv6 link-local
+  /^169\.254\./, // link-local
+  /^0\./, // current network
+  /^::1$/, // IPv6 loopback
+  /^fc/i, // IPv6 unique local
+  /^fd/i, // IPv6 unique local
+  /^fe80/i, // IPv6 link-local
 ];
 
-const BLOCKED_HOSTNAMES = new Set([
-  "localhost",
-  "metadata.google.internal",
-  "instance-data",
-]);
+const BLOCKED_HOSTNAMES = new Set(["localhost", "metadata.google.internal", "instance-data"]);
 
 /**
  * Check whether an IP address string belongs to a private/internal network.

@@ -97,7 +97,9 @@ export function findSimilarEntities(
 
   try {
     const MAX_ENTITY_CANDIDATES = 5000;
-    const rows = db.query("SELECT * FROM kg_entities WHERE type = ? LIMIT ?").all(type, MAX_ENTITY_CANDIDATES) as EntityRow[];
+    const rows = db
+      .query("SELECT * FROM kg_entities WHERE type = ? LIMIT ?")
+      .all(type, MAX_ENTITY_CANDIDATES) as EntityRow[];
 
     const matches: Array<{ entity: KGEntity; similarity: number }> = [];
 

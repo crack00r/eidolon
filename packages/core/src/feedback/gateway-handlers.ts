@@ -7,8 +7,8 @@
  */
 
 import { z } from "zod";
-import type { GatewayServer } from "../gateway/server.ts";
 import { RpcValidationError } from "../gateway/rpc-schemas.ts";
+import type { GatewayServer } from "../gateway/server.ts";
 import type { Logger } from "../logging/logger.ts";
 import type { EventBus } from "../loop/event-bus.ts";
 import type { FeedbackStore } from "./store.ts";

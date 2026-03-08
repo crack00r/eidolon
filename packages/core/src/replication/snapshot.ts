@@ -278,9 +278,7 @@ export function createSnapshotReceiver(snapshotDir: string, logger: Logger): Sna
               cleanupIncomingFiles(fileStates);
               receiving = false;
               fileStates.clear();
-              return Err(
-                createError(ErrorCode.DB_QUERY_FAILED, `Missing chunk ${i} for ${fileName}`),
-              );
+              return Err(createError(ErrorCode.DB_QUERY_FAILED, `Missing chunk ${i} for ${fileName}`));
             }
             appendFileSync(state.tmpPath, chunk);
           }

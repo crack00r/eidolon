@@ -18,12 +18,12 @@
  * Errors are logged to stderr to keep stdout clean for protocol messages.
  */
 
+import { z } from "zod";
 import type { Logger } from "../logging/logger.ts";
 import type { KGEntityStore } from "../memory/knowledge-graph/entities.ts";
 import type { KGRelationStore } from "../memory/knowledge-graph/relations.ts";
 import type { MemorySearch } from "../memory/search.ts";
 import type { MemoryStore } from "../memory/store.ts";
-import { z } from "zod";
 import {
   JSON_RPC_INTERNAL_ERROR,
   JSON_RPC_INVALID_PARAMS,

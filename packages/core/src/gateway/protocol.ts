@@ -3,7 +3,14 @@
  * for the Gateway WebSocket server.
  */
 
-import type { GatewayMethod, GatewayPushEvent, GatewayPushType, GatewayRequest, GatewayResponse, Result } from "@eidolon/protocol";
+import type {
+  GatewayMethod,
+  GatewayPushEvent,
+  GatewayPushType,
+  GatewayRequest,
+  GatewayResponse,
+  Result,
+} from "@eidolon/protocol";
 import { Err, Ok } from "@eidolon/protocol";
 
 // ---------------------------------------------------------------------------

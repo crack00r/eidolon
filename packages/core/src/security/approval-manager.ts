@@ -6,12 +6,13 @@
 import type { Database } from "bun:sqlite";
 import { randomUUID } from "node:crypto";
 import type {
+  ActionLevel,
   ApprovalRequest,
+  ApprovalStatus,
   EidolonError,
   Result,
   SecurityConfig,
 } from "@eidolon/protocol";
-import type { ActionLevel, ApprovalStatus } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 import type { Logger } from "../logging/logger.ts";
 import type { EventBus } from "../loop/event-bus.ts";

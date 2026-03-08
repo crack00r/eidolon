@@ -143,13 +143,10 @@ export function registerDaemonCommand(program: Command): void {
 
       const proc =
         process.platform === "win32"
-          ? Bun.spawn(
-              ["powershell", "-Command", "Get-Content", "-Path", logFile, "-Tail", String(lines), "-Wait"],
-              {
-                stdout: "inherit",
-                stderr: "inherit",
-              },
-            )
+          ? Bun.spawn(["powershell", "-Command", "Get-Content", "-Path", logFile, "-Tail", String(lines), "-Wait"], {
+              stdout: "inherit",
+              stderr: "inherit",
+            })
           : Bun.spawn(["tail", "-n", String(lines), "-f", logFile], {
               stdout: "inherit",
               stderr: "inherit",

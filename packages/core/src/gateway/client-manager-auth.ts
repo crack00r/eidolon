@@ -21,11 +21,13 @@ const JsonRpcAuthSchema = z.object({
   jsonrpc: z.literal("2.0"),
   method: z.literal("auth.authenticate"),
   id: z.string().optional(),
-  params: z.object({
-    token: z.string(),
-    platform: z.string().optional(),
-    version: z.string().optional(),
-  }).optional(),
+  params: z
+    .object({
+      token: z.string(),
+      platform: z.string().optional(),
+      version: z.string().optional(),
+    })
+    .optional(),
 });
 
 /** Legacy token-based auth message. */
@@ -87,7 +89,14 @@ export function handleClientAuth(
   } else if (legacyResult?.success) {
     token = legacyResult.data.token;
   } else {
-    emitAuthFailure(ws, client, "Invalid auth payload: expected JSON-RPC auth.authenticate or { type: 'token', token: string }", deps, undefined, authTimers);
+    emitAuthFailure(
+      ws,
+      client,
+      "Invalid auth payload: expected JSON-RPC auth.authenticate or { type: 'token', token: string }",
+      deps,
+      undefined,
+      authTimers,
+    );
     return;
   }
 

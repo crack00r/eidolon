@@ -5,8 +5,8 @@
  * Extracted from gateway-wiring.ts to keep each module under ~300 lines.
  */
 
-import { z } from "zod";
 import type { CalendarEvent } from "@eidolon/protocol";
+import { z } from "zod";
 import { CalendarManager } from "../calendar/manager.ts";
 import { registerFeedbackHandlers } from "../feedback/gateway-handlers.ts";
 import { HAManager } from "../home-automation/manager.ts";
@@ -109,7 +109,9 @@ export function buildCalendarSteps(modules: InitializedModules): InitStep[] {
       gatewayServer.registerHandler("calendar.createEvent", async (params) => {
         const parsed = CalendarCreateEventParamsSchema.safeParse(params);
         if (!parsed.success) {
-          throw new Error(`Invalid calendar.createEvent params: ${parsed.error.issues.map((i) => i.message).join(", ")}`);
+          throw new Error(
+            `Invalid calendar.createEvent params: ${parsed.error.issues.map((i) => i.message).join(", ")}`,
+          );
         }
         const event = parsed.data as Omit<CalendarEvent, "id" | "syncedAt">;
         const result = calendarManager.createEvent(event);

@@ -158,9 +158,7 @@ export class SystemTtsProvider implements TtsFallbackProvider {
     }
 
     try {
-      const spawnArgs = ttsCmd.useStdin
-        ? [ttsCmd.command, ...ttsCmd.args]
-        : [ttsCmd.command, ...ttsCmd.args, text];
+      const spawnArgs = ttsCmd.useStdin ? [ttsCmd.command, ...ttsCmd.args] : [ttsCmd.command, ...ttsCmd.args, text];
       const proc = Bun.spawn(spawnArgs, {
         stdout: "pipe",
         stderr: "pipe",

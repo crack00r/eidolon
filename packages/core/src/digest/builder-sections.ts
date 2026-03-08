@@ -118,7 +118,9 @@ export function buildLearningSummary(operationalDb: Database, since: number): Di
     lines.push("**Top discoveries:**");
     for (const d of top) {
       const score = Math.round(d.relevance_score * 100);
-      lines.push(`- [${sanitize(d.source_type)}] ${sanitize(d.title)} (relevance: ${score}%, status: ${sanitize(d.status)})`);
+      lines.push(
+        `- [${sanitize(d.source_type)}] ${sanitize(d.title)} (relevance: ${score}%, status: ${sanitize(d.status)})`,
+      );
     }
   }
 

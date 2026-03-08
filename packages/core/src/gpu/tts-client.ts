@@ -9,10 +9,10 @@ import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 import type { Logger } from "../logging/logger.ts";
 import type { GPUManager } from "./manager.ts";
 import {
+  MAX_TTS_SPEED,
   MAX_TTS_TEXT_LENGTH,
   MAX_VOICE_LENGTH,
   MIN_TTS_SPEED,
-  MAX_TTS_SPEED,
   VALID_TTS_FORMATS,
   VOICE_PATTERN,
 } from "./pool-validation.ts";

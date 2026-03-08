@@ -11,6 +11,7 @@ import { createError, DEFAULT_MODEL_PRICING, Err, ErrorCode, MODEL_PRICING, Ok }
 import { z } from "zod";
 
 const SessionTypeSchema = z.enum(["main", "task", "learning", "dream", "voice", "review"]);
+
 import type { Logger } from "../logging/logger.ts";
 
 /** Period durations in milliseconds. */

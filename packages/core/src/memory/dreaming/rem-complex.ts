@@ -20,8 +20,18 @@ const MIN_PREDICTION_CONFIDENCE = 0.7;
 
 /** Valid relation predicates for runtime validation of ComplEx predictions. */
 const VALID_PREDICATES = new Set<string>([
-  "uses", "owns", "runs_on", "depends_on", "prefers", "creates",
-  "is_part_of", "located_in", "has_property", "related_to", "contradicts", "replaces",
+  "uses",
+  "owns",
+  "runs_on",
+  "depends_on",
+  "prefers",
+  "creates",
+  "is_part_of",
+  "located_in",
+  "has_property",
+  "related_to",
+  "contradicts",
+  "replaces",
 ]);
 
 // ---------------------------------------------------------------------------

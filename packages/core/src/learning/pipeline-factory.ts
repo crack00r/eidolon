@@ -46,10 +46,7 @@ function validateCommand(command: string): Result<void, EidolonError> {
   for (const meta of SHELL_METACHARACTERS) {
     if (trimmed.includes(meta)) {
       return Err(
-        createError(
-          ErrorCode.DISCOVERY_FAILED,
-          `Command contains forbidden shell metacharacter "${meta}": ${command}`,
-        ),
+        createError(ErrorCode.DISCOVERY_FAILED, `Command contains forbidden shell metacharacter "${meta}": ${command}`),
       );
     }
   }

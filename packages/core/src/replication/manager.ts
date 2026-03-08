@@ -262,8 +262,7 @@ export class ReplicationManager {
     if (msg.role === "primary" && this.state.role === "primary") {
       const peerNodeId = msg.nodeId;
       const shouldDemoteSelf =
-        this.state.failoverCount > 0 ||
-        (this.state.failoverCount === 0 && this.nodeId > peerNodeId);
+        this.state.failoverCount > 0 || (this.state.failoverCount === 0 && this.nodeId > peerNodeId);
 
       if (shouldDemoteSelf) {
         this.logger.warn("split-brain", "Detected dual-primary, demoting self", {

@@ -40,9 +40,13 @@ describe("injectTraceContext", () => {
 describe("extractTraceContext", () => {
   test("runs fn within extracted context and returns result", () => {
     const tracer = new NoopTracer();
-    const result = extractTraceContext(tracer, {
-      Traceparent: "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
-    }, () => "hello");
+    const result = extractTraceContext(
+      tracer,
+      {
+        Traceparent: "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
+      },
+      () => "hello",
+    );
     expect(result).toBe("hello");
   });
 
@@ -50,10 +54,14 @@ describe("extractTraceContext", () => {
     const tracer = new NoopTracer();
     // NoopTracer.withExtractedContext just runs fn, so we verify no crash
     // and that the return value is propagated
-    const result = extractTraceContext(tracer, {
-      TRACEPARENT: "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
-      "X-Custom-Header": "value",
-    }, () => 99);
+    const result = extractTraceContext(
+      tracer,
+      {
+        TRACEPARENT: "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
+        "X-Custom-Header": "value",
+      },
+      () => 99,
+    );
     expect(result).toBe(99);
   });
 });

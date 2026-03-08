@@ -7,7 +7,7 @@
 
 import type { EidolonError, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
-import { z, type ZodType } from "zod";
+import { type ZodType, z } from "zod";
 import type { Logger } from "../logging/logger.ts";
 import { injectTraceContext } from "../telemetry/propagation.ts";
 import type { ITracer } from "../telemetry/tracer.ts";
@@ -207,7 +207,12 @@ export class GPUManager {
   }
 
   /** Make an authenticated request to the worker. When a `schema` is provided, JSON responses are validated. */
-  async request<T>(path: string, options?: RequestInit, timeoutOverrideMs?: number, schema?: ZodType<T>): Promise<Result<T, EidolonError>> {
+  async request<T>(
+    path: string,
+    options?: RequestInit,
+    timeoutOverrideMs?: number,
+    schema?: ZodType<T>,
+  ): Promise<Result<T, EidolonError>> {
     const url = `${this.config.url}${path}`;
     const timeoutMs = timeoutOverrideMs ?? this.config.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
@@ -277,7 +282,9 @@ export class GPUManager {
         if (schema) {
           const parsed = schema.safeParse(data);
           if (!parsed.success) {
-            return Err(createError(ErrorCode.GPU_UNAVAILABLE, `GPU response validation failed: ${parsed.error.message}`));
+            return Err(
+              createError(ErrorCode.GPU_UNAVAILABLE, `GPU response validation failed: ${parsed.error.message}`),
+            );
           }
           return Ok(parsed.data);
         }

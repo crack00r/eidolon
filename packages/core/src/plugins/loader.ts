@@ -17,8 +17,8 @@
 
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import type { ExtensionPointType, PluginManifest, PluginPermission } from "@eidolon/protocol";
 import { z } from "zod";
-import type { PluginManifest, PluginPermission, ExtensionPointType } from "@eidolon/protocol";
 import type { Logger } from "../logging/logger.ts";
 
 // ---------------------------------------------------------------------------

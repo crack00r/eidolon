@@ -14,7 +14,7 @@ import type { KGEntityStore } from "../memory/knowledge-graph/entities.ts";
 import type { KGRelationStore } from "../memory/knowledge-graph/relations.ts";
 import type { UserProfileGenerator } from "../memory/profile.ts";
 import type { MemorySearch } from "../memory/search.ts";
-import { type ComposedSuggestion, ActionComposer } from "./composer.ts";
+import { ActionComposer, type ComposedSuggestion } from "./composer.ts";
 import {
   BirthdayDetector,
   FollowUpDetector,
