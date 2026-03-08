@@ -64,12 +64,19 @@ pub async fn discover_servers(timeout_ms: u64) -> Result<Vec<DiscoveredServer>, 
 
     // Run the blocking UDP listener on a separate thread
     let result = tokio::task::spawn_blocking(move || -> Result<Vec<DiscoveredServer>, String> {
-        let socket = UdpSocket::bind("0.0.0.0:41920").map_err(|e| {
-            format!(
-                "Failed to bind UDP port 41920: {}. Another instance may be listening.",
-                e
-            )
-        })?;
+        let socket = match UdpSocket::bind("0.0.0.0:41920") {
+            Ok(s) => s,
+            Err(e) if e.kind() == std::io::ErrorKind::AddrInUse => {
+                // Port already in use (co-located server). Return empty list instead of crashing.
+                return Ok(Vec::new());
+            }
+            Err(e) => {
+                return Err(format!(
+                    "Failed to bind UDP port 41920: {}.",
+                    e
+                ));
+            }
+        };
 
         // Allow address reuse so the server's own socket doesn't conflict
         socket
@@ -193,11 +200,21 @@ pub fn start_daemon(
         args.push(config_path);
     }
 
-    let sidecar_command = app
+    // Read master key and pass as environment variable if available
+    let mut env_vars: Vec<(String, String)> = Vec::new();
+    if let Some(key) = read_master_key() {
+        env_vars.push(("EIDOLON_MASTER_KEY".to_string(), key));
+    }
+
+    let mut sidecar_command = app
         .shell()
         .sidecar("eidolon-cli")
         .map_err(|e| format!("Failed to create sidecar command: {}", e))?
         .args(&args);
+
+    for (k, v) in &env_vars {
+        sidecar_command = sidecar_command.env(k, v);
+    }
 
     let (rx, child) = sidecar_command
         .spawn()
@@ -356,7 +373,7 @@ fn build_skeleton_sections() -> serde_json::Value {
 }
 
 #[tauri::command]
-pub async fn save_client_config(host: String, port: u16, token: String) -> Result<(), String> {
+pub async fn save_client_config(host: String, port: u16, token: String, tls: bool) -> Result<(), String> {
     let config_path = get_config_path_internal();
 
     // Create parent directory if it doesn't exist
@@ -374,7 +391,7 @@ pub async fn save_client_config(host: String, port: u16, token: String) -> Resul
             "host": host,
             "port": port,
             "token": token,
-            "tls": false
+            "tls": tls
         },
         "identity": { "name": "Eidolon", "ownerName": "Client" },
         "brain": {
@@ -436,6 +453,56 @@ pub async fn get_client_config() -> Result<ClientConfig, String> {
     })
 }
 
+/// Return the platform-specific path for the master key file.
+fn get_master_key_path() -> String {
+    let home = std::env::var("HOME").unwrap_or_default();
+    if cfg!(target_os = "macos") {
+        format!("{}/Library/Preferences/eidolon/master.key", home)
+    } else if cfg!(target_os = "windows") {
+        format!(
+            "{}/eidolon/config/master.key",
+            std::env::var("APPDATA").unwrap_or_default()
+        )
+    } else {
+        format!("{}/.config/eidolon/master.key", home)
+    }
+}
+
+/// Read the persisted master key, if it exists.
+fn read_master_key() -> Option<String> {
+    let path = get_master_key_path();
+    std::fs::read_to_string(&path)
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+}
+
+/// Persist the master key to disk with restrictive permissions (0600).
+fn persist_master_key(key: &str) -> Result<(), String> {
+    let path = get_master_key_path();
+    if let Some(parent) = std::path::Path::new(&path).parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| format!("Failed to create master key dir: {}", e))?;
+    }
+    std::fs::write(&path, key).map_err(|e| format!("Failed to write master key: {}", e))?;
+    set_config_permissions(&path);
+    Ok(())
+}
+
+/// Try to detect a non-loopback local IPv4 address. Falls back to "127.0.0.1".
+fn detect_local_ip() -> String {
+    // Connect a UDP socket to a public address to determine the local interface IP.
+    // No data is actually sent.
+    if let Ok(socket) = UdpSocket::bind("0.0.0.0:0") {
+        if socket.connect("8.8.8.8:80").is_ok() {
+            if let Ok(addr) = socket.local_addr() {
+                return addr.ip().to_string();
+            }
+        }
+    }
+    "127.0.0.1".to_string()
+}
+
 /// Generate a random hex string of the given byte length (output is 2x bytes in hex chars).
 fn random_hex(byte_len: usize) -> String {
     let mut rng = rand::thread_rng();
@@ -481,11 +548,14 @@ fn get_platform_dirs() -> (String, String) {
 pub async fn onboard_setup_server(
     name: String,
     credential_type: String,
-    api_key: Option<String>,
+    _api_key: Option<String>,
 ) -> Result<String, String> {
-    let _master_key = random_hex(32); // 64 hex chars
+    let master_key = random_hex(32); // 64 hex chars
     let token = random_hex(16); // 32 hex chars
     let tailscale_ip = detect_tailscale_ip();
+
+    // Persist master key with restrictive permissions
+    persist_master_key(&master_key)?;
 
     let (data_dir, _log_dir) = get_platform_dirs();
 
@@ -493,13 +563,22 @@ pub async fn onboard_setup_server(
     std::fs::create_dir_all(&data_dir)
         .map_err(|e| format!("Failed to create data dir: {}", e))?;
 
-    // Build credential object
-    let cred_value = api_key.unwrap_or_else(|| "oauth".to_string());
-    let credential = serde_json::json!({
-        "type": credential_type,
-        "name": "primary",
-        "credential": cred_value
-    });
+    // Build credential object.
+    // For api-key type, use a $secret reference so resolveSecretRefs() can resolve it.
+    // For oauth type, use a plain string credential.
+    let credential = if credential_type == "api-key" {
+        serde_json::json!({
+            "type": credential_type,
+            "name": "primary",
+            "credential": { "$secret": "claude-api-key" }
+        })
+    } else {
+        serde_json::json!({
+            "type": credential_type,
+            "name": "primary",
+            "credential": "oauth"
+        })
+    };
 
     // Build the skeleton sections matching buildServerConfig() in setup-finalize.ts
     let skeleton = build_skeleton_sections();
@@ -548,11 +627,18 @@ pub async fn onboard_setup_server(
 
     set_config_permissions(&config_path);
 
+    let host = tailscale_ip
+        .as_deref()
+        .map(|s| s.to_string())
+        .unwrap_or_else(detect_local_ip);
+
     let result = serde_json::json!({
         "ok": true,
         "configPath": config_path,
-        "tailscaleIp": tailscale_ip,
-        "token": token
+        "host": host,
+        "port": 8419,
+        "token": token,
+        "tailscaleIp": tailscale_ip
     });
 
     Ok(result.to_string())

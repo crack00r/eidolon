@@ -168,7 +168,7 @@ export function buildServiceSteps(modules: InitializedModules, options?: DaemonO
       if (!checker || !logger) return;
 
       const config = modules.config;
-      const healthPort = config?.gateway?.port ? config.gateway.port + 1000 : 9419;
+      const healthPort = Math.min(config?.gateway?.port ? config.gateway.port + 1000 : 9419, 65535);
       modules.healthServer = createHealthServer({
         port: healthPort,
         checker,

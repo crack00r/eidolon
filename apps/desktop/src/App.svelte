@@ -1,6 +1,7 @@
 <script lang="ts">
-import { onMount } from "svelte";
+import { onDestroy, onMount } from "svelte";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import Layout from "./routes/+layout.svelte";
 import DashboardPage from "./routes/dashboard/+page.svelte";
 import ChatPage from "./routes/chat/+page.svelte";
@@ -38,6 +39,10 @@ function handleRoleSelect(role: "server" | "client"): void {
   }
 }
 
+function handleOnboardingBack(): void {
+  appState = "onboarding-role";
+}
+
 async function autoConnect(role: string): Promise<void> {
   try {
     if (role === "server") {
@@ -68,21 +73,36 @@ async function startDaemonWithConfig(): Promise<void> {
 }
 
 async function handleOnboardingComplete(): Promise<void> {
+  let role: string;
   try {
-    const role = await invoke<string>("get_config_role");
+    role = await invoke<string>("get_config_role");
     if (role === "server") {
       await startDaemonWithConfig();
     }
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     daemonError = `Failed to start daemon: ${msg}`;
+    return;
   }
   appState = "running";
-  const role = await invoke<string>("get_config_role").catch(() => "server");
   autoConnect(role);
 }
 
+// Daemon-exit event listener cleanup
+let unlistenDaemonExit: (() => void) | null = null;
+
+onDestroy(() => {
+  unlistenDaemonExit?.();
+});
+
 onMount(async () => {
+  // Listen for daemon-exit events from the Rust backend
+  unlistenDaemonExit = await listen<{ code: number; message: string }>("daemon-exit", (event) => {
+    const { code, message } = event.payload;
+    daemonError = `Daemon exited unexpectedly (code ${code}): ${message}`;
+    clientLog("error", "app", `Daemon exit: code=${code} message=${message}`);
+  });
+
   try {
     const configExists = await invoke<boolean>("check_config_exists");
     if (!configExists) {
@@ -120,9 +140,9 @@ onMount(async () => {
 {:else if appState === "onboarding-role"}
   <RoleSelect onSelect={handleRoleSelect} />
 {:else if appState === "onboarding-server"}
-  <ServerSetup onComplete={handleOnboardingComplete} />
+  <ServerSetup onComplete={handleOnboardingComplete} onBack={handleOnboardingBack} />
 {:else if appState === "onboarding-client"}
-  <ClientSetup onComplete={handleOnboardingComplete} />
+  <ClientSetup onComplete={handleOnboardingComplete} onBack={handleOnboardingBack} />
 {:else}
   <Layout {currentRoute} onNavigate={navigate}>
     {#if daemonError}

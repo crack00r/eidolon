@@ -9,6 +9,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   check:
     name: Lint, Typecheck & Test
@@ -78,17 +82,13 @@ jobs:
         with:
           workspaces: apps/desktop/src-tauri -> target
 
-      - name: Cargo check (Desktop)
+      - name: Cargo check & clippy (Desktop)
         run: |
           cd apps/desktop/src-tauri
-          # Create placeholder sidecar binaries for cargo check (actual binaries built during release)
+          # Create placeholder sidecar binaries for cargo check/clippy (actual binaries built during release)
           mkdir -p binaries
           touch binaries/eidolon-cli-x86_64-unknown-linux-gnu
           cargo check 2>&1
-
-      - name: Cargo clippy (Desktop)
-        run: |
-          cd apps/desktop/src-tauri
           cargo clippy -- -W clippy::all 2>&1
 
       - name: Version sync check

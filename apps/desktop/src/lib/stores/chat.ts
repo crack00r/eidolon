@@ -4,6 +4,7 @@
  */
 
 import { derived, writable } from "svelte/store";
+import type { GatewayClient } from "../api";
 import { clientLog } from "../logger";
 import { sanitizeErrorForDisplay } from "../utils";
 import { getClient } from "./connection";
@@ -60,12 +61,15 @@ export async function sendMessage(content: string): Promise<void> {
   streamingStore.set(true);
 
   try {
-    const response = await client.call<{ content: string }>("chat.send", {
-      message: content,
+    await client.call<{ messageId: string; status: string }>("chat.send", {
+      text: content,
     });
 
+    // The server returns { messageId, status: "queued" } -- the actual AI response
+    // arrives asynchronously via push notifications (push.taskCompleted).
+    // Show a placeholder until the push arrives.
     messagesStore.update((msgs) =>
-      msgs.map((msg) => (msg.id === assistantId ? { ...msg, content: response.content, streaming: false } : msg)),
+      msgs.map((msg) => (msg.id === assistantId ? { ...msg, content: "Thinking...", streaming: true } : msg)),
     );
   } catch (err) {
     clientLog("error", "chat", "sendMessage failed", err);
@@ -118,6 +122,30 @@ export async function rateMessage(messageId: string, rating: number): Promise<vo
     clientLog("error", "chat", "rateMessage failed", err);
     throw err;
   }
+}
+
+/**
+ * Wire up push notification handlers so assistant responses from the server
+ * replace the "Thinking..." placeholder. Call once after connecting.
+ * Returns an unsubscribe function.
+ */
+export function setupChatPushHandlers(client: GatewayClient): () => void {
+  const unsubTask = client.on("push.taskCompleted", (params) => {
+    const content = typeof params.result === "string" ? params.result : "";
+    if (!content) return;
+
+    // Replace the most recent streaming assistant message
+    messagesStore.update((msgs) => {
+      const idx = msgs.findLastIndex((m) => m.role === "assistant" && m.streaming);
+      if (idx === -1) return msgs;
+      const updated = [...msgs];
+      updated[idx] = { ...updated[idx]!, content, streaming: false };
+      return updated;
+    });
+    streamingStore.set(false);
+  });
+
+  return unsubTask;
 }
 
 export function clearMessages(): void {

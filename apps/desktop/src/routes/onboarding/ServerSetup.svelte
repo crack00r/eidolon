@@ -10,15 +10,16 @@ import { invoke } from "@tauri-apps/api/core";
 
 interface Props {
   onComplete: () => void;
+  onBack: () => void;
 }
 
-let { onComplete }: Props = $props();
+let { onComplete, onBack }: Props = $props();
 
 type Step = "identity" | "setup" | "ready";
 
 let step = $state<Step>("identity");
 let name = $state("");
-let credentialType = $state<"oauth" | "apikey">("oauth");
+let credentialType = $state<"oauth" | "api-key">("oauth");
 let apiKey = $state("");
 let setupError = $state<string | null>(null);
 let pairingUrl = $state("");
@@ -67,7 +68,7 @@ async function runSetup(): Promise<void> {
     const rawResult = await invoke<string>("onboard_setup_server", {
       name: name.trim(),
       credentialType,
-      apiKey: credentialType === "apikey" ? apiKey : undefined,
+      apiKey: credentialType === "api-key" ? apiKey : undefined,
     });
 
     // Mark all as done on success
@@ -119,6 +120,7 @@ function statusIcon(status: ChecklistItem["status"]): string {
 <div class="server-setup">
   {#if step === "identity"}
     <div class="step-panel">
+      <button class="ed-btn ed-btn--ghost btn-back" onclick={onBack}>Back</button>
       <h1 class="step-title">Set up your server</h1>
       <p class="step-desc">Tell us who you are and how to connect to Claude.</p>
 
@@ -156,7 +158,7 @@ function statusIcon(status: ChecklistItem["status"]): string {
         <button
           class="ed-btn ed-btn--secondary btn-wide"
           disabled={!name.trim() || !apiKey.trim()}
-          onclick={() => { credentialType = "apikey"; startSetup(); }}
+          onclick={() => { credentialType = "api-key"; startSetup(); }}
         >
           Set up with API key
         </button>
@@ -178,7 +180,12 @@ function statusIcon(status: ChecklistItem["status"]): string {
       </div>
 
       {#if setupError}
-        <div class="ed-banner ed-banner--error" role="alert">{setupError}</div>
+        <div class="ed-banner ed-banner--error" role="alert">
+          <span>{setupError}</span>
+          <button class="ed-btn ed-btn--secondary btn-retry" onclick={runSetup}>
+            Retry
+          </button>
+        </div>
       {/if}
     </div>
 
@@ -336,6 +343,18 @@ function statusIcon(status: ChecklistItem["status"]): string {
     border: 1px solid var(--border);
     border-radius: var(--radius);
     overflow-x: auto;
+  }
+
+  .btn-back {
+    align-self: flex-start;
+    font-size: var(--ed-text-sm);
+    padding: 4px 10px;
+  }
+
+  .btn-retry {
+    flex-shrink: 0;
+    font-size: var(--ed-text-sm);
+    padding: 6px 14px;
   }
 
   .pairing-url code {

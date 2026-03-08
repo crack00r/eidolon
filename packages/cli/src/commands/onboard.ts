@@ -212,9 +212,12 @@ async function onboardServer(ask: AskFn): Promise<ServerSetupResult> {
 function writeServerConfigFile(r: ServerSetupResult): void {
   const configPath = getConfigPath();
 
+  // For api-key accounts, credential is a secret store reference.
+  // For OAuth accounts, credential is the sentinel string "oauth" -- Claude CLI
+  // handles OAuth auth natively, so no stored secret is needed.
   const claudeCredential =
     r.claudeAccountType === "api-key"
-      ? { type: "api-key", name: "primary", credential: "claude-api-key" }
+      ? { type: "api-key", name: "primary", credential: { $secret: "claude-api-key" } }
       : { type: "oauth", name: "primary", credential: "oauth" };
 
   const gateway: Record<string, unknown> = {

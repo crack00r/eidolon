@@ -15,7 +15,7 @@ export interface ServerConfigInput {
   readonly claudeCredential: {
     readonly type: string;
     readonly name: string;
-    readonly credential: string;
+    readonly credential: string | { readonly $secret: string };
   };
   readonly gateway: Record<string, unknown>;
   readonly dataDir: string;

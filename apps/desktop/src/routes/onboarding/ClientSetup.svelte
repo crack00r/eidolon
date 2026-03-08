@@ -9,9 +9,10 @@ import { invoke } from "@tauri-apps/api/core";
 
 interface Props {
   onComplete: () => void;
+  onBack: () => void;
 }
 
-let { onComplete }: Props = $props();
+let { onComplete, onBack }: Props = $props();
 
 type Step = "discover" | "connected";
 
@@ -38,6 +39,10 @@ let manualPort = $state(8419);
 let manualToken = $state("");
 let connecting = $state(false);
 let connectError = $state<string | null>(null);
+
+// Discovered server pending token entry
+let selectedServer = $state<DiscoveredServer | null>(null);
+let discoveredToken = $state("");
 
 // Connected info
 let connectedServer = $state<{ host: string; port: number; name: string } | null>(null);
@@ -117,14 +122,27 @@ function connectManual(): void {
   connectToServer(manualHost.trim(), manualPort, manualToken.trim());
 }
 
-function connectToDiscovered(server: DiscoveredServer): void {
-  connectToServer(server.host, server.port, "", server.tls ?? false);
+function selectDiscovered(server: DiscoveredServer): void {
+  selectedServer = server;
+  discoveredToken = "";
+  connectError = null;
+}
+
+function connectSelectedServer(): void {
+  if (!selectedServer) return;
+  connectToServer(selectedServer.host, selectedServer.port, discoveredToken.trim(), selectedServer.tls ?? false);
+}
+
+function cancelSelection(): void {
+  selectedServer = null;
+  discoveredToken = "";
 }
 </script>
 
 <div class="client-setup">
   {#if step === "discover"}
     <div class="step-panel">
+      <button class="ed-btn ed-btn--ghost btn-back" onclick={onBack}>Back</button>
       <h1 class="step-title">Connect to a server</h1>
       <p class="step-desc">Find your Eidolon server automatically or enter the address manually.</p>
 
@@ -147,12 +165,42 @@ function connectToDiscovered(server: DiscoveredServer): void {
         {#if servers.length > 0}
           <div class="server-list">
             {#each servers as server}
-              <button class="server-card" onclick={() => connectToDiscovered(server)}>
+              <button
+                class="server-card"
+                class:selected={selectedServer === server}
+                onclick={() => selectDiscovered(server)}
+              >
                 <span class="server-name">{server.name || server.hostname}</span>
                 <span class="server-addr">{server.host}:{server.port}</span>
                 <span class="server-version">v{server.version}</span>
               </button>
             {/each}
+          </div>
+        {/if}
+
+        {#if selectedServer}
+          <div class="token-prompt">
+            <div class="form-group">
+              <label class="form-label" for="discovered-token">Auth Token</label>
+              <input
+                id="discovered-token"
+                type="password"
+                bind:value={discoveredToken}
+                placeholder="Enter the server token"
+              />
+            </div>
+            <div class="token-actions">
+              <button
+                class="ed-btn ed-btn--primary"
+                disabled={connecting}
+                onclick={connectSelectedServer}
+              >
+                {connecting ? "Connecting..." : "Connect"}
+              </button>
+              <button class="ed-btn ed-btn--ghost" onclick={cancelSelection}>
+                Cancel
+              </button>
+            </div>
           </div>
         {/if}
 
@@ -327,7 +375,8 @@ function connectToDiscovered(server: DiscoveredServer): void {
       box-shadow var(--ed-duration-normal) var(--ed-ease);
   }
 
-  .server-card:hover {
+  .server-card:hover,
+  .server-card.selected {
     border-color: var(--accent);
     box-shadow: var(--ed-glow-accent);
   }
@@ -394,6 +443,12 @@ function connectToDiscovered(server: DiscoveredServer): void {
     flex: 1;
   }
 
+  .btn-back {
+    align-self: flex-start;
+    font-size: var(--ed-text-sm);
+    padding: 4px 10px;
+  }
+
   .btn-wide {
     width: 100%;
     padding: 12px 16px;
@@ -419,6 +474,21 @@ function connectToDiscovered(server: DiscoveredServer): void {
 
   .alt-summary:hover {
     color: var(--accent);
+  }
+
+  .token-prompt {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px 16px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--accent);
+    border-radius: var(--radius);
+  }
+
+  .token-actions {
+    display: flex;
+    gap: 8px;
   }
 
   .manual-fields {

@@ -285,15 +285,24 @@ function buildSafeDaemonEnv(): Record<string, string> {
 }
 
 function startBackground(configPath?: string): void {
-  // Spawn this CLI as a detached child in foreground mode
-  const args = ["eidolon", "daemon", "start", "--foreground"];
+  // Spawn this CLI as a detached child in foreground mode.
+  // Use process.execPath (the current Bun binary) and process.argv[1] (the current
+  // script entry point) so the spawn works regardless of how the CLI was invoked.
+  const scriptPath = process.argv[1];
+  if (!scriptPath) {
+    console.error("Failed to determine CLI script path from process.argv[1].");
+    process.exitCode = 1;
+    return;
+  }
+
+  const args = [process.execPath, scriptPath, "daemon", "start", "--foreground"];
   if (configPath) {
     args.push("--config", configPath);
   }
 
   try {
     // ERR-003: Use filtered env instead of raw process.env
-    const proc = Bun.spawn(["bun", "run", ...args], {
+    const proc = Bun.spawn(args, {
       stdio: ["ignore", "ignore", "ignore"],
       env: buildSafeDaemonEnv(),
     });

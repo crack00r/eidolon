@@ -1,4 +1,5 @@
 <script lang="ts">
+import { onMount } from "svelte";
 import { clientLog } from "../../lib/logger";
 import { isConnected } from "../../lib/stores/connection";
 import {
@@ -11,6 +12,10 @@ import {
   rejectItem,
   type SafetyClassification,
 } from "../../lib/stores/learning";
+
+onMount(() => {
+  fetchPendingItems();
+});
 
 function safetyColor(safety: SafetyClassification): string {
   const colors: Record<SafetyClassification, string> = {

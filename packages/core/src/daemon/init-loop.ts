@@ -311,7 +311,7 @@ export function buildLoopSteps(modules: InitializedModules): InitStep[] {
           const createResult = taskScheduler.create({
             name: "Anticipation Check",
             type: "recurring",
-            cron: `*/${intervalMinutes}`,
+            cron: `*/${intervalMinutes} * * * *`,
             action: "anticipation:check",
             payload: {},
           });
