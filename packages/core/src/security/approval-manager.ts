@@ -6,13 +6,12 @@
 import type { Database } from "bun:sqlite";
 import { randomUUID } from "node:crypto";
 import type {
-  ActionLevel,
   ApprovalRequest,
-  ApprovalStatus,
   EidolonError,
   Result,
   SecurityConfig,
 } from "@eidolon/protocol";
+import type { ActionLevel, ApprovalStatus } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 import type { Logger } from "../logging/logger.ts";
 import type { EventBus } from "../loop/event-bus.ts";
@@ -37,6 +36,17 @@ interface ApprovalRow {
   metadata: string;
 }
 
+const VALID_ACTION_LEVELS = new Set<string>(["safe", "needs_approval", "dangerous"]);
+const VALID_APPROVAL_STATUSES = new Set<string>(["pending", "approved", "denied", "timeout", "escalated"]);
+
+function validateActionLevel(value: string): ActionLevel {
+  return VALID_ACTION_LEVELS.has(value) ? (value as ActionLevel) : "safe";
+}
+
+function validateApprovalStatus(value: string): ApprovalStatus {
+  return VALID_APPROVAL_STATUSES.has(value) ? (value as ApprovalStatus) : "pending";
+}
+
 function rowToRequest(row: ApprovalRow): ApprovalRequest {
   let metadata: Record<string, unknown> | undefined;
   try {
@@ -51,12 +61,12 @@ function rowToRequest(row: ApprovalRow): ApprovalRequest {
   return {
     id: row.id,
     action: row.action,
-    level: row.level as ActionLevel,
+    level: validateActionLevel(row.level),
     description: row.description,
     requestedAt: row.requested_at,
     timeoutAt: row.timeout_at,
     channel: row.channel,
-    status: row.status as ApprovalStatus,
+    status: validateApprovalStatus(row.status),
     respondedBy: row.responded_by ?? undefined,
     respondedAt: row.responded_at ?? undefined,
     escalationLevel: row.escalation_level,
@@ -283,8 +293,8 @@ export class ApprovalManager {
 
     try {
       this.db
-        .query("UPDATE approval_requests SET status = 'timeout', responded_by = ?, responded_at = ? WHERE id = ?")
-        .run(`auto:${finalStatus}`, now, request.id);
+        .query("UPDATE approval_requests SET status = ?, responded_by = ?, responded_at = ? WHERE id = ?")
+        .run(finalStatus, `auto:timeout:${finalStatus}`, now, request.id);
     } catch (cause) {
       this.logger.error("checkTimeouts", `Failed to resolve timed-out request ${request.id}`, cause);
       return 0;

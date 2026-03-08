@@ -6,7 +6,7 @@
  */
 
 import { existsSync, mkdirSync, rmSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import type { EidolonError, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 import type { Logger } from "../../logging/logger.ts";
@@ -24,6 +24,23 @@ const INSTALL_TIMEOUT_MS = 120_000;
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+function validatePathContainment(baseDir: string, targetPath: string): void {
+  const resolvedBase = resolve(baseDir);
+  const resolvedTarget = resolve(targetPath);
+  if (!resolvedTarget.startsWith(`${resolvedBase}/`) && resolvedTarget !== resolvedBase) {
+    throw new Error(`Path traversal detected: ${targetPath} escapes base directory`);
+  }
+}
+
+function validateTemplateId(templateId: string): void {
+  if (templateId.includes("..") || templateId.includes("/") || templateId.includes("\\")) {
+    throw new Error(`Invalid template ID: ${templateId}`);
+  }
+  if (!/^[a-zA-Z0-9_-]+$/.test(templateId)) {
+    throw new Error(`Template ID contains unsafe characters: ${templateId}`);
+  }
+}
 
 /** Extract the npm package name from template args (first arg after -y in npx). */
 function extractPackageName(args: readonly string[]): string | undefined {
@@ -58,6 +75,12 @@ export class McpInstaller {
 
   /** Install an MCP server by template ID. */
   async install(templateId: string): Promise<Result<McpInstallResult, EidolonError>> {
+    try {
+      validateTemplateId(templateId);
+    } catch (e) {
+      return Err(createError(ErrorCode.INVALID_INPUT, e instanceof Error ? e.message : String(e)));
+    }
+
     const template = getMcpTemplate(templateId);
     if (!template) {
       return Err(createError(ErrorCode.CONFIG_NOT_FOUND, `Unknown MCP template: ${templateId}`));
@@ -74,6 +97,7 @@ export class McpInstaller {
     }
 
     const serverDir = join(this.installDir, templateId);
+    validatePathContainment(this.installDir, serverDir);
 
     // Mark as installing
     this.registry.upsert({
@@ -159,6 +183,12 @@ export class McpInstaller {
 
   /** Remove an installed MCP server. */
   async remove(templateId: string): Promise<Result<McpRemoveResult, EidolonError>> {
+    try {
+      validateTemplateId(templateId);
+    } catch (e) {
+      return Err(createError(ErrorCode.INVALID_INPUT, e instanceof Error ? e.message : String(e)));
+    }
+
     const installed = this.registry.get(templateId);
     if (!installed || installed.status === "available") {
       return Err(createError(ErrorCode.CONFIG_NOT_FOUND, `MCP server ${templateId} is not installed`));
@@ -168,6 +198,7 @@ export class McpInstaller {
 
     try {
       const serverDir = join(this.installDir, templateId);
+      validatePathContainment(this.installDir, serverDir);
 
       if (existsSync(serverDir)) {
         rmSync(serverDir, { recursive: true, force: true });

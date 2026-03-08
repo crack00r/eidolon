@@ -23,6 +23,7 @@ import type { KGEntityStore } from "../memory/knowledge-graph/entities.ts";
 import type { KGRelationStore } from "../memory/knowledge-graph/relations.ts";
 import type { MemorySearch } from "../memory/search.ts";
 import type { MemoryStore } from "../memory/store.ts";
+import { z } from "zod";
 import {
   JSON_RPC_INTERNAL_ERROR,
   JSON_RPC_INVALID_PARAMS,
@@ -35,6 +36,26 @@ import {
   TOOLS,
 } from "./memory-server-protocol.ts";
 import { toolKgQuery, toolMemoryAdd, toolMemoryList, toolMemorySearch } from "./memory-server-tools.ts";
+
+// ---------------------------------------------------------------------------
+// Zod schemas for JSON-RPC tool call / resource read params
+// ---------------------------------------------------------------------------
+
+const ToolCallParamsSchema = z.object({
+  name: z.string(),
+  arguments: z.record(z.string(), z.unknown()).optional(),
+});
+
+const ResourceReadParamsSchema = z.object({
+  uri: z.string(),
+});
+
+const JsonRpcRequestSchema = z.object({
+  jsonrpc: z.literal("2.0"),
+  id: z.union([z.string(), z.number(), z.null()]).optional(),
+  method: z.string(),
+  params: z.record(z.string(), z.unknown()).optional(),
+});
 
 // ---------------------------------------------------------------------------
 // Dependencies
@@ -59,6 +80,7 @@ export class MemoryMcpServer {
   private readonly kgRelations: KGRelationStore | null;
   private readonly logger: Logger;
   private running = false;
+  private reader: { cancel(reason?: unknown): Promise<void> } | null = null;
 
   constructor(deps: MemoryMcpServerDeps) {
     this.store = deps.store;
@@ -74,6 +96,7 @@ export class MemoryMcpServer {
     this.logger.info("start", "MCP Memory Server starting on stdio");
 
     const reader = Bun.stdin.stream().getReader();
+    this.reader = reader;
     const decoder = new TextDecoder();
     let buffer = "";
 
@@ -102,6 +125,7 @@ export class MemoryMcpServer {
       }
     } finally {
       reader.releaseLock();
+      this.reader = null;
       this.logger.info("start", "MCP Memory Server stopped");
     }
   }
@@ -109,18 +133,22 @@ export class MemoryMcpServer {
   /** Stop the server. */
   stop(): void {
     this.running = false;
+    if (this.reader) {
+      this.reader.cancel().catch(() => {});
+    }
   }
 
   /** Handle a single line of JSON-RPC input. */
   async handleLine(line: string): Promise<void> {
     let request: JsonRpcRequest;
     try {
-      const parsed: unknown = JSON.parse(line);
-      if (typeof parsed !== "object" || parsed === null || !("jsonrpc" in parsed)) {
+      const raw: unknown = JSON.parse(line);
+      const parsed = JsonRpcRequestSchema.safeParse(raw);
+      if (!parsed.success) {
         this.sendError(null, JSON_RPC_INVALID_REQUEST, "Invalid JSON-RPC request");
         return;
       }
-      request = parsed as JsonRpcRequest;
+      request = parsed.data;
     } catch {
       this.sendError(null, JSON_RPC_PARSE_ERROR, "Parse error");
       return;
@@ -186,8 +214,13 @@ export class MemoryMcpServer {
   // -----------------------------------------------------------------------
 
   private async handleToolCall(id: string | number | null, params: Record<string, unknown>): Promise<void> {
-    const name = params.name as string | undefined;
-    const args = (params.arguments ?? {}) as Record<string, unknown>;
+    const parsed = ToolCallParamsSchema.safeParse(params);
+    if (!parsed.success) {
+      this.sendError(id, JSON_RPC_INVALID_PARAMS, `Invalid tool call params: ${parsed.error.message}`);
+      return;
+    }
+    const name = parsed.data.name;
+    const args = parsed.data.arguments ?? {};
 
     let outcome: { ok: true; text: string } | { ok: false; error: string };
 
@@ -223,7 +256,12 @@ export class MemoryMcpServer {
   // -----------------------------------------------------------------------
 
   private async handleResourceRead(id: string | number | null, params: Record<string, unknown>): Promise<void> {
-    const uri = params.uri as string | undefined;
+    const parsed = ResourceReadParamsSchema.safeParse(params);
+    if (!parsed.success) {
+      this.sendError(id, JSON_RPC_INVALID_PARAMS, `Invalid resource read params: ${parsed.error.message}`);
+      return;
+    }
+    const uri = parsed.data.uri;
 
     if (uri === "memory://stats") {
       this.resourceStats(id);

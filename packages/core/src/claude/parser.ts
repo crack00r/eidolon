@@ -26,7 +26,7 @@ export function parseStreamLine(line: string): StreamEvent | null {
   try {
     parsed = JSON.parse(trimmed);
   } catch {
-    // Intentional: non-JSON lines are skipped
+    console.warn(`[parser] Failed to parse stream line as JSON: ${trimmed.length > 200 ? `${trimmed.slice(0, 200)}...` : trimmed}`);
     return null;
   }
 

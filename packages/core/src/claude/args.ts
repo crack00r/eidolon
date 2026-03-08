@@ -16,12 +16,10 @@ import { generateSchemaInstruction } from "./structured-output.ts";
  * appended to the system prompt so Claude produces valid JSON output.
  */
 export function buildClaudeArgs(prompt: string, options: ClaudeSessionOptions): readonly string[] {
-  const args: string[] = ["--print", "--output-format", "stream-json"];
+  const args: string[] = ["--print", "--output-format", "stream-json", "--verbose"];
 
-  if (options.sessionId) {
-    args.push("--session-id", options.sessionId);
-  }
-
+  // sessionId is used for internal tracking only; not passed to Claude CLI
+  // (Claude CLI requires a valid UUID for --session-id, but our IDs have prefixes)
   if (options.model) {
     args.push("--model", options.model);
   }
@@ -49,8 +47,8 @@ export function buildClaudeArgs(prompt: string, options: ClaudeSessionOptions): 
     args.push("--system-prompt", systemPrompt);
   }
 
-  // Prompt is always the last positional argument
-  args.push(prompt);
+  // Use -- separator to prevent prompts starting with -- from being parsed as flags
+  args.push("--", prompt);
 
   return args;
 }

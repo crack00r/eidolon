@@ -6,14 +6,51 @@
  */
 
 import { randomUUID } from "node:crypto";
+import { existsSync } from "node:fs";
 import type { ClaudeSessionOptions, EidolonError, IClaudeProcess, Result, StreamEvent } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 import type { Subprocess } from "bun";
+import { getEidolonClaudeConfigDir } from "../config/paths.ts";
 import type { Logger } from "../logging/logger.ts";
 import type { ITracer } from "../telemetry/tracer.ts";
 import { NoopTracer } from "../telemetry/tracer.ts";
 import { buildClaudeArgs } from "./args.ts";
 import { parseStreamLine } from "./parser.ts";
+
+/** Build a PATH string that includes common Claude CLI install locations. */
+function buildExtendedPath(): string {
+  const home = process.env.HOME ?? process.env.USERPROFILE ?? "";
+  const pathSep = process.platform === "win32" ? ";" : ":";
+  const extraPaths = [
+    `${home}/.local/bin`,
+    `${home}/.claude/local`,
+    `${home}/.nvm/current/bin`,
+    `${home}/.volta/bin`,
+    "/usr/local/bin",
+    "/opt/homebrew/bin",
+  ].join(pathSep);
+  const currentPath = process.env.PATH ?? "";
+  return currentPath ? `${extraPaths}${pathSep}${currentPath}` : extraPaths;
+}
+
+/** Find the Claude CLI binary, searching common install locations. */
+function findClaudeBinary(): string {
+  const home = process.env.HOME ?? process.env.USERPROFILE ?? "";
+  const candidates = [
+    `${home}/.local/bin/claude`,
+    `${home}/.claude/local/claude`,
+    "/usr/local/bin/claude",
+    "/opt/homebrew/bin/claude",
+  ];
+  for (const candidate of candidates) {
+    try {
+      if (existsSync(candidate)) return candidate;
+    } catch {
+      // skip
+    }
+  }
+  return "claude";
+}
 
 /**
  * Manages Claude Code CLI subprocesses.
@@ -23,10 +60,14 @@ export class ClaudeCodeManager implements IClaudeProcess {
   private readonly activeSessions = new Map<string, Subprocess>();
   private readonly logger: Logger;
   private readonly tracer: ITracer;
+  private readonly apiKey: string | undefined;
+  private readonly maxConcurrentSessions: number;
 
-  constructor(logger: Logger, tracer?: ITracer) {
+  constructor(logger: Logger, options?: { tracer?: ITracer; apiKey?: string; maxConcurrentSessions?: number }) {
     this.logger = logger.child("claude");
-    this.tracer = tracer ?? new NoopTracer();
+    this.tracer = options?.tracer ?? new NoopTracer();
+    this.apiKey = options?.apiKey;
+    this.maxConcurrentSessions = options?.maxConcurrentSessions ?? 5;
   }
 
   /**
@@ -34,8 +75,24 @@ export class ClaudeCodeManager implements IClaudeProcess {
    * Spawns the CLI, streams parsed events, and cleans up on completion.
    */
   async *run(prompt: string, options: ClaudeSessionOptions): AsyncGenerator<StreamEvent> {
-    const args = buildClaudeArgs(prompt, options);
     const sessionId = options.sessionId ?? `session-${randomUUID()}`;
+
+    // Enforce concurrency limit before spawning a new subprocess
+    if (this.activeSessions.size >= this.maxConcurrentSessions) {
+      this.logger.warn("manager", "Concurrency limit reached, rejecting session", {
+        sessionId,
+        active: this.activeSessions.size,
+        limit: this.maxConcurrentSessions,
+      });
+      yield {
+        type: "error",
+        error: `Concurrency limit reached (${String(this.maxConcurrentSessions)} active sessions). Try again later.`,
+        timestamp: Date.now(),
+      };
+      return;
+    }
+
+    const args = buildClaudeArgs(prompt, options);
     const span = this.tracer.startSpan("claude.session", {
       "session.id": sessionId,
       ...(options.model ? { model: options.model } : {}),
@@ -77,6 +134,9 @@ export class ClaudeCodeManager implements IClaudeProcess {
       }
     }
 
+    // Ensure PATH includes common Claude CLI install locations
+    safeEnv.PATH = buildExtendedPath();
+
     // Filter options.env to reject dangerous keys that could hijack the subprocess
     const DANGEROUS_ENV_KEYS = new Set([
       "PATH",
@@ -90,6 +150,12 @@ export class ClaudeCodeManager implements IClaudeProcess {
       "EIDOLON_MASTER_KEY",
       "EIDOLON_GPU_API_KEY",
       "NODE_OPTIONS",
+      // Anthropic API keys -- prevent callers from overriding/stealing API credentials
+      "ANTHROPIC_API_KEY",
+      "ANTHROPIC_AUTH_TOKEN",
+      // Claude CLI config -- prevent hijacking Claude's config/auth directory
+      "CLAUDE_CONFIG_DIR",
+      "CLAUDE_API_KEY",
     ]);
     const filteredEnv: Record<string, string> = {};
     if (options.env) {
@@ -102,7 +168,19 @@ export class ClaudeCodeManager implements IClaudeProcess {
       }
     }
 
-    const proc = Bun.spawn(["claude", ...args], {
+    // Inject API key from config if provided and not already set in environment
+    if (this.apiKey && !safeEnv.ANTHROPIC_API_KEY) {
+      safeEnv.ANTHROPIC_API_KEY = this.apiKey;
+    }
+
+    // Give Eidolon its own Claude CLI auth session (separate from user's global Claude)
+    safeEnv.CLAUDE_CONFIG_DIR = getEidolonClaudeConfigDir();
+
+    // For OAuth auth: Claude CLI uses its own stored authentication.
+    // No env var injection needed -- the subprocess finds its auth via HOME.
+
+    const claudeBin = findClaudeBinary();
+    const proc = Bun.spawn([claudeBin, ...args], {
       stdout: "pipe",
       stderr: "pipe",
       env: {
@@ -118,9 +196,12 @@ export class ClaudeCodeManager implements IClaudeProcess {
     const stderrPromise: Promise<string> = proc.stderr ? new Response(proc.stderr).text() : Promise.resolve("");
 
     // Set up timeout if configured
+    let timedOut = false;
     const timeoutId =
       options.timeoutMs !== undefined
         ? setTimeout(() => {
+            this.logger.warn("manager", `Session timed out after ${String(options.timeoutMs)}ms`, { sessionId });
+            timedOut = true;
             try {
               proc.kill();
             } catch {
@@ -172,7 +253,14 @@ export class ClaudeCodeManager implements IClaudeProcess {
       // Wait for process to exit
       const exitCode = await proc.exited;
 
-      if (exitCode !== 0) {
+      if (timedOut) {
+        span.setStatus("error", `Claude Code session timed out after ${String(options.timeoutMs)}ms`);
+        yield {
+          type: "error",
+          error: `Claude Code session timed out after ${String(options.timeoutMs)}ms`,
+          timestamp: Date.now(),
+        };
+      } else if (exitCode !== 0) {
         const stderr = await stderrPromise;
         span.setStatus("error", `Claude Code exited with code ${String(exitCode)}`);
         yield {
@@ -188,6 +276,12 @@ export class ClaudeCodeManager implements IClaudeProcess {
       yield { type: "done", timestamp: Date.now() };
     } finally {
       if (timeoutId !== null) clearTimeout(timeoutId);
+      // Kill the subprocess to prevent leaks when the generator is abandoned early
+      try {
+        proc.kill();
+      } catch {
+        // Process may have already exited; ignore ESRCH / similar errors
+      }
       this.activeSessions.delete(sessionId);
       // Ensure stderr is consumed even if generator is abandoned early
       stderrPromise.catch(() => {});
@@ -200,9 +294,10 @@ export class ClaudeCodeManager implements IClaudeProcess {
    */
   async isAvailable(): Promise<boolean> {
     try {
-      const result = Bun.spawnSync(["claude", "--version"], {
+      const result = Bun.spawnSync([findClaudeBinary(), "--version"], {
         stdout: "pipe",
         stderr: "pipe",
+        env: { ...process.env, PATH: buildExtendedPath() },
       });
       return result.exitCode === 0;
     } catch {
@@ -216,9 +311,10 @@ export class ClaudeCodeManager implements IClaudeProcess {
    */
   async getVersion(): Promise<Result<string, EidolonError>> {
     try {
-      const result = Bun.spawnSync(["claude", "--version"], {
+      const result = Bun.spawnSync([findClaudeBinary(), "--version"], {
         stdout: "pipe",
         stderr: "pipe",
+        env: { ...process.env, PATH: buildExtendedPath() },
       });
       if (result.exitCode !== 0) {
         return Err(createError(ErrorCode.CLAUDE_NOT_INSTALLED, "Claude Code CLI not found or not working"));

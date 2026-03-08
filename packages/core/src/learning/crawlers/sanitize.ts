@@ -28,7 +28,7 @@ const DANGEROUS_COMMAND_PATTERNS: readonly RegExp[] = [
   /\bdd\s+if=/g,
   /\b(?:curl|wget)\s+.*\|\s*(?:bash|sh)\b/g,
   /\bchmod\s+777\b/g,
-  /\b:(){.*};:/g, // fork bomb
+  /:\(\)\s*\{[^}]*\}\s*;/g, // fork bomb
 ];
 
 /**

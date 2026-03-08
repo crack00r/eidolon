@@ -104,7 +104,10 @@ export function escalateRequest(request: ApprovalRequest, deps: EscalateDeps): R
 
 function resolveMaxEscalation(request: ApprovalRequest, deps: EscalateDeps): Result<ApprovalRequest, EidolonError> {
   const defaultAction = deps.config.approval.defaultAction;
-  const finalStatus: ApprovalStatus = defaultAction === "allow" ? "approved" : "denied";
+  const resolvedStatus: ApprovalStatus = defaultAction === "allow" ? "approved" : "denied";
+  // Safety: never auto-approve dangerous actions (same guard as resolveTimeout)
+  const finalStatus: ApprovalStatus =
+    resolvedStatus === "approved" && request.level === "dangerous" ? "denied" : resolvedStatus;
   const now = Date.now();
 
   try {

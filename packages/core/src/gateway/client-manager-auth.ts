@@ -5,11 +5,34 @@
  * legacy token format and JSON-RPC auth.authenticate method.
  */
 
+import { z } from "zod";
 import type { Logger } from "../logging/logger.ts";
 import type { EventBus } from "../loop/event-bus.ts";
 import { createJsonRpcError, createJsonRpcResponse } from "./protocol.ts";
 import type { AuthRateLimiter } from "./rate-limiter.ts";
 import { anonymizeIp, type ClientState, constantTimeCompare, type ServerWS } from "./server-helpers.ts";
+
+// ---------------------------------------------------------------------------
+// Auth payload schemas
+// ---------------------------------------------------------------------------
+
+/** JSON-RPC auth.authenticate request. */
+const JsonRpcAuthSchema = z.object({
+  jsonrpc: z.literal("2.0"),
+  method: z.literal("auth.authenticate"),
+  id: z.string().optional(),
+  params: z.object({
+    token: z.string(),
+    platform: z.string().optional(),
+    version: z.string().optional(),
+  }).optional(),
+});
+
+/** Legacy token-based auth message. */
+const LegacyAuthSchema = z.object({
+  type: z.literal("token"),
+  token: z.string(),
+});
 
 // ---------------------------------------------------------------------------
 // Types
@@ -40,38 +63,36 @@ export function handleClientAuth(
     parsed = JSON.parse(text);
   } catch {
     // Intentional: invalid JSON in auth payload is an auth failure
-    emitAuthFailure(ws, client, "Invalid auth payload", deps);
+    emitAuthFailure(ws, client, "Invalid auth payload", deps, undefined, authTimers);
     return;
   }
 
-  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-    emitAuthFailure(ws, client, "Invalid auth payload", deps);
-    return;
-  }
+  // Try JSON-RPC auth schema first, then legacy token schema
+  const jsonRpcResult = JsonRpcAuthSchema.safeParse(parsed);
+  const legacyResult = !jsonRpcResult.success ? LegacyAuthSchema.safeParse(parsed) : undefined;
 
-  const obj = parsed as Record<string, unknown>;
-  const isJsonRpc = obj.jsonrpc === "2.0" && typeof obj.method === "string";
   let token: string | undefined;
   let jsonRpcId: string | undefined;
+  let isJsonRpc = false;
+  let platform: string | undefined;
+  let version: string | undefined;
 
-  if (isJsonRpc) {
-    if (obj.method !== "auth.authenticate") {
-      emitAuthFailure(ws, client, "Expected auth.authenticate method", deps, obj.id as string);
-      return;
-    }
-    jsonRpcId = typeof obj.id === "string" ? obj.id : undefined;
-    const params = obj.params as Record<string, unknown> | undefined;
-    if (params && typeof params.token === "string") token = params.token;
+  if (jsonRpcResult.success) {
+    isJsonRpc = true;
+    const data = jsonRpcResult.data;
+    jsonRpcId = data.id;
+    token = data.params?.token;
+    platform = data.params?.platform;
+    version = data.params?.version;
+  } else if (legacyResult?.success) {
+    token = legacyResult.data.token;
   } else {
-    if (obj.type !== "token" || typeof obj.token !== "string") {
-      emitAuthFailure(ws, client, "Invalid auth: expected { type: 'token', token: string }", deps);
-      return;
-    }
-    token = obj.token;
+    emitAuthFailure(ws, client, "Invalid auth payload: expected JSON-RPC auth.authenticate or { type: 'token', token: string }", deps, undefined, authTimers);
+    return;
   }
 
   if (typeof token !== "string") {
-    emitAuthFailure(ws, client, "Missing token in auth payload", deps, jsonRpcId);
+    emitAuthFailure(ws, client, "Missing token in auth payload", deps, jsonRpcId, authTimers);
     return;
   }
 
@@ -79,7 +100,7 @@ export function handleClientAuth(
   const configToken = authConfig.token;
   if (typeof configToken !== "string" || !constantTimeCompare(token, configToken)) {
     deps.rateLimiter.recordFailure(client.ip);
-    emitAuthFailure(ws, client, "Authentication failed", deps, jsonRpcId);
+    emitAuthFailure(ws, client, "Authentication failed", deps, jsonRpcId, authTimers);
     return;
   }
 
@@ -93,11 +114,8 @@ export function handleClientAuth(
   }
 
   if (isJsonRpc) {
-    const params = obj.params as Record<string, unknown> | undefined;
-    if (params) {
-      if (typeof params.platform === "string") client.platform = params.platform;
-      if (typeof params.version === "string") client.version = params.version;
-    }
+    if (platform) client.platform = platform;
+    if (version) client.version = version;
   }
 
   deps.logger.info("auth", `Client ${client.id} authenticated from ${anonymizeIp(client.ip)}`);
@@ -115,7 +133,11 @@ export function handleClientAuth(
 
   if (isJsonRpc && jsonRpcId) {
     const response = createJsonRpcResponse(jsonRpcId, { authenticated: true });
-    ws.send(JSON.stringify(response));
+    try {
+      ws.send(JSON.stringify(response));
+    } catch {
+      // Client may have already disconnected
+    }
   }
 }
 
@@ -129,14 +151,28 @@ export function emitAuthFailure(
   reason: string,
   deps: AuthDeps,
   jsonRpcId?: string,
+  authTimers?: Map<string, ReturnType<typeof setTimeout>>,
 ): void {
+  // Clear the auth timer on failure to prevent lingering timers
+  if (authTimers) {
+    const timer = authTimers.get(client.id);
+    if (timer) {
+      clearTimeout(timer);
+      authTimers.delete(client.id);
+    }
+  }
+
   deps.logger.warn("auth-failure", `Auth failed for client ${client.id}: ${reason}`, {
     ip: anonymizeIp(client.ip),
   });
   const genericMessage = "Authentication failed";
   if (jsonRpcId) {
     const errResp = createJsonRpcError(jsonRpcId, -32000, genericMessage);
-    ws.send(JSON.stringify(errResp));
+    try {
+      ws.send(JSON.stringify(errResp));
+    } catch {
+      // Client may have already disconnected
+    }
   }
   ws.close(4001, genericMessage);
   deps.eventBus.publish(

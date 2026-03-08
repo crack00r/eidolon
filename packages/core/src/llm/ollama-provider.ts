@@ -21,17 +21,91 @@ import {
   OllamaTagsResponseSchema,
 } from "./schemas.ts";
 
+// ---------------------------------------------------------------------------
+// SSRF protection -- reject private/internal network addresses
+// ---------------------------------------------------------------------------
+
+/** IPv4 patterns for private/internal networks. */
+const PRIVATE_IP_PATTERNS = [
+  /^127\./,          // loopback
+  /^10\./,           // Class A private
+  /^192\.168\./,     // Class C private
+  /^172\.(1[6-9]|2\d|3[01])\./, // Class B private (172.16-31.x)
+  /^169\.254\./,     // link-local
+  /^0\./,            // current network
+  /^::1$/,           // IPv6 loopback
+  /^fc/i,            // IPv6 unique local
+  /^fd/i,            // IPv6 unique local
+  /^fe80/i,          // IPv6 link-local
+];
+
+const BLOCKED_HOSTNAMES = new Set([
+  "localhost",
+  "metadata.google.internal",
+  "instance-data",
+]);
+
+/**
+ * Check whether an IP address string belongs to a private/internal network.
+ */
+function isPrivateIp(ip: string): boolean {
+  for (const pattern of PRIVATE_IP_PATTERNS) {
+    if (pattern.test(ip)) return true;
+  }
+  return false;
+}
+
+/**
+ * Validate that a host URL does not point to a private/internal network address.
+ * Throws an Error if the host is unsafe and `allowPrivateHosts` is not set.
+ */
+export function validateOllamaHost(host: string, allowPrivateHosts = false): void {
+  if (allowPrivateHosts) return;
+
+  let parsed: URL;
+  try {
+    parsed = new URL(host);
+  } catch {
+    throw new Error(`Invalid Ollama host URL: ${host}`);
+  }
+
+  const hostname = parsed.hostname.replace(/^\[/, "").replace(/]$/, "");
+
+  if (BLOCKED_HOSTNAMES.has(hostname.toLowerCase())) {
+    throw new Error(`Ollama host rejected: ${hostname} is a blocked hostname (SSRF protection)`);
+  }
+
+  if (isPrivateIp(hostname)) {
+    throw new Error(`Ollama host rejected: ${hostname} resolves to a private network address (SSRF protection)`);
+  }
+}
+
+/**
+ * Validate the host URL immediately before a fetch call to prevent DNS rebinding.
+ * Re-checks that the URL still does not point to a private/internal address.
+ */
+function guardFetch(host: string, allowPrivateHosts: boolean): void {
+  if (allowPrivateHosts) return;
+  validateOllamaHost(host, false);
+}
+
 export class OllamaProvider implements ILLMProvider {
   readonly type = "ollama" as const;
   readonly name = "Ollama (local)";
+  private readonly allowPrivateHosts: boolean;
 
   constructor(
     private readonly config: OllamaProviderConfig,
     readonly _logger: Logger,
-  ) {}
+    allowPrivateHosts = false,
+  ) {
+    this.allowPrivateHosts = allowPrivateHosts;
+    validateOllamaHost(config.host, allowPrivateHosts);
+  }
 
   async isAvailable(): Promise<boolean> {
     try {
+      guardFetch(this.config.host, this.allowPrivateHosts);
       const res = await fetch(`${this.config.host}/api/tags`, { signal: AbortSignal.timeout(3000) });
       return res.ok;
     } catch {
@@ -42,6 +116,7 @@ export class OllamaProvider implements ILLMProvider {
 
   async listModels(): Promise<readonly string[]> {
     try {
+      guardFetch(this.config.host, this.allowPrivateHosts);
       const res = await fetch(`${this.config.host}/api/tags`);
       if (!res.ok) return [];
       const raw: unknown = await res.json();
@@ -70,6 +145,7 @@ export class OllamaProvider implements ILLMProvider {
       },
     };
 
+    guardFetch(this.config.host, this.allowPrivateHosts);
     const res = await fetch(`${this.config.host}/api/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -114,6 +190,7 @@ export class OllamaProvider implements ILLMProvider {
       },
     };
 
+    guardFetch(this.config.host, this.allowPrivateHosts);
     const res = await fetch(`${this.config.host}/api/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -177,6 +254,7 @@ export class OllamaProvider implements ILLMProvider {
     const results: Float32Array[] = [];
 
     for (const text of texts) {
+      guardFetch(this.config.host, this.allowPrivateHosts);
       const res = await fetch(`${this.config.host}/api/embeddings`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

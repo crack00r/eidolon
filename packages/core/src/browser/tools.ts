@@ -101,6 +101,45 @@ export const BROWSER_TOOL_DEFINITIONS: readonly BrowserToolDefinition[] = [
 ];
 
 // ---------------------------------------------------------------------------
+// Evaluate Security Blocklist
+// ---------------------------------------------------------------------------
+
+/**
+ * Dangerous patterns blocked in browser evaluate() calls.
+ * Each entry is a regex that matches unsafe JavaScript constructs.
+ */
+const EVALUATE_BLOCKED_PATTERNS: readonly { pattern: RegExp; reason: string }[] = [
+  { pattern: /\bfetch\s*\(/, reason: "Network requests (fetch) are not allowed" },
+  { pattern: /\bXMLHttpRequest\b/, reason: "Network requests (XMLHttpRequest) are not allowed" },
+  { pattern: /\beval\s*\(/, reason: "Dynamic code execution (eval) is not allowed" },
+  { pattern: /\bnew\s+Function\b/, reason: "Dynamic code execution (Function constructor) is not allowed" },
+  { pattern: /\bFunction\s*\(/, reason: "Dynamic code execution (Function constructor) is not allowed" },
+  { pattern: /\bimport\s*\(/, reason: "Dynamic imports are not allowed" },
+  { pattern: /\brequire\s*\(/, reason: "Module loading (require) is not allowed" },
+  { pattern: /\bdocument\s*\.\s*cookie\b/, reason: "Accessing document.cookie is not allowed" },
+  { pattern: /\blocalStorage\b/, reason: "Accessing localStorage is not allowed" },
+  { pattern: /\bsessionStorage\b/, reason: "Accessing sessionStorage is not allowed" },
+  { pattern: /\bindexedDB\b/, reason: "Accessing indexedDB is not allowed" },
+  { pattern: /\bnavigator\s*\.\s*sendBeacon\b/, reason: "Network requests (sendBeacon) are not allowed" },
+  { pattern: /\bWebSocket\b/, reason: "WebSocket connections are not allowed" },
+  { pattern: /\bServiceWorker\b/, reason: "ServiceWorker access is not allowed" },
+  { pattern: /\bpostMessage\s*\(/, reason: "Cross-origin messaging (postMessage) is not allowed" },
+];
+
+/**
+ * Validate that a script does not contain blocked patterns.
+ * Returns the rejection reason if blocked, or undefined if safe.
+ */
+export function validateEvaluateScript(script: string): string | undefined {
+  for (const { pattern, reason } of EVALUATE_BLOCKED_PATTERNS) {
+    if (pattern.test(script)) {
+      return reason;
+    }
+  }
+  return undefined;
+}
+
+// ---------------------------------------------------------------------------
 // Tool Executor
 // ---------------------------------------------------------------------------
 
@@ -135,6 +174,9 @@ export async function executeBrowserTool(
 // Individual Handlers
 // ---------------------------------------------------------------------------
 
+/** URL schemes blocked in navigate to prevent local file access and script injection. */
+const BLOCKED_NAVIGATE_SCHEMES = ["file:", "javascript:", "data:"];
+
 async function handleNavigate(
   manager: BrowserManager,
   input: unknown,
@@ -142,6 +184,13 @@ async function handleNavigate(
   const parsed = BrowseNavigateInputSchema.safeParse(input);
   if (!parsed.success) {
     return Err(createError(ErrorCode.INVALID_INPUT, `Invalid navigate input: ${parsed.error.message}`));
+  }
+
+  const urlLower = parsed.data.url.toLowerCase().trim();
+  for (const scheme of BLOCKED_NAVIGATE_SCHEMES) {
+    if (urlLower.startsWith(scheme)) {
+      return Err(createError(ErrorCode.SECURITY_BLOCKED, `Blocked URL scheme in navigate: ${scheme}`));
+    }
   }
 
   const result = await manager.navigate(parsed.data.url);
@@ -195,6 +244,11 @@ async function handleEvaluate(
   const parsed = BrowseEvaluateInputSchema.safeParse(input);
   if (!parsed.success) {
     return Err(createError(ErrorCode.INVALID_INPUT, `Invalid evaluate input: ${parsed.error.message}`));
+  }
+
+  const blockedReason = validateEvaluateScript(parsed.data.script);
+  if (blockedReason) {
+    return Err(createError(ErrorCode.SECURITY_BLOCKED, `Blocked evaluate script: ${blockedReason}`));
   }
 
   const result = await manager.evaluate(parsed.data.script);

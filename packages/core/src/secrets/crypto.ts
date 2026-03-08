@@ -95,10 +95,10 @@ export function deriveKey(masterKey: Buffer, salt: Buffer): Buffer {
  */
 export function encrypt(value: string, masterKey: Buffer): Result<EncryptedData, EidolonError> {
   if (value.length === 0) {
-    return Err(createError(ErrorCode.SECRET_DECRYPTION_FAILED, "Encryption failed: value must not be empty"));
+    return Err(createError(ErrorCode.SECRET_ENCRYPTION_FAILED, "Encryption failed: value must not be empty"));
   }
   if (value.length > MAX_PLAINTEXT_LENGTH) {
-    return Err(createError(ErrorCode.SECRET_DECRYPTION_FAILED, "Encryption failed: value exceeds maximum length"));
+    return Err(createError(ErrorCode.SECRET_ENCRYPTION_FAILED, "Encryption failed: value exceeds maximum length"));
   }
 
   let key: Buffer | undefined;
@@ -111,7 +111,7 @@ export function encrypt(value: string, masterKey: Buffer): Result<EncryptedData,
     const authTag = cipher.getAuthTag();
     return Ok({ ciphertext: encrypted, iv, authTag, salt });
   } catch (cause) {
-    return Err(createError(ErrorCode.SECRET_DECRYPTION_FAILED, "Encryption failed", cause));
+    return Err(createError(ErrorCode.SECRET_ENCRYPTION_FAILED, "Encryption failed", cause));
   } finally {
     // Zero derived key material (best-effort in JS)
     if (key) key.fill(0);

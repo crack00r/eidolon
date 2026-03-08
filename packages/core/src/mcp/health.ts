@@ -44,6 +44,20 @@ export interface MCPHealthMonitorOptions {
 const DEFAULT_CHECK_INTERVAL_MS = 60_000;
 const DEFAULT_CHECK_TIMEOUT_MS = 10_000;
 
+const MCP_SAFE_ENV_KEYS = [
+  "PATH",
+  "HOME",
+  "USER",
+  "LANG",
+  "TERM",
+  "SHELL",
+  "TMPDIR",
+  "TZ",
+  "NODE_ENV",
+  "XDG_CONFIG_HOME",
+  "XDG_DATA_HOME",
+] as const;
+
 // ---------------------------------------------------------------------------
 // MCPHealthMonitor
 // ---------------------------------------------------------------------------
@@ -98,6 +112,7 @@ export class MCPHealthMonitor {
   /** Check a single MCP server by spawning its process with a timeout. */
   async checkServer(name: string, config: McpServerConfig): Promise<McpServerHealthStatus> {
     const startTime = Date.now();
+    let proc: ReturnType<typeof Bun.spawn> | null = null;
 
     try {
       const args = config.args ? [...config.args] : [];
@@ -114,10 +129,16 @@ export class MCPHealthMonitor {
         }
       }
 
-      const proc = Bun.spawn(commandParts, {
+      const safeEnv: Record<string, string> = {};
+      for (const key of MCP_SAFE_ENV_KEYS) {
+        const val = process.env[key];
+        if (val) safeEnv[key] = val;
+      }
+
+      proc = Bun.spawn(commandParts, {
         stdout: "pipe",
         stderr: "pipe",
-        env: { ...process.env, ...filteredEnv },
+        env: { ...safeEnv, ...filteredEnv },
       });
 
       // Wait for either the process to produce output (healthy) or timeout.
@@ -128,19 +149,9 @@ export class MCPHealthMonitor {
 
       const result = await Promise.race([healthyPromise, timeoutPromise]);
 
-      // Kill the process regardless of result -- we only wanted to verify it starts.
-      try {
-        proc.kill();
-      } catch {
-        // Process may have already exited
-      }
-
       const responseTimeMs = Date.now() - startTime;
 
       if (result === "timeout") {
-        // Process started but produced no output within timeout.
-        // This could mean it's running fine but silent -- treat as healthy
-        // since MCP servers typically don't produce output until queried.
         return {
           name,
           status: "healthy",
@@ -179,6 +190,14 @@ export class MCPHealthMonitor {
         lastCheckedAt: Date.now(),
         responseTimeMs,
       };
+    } finally {
+      if (proc) {
+        try {
+          proc.kill();
+        } catch {
+          // Process may have already exited
+        }
+      }
     }
   }
 

@@ -52,6 +52,14 @@ interface PwModule {
   chromium: PwChromium;
 }
 
+/**
+ * SECURITY NOTE: PlaywrightClient uses a persistent browser profile (user data dir)
+ * that is shared across all sessions. This means cookies, localStorage, and session
+ * tokens persist between uses. If multiple untrusted users or plugins share the same
+ * daemon, they could access each other's authenticated sessions. In production,
+ * consider using separate profiles per trust boundary or ephemeral (non-persistent)
+ * contexts for sensitive operations.
+ */
 export class PlaywrightClient implements IBrowserClient {
   private context: PwContext | null = null;
   private page: PwPage | null = null;

@@ -33,6 +33,31 @@ export interface CrawlOptions {
   readonly minScore?: number;
 }
 
+const PRIVATE_IP_PATTERNS: readonly RegExp[] = [
+  /^127\./,
+  /^10\./,
+  /^172\.(1[6-9]|2\d|3[01])\./,
+  /^192\.168\./,
+  /^169\.254\./,
+  /^0\./,
+];
+
+function validateUrlNotPrivate(url: string): void {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new Error(`Invalid URL: ${url}`);
+  }
+  const hostname = parsed.hostname.replace(/^\[/, "").replace(/]$/, "").toLowerCase();
+  if (hostname === "localhost" || hostname === "::1") {
+    throw new Error(`SSRF protection: URL hostname '${hostname}' is not allowed`);
+  }
+  if (PRIVATE_IP_PATTERNS.some((p) => p.test(hostname))) {
+    throw new Error(`SSRF protection: URL hostname '${hostname}' is a private/internal address`);
+  }
+}
+
 /**
  * Abstract base for all crawlers. Handles rate limiting, sanitization,
  * and wrapping fetch errors into the Result pattern.
@@ -41,6 +66,12 @@ export abstract class BaseCrawler {
   protected readonly logger: Logger;
   private lastRequestAt = 0;
   private readonly minIntervalMs: number;
+
+  /**
+   * When true, skips SSRF hostname validation on fetch URLs.
+   * Only intended for tests that redirect requests to a local mock server.
+   */
+  protected skipSsrfCheck = false;
 
   /**
    * @param logger Logger instance
@@ -88,6 +119,10 @@ export abstract class BaseCrawler {
    * Rate-limited fetch wrapper. Waits if called too quickly.
    */
   protected async rateLimitedFetch(url: string, init?: RequestInit): Promise<Response> {
+    if (!this.skipSsrfCheck) {
+      validateUrlNotPrivate(url);
+    }
+
     const now = Date.now();
     const elapsed = now - this.lastRequestAt;
     if (elapsed < this.minIntervalMs) {
@@ -100,7 +135,7 @@ export abstract class BaseCrawler {
       ...(init?.headers as Record<string, string> | undefined),
     };
 
-    const response = await fetch(url, { ...init, headers });
+    const response = await fetch(url, { ...init, headers, redirect: "manual" });
 
     if (!response.ok) {
       throw new Error(`HTTP ${response.status} ${response.statusText} for ${url}`);

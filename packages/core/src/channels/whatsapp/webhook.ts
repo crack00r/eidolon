@@ -256,10 +256,14 @@ function normalizeMessageType(raw: string): WhatsAppMessageType {
 // ---------------------------------------------------------------------------
 
 function constantTimeCompare(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let mismatch = 0;
-  for (let i = 0; i < a.length; i++) {
-    mismatch |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  // Pad the shorter string to match the longer to prevent length leakage
+  // through timing differences in the comparison loop.
+  const maxLen = Math.max(a.length, b.length);
+  let mismatch = a.length ^ b.length;
+  for (let i = 0; i < maxLen; i++) {
+    const ca = i < a.length ? a.charCodeAt(i) : 0;
+    const cb = i < b.length ? b.charCodeAt(i) : 0;
+    mismatch |= ca ^ cb;
   }
   return mismatch === 0;
 }

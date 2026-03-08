@@ -23,8 +23,8 @@ import type { TailscaleDetector } from "./tailscale.ts";
  */
 export function maskToken(token: string): string {
   if (!token) return "[none]";
-  if (token.length <= 4) return "...";
-  return `${token.slice(0, 4)}...`;
+  if (token.length <= 8) return "...";
+  return `${token.slice(0, 4)}...${token.slice(-4)}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -132,5 +132,5 @@ export function logPairingUrl(logger: Logger, config: GatewayConfig, tailscale?:
   const pairing = buildPairingUrl(config, tailscale);
   const maskedUrl = pairing.url.replace(/token=[^&]+/, `token=${maskToken(pairing.token)}`);
   logger.info("pairing", `Pairing URL: ${maskedUrl}`);
-  logger.debug("pairing", `Full pairing URL: ${pairing.url}`);
+  logger.debug("pairing", `Pairing URL (debug): ${maskedUrl}`);
 }

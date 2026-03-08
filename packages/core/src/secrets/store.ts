@@ -73,7 +73,9 @@ export class SecretStore {
    */
   constructor(dbPath: string, masterKey: Buffer, logger?: Logger) {
     this.db = new Database(dbPath, { create: true });
-    this.masterKey = masterKey;
+    // Copy the master key so that close() only zeroizes our internal copy,
+    // not the caller's buffer.
+    this.masterKey = Buffer.from(masterKey);
     this.logger = logger?.child("secrets");
     this.restrictFilePermissions(dbPath);
     this.initialize();
@@ -129,51 +131,38 @@ export class SecretStore {
     if (!keyValidation.ok) return keyValidation;
 
     if (description !== undefined && description.length > MAX_DESCRIPTION_LENGTH) {
-      return Err(createError(ErrorCode.SECRET_DECRYPTION_FAILED, "Description exceeds maximum length"));
+      return Err(createError(ErrorCode.INVALID_INPUT, "Description exceeds maximum length"));
     }
 
     const encrypted = encrypt(value, this.masterKey);
     if (!encrypted.ok) return encrypted;
 
     const now = Date.now();
-    const existing = this.db.query("SELECT key FROM secrets WHERE key = ?").get(key);
 
-    if (existing) {
-      this.db
-        .query(
-          `UPDATE secrets SET encrypted_value = ?, iv = ?, auth_tag = ?, salt = ?,
-        description = COALESCE(?, description), updated_at = ?
-        WHERE key = ?`,
-        )
-        .run(
-          encrypted.value.ciphertext,
-          encrypted.value.iv,
-          encrypted.value.authTag,
-          encrypted.value.salt,
-          description ?? null,
-          now,
-          key,
-        );
-      this.logger?.info("set", `Secret updated: ${key}`);
-    } else {
-      this.db
-        .query(
-          `INSERT INTO secrets (key, encrypted_value, iv, auth_tag, salt, description, created_at, updated_at, accessed_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        )
-        .run(
-          key,
-          encrypted.value.ciphertext,
-          encrypted.value.iv,
-          encrypted.value.authTag,
-          encrypted.value.salt,
-          description ?? null,
-          now,
-          now,
-          now,
-        );
-      this.logger?.info("set", `Secret created: ${key}`);
-    }
+    this.db
+      .query(
+        `INSERT INTO secrets (key, encrypted_value, iv, auth_tag, salt, description, created_at, updated_at, accessed_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(key) DO UPDATE SET
+          encrypted_value = excluded.encrypted_value,
+          iv = excluded.iv,
+          auth_tag = excluded.auth_tag,
+          salt = excluded.salt,
+          description = COALESCE(excluded.description, secrets.description),
+          updated_at = excluded.updated_at`,
+      )
+      .run(
+        key,
+        encrypted.value.ciphertext,
+        encrypted.value.iv,
+        encrypted.value.authTag,
+        encrypted.value.salt,
+        description ?? null,
+        now,
+        now,
+        now,
+      );
+    this.logger?.info("set", `Secret set: ${key}`);
 
     return Ok(undefined);
   }
@@ -347,15 +336,15 @@ export class SecretStore {
    */
   private validateKey(key: string): Result<void, EidolonError> {
     if (!key || key.length === 0) {
-      return Err(createError(ErrorCode.SECRET_NOT_FOUND, "Secret key must not be empty"));
+      return Err(createError(ErrorCode.INVALID_INPUT, "Secret key must not be empty"));
     }
     if (key.length > MAX_KEY_LENGTH) {
-      return Err(createError(ErrorCode.SECRET_NOT_FOUND, "Secret key exceeds maximum length"));
+      return Err(createError(ErrorCode.INVALID_INPUT, "Secret key exceeds maximum length"));
     }
     if (!VALID_KEY_PATTERN.test(key)) {
       return Err(
         createError(
-          ErrorCode.SECRET_NOT_FOUND,
+          ErrorCode.INVALID_INPUT,
           "Secret key contains invalid characters (allowed: alphanumeric, hyphens, underscores, dots, slashes)",
         ),
       );

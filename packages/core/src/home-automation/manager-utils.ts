@@ -47,13 +47,43 @@ export function rowToEntity(row: HAEntityRow): HAEntity {
 // Pattern matching and condition evaluation
 // ---------------------------------------------------------------------------
 
-/** Check if an entity ID matches a glob-like pattern (supports * wildcard). */
+/** Maximum pattern length to prevent abuse. */
+const MAX_PATTERN_LENGTH = 256;
+
+/**
+ * Check if an entity ID matches a glob-like pattern (supports * wildcard).
+ * Uses string matching instead of regex to avoid ReDoS.
+ */
 export function matchesPattern(entityId: string, pattern: string): boolean {
   if (pattern === "*") return true;
-  // Convert glob pattern to regex
-  const escapedPattern = pattern.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*");
-  const regex = new RegExp(`^${escapedPattern}$`);
-  return regex.test(entityId);
+  if (pattern.length > MAX_PATTERN_LENGTH) return false;
+
+  // Split on wildcards and match each literal segment in order
+  const parts = pattern.split("*");
+
+  // No wildcards -- exact match
+  if (parts.length === 1) return entityId === pattern;
+
+  let pos = 0;
+  for (let i = 0; i < parts.length; i++) {
+    const part = parts[i];
+    if (part === undefined || part === "") continue;
+
+    if (i === 0) {
+      // First segment must match at start
+      if (!entityId.startsWith(part)) return false;
+      pos = part.length;
+    } else if (i === parts.length - 1) {
+      // Last segment must match at end
+      if (!entityId.endsWith(part) || entityId.length - part.length < pos) return false;
+    } else {
+      // Middle segments must appear in order
+      const idx = entityId.indexOf(part, pos);
+      if (idx === -1) return false;
+      pos = idx + part.length;
+    }
+  }
+  return true;
 }
 
 /**

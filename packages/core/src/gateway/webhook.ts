@@ -14,6 +14,7 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { Logger } from "../logging/logger.ts";
+import { constantTimeCompare } from "./server-helpers.ts";
 
 // ---------------------------------------------------------------------------
 // Schema
@@ -105,13 +106,8 @@ async function verifyHmacSignature(body: string, signature: string, secret: stri
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
 
-  // Constant-time comparison: always compare full length
-  if (expectedHex.length !== actualHex.length) return false;
-  let mismatch = 0;
-  for (let i = 0; i < expectedHex.length; i++) {
-    mismatch |= expectedHex.charCodeAt(i) ^ actualHex.charCodeAt(i);
-  }
-  return mismatch === 0;
+  // Use shared constant-time comparison (timingSafeEqual under the hood)
+  return constantTimeCompare(expectedHex, actualHex);
 }
 
 function jsonResponse(body: Record<string, unknown>, status: number): Response {
@@ -247,7 +243,7 @@ async function authenticateRequest(
     if (!authHeader.startsWith("Bearer ")) return false;
     const token = authHeader.slice(7);
     if (typeof deps.gatewayToken === "string" && deps.gatewayToken.length > 0) {
-      return constantTimeStringCompare(token, deps.gatewayToken);
+      return constantTimeCompare(token, deps.gatewayToken);
     }
     return false;
   }
@@ -262,19 +258,6 @@ async function authenticateRequest(
 
   // No auth headers present
   return false;
-}
-
-/**
- * Constant-time string comparison to prevent timing attacks.
- * Uses XOR comparison over character codes.
- */
-function constantTimeStringCompare(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let mismatch = 0;
-  for (let i = 0; i < a.length; i++) {
-    mismatch |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  }
-  return mismatch === 0;
 }
 
 // Export for testing

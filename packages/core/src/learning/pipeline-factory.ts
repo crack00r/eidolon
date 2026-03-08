@@ -20,17 +20,60 @@ import type { ImplementFn, RunCommandFn } from "./implementation.ts";
 /** Maximum command execution time (5 minutes). */
 const DEFAULT_COMMAND_TIMEOUT_MS = 300_000;
 
+/** Whitelisted command prefixes allowed by createRunCommandFn. */
+const ALLOWED_COMMAND_PREFIXES: readonly string[] = ["pnpm ", "git "];
+
+/**
+ * Validate that a command starts with one of the allowed prefixes.
+ * Prevents arbitrary shell command execution through the learning pipeline.
+ */
+/** Shell metacharacters that could enable command chaining or injection. */
+const SHELL_METACHARACTERS = [";", "|", "&&", "||", "`", "$(", "${", "\n", "\r", ">", "<"];
+
+function validateCommand(command: string): Result<void, EidolonError> {
+  const trimmed = command.trimStart();
+  const isAllowed = ALLOWED_COMMAND_PREFIXES.some((prefix) => trimmed.startsWith(prefix));
+  if (!isAllowed) {
+    return Err(
+      createError(
+        ErrorCode.DISCOVERY_FAILED,
+        `Command not allowed. Only commands starting with [${ALLOWED_COMMAND_PREFIXES.map((p) => p.trim()).join(", ")}] are permitted: ${command}`,
+      ),
+    );
+  }
+
+  // Reject shell metacharacters that could enable command chaining
+  for (const meta of SHELL_METACHARACTERS) {
+    if (trimmed.includes(meta)) {
+      return Err(
+        createError(
+          ErrorCode.DISCOVERY_FAILED,
+          `Command contains forbidden shell metacharacter "${meta}": ${command}`,
+        ),
+      );
+    }
+  }
+
+  return Ok(undefined);
+}
+
 /**
  * Create a production RunCommandFn that executes shell commands via Bun.spawn.
  *
  * Commands are run in a bash shell with a configurable timeout.
  * stdout and stderr are captured and returned.
+ * Only whitelisted commands (pnpm, git) are allowed.
  */
 export function createRunCommandFn(logger: Logger, timeoutMs?: number): RunCommandFn {
   const timeout = timeoutMs ?? DEFAULT_COMMAND_TIMEOUT_MS;
   const childLogger = logger.child("pipeline-cmd");
 
   return async (command: string, cwd: string): Promise<Result<{ stdout: string; exitCode: number }, EidolonError>> => {
+    const validation = validateCommand(command);
+    if (!validation.ok) {
+      return Err(validation.error);
+    }
+
     childLogger.debug("run", `Executing: ${command}`, { cwd });
 
     try {
@@ -46,14 +89,20 @@ export function createRunCommandFn(logger: Logger, timeoutMs?: number): RunComma
       const stderrPromise = new Response(proc.stderr).text();
 
       // Wait for completion with timeout
+      let timer: ReturnType<typeof setTimeout> | undefined;
       const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => {
+        timer = setTimeout(() => {
           proc.kill();
           reject(new Error(`Command timed out after ${timeout}ms: ${command}`));
         }, timeout);
       });
 
-      const exitCode = await Promise.race([proc.exited, timeoutPromise]);
+      let exitCode: number;
+      try {
+        exitCode = await Promise.race([proc.exited, timeoutPromise]);
+      } finally {
+        clearTimeout(timer);
+      }
       const stdout = await stdoutPromise;
       const stderr = await stderrPromise;
 
@@ -97,7 +146,7 @@ export function createImplementFn(claude: IClaudeProcess, logger: Logger): Imple
 
       for await (const event of claude.run(prompt, {
         workspaceDir,
-        allowedTools: ["Read", "Write", "Edit", "Glob", "Grep", "Bash"],
+        allowedTools: ["Read", "Write", "Edit", "Glob", "Grep"],
         maxTurns: 20,
         systemPrompt:
           "You are implementing a self-learning improvement for Eidolon. " +
@@ -124,6 +173,35 @@ export function createImplementFn(claude: IClaudeProcess, logger: Logger): Imple
       return Err(createError(ErrorCode.CLAUDE_PROCESS_CRASHED, "Implementation session crashed", cause));
     }
   };
+}
+
+// ---------------------------------------------------------------------------
+// Path validation
+// ---------------------------------------------------------------------------
+
+/** Pattern for safe filesystem paths: alphanumeric, slashes, dots, hyphens, underscores. */
+const SAFE_PATH_PATTERN = /^[a-zA-Z0-9./_-]+$/;
+
+/**
+ * Validate that a path is safe for shell interpolation.
+ *
+ * Rejects paths containing shell-dangerous characters (spaces, semicolons,
+ * backticks, pipes, etc.) and path traversal patterns.
+ * Throws if the path is unsafe.
+ */
+export function validateSafePath(path: string): void {
+  if (!path || path.length === 0) {
+    throw new Error("Path must not be empty");
+  }
+  if (path.length > 4096) {
+    throw new Error(`Path too long (${String(path.length)} chars, max 4096)`);
+  }
+  if (!SAFE_PATH_PATTERN.test(path)) {
+    throw new Error(`Path contains unsafe characters: ${path}`);
+  }
+  if (path.includes("..")) {
+    throw new Error(`Path contains directory traversal: ${path}`);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -157,6 +235,20 @@ export async function createGitWorktree(
     return Err(createError(ErrorCode.DISCOVERY_FAILED, `Invalid branch name: ${branch}`));
   }
 
+  // Validate worktreePath to prevent command injection
+  try {
+    validateSafePath(worktreePath);
+  } catch (cause) {
+    return Err(createError(ErrorCode.DISCOVERY_FAILED, `Invalid worktree path: ${worktreePath}`, cause));
+  }
+
+  // Validate repoDir to prevent command injection
+  try {
+    validateSafePath(repoDir);
+  } catch (cause) {
+    return Err(createError(ErrorCode.DISCOVERY_FAILED, `Invalid repo directory: ${repoDir}`, cause));
+  }
+
   childLogger.info("create", `Creating worktree: ${worktreePath} on branch ${branch}`);
 
   const result = await runCommand(`git worktree add -b ${branch} ${worktreePath}`, repoDir);
@@ -184,6 +276,20 @@ export async function removeGitWorktree(
   logger: Logger,
 ): Promise<Result<void, EidolonError>> {
   const childLogger = logger.child("git-worktree");
+
+  // Validate worktreePath to prevent command injection
+  try {
+    validateSafePath(worktreePath);
+  } catch (cause) {
+    return Err(createError(ErrorCode.DISCOVERY_FAILED, `Invalid worktree path: ${worktreePath}`, cause));
+  }
+
+  // Validate repoDir to prevent command injection
+  try {
+    validateSafePath(repoDir);
+  } catch (cause) {
+    return Err(createError(ErrorCode.DISCOVERY_FAILED, `Invalid repo directory: ${repoDir}`, cause));
+  }
 
   childLogger.info("remove", `Removing worktree: ${worktreePath}`);
 

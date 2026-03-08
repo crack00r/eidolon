@@ -85,6 +85,11 @@ function foldBase64(encoded: string): string {
   return lines.join(CRLF);
 }
 
+/** Strip CR and LF characters from SMTP header values to prevent header injection. */
+function sanitizeHeaderValue(value: string): string {
+  return value.replace(/[\r\n]/g, "");
+}
+
 /** Build a complete MIME message string. */
 export function buildMimeMessage(
   from: string,
@@ -103,20 +108,20 @@ export function buildMimeMessage(
   const isMultipart = hasAttachments || hasHtml;
 
   const headers: string[] = [
-    `From: ${from}`,
-    `To: ${to.join(", ")}`,
-    `Subject: ${subject}`,
+    `From: ${sanitizeHeaderValue(from)}`,
+    `To: ${sanitizeHeaderValue(to.join(", "))}`,
+    `Subject: ${sanitizeHeaderValue(subject)}`,
     `Date: ${date}`,
     `Message-ID: <${messageId}>`,
     "MIME-Version: 1.0",
   ];
 
   if (inReplyTo) {
-    headers.push(`In-Reply-To: <${inReplyTo}>`);
+    headers.push(`In-Reply-To: <${sanitizeHeaderValue(inReplyTo)}>`);
   }
 
   if (references && references.length > 0) {
-    const refs = references.map((r) => `<${r}>`).join(" ");
+    const refs = references.map((r) => `<${sanitizeHeaderValue(r)}>`).join(" ");
     headers.push(`References: ${refs}`);
   }
 
@@ -348,15 +353,18 @@ export class BunSmtpClient implements ISmtpClient {
   private sendLine(line: string): Promise<string> {
     this.buffer = "";
     return new Promise<string>((resolve) => {
-      this.pendingResolve = resolve;
-      this.socket.write(new TextEncoder().encode(`${line}\r\n`));
-
-      setTimeout(() => {
+      const timer = setTimeout(() => {
         if (this.pendingResolve === resolve) {
           this.pendingResolve = null;
           resolve("500 Timeout");
         }
       }, 30_000);
+
+      this.pendingResolve = (data: string): void => {
+        clearTimeout(timer);
+        resolve(data);
+      };
+      this.socket.write(new TextEncoder().encode(`${line}\r\n`));
     });
   }
 }

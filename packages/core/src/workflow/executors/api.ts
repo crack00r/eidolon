@@ -10,6 +10,40 @@ import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 import type { IStepExecutor, StepConfig, StepOutput, WorkflowContext } from "../types.ts";
 import { ApiCallConfigSchema } from "../types.ts";
 
+/** URL schemes that are blocked to prevent SSRF attacks. */
+const BLOCKED_URL_SCHEMES = ["file:", "javascript:", "data:", "ftp:", "gopher:"];
+
+/** Private/internal IP patterns that should not be reachable from workflow API calls. */
+const PRIVATE_IP_PATTERNS = [
+  /^https?:\/\/127\./,
+  /^https?:\/\/0\./,
+  /^https?:\/\/10\./,
+  /^https?:\/\/172\.(1[6-9]|2\d|3[01])\./,
+  /^https?:\/\/192\.168\./,
+  /^https?:\/\/localhost[:/]/,
+  /^https?:\/\/localhost$/,
+  /^https?:\/\/\[::1\]/,
+  /^https?:\/\/169\.254\./,
+  /^https?:\/\/\[fd/i,
+  /^https?:\/\/\[fe80:/i,
+];
+
+/** Validate that a URL is safe for outbound HTTP requests. */
+function validateUrl(url: string): string | undefined {
+  const lower = url.toLowerCase();
+  for (const scheme of BLOCKED_URL_SCHEMES) {
+    if (lower.startsWith(scheme)) {
+      return `Blocked URL scheme: ${scheme}`;
+    }
+  }
+  for (const pattern of PRIVATE_IP_PATTERNS) {
+    if (pattern.test(lower)) {
+      return "Requests to private/internal IP addresses are not allowed";
+    }
+  }
+  return undefined;
+}
+
 export class ApiStepExecutor implements IStepExecutor {
   readonly type = "api_call" as const;
 
@@ -28,6 +62,12 @@ export class ApiStepExecutor implements IStepExecutor {
     }
 
     const { url, method, headers, body } = parsed.data;
+
+    // SSRF prevention: reject dangerous URL schemes and private IPs
+    const urlBlockedReason = validateUrl(url);
+    if (urlBlockedReason) {
+      return Err(createError(ErrorCode.SECURITY_BLOCKED, `API call blocked: ${urlBlockedReason}`));
+    }
 
     try {
       const response = await fetch(url, {
