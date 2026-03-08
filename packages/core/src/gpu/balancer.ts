@@ -41,14 +41,18 @@ function filterAvailable(workers: readonly GPUWorkerInfo[], capability: string):
 
 /** Cycles through available workers in round-robin order. */
 export class RoundRobinBalancer implements LoadBalancerStrategy {
-  private index = 0;
+  private counter = 0;
 
   select(workers: readonly GPUWorkerInfo[], capability: string): GPUWorkerInfo | null {
     const available = filterAvailable(workers, capability);
     if (available.length === 0) return null;
 
-    const selected = available[this.index % available.length];
-    this.index = (this.index + 1) % available.length;
+    const selected = available[this.counter % available.length];
+    this.counter++;
+    // Prevent counter from growing unbounded
+    if (this.counter >= Number.MAX_SAFE_INTEGER) {
+      this.counter = 0;
+    }
     return selected ?? null;
   }
 }

@@ -49,6 +49,29 @@ export interface HistogramMetric {
 
 const DEFAULT_LOOP_BUCKETS: readonly number[] = [1, 5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000];
 
+export function validateHistogramBuckets(buckets: readonly number[]): readonly number[] {
+  if (buckets.length === 0) {
+    throw new Error("Histogram buckets must not be empty");
+  }
+  const sorted = [...buckets].sort((a, b) => a - b);
+  for (let i = 1; i < sorted.length; i++) {
+    if (sorted[i] === sorted[i - 1]) {
+      throw new Error(`Duplicate histogram bucket boundary: ${sorted[i]}`);
+    }
+  }
+  return sorted;
+}
+
+/**
+ * Maximum number of distinct label values per metric.
+ * When exceeded, new values are aggregated into the "_other" bucket
+ * to prevent unbounded memory growth from high-cardinality labels.
+ */
+const MAX_LABEL_VALUES = 200;
+
+/** Sentinel label used to aggregate values that exceed the cardinality limit. */
+const OTHER_LABEL = "_other";
+
 // ---------------------------------------------------------------------------
 // MetricsRegistry
 // ---------------------------------------------------------------------------
@@ -140,6 +163,16 @@ export class MetricsRegistry {
   // Mutation methods
   // -------------------------------------------------------------------------
 
+  /**
+   * Resolve a label key: if the label already exists or there is room,
+   * return it as-is. Otherwise, aggregate into the "_other" bucket.
+   */
+  private resolveLabel(values: Map<string, number>, label: string): string {
+    if (label === "" || values.has(label)) return label;
+    if (values.size < MAX_LABEL_VALUES) return label;
+    return OTHER_LABEL;
+  }
+
   /** Increment the total events processed counter. */
   incEventsProcessed(count = 1): void {
     const current = this.eventsProcessed.values.get("") ?? 0;
@@ -148,8 +181,9 @@ export class MetricsRegistry {
 
   /** Increment token usage counter for a specific model. */
   incTokensUsed(model: string, tokens: number): void {
-    const current = this.tokensUsed.values.get(model) ?? 0;
-    this.tokensUsed.values.set(model, current + tokens);
+    const key = this.resolveLabel(this.tokensUsed.values, model);
+    const current = this.tokensUsed.values.get(key) ?? 0;
+    this.tokensUsed.values.set(key, current + tokens);
   }
 
   /** Increment total cost counter. */
@@ -170,23 +204,27 @@ export class MetricsRegistry {
 
   /** Set the tokens used gauge for an account. */
   setAccountTokensUsed(accountName: string, tokens: number): void {
-    this.accountTokensUsed.values.set(accountName, tokens);
+    const key = this.resolveLabel(this.accountTokensUsed.values, accountName);
+    this.accountTokensUsed.values.set(key, tokens);
   }
 
   /** Set the tokens remaining gauge for an account. */
   setAccountTokensRemaining(accountName: string, tokens: number): void {
-    this.accountTokensRemaining.values.set(accountName, tokens);
+    const key = this.resolveLabel(this.accountTokensRemaining.values, accountName);
+    this.accountTokensRemaining.values.set(key, tokens);
   }
 
   /** Set the cooldown active gauge for an account (1 if in cooldown, 0 otherwise). */
   setAccountCooldownActive(accountName: string, active: boolean): void {
-    this.accountCooldownActive.values.set(accountName, active ? 1 : 0);
+    const key = this.resolveLabel(this.accountCooldownActive.values, accountName);
+    this.accountCooldownActive.values.set(key, active ? 1 : 0);
   }
 
   /** Increment the error counter for an account. */
   incAccountErrors(accountName: string, count = 1): void {
-    const current = this.accountErrorsTotal.values.get(accountName) ?? 0;
-    this.accountErrorsTotal.values.set(accountName, current + count);
+    const key = this.resolveLabel(this.accountErrorsTotal.values, accountName);
+    const current = this.accountErrorsTotal.values.get(key) ?? 0;
+    this.accountErrorsTotal.values.set(key, current + count);
   }
 
   /** Observe a loop cycle duration for the histogram. */

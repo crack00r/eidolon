@@ -265,6 +265,12 @@ export class SlackChannel implements Channel {
 
   private isRateLimited(userId: string): boolean {
     const now = Date.now();
+
+    // Periodically prune expired entries to prevent unbounded growth
+    if (this.userRateLimits.size > 1000) {
+      this.pruneRateLimits(now);
+    }
+
     const entry = this.userRateLimits.get(userId);
 
     if (!entry || now - entry.windowStart > RATE_LIMIT_WINDOW_MS) {
@@ -278,6 +284,15 @@ export class SlackChannel implements Channel {
       return true;
     }
     return false;
+  }
+
+  /** Remove expired rate limit entries to prevent unbounded Map growth. */
+  private pruneRateLimits(now: number): void {
+    for (const [key, entry] of this.userRateLimits) {
+      if (now - entry.windowStart > RATE_LIMIT_WINDOW_MS) {
+        this.userRateLimits.delete(key);
+      }
+    }
   }
 
   private convertFiles(files?: readonly SlackFile[]): MessageAttachment[] {

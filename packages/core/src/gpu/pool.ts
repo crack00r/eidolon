@@ -234,9 +234,6 @@ export class GPUWorkerPool {
 
     const mime = mimeType ?? "audio/wav";
     const extension = mime.split("/")[1] ?? "wav";
-    const formData = new FormData();
-    const blob = new Blob([audio], { type: mime });
-    formData.append("file", blob, `audio.${extension}`);
 
     const triedWorkers = new Set<string>();
     let lastError: EidolonError | null = null;
@@ -254,6 +251,11 @@ export class GPUWorkerPool {
       if (!worker) break;
 
       triedWorkers.add(selected.name);
+
+      // Create fresh FormData per attempt -- FormData objects cannot be reused after consumption
+      const formData = new FormData();
+      const blob = new Blob([audio], { type: mime });
+      formData.append("file", blob, `audio.${extension}`);
 
       const result = await worker.executeRequest<SttResult>(
         "/stt/transcribe",

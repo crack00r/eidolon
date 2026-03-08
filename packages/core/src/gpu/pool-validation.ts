@@ -14,20 +14,20 @@ import type { TtsRequest } from "./tts-client.ts";
 // ---------------------------------------------------------------------------
 
 /** Maximum allowed text length for a single TTS request. */
-const MAX_TTS_TEXT_LENGTH = 10_000;
+export const MAX_TTS_TEXT_LENGTH = 10_000;
 
 /** Valid TTS speed range. */
-const MIN_TTS_SPEED = 0.25;
-const MAX_TTS_SPEED = 4.0;
+export const MIN_TTS_SPEED = 0.25;
+export const MAX_TTS_SPEED = 4.0;
 
 /** Valid TTS output formats. */
-const VALID_TTS_FORMATS: ReadonlySet<string> = new Set(["opus", "wav", "mp3"]);
+export const VALID_TTS_FORMATS: ReadonlySet<string> = new Set(["opus", "wav", "mp3"]);
 
 /** Maximum voice parameter length. */
-const MAX_VOICE_LENGTH = 64;
+export const MAX_VOICE_LENGTH = 64;
 
 /** Allowed characters in voice parameter. */
-const VOICE_PATTERN = /^[a-zA-Z0-9_\-.]+$/;
+export const VOICE_PATTERN = /^[a-zA-Z0-9_\-.]+$/;
 
 // ---------------------------------------------------------------------------
 // STT validation constants
@@ -40,7 +40,7 @@ export const MAX_STT_AUDIO_BYTES = 25 * 1024 * 1024;
 export const STT_UPLOAD_TIMEOUT_MS = 60_000;
 
 /** Supported MIME types for STT audio input. */
-const ALLOWED_STT_MIME_TYPES: ReadonlySet<string> = new Set([
+export const ALLOWED_STT_MIME_TYPES: ReadonlySet<string> = new Set([
   "audio/wav",
   "audio/wave",
   "audio/x-wav",
