@@ -13,20 +13,37 @@ import type { EidolonConfig } from "@eidolon/protocol";
 
 const ENV_PREFIX = "EIDOLON_";
 
-/** Sections that are known to be part of the config schema (lowercase). */
-const CONFIG_SECTIONS = new Set([
-  "identity",
-  "brain",
-  "loop",
-  "memory",
-  "learning",
-  "channels",
-  "gateway",
-  "gpu",
-  "security",
-  "database",
-  "logging",
-  "daemon",
+/**
+ * Map from lowercased env var section name to the actual config key.
+ * This handles camelCase keys like "homeAutomation" that become "homeautomation"
+ * when the env var EIDOLON_HOMEAUTOMATION_ENABLED is lowercased.
+ */
+const CONFIG_SECTIONS = new Map<string, string>([
+  ["identity", "identity"],
+  ["brain", "brain"],
+  ["loop", "loop"],
+  ["memory", "memory"],
+  ["learning", "learning"],
+  ["channels", "channels"],
+  ["gateway", "gateway"],
+  ["gpu", "gpu"],
+  ["security", "security"],
+  ["database", "database"],
+  ["logging", "logging"],
+  ["daemon", "daemon"],
+  ["privacy", "privacy"],
+  ["digest", "digest"],
+  ["anticipation", "anticipation"],
+  ["calendar", "calendar"],
+  ["homeautomation", "homeAutomation"],
+  ["telemetry", "telemetry"],
+  ["plugins", "plugins"],
+  ["llm", "llm"],
+  ["browser", "browser"],
+  ["replication", "replication"],
+  ["users", "users"],
+  ["role", "role"],
+  ["server", "server"],
 ]);
 
 /**
@@ -73,9 +90,17 @@ export function applyEnvOverrides(config: EidolonConfig): EidolonConfig {
     // SEC-C2: Block env overrides for security-critical config paths
     if (isLockedEnvPath(path)) continue;
 
-    setNestedValue(result, path, coerceValue(value));
+    // Replace the first segment with the actual config key (handles camelCase)
+    const actualKey = CONFIG_SECTIONS.get(firstSegment);
+    if (actualKey === undefined) continue;
+    const resolvedPath = [actualKey, ...path.slice(1)];
+
+    setNestedValue(result, resolvedPath, coerceValue(value));
   }
 
+  // Safe cast: the result structure mirrors EidolonConfig since it was cloned
+  // from a Zod-validated config and only had matching keys overridden. The caller
+  // (loadConfig) always merges this into a Zod-parsed EidolonConfigSchema result.
   return result as unknown as EidolonConfig;
 }
 

@@ -14,6 +14,20 @@ import { createError, Err, ErrorCode } from "@eidolon/protocol";
 import { getConfigPath } from "./paths.ts";
 import { validateAndResolve } from "./validator.ts";
 
+/**
+ * Migrate legacy config field names to current names.
+ * This allows old config files to keep working after renames.
+ */
+function migrateConfig(raw: Record<string, unknown>): Record<string, unknown> {
+  // Migrate brain.claudeAccounts → brain.accounts
+  const brain = raw.brain as Record<string, unknown> | undefined;
+  if (brain && "claudeAccounts" in brain && !("accounts" in brain)) {
+    brain.accounts = brain.claudeAccounts;
+    delete brain.claudeAccounts;
+  }
+  return raw;
+}
+
 export async function loadConfig(path?: string): Promise<Result<EidolonConfig, EidolonError>> {
   // Determine config file path
   const configPath = path ?? getConfigPath();
@@ -53,6 +67,9 @@ export async function loadConfig(path?: string): Promise<Result<EidolonConfig, E
     return Err(createError(ErrorCode.CONFIG_PARSE_ERROR, `Invalid JSON in ${usedPath}`, cause));
   }
 
+  // Migrate legacy field names before validation
+  const migrated = migrateConfig(parsed as Record<string, unknown>);
+
   // Validate with Zod and resolve
-  return validateAndResolve(parsed);
+  return validateAndResolve(migrated);
 }

@@ -60,6 +60,11 @@ export function getConfigDir(): string {
   return canonicalize(join(xdgConfig, DEFAULT_DATA_DIR_NAME));
 }
 
+/** Get the directory for Eidolon's own Claude CLI config (separate from user's global Claude) */
+export function getEidolonClaudeConfigDir(): string {
+  return canonicalize(join(getConfigDir(), "claude-config"));
+}
+
 /** Get the default log directory */
 export function getLogDir(): string {
   const envDir = process.env.EIDOLON_LOG_DIR;

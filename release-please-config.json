@@ -53,6 +53,10 @@
           "jsonpath": "$.package.version"
         }
       ]
+    },
+    "apps/web": {
+      "component": "web",
+      "changelog-path": "apps/web/CHANGELOG.md"
     }
   }
 }
