@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.15](https://github.com/crack00r/eidolon/compare/v0.1.14...v0.1.15) (2026-03-08)
+
+
+### Bug Fixes
+
+* **apps:** harden desktop, web, and CLI frontends ([3bbbf96](https://github.com/crack00r/eidolon/commit/3bbbf967d5e0cff74d21efa048a6746affec8a01))
+* **desktop:** fix daemon exit event payload and add updater bundles ([c6df384](https://github.com/crack00r/eidolon/commit/c6df3846ea4223f7375b6400165c38a4eb10786c))
+
 ## [0.1.14](https://github.com/crack00r/eidolon/compare/v0.1.13...v0.1.14) (2026-03-08)
 
 
