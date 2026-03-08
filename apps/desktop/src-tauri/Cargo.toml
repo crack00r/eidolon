@@ -1,6 +1,6 @@
 [package]
 name = "eidolon-desktop"
-version = "0.1.13"
+version = "0.1.14"
 edition = "2021"
 description = "Eidolon AI Assistant Desktop Client"
 authors = ["Manuel Guttmann"]
