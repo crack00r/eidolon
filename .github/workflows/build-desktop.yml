@@ -37,6 +37,10 @@ jobs:
             runner: macos-latest
             rust-target: aarch64-apple-darwin
             bundles: dmg,updater
+          - name: macOS (Intel)
+            runner: macos-13
+            rust-target: x86_64-apple-darwin
+            bundles: dmg,updater
           - name: Windows
             runner: windows-latest
             rust-target: x86_64-pc-windows-msvc

@@ -66,14 +66,29 @@ jobs:
           fi
           echo "CLI build output verified."
 
+      - name: Check if version already published
+        id: version-check
+        run: |
+          CLI_VERSION=$(node -e "console.log(require('./packages/cli/package.json').version)")
+          echo "cli_version=$CLI_VERSION" >> "$GITHUB_OUTPUT"
+          if npm view @eidolon-ai/cli@$CLI_VERSION version 2>/dev/null; then
+            echo "already_published=true" >> "$GITHUB_OUTPUT"
+            echo "Version $CLI_VERSION already published, skipping"
+          else
+            echo "already_published=false" >> "$GITHUB_OUTPUT"
+            echo "Version $CLI_VERSION not yet published"
+          fi
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
       - name: Publish to npm (dry run)
-        if: inputs.dry_run == 'true'
+        if: inputs.dry_run == 'true' && steps.version-check.outputs.already_published != 'true'
         run: pnpm publish --filter @eidolon-ai/cli --no-git-checks --dry-run
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish to npm
-        if: inputs.dry_run != 'true'
+        if: inputs.dry_run != 'true' && steps.version-check.outputs.already_published != 'true'
         run: pnpm publish --filter @eidolon-ai/cli --no-git-checks
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
