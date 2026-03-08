@@ -258,8 +258,15 @@ describe("ObsidianIndexer", () => {
     expect(row?.content).toBe("Version 2 content.");
   });
 
-  test("indexNote returns error for missing file", () => {
+  test("indexNote returns error for file outside vault root", () => {
     const result = indexer.indexNote("/nonexistent/file.md", vaultPath);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.message).toContain("is outside vault root");
+  });
+
+  test("indexNote returns error for missing file inside vault", () => {
+    const result = indexer.indexNote(join(vaultPath, "does-not-exist.md"), vaultPath);
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.error.message).toContain("File not found");

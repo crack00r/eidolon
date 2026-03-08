@@ -35,7 +35,8 @@ function createTestDb(): Database {
       enabled INTEGER NOT NULL DEFAULT 1,
       last_run_at INTEGER,
       next_run_at INTEGER,
-      created_at INTEGER NOT NULL
+      created_at INTEGER NOT NULL,
+      timezone TEXT
     );
     CREATE INDEX idx_tasks_next_run ON scheduled_tasks(next_run_at) WHERE enabled = 1;
   `);

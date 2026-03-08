@@ -13,18 +13,18 @@ function makeOptions(overrides: Partial<ClaudeSessionOptions> = {}): ClaudeSessi
 describe("buildClaudeArgs", () => {
   test("basic prompt produces correct base args", () => {
     const args = buildClaudeArgs("Hello", makeOptions());
-    expect(args).toEqual(["--print", "--output-format", "stream-json", "Hello"]);
+    expect(args).toEqual(["--print", "--output-format", "stream-json", "--verbose", "--", "Hello"]);
   });
 
-  test("prompt is always the last argument", () => {
+  test("prompt is always the last argument after -- separator", () => {
     const args = buildClaudeArgs("my prompt", makeOptions({ model: "opus" }));
     expect(args[args.length - 1]).toBe("my prompt");
+    expect(args[args.length - 2]).toBe("--");
   });
 
-  test("adds --session-id flag", () => {
+  test("does not pass sessionId to CLI (used for internal tracking only)", () => {
     const args = buildClaudeArgs("prompt", makeOptions({ sessionId: "sess-1" }));
-    expect(args).toContain("--session-id");
-    expect(args[args.indexOf("--session-id") + 1]).toBe("sess-1");
+    expect(args).not.toContain("--session-id");
   });
 
   test("adds --model flag", () => {
@@ -78,7 +78,7 @@ describe("buildClaudeArgs", () => {
     expect(args[0]).toBe("--print");
     expect(args[1]).toBe("--output-format");
     expect(args[2]).toBe("stream-json");
-    expect(args).toContain("--session-id");
+    expect(args).not.toContain("--session-id");
     expect(args).toContain("--model");
     expect(args).toContain("--allowedTools");
     expect(args).toContain("--mcp-config");

@@ -166,3 +166,105 @@ describe("formatLogEntry", () => {
     expect(output).toContain("at loader.ts:42");
   });
 });
+
+describe("sensitive key redaction", () => {
+  let capture: ReturnType<typeof captureStdout>;
+
+  beforeEach(() => {
+    capture = captureStdout();
+  });
+
+  afterEach(() => {
+    capture.restore();
+  });
+
+  test("redacts password fields in log data", () => {
+    const logger = createLogger(makeConfig());
+    logger.info("auth", "login attempt", { password: "s3cr3t", user: "admin" });
+
+    const parsed = JSON.parse(capture.getOutput().trim()) as LogEntry;
+    expect(parsed.data?.password).toBe("[REDACTED]");
+    expect(parsed.data?.user).toBe("admin");
+  });
+
+  test("redacts apiKey fields in log data", () => {
+    const logger = createLogger(makeConfig());
+    logger.info("auth", "api call", { apiKey: "sk-12345", endpoint: "/v1" });
+
+    const parsed = JSON.parse(capture.getOutput().trim()) as LogEntry;
+    expect(parsed.data?.apiKey).toBe("[REDACTED]");
+    expect(parsed.data?.endpoint).toBe("/v1");
+  });
+
+  test("redacts token fields in log data", () => {
+    const logger = createLogger(makeConfig());
+    logger.info("auth", "session", { token: "jwt.abc.xyz", scope: "read" });
+
+    const parsed = JSON.parse(capture.getOutput().trim()) as LogEntry;
+    expect(parsed.data?.token).toBe("[REDACTED]");
+    expect(parsed.data?.scope).toBe("read");
+  });
+
+  test("redacts nested sensitive keys", () => {
+    const logger = createLogger(makeConfig());
+    logger.info("auth", "config", { server: { api_key: "key123", host: "localhost" } });
+
+    const parsed = JSON.parse(capture.getOutput().trim()) as LogEntry;
+    const server = parsed.data?.server as Record<string, unknown>;
+    expect(server?.api_key).toBe("[REDACTED]");
+    expect(server?.host).toBe("localhost");
+  });
+});
+
+describe("control character sanitization", () => {
+  test("strips NUL bytes from JSON log messages", () => {
+    const entry: LogEntry = {
+      level: "info",
+      timestamp: 1772540400000,
+      module: "test",
+      message: "hello\x00world",
+    };
+    const output = formatLogEntry(entry, "json");
+    expect(output).not.toContain("\x00");
+    const parsed = JSON.parse(output) as LogEntry;
+    expect(parsed.message).toBe("helloworld");
+  });
+
+  test("strips backspace characters from log messages", () => {
+    const entry: LogEntry = {
+      level: "info",
+      timestamp: 1772540400000,
+      module: "test",
+      message: "clean\x08text",
+    };
+    const output = formatLogEntry(entry, "json");
+    const parsed = JSON.parse(output) as LogEntry;
+    expect(parsed.message).toBe("cleantext");
+  });
+
+  test("strips control chars from error messages in pretty format", () => {
+    const entry: LogEntry = {
+      level: "error",
+      timestamp: 1772540400000,
+      module: "test",
+      message: "fail",
+      error: { message: "bad\x07input\x1F" },
+    };
+    const output = formatLogEntry(entry, "pretty");
+    expect(output).not.toContain("\x07");
+    expect(output).not.toContain("\x1F");
+    expect(output).toContain("badinput");
+  });
+
+  test("preserves tabs and newlines while stripping other control chars", () => {
+    const entry: LogEntry = {
+      level: "info",
+      timestamp: 1772540400000,
+      module: "test",
+      message: "line1\nline2\ttab\x00nul",
+    };
+    const output = formatLogEntry(entry, "pretty");
+    expect(output).toContain("line1\nline2\ttab");
+    expect(output).not.toContain("\x00");
+  });
+});

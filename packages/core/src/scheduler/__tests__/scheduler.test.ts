@@ -1,7 +1,7 @@
 import { Database } from "bun:sqlite";
 import { afterEach, describe, expect, test } from "bun:test";
 import type { Logger } from "../../logging/logger.ts";
-import { TaskScheduler } from "../scheduler.ts";
+import { TaskScheduler, validateCronExpression } from "../scheduler.ts";
 
 function createSilentLogger(): Logger {
   const noop = (): void => {};
@@ -30,7 +30,8 @@ function createTestDb(): Database {
       enabled INTEGER NOT NULL DEFAULT 1,
       last_run_at INTEGER,
       next_run_at INTEGER,
-      created_at INTEGER NOT NULL
+      created_at INTEGER NOT NULL,
+      timezone TEXT
     );
     CREATE INDEX idx_tasks_next_run ON scheduled_tasks(next_run_at) WHERE enabled = 1;
   `);
@@ -195,7 +196,7 @@ describe("TaskScheduler", () => {
     const createResult = scheduler.create({
       name: "toggle-task",
       type: "recurring",
-      cron: "*/60",
+      cron: "*/30",
       action: "ping",
     });
 
@@ -350,5 +351,157 @@ describe("TaskScheduler.computeNextRun", () => {
     const reference = Date.now();
     const next = TaskScheduler.computeNextRun("invalid", reference);
     expect(next).toBe(reference + 3_600_000);
+  });
+
+  test("computes next run with timezone", () => {
+    // Use a known reference time: 2025-01-15T10:00:00.000Z (UTC)
+    // In Europe/Berlin this is 11:00 CET
+    const reference = new Date("2025-01-15T10:00:00.000Z").getTime();
+
+    // "14:00" in Europe/Berlin = 13:00 UTC
+    const next = TaskScheduler.computeNextRun("14:00", reference, "Europe/Berlin");
+    const nextDate = new Date(next);
+
+    // Verify the time in Berlin timezone is 14:00
+    const berlinTime = new Intl.DateTimeFormat("en-US", {
+      timeZone: "Europe/Berlin",
+      hour: "numeric",
+      minute: "numeric",
+      hour12: false,
+    }).formatToParts(nextDate);
+
+    const hour = berlinTime.find((p) => p.type === "hour")?.value;
+    const minute = berlinTime.find((p) => p.type === "minute")?.value;
+    expect(hour).toBe("14");
+    expect(minute).toBe("00");
+    expect(next).toBeGreaterThan(reference);
+  });
+});
+
+describe("validateCronExpression", () => {
+  test("accepts valid HH:MM", () => {
+    expect(validateCronExpression("00:00")).toBeNull();
+    expect(validateCronExpression("23:59")).toBeNull();
+    expect(validateCronExpression("12:30")).toBeNull();
+  });
+
+  test("rejects invalid hours in HH:MM", () => {
+    const result = validateCronExpression("24:00");
+    expect(result).not.toBeNull();
+    expect(result).toContain("hour");
+  });
+
+  test("rejects invalid minutes in HH:MM", () => {
+    const result = validateCronExpression("12:60");
+    expect(result).not.toBeNull();
+    expect(result).toContain("minute");
+  });
+
+  test("accepts valid */N", () => {
+    expect(validateCronExpression("*/1")).toBeNull();
+    expect(validateCronExpression("*/30")).toBeNull();
+    expect(validateCronExpression("*/59")).toBeNull();
+  });
+
+  test("rejects invalid */N interval", () => {
+    const result = validateCronExpression("*/0");
+    expect(result).not.toBeNull();
+    expect(result).toContain("interval");
+
+    const result2 = validateCronExpression("*/60");
+    expect(result2).not.toBeNull();
+    expect(result2).toContain("interval");
+  });
+
+  test("accepts valid HH:MM:dow", () => {
+    expect(validateCronExpression("09:00:0")).toBeNull();
+    expect(validateCronExpression("09:00:7")).toBeNull();
+    expect(validateCronExpression("23:59:6")).toBeNull();
+  });
+
+  test("rejects invalid day of week", () => {
+    const result = validateCronExpression("09:00:8");
+    expect(result).not.toBeNull();
+    expect(result).toContain("day of week");
+  });
+
+  test("rejects invalid hours in HH:MM:dow", () => {
+    const result = validateCronExpression("25:00:1");
+    expect(result).not.toBeNull();
+    expect(result).toContain("hour");
+  });
+
+  test("rejects unrecognized format", () => {
+    const result = validateCronExpression("foobar");
+    expect(result).not.toBeNull();
+    expect(result).toContain("Unrecognized");
+  });
+});
+
+describe("TaskScheduler cron validation on create", () => {
+  const logger = createSilentLogger();
+  const databases: Database[] = [];
+
+  afterEach(() => {
+    for (const db of databases) {
+      db.close();
+    }
+    databases.length = 0;
+  });
+
+  function makeScheduler(): TaskScheduler {
+    const db = createTestDb();
+    databases.push(db);
+    return new TaskScheduler(db, logger);
+  }
+
+  test("rejects task with invalid cron expression", () => {
+    const scheduler = makeScheduler();
+
+    const result = scheduler.create({
+      name: "bad-cron",
+      type: "recurring",
+      cron: "25:00",
+      action: "test",
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.message).toContain("hour");
+    }
+  });
+
+  test("rejects task with invalid timezone", () => {
+    const scheduler = makeScheduler();
+
+    const result = scheduler.create({
+      name: "bad-tz",
+      type: "recurring",
+      cron: "14:00",
+      action: "test",
+      timezone: "Invalid/Timezone",
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.message).toContain("timezone");
+    }
+  });
+
+  test("accepts task with valid timezone", () => {
+    const scheduler = makeScheduler();
+
+    const result = scheduler.create({
+      name: "berlin-task",
+      type: "recurring",
+      cron: "14:00",
+      action: "test",
+      timezone: "Europe/Berlin",
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.timezone).toBe("Europe/Berlin");
+    }
   });
 });

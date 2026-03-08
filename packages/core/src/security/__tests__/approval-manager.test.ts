@@ -292,8 +292,8 @@ describe("ApprovalManager", () => {
       const updated = manager.getById(req.value.id);
       expect(updated.ok).toBe(true);
       if (!updated.ok) return;
-      expect(updated.value?.status).toBe("timeout");
-      expect(updated.value?.respondedBy).toBe("auto:denied");
+      expect(updated.value?.status).toBe("denied");
+      expect(updated.value?.respondedBy).toBe("auto:timeout:denied");
     });
 
     test("auto-approves timed-out safe requests with allow policy", () => {
@@ -316,8 +316,8 @@ describe("ApprovalManager", () => {
       const updated = manager.getById(req.value.id);
       expect(updated.ok).toBe(true);
       if (!updated.ok) return;
-      expect(updated.value?.status).toBe("timeout");
-      expect(updated.value?.respondedBy).toBe("auto:approved");
+      expect(updated.value?.status).toBe("approved");
+      expect(updated.value?.respondedBy).toBe("auto:timeout:approved");
     });
 
     test("never auto-approves dangerous actions even with allow policy", () => {
@@ -339,9 +339,9 @@ describe("ApprovalManager", () => {
       const updated = manager.getById(req.value.id);
       expect(updated.ok).toBe(true);
       if (!updated.ok) return;
-      expect(updated.value?.status).toBe("timeout");
-      // Should be auto:denied despite allow policy because action is dangerous
-      expect(updated.value?.respondedBy).toBe("auto:denied");
+      expect(updated.value?.status).toBe("denied");
+      // Should be auto:timeout:denied despite allow policy because action is dangerous
+      expect(updated.value?.respondedBy).toBe("auto:timeout:denied");
     });
 
     test("does not process requests that have not timed out", () => {

@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import { parseStreamLine, parseStreamOutput } from "../parser.ts";
 
 describe("parseStreamLine", () => {
@@ -88,9 +88,39 @@ describe("parseStreamLine", () => {
     expect(parseStreamLine("\n")).toBeNull();
   });
 
-  test("returns null for invalid JSON", () => {
-    expect(parseStreamLine("not json")).toBeNull();
-    expect(parseStreamLine("{broken")).toBeNull();
+  test("returns null for invalid JSON and logs warning", () => {
+    const warnSpy = mock((..._args: unknown[]) => {});
+    const originalWarn = console.warn;
+    console.warn = warnSpy;
+
+    try {
+      expect(parseStreamLine("not json")).toBeNull();
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+      expect(String(warnSpy.mock.calls[0]![0])).toContain("not json");
+
+      expect(parseStreamLine("{broken")).toBeNull();
+      expect(warnSpy).toHaveBeenCalledTimes(2);
+      expect(String(warnSpy.mock.calls[1]![0])).toContain("{broken");
+    } finally {
+      console.warn = originalWarn;
+    }
+  });
+
+  test("truncates long invalid JSON lines in warning", () => {
+    const warnSpy = mock((..._args: unknown[]) => {});
+    const originalWarn = console.warn;
+    console.warn = warnSpy;
+
+    try {
+      const longLine = "x".repeat(300);
+      expect(parseStreamLine(longLine)).toBeNull();
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+      const warnMessage = String(warnSpy.mock.calls[0]![0]);
+      expect(warnMessage).toContain("...");
+      expect(warnMessage.length).toBeLessThan(300);
+    } finally {
+      console.warn = originalWarn;
+    }
   });
 
   test("returns null for non-object JSON values", () => {

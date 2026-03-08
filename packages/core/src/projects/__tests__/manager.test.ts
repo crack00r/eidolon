@@ -139,7 +139,7 @@ describe("ProjectManager", () => {
     expect(createResult.ok).toBe(true);
     if (!createResult.ok) return;
 
-    const updateResult = manager.update(createResult.value.id, {
+    const updateResult = await manager.update(createResult.value.id, {
       description: "Updated desc",
     });
     expect(updateResult.ok).toBe(true);
@@ -149,8 +149,8 @@ describe("ProjectManager", () => {
     }
   });
 
-  test("update returns error for non-existent project", () => {
-    const result = manager.update("non-existent", { description: "x" });
+  test("update returns error for non-existent project", async () => {
+    const result = await manager.update("non-existent", { description: "x" });
     expect(result.ok).toBe(false);
   });
 

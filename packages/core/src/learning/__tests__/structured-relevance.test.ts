@@ -145,7 +145,7 @@ describe("createStructuredRelevanceScorerFn", () => {
     expect(result.matchedInterests).toHaveLength(0);
   });
 
-  test("throws on invalid Claude response", async () => {
+  test("returns default score on invalid Claude response", async () => {
     const fake = FakeClaudeProcess.withResponse(/./, "not valid JSON");
 
     const scorerFn = createStructuredRelevanceScorerFn(fake, logger, {
@@ -153,7 +153,10 @@ describe("createStructuredRelevanceScorerFn", () => {
       maxRetries: 0,
     });
 
-    await expect(scorerFn("Test", "Content", ["interest"])).rejects.toThrow("Structured relevance scoring failed");
+    const result = await scorerFn("Test", "Content", ["interest"]);
+    expect(result.score).toBe(0);
+    expect(result.matchedInterests).toHaveLength(0);
+    expect(result.reason).toContain("Scoring failed");
   });
 
   test("sends title and content in prompt", async () => {
@@ -295,7 +298,7 @@ describe("RelevanceFilter + structured relevance integration", () => {
     expect(result.value.matchedInterests).toEqual(["SQLite", "performance"]);
   });
 
-  test("filter returns error when structured scorer fails", async () => {
+  test("filter returns low score when structured scorer fails", async () => {
     const fake = FakeClaudeProcess.withResponse(/./, "garbage output");
 
     const scorerFn = createStructuredRelevanceScorerFn(fake, logger, {
@@ -307,8 +310,9 @@ describe("RelevanceFilter + structured relevance integration", () => {
 
     const result = await filter.scoreLlm("Test", "Content", scorerFn);
 
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.error.code).toBe("DISCOVERY_FAILED");
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.score).toBe(0);
+    expect(result.value.matchedInterests).toHaveLength(0);
   });
 });

@@ -49,7 +49,7 @@ describe("EventBus crash recovery", () => {
     return db;
   }
 
-  test("replays unprocessed events after restart", () => {
+  test("replays unprocessed events after restart", async () => {
     // --- first instance: publish 3 events, process only 1 ---
     const db1 = openDb();
     const bus1 = new EventBus(db1, logger);
@@ -85,7 +85,7 @@ describe("EventBus crash recovery", () => {
       replayed.push(event);
     });
 
-    const replayResult = bus2.replayUnprocessed();
+    const replayResult = await bus2.replayUnprocessed();
     expect(replayResult.ok).toBe(true);
     if (!replayResult.ok) return;
 

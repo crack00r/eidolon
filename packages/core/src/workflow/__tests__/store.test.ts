@@ -193,6 +193,27 @@ describe("WorkflowStore - Runs", () => {
     }
   });
 
+  test("preserves startedAt on subsequent running transitions", () => {
+    const { store, defId } = makeStoreWithDef();
+    store.createRun("run-1", defId, {});
+
+    // First transition to running sets startedAt
+    store.updateRunStatus("run-1", "running");
+    const firstGet = store.getRun("run-1");
+    expect(firstGet.ok).toBe(true);
+    if (!firstGet.ok) return;
+    const originalStartedAt = firstGet.value.startedAt;
+    expect(originalStartedAt).not.toBeNull();
+
+    // Second transition to running (e.g., after a step completes) should preserve startedAt
+    store.updateRunStatus("run-1", "running", { currentStepId: "step2" });
+    const secondGet = store.getRun("run-1");
+    expect(secondGet.ok).toBe(true);
+    if (secondGet.ok) {
+      expect(secondGet.value.startedAt).toBe(originalStartedAt);
+    }
+  });
+
   test("queries runs by status", () => {
     const { store, defId } = makeStoreWithDef();
     store.createRun("run-1", defId, {});

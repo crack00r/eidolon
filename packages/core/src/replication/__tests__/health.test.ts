@@ -27,6 +27,7 @@ function makeConfig(overrides?: Partial<ReplicationConfig>): ReplicationConfig {
     missedHeartbeatsThreshold: 3,
     snapshotIntervalMs: 300_000,
     snapshotDir: "",
+    sharedSecret: "",
     ...overrides,
   };
 }

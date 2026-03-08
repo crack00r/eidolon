@@ -7,7 +7,7 @@ import type { BrowserConfig } from "@eidolon/protocol";
 import { createLogger } from "../../logging/logger.ts";
 import { FakeBrowserClient } from "../fake-client.ts";
 import { BrowserManager } from "../manager.ts";
-import { BROWSER_TOOL_DEFINITIONS, BROWSER_TOOL_NAMES, executeBrowserTool } from "../tools.ts";
+import { BROWSER_TOOL_DEFINITIONS, BROWSER_TOOL_NAMES, executeBrowserTool, validateEvaluateScript } from "../tools.ts";
 
 function makeConfig(): BrowserConfig {
   return {
@@ -109,5 +109,87 @@ describe("executeBrowserTool", () => {
   it("BROWSER_TOOL_DEFINITIONS matches tool names", () => {
     const names = BROWSER_TOOL_DEFINITIONS.map((d) => d.name);
     expect(names).toEqual([...BROWSER_TOOL_NAMES]);
+  });
+
+  // --- Security blocklist tests ---
+  // These tests verify that the evaluate blocklist correctly REJECTS dangerous scripts.
+  // The dangerous strings are test inputs (not executed), validating our security check works.
+
+  it("browse_evaluate blocks fetch calls", async () => {
+    const result = await executeBrowserTool(manager, "browse_evaluate", { script: "fetch('/api')" });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("SECURITY_BLOCKED");
+    }
+  });
+
+  it("browse_evaluate blocks document.cookie access", async () => {
+    const result = await executeBrowserTool(manager, "browse_evaluate", { script: "document.cookie" });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("SECURITY_BLOCKED");
+    }
+  });
+
+  it("browse_evaluate blocks localStorage access", async () => {
+    const result = await executeBrowserTool(manager, "browse_evaluate", { script: "localStorage.getItem('x')" });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("SECURITY_BLOCKED");
+    }
+  });
+
+  it("browse_evaluate blocks XMLHttpRequest", async () => {
+    const result = await executeBrowserTool(manager, "browse_evaluate", { script: "new XMLHttpRequest()" });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("SECURITY_BLOCKED");
+    }
+  });
+
+  it("browse_evaluate blocks dynamic import", async () => {
+    const result = await executeBrowserTool(manager, "browse_evaluate", { script: "import('module')" });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("SECURITY_BLOCKED");
+    }
+  });
+
+  it("browse_evaluate blocks WebSocket", async () => {
+    const result = await executeBrowserTool(manager, "browse_evaluate", { script: "new WebSocket('ws://x.com')" });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("SECURITY_BLOCKED");
+    }
+  });
+
+  it("browse_evaluate allows safe scripts", async () => {
+    client.setEvalResult(42);
+    const result = await executeBrowserTool(manager, "browse_evaluate", {
+      script: "document.querySelectorAll('a').length",
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.success).toBe(true);
+    }
+  });
+});
+
+describe("validateEvaluateScript", () => {
+  it("returns undefined for safe scripts", () => {
+    expect(validateEvaluateScript("document.title")).toBeUndefined();
+    expect(validateEvaluateScript("document.querySelectorAll('div').length")).toBeUndefined();
+    expect(validateEvaluateScript("1 + 2")).toBeUndefined();
+  });
+
+  it("returns reason string for blocked patterns", () => {
+    // Validate that blocked patterns produce a non-empty reason string
+    expect(typeof validateEvaluateScript("fetch('/api')")).toBe("string");
+    expect(typeof validateEvaluateScript("document.cookie")).toBe("string");
+    expect(typeof validateEvaluateScript("localStorage.getItem('x')")).toBe("string");
+    expect(typeof validateEvaluateScript("sessionStorage.setItem('x', 'y')")).toBe("string");
+    expect(typeof validateEvaluateScript("indexedDB.open('db')")).toBe("string");
+    expect(typeof validateEvaluateScript("navigator.sendBeacon('/log', data)")).toBe("string");
+    expect(typeof validateEvaluateScript("window.postMessage('msg', '*')")).toBe("string");
   });
 });

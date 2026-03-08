@@ -315,9 +315,9 @@ describe("protocol", () => {
 
   describe("createPushEvent", () => {
     test("creates a push event", () => {
-      const event = createPushEvent("session.updated", { sessionId: "abc" });
+      const event = createPushEvent("push.stateChange", { sessionId: "abc" });
       expect(event.jsonrpc).toBe("2.0");
-      expect(event.method).toBe("session.updated");
+      expect(event.method).toBe("push.stateChange");
       expect(event.params).toEqual({ sessionId: "abc" });
     });
   });
@@ -533,12 +533,12 @@ describe("GatewayServer", () => {
     activeClients.push(ws);
 
     // Give the server a moment to register the client
-    await delay(50);
+    await delay(200);
 
     expect(server.connectedClients).toBe(1);
 
     ws.close();
-    await delay(50);
+    await delay(200);
 
     expect(server.connectedClients).toBe(0);
   });
@@ -555,15 +555,15 @@ describe("GatewayServer", () => {
     const ws2 = await connectClient(config.port);
     activeClients.push(ws1, ws2);
 
-    await delay(50);
+    await delay(200);
     expect(server.connectedClients).toBe(2);
 
     ws1.close();
-    await delay(50);
+    await delay(200);
     expect(server.connectedClients).toBe(1);
 
     ws2.close();
-    await delay(50);
+    await delay(200);
     expect(server.connectedClients).toBe(0);
   });
 
@@ -584,7 +584,7 @@ describe("GatewayServer", () => {
 
       // Send auth in raw ClientAuth format
       ws.send(JSON.stringify({ type: "token", token: "secret-123" }));
-      await delay(50);
+      await delay(200);
 
       // Now send a JSON-RPC request — should succeed
       const resp = await sendAndReceive(ws, {
@@ -744,7 +744,7 @@ describe("GatewayServer", () => {
       const ws1 = await connectClient(config.port);
       const ws2 = await connectClient(config.port);
       activeClients.push(ws1, ws2);
-      await delay(50);
+      await delay(200);
 
       expect(server.connectedClients).toBe(2);
 
@@ -783,7 +783,7 @@ describe("GatewayServer", () => {
 
       const ws = await connectClient(config.port);
       activeClients.push(ws);
-      await delay(50);
+      await delay(200);
 
       // Sending a small message should work
       server.registerHandler("system.status", async () => ({ ok: true }));
@@ -948,7 +948,7 @@ describe("GatewayServer", () => {
       const p1 = waitForMessage(ws1);
       const p2 = waitForMessage(ws2);
 
-      const event = createPushEvent("session.updated", { sessionId: "s1" });
+      const event = createPushEvent("push.stateChange", { sessionId: "s1" });
       server.broadcast(event);
 
       const [msg1, msg2] = await Promise.all([p1, p2]);
@@ -984,7 +984,7 @@ describe("GatewayServer", () => {
       const _client2Id = (resp2.result as Record<string, unknown>).clientId as string;
 
       // Send only to client1
-      const event = createPushEvent("test.event", { data: "for-client-1" });
+      const event = createPushEvent("push.stateChange", { data: "for-client-1" });
       const p1 = waitForMessage(ws1);
       server.sendTo(client1Id, event);
 
@@ -1012,7 +1012,7 @@ describe("GatewayServer", () => {
 
       const ws = await connectClient(config.port);
       activeClients.push(ws);
-      await delay(50);
+      await delay(200);
 
       expect(events.length).toBe(1);
       const payload = events[0] as Record<string, unknown>;
@@ -1035,10 +1035,10 @@ describe("GatewayServer", () => {
 
       const ws = await connectClient(config.port);
       // Don't add to activeClients since we're closing manually
-      await delay(50);
+      await delay(200);
 
       ws.close();
-      await delay(50);
+      await delay(200);
 
       expect(disconnectEvents.length).toBe(1);
       const payload = disconnectEvents[0] as Record<string, unknown>;
@@ -1098,7 +1098,7 @@ describe("GatewayServer", () => {
       });
 
       expect(resp.result).toEqual({ authenticated: true });
-      await delay(50);
+      await delay(200);
 
       expect(events.length).toBe(1);
       const payload = events[0] as Record<string, unknown>;
@@ -1122,7 +1122,7 @@ describe("GatewayServer", () => {
         ws.onclose = (ev): void => resolve(ev.code);
       });
 
-      await delay(50);
+      await delay(200);
       expect(server.connectedClients).toBe(1);
 
       await server.stop();

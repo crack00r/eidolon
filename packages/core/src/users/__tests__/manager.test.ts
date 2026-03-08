@@ -234,6 +234,44 @@ describe("UserManager", () => {
       if (!result.ok) return;
       expect(result.value).toBeNull();
     });
+
+    test("escapes LIKE wildcards in externalUserId (% injection)", () => {
+      manager.create({
+        id: "u1",
+        name: "Alice",
+        channelMappings: [{ channelType: "telegram", externalUserId: "safe_id" }],
+      });
+      // A malicious externalUserId with % should NOT match unrelated users
+      const result = manager.findByChannel("telegram", "%");
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value).toBeNull();
+    });
+
+    test("escapes LIKE wildcards in externalUserId (_ injection)", () => {
+      manager.create({
+        id: "u1",
+        name: "Alice",
+        channelMappings: [{ channelType: "telegram", externalUserId: "12345" }],
+      });
+      // _ is a single-character wildcard in LIKE; should not match "12345"
+      const result = manager.findByChannel("telegram", "_____");
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value).toBeNull();
+    });
+
+    test("finds user with literal % in externalUserId", () => {
+      manager.create({
+        id: "u1",
+        name: "Alice",
+        channelMappings: [{ channelType: "telegram", externalUserId: "user%special" }],
+      });
+      const result = manager.findByChannel("telegram", "user%special");
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value?.id).toBe("u1");
+    });
   });
 
   describe("count", () => {

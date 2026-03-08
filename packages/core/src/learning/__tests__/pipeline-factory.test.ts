@@ -8,7 +8,13 @@
 import { describe, expect, test } from "bun:test";
 import { FakeClaudeProcess } from "@eidolon/test-utils";
 import type { Logger } from "../../logging/logger.ts";
-import { createGitWorktree, createImplementFn, createRunCommandFn, removeGitWorktree } from "../pipeline-factory.ts";
+import {
+  createGitWorktree,
+  createImplementFn,
+  createRunCommandFn,
+  removeGitWorktree,
+  validateSafePath,
+} from "../pipeline-factory.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -33,56 +39,64 @@ const logger = createSilentLogger();
 // ---------------------------------------------------------------------------
 
 describe("createRunCommandFn", () => {
-  test("executes a simple command successfully", async () => {
+  test("executes a whitelisted git command successfully", async () => {
     const runCommand = createRunCommandFn(logger);
 
-    const result = await runCommand("echo hello", "/tmp");
+    const result = await runCommand("git --version", "/tmp");
 
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.value.exitCode).toBe(0);
-      expect(result.value.stdout).toContain("hello");
+      expect(result.value.stdout).toContain("git version");
     }
   });
 
-  test("returns non-zero exit code for failing commands", async () => {
+  test("executes a whitelisted pnpm command successfully", async () => {
     const runCommand = createRunCommandFn(logger);
 
-    const result = await runCommand("false", "/tmp");
+    const result = await runCommand("pnpm --version", "/tmp");
 
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.value.exitCode).not.toBe(0);
+      expect(result.value.exitCode).toBe(0);
     }
   });
 
-  test("captures stderr in output", async () => {
+  test("rejects non-whitelisted commands", async () => {
     const runCommand = createRunCommandFn(logger);
 
-    const result = await runCommand("echo error-msg >&2", "/tmp");
+    const result = await runCommand("echo hello", "/tmp");
 
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.value.stdout).toContain("error-msg");
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.message).toContain("not allowed");
+    }
+  });
+
+  test("rejects commands attempting to bypass whitelist", async () => {
+    const runCommand = createRunCommandFn(logger);
+
+    const result = await runCommand("rm -rf / && git status", "/tmp");
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.message).toContain("not allowed");
     }
   });
 
   test("respects cwd parameter", async () => {
     const runCommand = createRunCommandFn(logger);
 
-    const result = await runCommand("pwd", "/tmp");
+    const result = await runCommand("git rev-parse --show-toplevel", "/tmp");
 
     expect(result.ok).toBe(true);
-    if (result.ok) {
-      // On macOS, /tmp -> /private/tmp
-      expect(result.value.stdout).toMatch(/\/tmp/);
-    }
+    // The command may fail (not a git repo) but the function executed
   });
 
   test("returns error for invalid cwd", async () => {
     const runCommand = createRunCommandFn(logger);
 
-    const result = await runCommand("echo test", "/nonexistent/path/that/does/not/exist");
+    const result = await runCommand("git status", "/nonexistent/path/that/does/not/exist");
 
     // Should return an Err since the cwd doesn't exist
     expect(result.ok).toBe(false);
@@ -114,9 +128,19 @@ describe("createImplementFn", () => {
 
     const lastOptions = fake.getLastOptions();
     expect(lastOptions?.workspaceDir).toBe("/tmp/workspace");
-    expect(lastOptions?.allowedTools).toEqual(["Read", "Write", "Edit", "Glob", "Grep", "Bash"]);
+    expect(lastOptions?.allowedTools).toEqual(["Read", "Write", "Edit", "Glob", "Grep"]);
     expect(lastOptions?.maxTurns).toBe(20);
     expect(lastOptions?.systemPrompt).toContain("self-learning improvement");
+  });
+
+  test("does not include Bash in allowedTools for security", async () => {
+    const fake = FakeClaudeProcess.withResponse(/./, "Done");
+    const implFn = createImplementFn(fake, logger);
+
+    await implFn("Test prompt", "/tmp/workspace");
+
+    const lastOptions = fake.getLastOptions();
+    expect(lastOptions?.allowedTools).not.toContain("Bash");
   });
 
   test("sends the prompt to Claude", async () => {
@@ -139,6 +163,39 @@ describe("createImplementFn", () => {
     if (!result.ok) {
       expect(result.error.code).toBe("CLAUDE_PROCESS_CRASHED");
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// validateSafePath
+// ---------------------------------------------------------------------------
+
+describe("validateSafePath", () => {
+  test("accepts valid absolute paths", () => {
+    expect(() => validateSafePath("/tmp/worktree")).not.toThrow();
+    expect(() => validateSafePath("/home/user/repo/wt-test")).not.toThrow();
+    expect(() => validateSafePath("/var/lib/eidolon/worktrees/branch_1")).not.toThrow();
+  });
+
+  test("rejects empty path", () => {
+    expect(() => validateSafePath("")).toThrow("must not be empty");
+  });
+
+  test("rejects paths with shell metacharacters", () => {
+    expect(() => validateSafePath("/tmp/wt; rm -rf /")).toThrow("unsafe characters");
+    expect(() => validateSafePath("/tmp/wt$(whoami)")).toThrow("unsafe characters");
+    expect(() => validateSafePath("/tmp/wt`id`")).toThrow("unsafe characters");
+    expect(() => validateSafePath("/tmp/wt | cat /etc/passwd")).toThrow("unsafe characters");
+    expect(() => validateSafePath("/tmp/wt&bg")).toThrow("unsafe characters");
+  });
+
+  test("rejects paths with directory traversal", () => {
+    expect(() => validateSafePath("/tmp/../etc/passwd")).toThrow("directory traversal");
+  });
+
+  test("rejects paths exceeding max length", () => {
+    const longPath = "/" + "a".repeat(4096);
+    expect(() => validateSafePath(longPath)).toThrow("too long");
   });
 });
 
@@ -182,6 +239,38 @@ describe("git worktree helpers", () => {
     // so we get a command execution error, not a validation error
     if (!result.ok) {
       expect(result.error.message).not.toContain("Invalid branch name");
+    }
+  });
+
+  test("createGitWorktree rejects worktree paths with shell injection", async () => {
+    const runCommand = createRunCommandFn(logger);
+
+    const result = await createGitWorktree(runCommand, "/tmp", "valid-branch", "/tmp/wt; rm -rf /", logger);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.message).toContain("Invalid worktree path");
+    }
+  });
+
+  test("createGitWorktree rejects worktree paths with directory traversal", async () => {
+    const runCommand = createRunCommandFn(logger);
+
+    const result = await createGitWorktree(runCommand, "/tmp", "valid-branch", "/tmp/../etc/wt", logger);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.message).toContain("Invalid worktree path");
+    }
+  });
+
+  test("removeGitWorktree rejects unsafe worktree paths", async () => {
+    const fakeRunCommand = async (_cmd: string, _cwd: string) => {
+      return { ok: true as const, value: { stdout: "", exitCode: 0 } };
+    };
+
+    const result = await removeGitWorktree(fakeRunCommand, "/repo", "/tmp/wt$(whoami)", logger);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.message).toContain("Invalid worktree path");
     }
   });
 

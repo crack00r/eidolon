@@ -55,9 +55,9 @@ export class FakeClaudeProcess implements IClaudeProcess {
   }
 
   /** Create a FakeClaudeProcess that returns an error event. */
-  static withError(_code: ErrorCode, message: string): FakeClaudeProcess {
+  static withError(code: ErrorCode, message: string): FakeClaudeProcess {
     const fake = new FakeClaudeProcess();
-    fake.addRule(/./, [{ type: "error", error: message, timestamp: Date.now() }]);
+    fake.addRule(/./, [{ type: "error", error: message, errorCode: code, timestamp: Date.now() }]);
     return fake;
   }
 
@@ -136,5 +136,6 @@ export class FakeClaudeProcess implements IClaudeProcess {
 
   reset(): void {
     this.calls.length = 0;
+    this.rules.length = 0;
   }
 }

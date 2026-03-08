@@ -66,10 +66,10 @@ describe("NoopTracer", () => {
     expect(headers).toEqual({});
   });
 
-  test("extractContext is a no-op", () => {
+  test("withExtractedContext runs fn and returns its result", () => {
     const tracer = new NoopTracer();
-    // Should not throw
-    tracer.extractContext({ traceparent: "00-abc-def-01" });
+    const result = tracer.withExtractedContext({ traceparent: "00-abc-def-01" }, () => 42);
+    expect(result).toBe(42);
   });
 });
 

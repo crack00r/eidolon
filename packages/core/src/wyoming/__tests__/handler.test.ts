@@ -184,8 +184,18 @@ describe("WyomingHandler", () => {
       expect(stopResult.ok).toBe(true);
       if (!stopResult.ok) return;
 
-      // Verify STT was called
-      expect(stt.lastAudio).toEqual(audioData);
+      // Verify STT was called with WAV-wrapped audio (44-byte header + PCM data)
+      expect(stt.lastAudio).toBeDefined();
+      if (stt.lastAudio) {
+        expect(stt.lastAudio.byteLength).toBe(44 + audioData.byteLength);
+        // Verify WAV header starts with "RIFF"
+        expect(stt.lastAudio[0]).toBe(0x52); // 'R'
+        expect(stt.lastAudio[1]).toBe(0x49); // 'I'
+        expect(stt.lastAudio[2]).toBe(0x46); // 'F'
+        expect(stt.lastAudio[3]).toBe(0x46); // 'F'
+        // Verify PCM data follows the header
+        expect(stt.lastAudio.slice(44)).toEqual(audioData);
+      }
 
       // Verify transcript event was sent back
       const parser = new WyomingParser();

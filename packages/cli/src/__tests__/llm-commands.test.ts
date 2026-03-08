@@ -53,6 +53,7 @@ describe("buildProviderList", () => {
           enabled: true,
           host: "http://localhost:11434",
           defaultModel: "llama3.2",
+          allowPrivateHosts: true,
           models: {
             llama3: { contextLength: 8192, supportsTools: false },
             mistral: { contextLength: 8192, supportsTools: false },

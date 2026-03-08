@@ -135,7 +135,7 @@ describe("RealtimeVoiceClient", () => {
       await client.disconnect();
     });
 
-    test("builds correct WebSocket URL with token", async () => {
+    test("builds correct WebSocket URL without token in query", async () => {
       const client = new RealtimeVoiceClient(logger, { maxReconnectAttempts: 0 });
 
       const connectPromise = client.connect("http://localhost:8420", "my-secret");
@@ -144,7 +144,10 @@ describe("RealtimeVoiceClient", () => {
 
       await connectPromise;
 
-      expect(ws.url).toBe("ws://localhost:8420/voice/realtime?token=my-secret");
+      // Token should NOT be in the URL (moved to first message)
+      expect(ws.url).toBe("ws://localhost:8420/voice/realtime");
+      // Auth token sent as first message after connection
+      expect(ws.send).toHaveBeenCalledWith(JSON.stringify({ type: "auth", token: "my-secret" }));
 
       await client.disconnect();
     });
@@ -158,7 +161,7 @@ describe("RealtimeVoiceClient", () => {
 
       await connectPromise;
 
-      expect(ws.url).toBe("wss://gpu.example.com/voice/realtime?token=key");
+      expect(ws.url).toBe("wss://gpu.example.com/voice/realtime");
 
       await client.disconnect();
     });
@@ -172,7 +175,7 @@ describe("RealtimeVoiceClient", () => {
 
       await connectPromise;
 
-      expect(ws.url).toBe("ws://gpu.local:8420/voice/realtime?token=key");
+      expect(ws.url).toBe("ws://gpu.local:8420/voice/realtime");
 
       await client.disconnect();
     });
@@ -211,7 +214,7 @@ describe("RealtimeVoiceClient", () => {
       await client.disconnect();
     });
 
-    test("URL-encodes special characters in token", async () => {
+    test("sends auth token with special characters as first message", async () => {
       const client = new RealtimeVoiceClient(logger, { maxReconnectAttempts: 0 });
 
       const connectPromise = client.connect("http://localhost:8420", "key with spaces&special=chars");
@@ -220,7 +223,11 @@ describe("RealtimeVoiceClient", () => {
 
       await connectPromise;
 
-      expect(ws.url).toContain("token=key%20with%20spaces%26special%3Dchars");
+      // Token sent as first message, not in URL
+      expect(ws.url).not.toContain("token=");
+      expect(ws.send).toHaveBeenCalledWith(
+        JSON.stringify({ type: "auth", token: "key with spaces&special=chars" }),
+      );
 
       await client.disconnect();
     });

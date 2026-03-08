@@ -252,7 +252,7 @@ describe("HASceneEngine", () => {
       expect(result.error.code).toBe(ErrorCode.HA_SCENE_NOT_FOUND);
     });
 
-    test("stops on first action failure", async () => {
+    test("continues on partial action failure and returns partial results", async () => {
       const { db, eventBus } = makeDeps();
       const engine = new HASceneEngine(db, logger, eventBus);
 
@@ -270,8 +270,32 @@ describe("HASceneEngine", () => {
       };
 
       const result = await engine.executeScene(createResult.value.id, failOnSecond);
+      // Partial failure: 1 of 3 failed, so result is Ok with mixed success values
+      expect(result.ok).toBe(true);
+      expect(callCount).toBe(3);
+      if (result.ok) {
+        expect(result.value.length).toBe(3);
+        expect(result.value[1]?.success).toBe(false);
+      }
+    });
+
+    test("returns error when all actions fail", async () => {
+      const { db, eventBus } = makeDeps();
+      const engine = new HASceneEngine(db, logger, eventBus);
+
+      const createResult = engine.createScene("All Fail", makeActions(2));
+      expect(createResult.ok).toBe(true);
+      if (!createResult.ok) return;
+
+      const failAll: ExecuteServiceFn = async () => {
+        return Err(createError(ErrorCode.HA_SERVICE_FAILED, "Failed"));
+      };
+
+      const result = await engine.executeScene(createResult.value.id, failAll);
       expect(result.ok).toBe(false);
-      expect(callCount).toBe(2);
+      if (!result.ok) {
+        expect(result.error.code).toBe(ErrorCode.HA_SERVICE_FAILED);
+      }
     });
   });
 

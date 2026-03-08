@@ -541,14 +541,11 @@ describe("HAManager service execution with policy enforcement", () => {
       config: makeConfig(),
     });
 
-    // Lock needs approval -- HAManager executeService checks the policy but
-    // does not block needs_approval (it only blocks dangerous).
-    // The approval flow is handled upstream by the cognitive loop / approval manager.
+    // Lock needs approval -- executeService now blocks needs_approval actions
     const result = await manager.executeService("lock.front_door", "lock", "lock");
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.value.success).toBe(true);
-      expect(result.value.domain).toBe("lock");
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe(ErrorCode.HA_POLICY_DENIED);
     }
   });
 
@@ -655,11 +652,11 @@ describe("HAManager service execution with policy enforcement", () => {
       config: makeConfig(),
     });
 
-    // Unknown domain -- defaults to needs_approval, which is not blocked by executeService
+    // Unknown domain -- defaults to needs_approval, which is now blocked by executeService
     const result = await manager.executeService("water_heater.main", "water_heater", "turn_on");
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.value.success).toBe(true);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe(ErrorCode.HA_POLICY_DENIED);
     }
   });
 });

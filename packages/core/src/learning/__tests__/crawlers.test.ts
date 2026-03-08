@@ -443,6 +443,7 @@ describe("CrawlerRegistry", () => {
 
 class RedditCrawlerWithBaseUrl extends RedditCrawler {
   private baseUrl: string;
+  protected override skipSsrfCheck = true;
   constructor(logger: Logger, baseUrl: string) {
     super(logger);
     this.baseUrl = baseUrl;
@@ -455,6 +456,7 @@ class RedditCrawlerWithBaseUrl extends RedditCrawler {
 
 class HNCrawlerWithBaseUrl extends HackerNewsCrawler {
   private baseUrl: string;
+  protected override skipSsrfCheck = true;
   constructor(logger: Logger, baseUrl: string) {
     super(logger);
     this.baseUrl = baseUrl;
@@ -467,6 +469,7 @@ class HNCrawlerWithBaseUrl extends HackerNewsCrawler {
 
 class GHCrawlerWithBaseUrl extends GitHubCrawler {
   private baseUrl: string;
+  protected override skipSsrfCheck = true;
   constructor(logger: Logger, baseUrl: string) {
     super(logger);
     this.baseUrl = baseUrl;
@@ -478,6 +481,7 @@ class GHCrawlerWithBaseUrl extends GitHubCrawler {
 }
 
 class RssCrawlerWithBaseUrl extends RssCrawler {
+  protected override skipSsrfCheck = true;
   constructor(logger: Logger, _baseUrl: string) {
     super(logger);
   }
@@ -486,6 +490,7 @@ class RssCrawlerWithBaseUrl extends RssCrawler {
 
 class ArxivCrawlerWithBaseUrl extends ArxivCrawler {
   private baseUrl: string;
+  protected override skipSsrfCheck = true;
   constructor(logger: Logger, baseUrl: string) {
     super(logger);
     this.baseUrl = baseUrl;

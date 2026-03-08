@@ -38,22 +38,23 @@ describe("injectTraceContext", () => {
 });
 
 describe("extractTraceContext", () => {
-  test("does not throw with NoopTracer", () => {
+  test("runs fn within extracted context and returns result", () => {
     const tracer = new NoopTracer();
-    // Should not throw
-    extractTraceContext(tracer, {
+    const result = extractTraceContext(tracer, {
       Traceparent: "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
-    });
+    }, () => "hello");
+    expect(result).toBe("hello");
   });
 
   test("normalizes header keys to lowercase", () => {
     const tracer = new NoopTracer();
-    // The function should normalize keys before passing to extractContext
-    // Since NoopTracer.extractContext is a no-op, we just verify no crash
-    extractTraceContext(tracer, {
+    // NoopTracer.withExtractedContext just runs fn, so we verify no crash
+    // and that the return value is propagated
+    const result = extractTraceContext(tracer, {
       TRACEPARENT: "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
       "X-Custom-Header": "value",
-    });
+    }, () => 99);
+    expect(result).toBe(99);
   });
 });
 
