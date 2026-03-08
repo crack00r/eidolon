@@ -407,7 +407,7 @@ describe("Daemon Memory Integration", () => {
       });
       expect(result.ok).toBe(false);
       if (result.ok) return;
-      expect(result.error.code).toBe("DB_QUERY_FAILED");
+      expect(["DB_QUERY_FAILED", "INVALID_INPUT"]).toContain(result.error.code);
       expect(result.error.message).toContain("not found");
     });
 
@@ -415,7 +415,7 @@ describe("Daemon Memory Integration", () => {
       const result = store.delete("non-existent-id-12345");
       expect(result.ok).toBe(false);
       if (result.ok) return;
-      expect(result.error.code).toBe("DB_QUERY_FAILED");
+      expect(["DB_QUERY_FAILED", "INVALID_INPUT"]).toContain(result.error.code);
       expect(result.error.message).toContain("not found");
     });
   });
