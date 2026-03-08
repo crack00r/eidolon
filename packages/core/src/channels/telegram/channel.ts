@@ -133,8 +133,9 @@ export class TelegramChannel implements Channel {
       return Err(createError(ErrorCode.CHANNEL_SEND_FAILED, "Telegram bot is not connected"));
     }
 
-    // The channelId for Telegram outbound is the chat ID
-    const chatId = message.replyToId ?? message.channelId;
+    // Always use channelId as the Telegram chat ID.
+    // replyToId is an event bus event ID, not a Telegram chat ID.
+    const chatId = message.channelId;
     const span = this.tracer.startSpan("telegram.send", {
       "telegram.chat_id": chatId,
       "message.format": message.format ?? "text",
@@ -303,6 +304,12 @@ export class TelegramChannel implements Channel {
    */
   private isRateLimited(userId: number): boolean {
     const now = Date.now();
+
+    // Periodically prune expired entries to prevent unbounded growth
+    if (this.userRateLimits.size > 1000) {
+      this.pruneRateLimits(now);
+    }
+
     const entry = this.userRateLimits.get(userId);
 
     if (!entry || now - entry.windowStart > RATE_LIMIT_WINDOW_MS) {
@@ -316,6 +323,15 @@ export class TelegramChannel implements Channel {
       return true;
     }
     return false;
+  }
+
+  /** Remove expired rate limit entries to prevent unbounded Map growth. */
+  private pruneRateLimits(now: number): void {
+    for (const [key, entry] of this.userRateLimits) {
+      if (now - entry.windowStart > RATE_LIMIT_WINDOW_MS) {
+        this.userRateLimits.delete(key);
+      }
+    }
   }
 
   /** Build an InboundMessage from Telegram context fields. */

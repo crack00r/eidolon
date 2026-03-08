@@ -246,6 +246,12 @@ export class WhatsAppChannel implements Channel {
    */
   private isRateLimited(phoneNumber: string): boolean {
     const now = Date.now();
+
+    // Periodically prune expired entries to prevent unbounded growth
+    if (this.userRateLimits.size > 1000) {
+      this.pruneRateLimits(now);
+    }
+
     const entry = this.userRateLimits.get(phoneNumber);
 
     if (!entry || now - entry.windowStart > RATE_LIMIT_WINDOW_MS) {
@@ -259,6 +265,15 @@ export class WhatsAppChannel implements Channel {
       return true;
     }
     return false;
+  }
+
+  /** Remove expired rate limit entries to prevent unbounded Map growth. */
+  private pruneRateLimits(now: number): void {
+    for (const [key, entry] of this.userRateLimits) {
+      if (now - entry.windowStart > RATE_LIMIT_WINDOW_MS) {
+        this.userRateLimits.delete(key);
+      }
+    }
   }
 
   /** Check whether the recipient is within the 24-hour messaging window. */

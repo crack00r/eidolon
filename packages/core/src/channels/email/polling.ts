@@ -188,24 +188,26 @@ export async function processInboundEmail(email: ImapMessage, deps: ProcessEmail
     }
   }
 
-  // Mark as read before dispatching
-  await deps.imapClient.markAsRead(email.uid);
-
   span.setAttribute("email.has_attachments", attachments.length > 0);
   span.setAttribute("email.is_reply", threadInfo.isReply);
   span.setAttribute("email.body_length", safeText.length);
 
-  // Dispatch to handler
+  // Dispatch to handler, then mark as read on success
   try {
     if (!deps.messageHandler) {
       deps.logger.warn("email", "No message handler registered, dropping message", {
         id: inbound.id,
       });
+      // No handler: mark as read to avoid re-processing
+      await deps.imapClient.markAsRead(email.uid);
     } else {
       try {
         await deps.messageHandler(inbound);
+        // Mark as read only after successful handler execution
+        await deps.imapClient.markAsRead(email.uid);
       } catch (err) {
         deps.logger.error("email", "Message handler error", err, { id: inbound.id });
+        // Do NOT mark as read -- allow re-processing on next poll
       }
     }
     span.setStatus("ok");

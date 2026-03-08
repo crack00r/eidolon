@@ -65,7 +65,7 @@ export function convertAttachments(attachments?: readonly MessageAttachment[]): 
   if (!attachments || attachments.length === 0) return [];
 
   return attachments
-    .filter((a) => a.data)
+    .filter((a) => a.data instanceof Uint8Array)
     .map((a) => ({
       filename: a.filename ?? "attachment",
       mimeType: a.mimeType,

@@ -153,17 +153,17 @@ export function stripSignature(text: string): string {
  */
 const QUOTE_HEADER_PATTERNS: readonly RegExp[] = [
   // English: "On Mon, Jan 1, 2026 at 10:00 AM John Doe <john@example.com> wrote:"
-  /^On .+wrote:\s*$/im,
+  /^On [^\r\n]{1,500}wrote:\s*$/im,
   // German: "Am 01.01.2026 um 10:00 schrieb Max Mustermann:"
-  /^Am .+schrieb .+:\s*$/im,
+  /^Am [^\r\n]{1,500}schrieb [^\r\n]{1,200}:\s*$/im,
   // French: "Le 01/01/2026 a 10:00, Jean Dupont a ecrit :"
-  /^Le .+(?:a\s+[eé]crit|wrote)\s*:\s*$/im,
+  /^Le [^\r\n]{1,500}(?:a\s+[eé]crit|wrote)\s*:\s*$/im,
   // Generic separator line (many email clients)
-  /^-{3,}.*Original Message.*-{3,}\s*$/im,
+  /^-{3,}[^\r\n]{0,200}Original Message[^\r\n]{0,200}-{3,}\s*$/im,
   // Outlook-style
   /^_{3,}\s*$/m,
   // "From: ... Sent: ... To: ... Subject: ..." block (Outlook)
-  /^From:\s.+\nSent:\s.+\nTo:\s.+\nSubject:\s.+$/im,
+  /^From:\s[^\r\n]{1,500}\nSent:\s[^\r\n]{1,500}\nTo:\s[^\r\n]{1,500}\nSubject:\s[^\r\n]{1,500}$/im,
 ];
 
 /**

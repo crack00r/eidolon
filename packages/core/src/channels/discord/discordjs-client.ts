@@ -109,32 +109,39 @@ export async function createDiscordJsClient(): Promise<
       },
 
       onMessage(handler: (message: DiscordInboundMessage) => Promise<void>): void {
-        djsClient.on("messageCreate", async (...args: unknown[]) => {
-          const m = args[0] as DjsMessageLike;
+        djsClient.on("messageCreate", (...args: unknown[]) => {
+          (async () => {
+            try {
+              const m = args[0] as DjsMessageLike;
 
-          const attachmentValues = [...m.attachments.values()];
-          const attachments = attachmentValues.map((a) => ({
-            id: String(a.id),
-            url: String(a.url),
-            filename: String(a.name ?? "unknown"),
-            contentType: a.contentType,
-            size: Number(a.size),
-          }));
+              const attachmentValues = [...m.attachments.values()];
+              const attachments = attachmentValues.map((a) => ({
+                id: String(a.id),
+                url: String(a.url),
+                filename: String(a.name ?? "unknown"),
+                contentType: a.contentType,
+                size: Number(a.size),
+              }));
 
-          const inbound: DiscordInboundMessage = {
-            id: String(m.id),
-            content: String(m.content ?? ""),
-            channelId: String(m.channelId),
-            author: {
-              id: String(m.author.id),
-              username: String(m.author.username),
-              bot: Boolean(m.author.bot),
-            },
-            guildId: m.guildId ? String(m.guildId) : null,
-            attachments,
-          };
+              const inbound: DiscordInboundMessage = {
+                id: String(m.id),
+                content: String(m.content ?? ""),
+                channelId: String(m.channelId),
+                author: {
+                  id: String(m.author.id),
+                  username: String(m.author.username),
+                  bot: Boolean(m.author.bot),
+                },
+                guildId: m.guildId ? String(m.guildId) : null,
+                attachments,
+              };
 
-          await handler(inbound);
+              await handler(inbound);
+            } catch (err: unknown) {
+              // Prevent unhandled promise rejection from crashing the process
+              console.error("[discord] messageCreate handler error:", err instanceof Error ? err.message : String(err));
+            }
+          })();
         });
       },
 

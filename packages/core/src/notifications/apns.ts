@@ -67,18 +67,57 @@ const APNS_SANDBOX_HOST = "api.sandbox.push.apple.com";
 // APNs Client
 // ---------------------------------------------------------------------------
 
+/** Timeout for individual APNs HTTP/2 requests (30 seconds). */
+const REQUEST_TIMEOUT_MS = 30_000;
+
 export class ApnsClient {
   private readonly config: ApnsConfig;
   private readonly db: Database;
   private readonly logger: Logger;
   private readonly host: string;
   private cachedJwt: ApnsJwt | null = null;
+  private http2Session: http2.ClientHttp2Session | null = null;
 
   constructor(config: ApnsConfig, db: Database, logger: Logger) {
     this.config = config;
     this.db = db;
     this.logger = logger.child("apns");
     this.host = config.sandbox ? APNS_SANDBOX_HOST : APNS_PRODUCTION_HOST;
+  }
+
+  /** Get or create a reusable HTTP/2 session. Reconnects on error or if closed. */
+  private getHttp2Session(): http2.ClientHttp2Session {
+    if (this.http2Session && !this.http2Session.closed && !this.http2Session.destroyed) {
+      return this.http2Session;
+    }
+
+    const session = http2.connect(`https://${this.host}`);
+    session.on("error", (err) => {
+      this.logger.error("http2", "Session error, will reconnect on next request", err);
+      this.closeHttp2Session();
+    });
+    session.on("close", () => {
+      this.http2Session = null;
+    });
+    this.http2Session = session;
+    return session;
+  }
+
+  /** Close the cached HTTP/2 session. */
+  private closeHttp2Session(): void {
+    if (this.http2Session) {
+      try {
+        this.http2Session.close();
+      } catch {
+        // Already closed
+      }
+      this.http2Session = null;
+    }
+  }
+
+  /** Close the HTTP/2 session. Call when shutting down the client. */
+  close(): void {
+    this.closeHttp2Session();
   }
 
   // -----------------------------------------------------------------------
@@ -238,15 +277,8 @@ export class ApnsClient {
   /** Send a single HTTP/2 request to APNs and interpret the response. */
   private sendRequest(deviceToken: string, body: string, jwt: string): Promise<Result<void, EidolonError>> {
     return new Promise((resolve) => {
-      let client: http2.ClientHttp2Session | undefined;
-
       try {
-        client = http2.connect(`https://${this.host}`);
-
-        client.on("error", (err) => {
-          this.logger.error("http2", "Connection error", err);
-          resolve(Err(createError(ErrorCode.APNS_SEND_FAILED, `HTTP/2 connection error: ${err.message}`, err)));
-        });
+        const client = this.getHttp2Session();
 
         const headers: http2.OutgoingHttpHeaders = {
           ":method": "POST",
@@ -262,6 +294,13 @@ export class ApnsClient {
         let responseStatus = 0;
         const responseChunks: Buffer[] = [];
 
+        // Request timeout
+        const timer = setTimeout(() => {
+          req.close();
+          this.closeHttp2Session();
+          resolve(Err(createError(ErrorCode.APNS_SEND_FAILED, `APNs request timed out after ${REQUEST_TIMEOUT_MS}ms`)));
+        }, REQUEST_TIMEOUT_MS);
+
         req.on("response", (hdrs) => {
           const status = hdrs[":status"];
           responseStatus = typeof status === "number" ? status : 0;
@@ -272,20 +311,21 @@ export class ApnsClient {
         });
 
         req.on("end", () => {
-          client?.close();
+          clearTimeout(timer);
           const responseBody = Buffer.concat(responseChunks).toString("utf-8");
           resolve(this.interpretResponse(responseStatus, responseBody));
         });
 
         req.on("error", (err) => {
-          client?.close();
+          clearTimeout(timer);
+          this.closeHttp2Session();
           resolve(Err(createError(ErrorCode.APNS_SEND_FAILED, `APNs request error: ${err.message}`, err)));
         });
 
         req.write(body);
         req.end();
       } catch (err: unknown) {
-        client?.close();
+        this.closeHttp2Session();
         const message = err instanceof Error ? err.message : String(err);
         resolve(Err(createError(ErrorCode.APNS_SEND_FAILED, `Failed to send APNs request: ${message}`, err)));
       }

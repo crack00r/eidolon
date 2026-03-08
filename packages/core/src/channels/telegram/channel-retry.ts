@@ -69,7 +69,7 @@ export async function sendWithRetry<T>(fn: () => Promise<T>, logger: Logger): Pr
         const parameters = (err as GrammyError & { parameters?: { retry_after?: number } }).parameters;
         const retryAfter = parameters?.retry_after;
         if (typeof retryAfter === "number" && retryAfter > 0) {
-          delayMs = retryAfter * 1000;
+          delayMs = Math.min(retryAfter * 1000, 60_000);
         }
       }
 
