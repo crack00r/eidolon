@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.1.14](https://github.com/crack00r/eidolon/compare/v0.1.13...v0.1.14) (2026-03-08)
+
+
+### Bug Fixes
+
+* **channels:** harden all communication channels ([9f5e783](https://github.com/crack00r/eidolon/commit/9f5e783b9df8e569ba34157c43fe3f71c9d3577c))
+* comprehensive bugfix across desktop, protocol, core, CLI, and CI ([6615af4](https://github.com/crack00r/eidolon/commit/6615af40d7554acf43b5358138671431f9b15843))
+* **config:** sync versions, release-please, and config validation ([f8ad461](https://github.com/crack00r/eidolon/commit/f8ad461e7e57f5cb49e0a00f14aca820d2ba536b))
+* critical bugfixes for chat, credentials, onboarding, and daemon ([858f4a8](https://github.com/crack00r/eidolon/commit/858f4a87b615b84f41ed0303df9604b064218e3d))
+* **data:** add transactions, UPSERT, and data integrity guards ([4b0ec58](https://github.com/crack00r/eidolon/commit/4b0ec585f9d0f221385b351f6292eb5142cea543))
+* **errors:** improve error handling, resource cleanup, and resilience ([dd97686](https://github.com/crack00r/eidolon/commit/dd976860105237363d5d5921252ee79c4787d775))
+* **resources:** add bounds, rate limits, and memory safety ([613509f](https://github.com/crack00r/eidolon/commit/613509fc71db6c624ba6b01d95a18e45a1873f4a))
+* **security:** prevent injection, SSRF, and auth vulnerabilities ([b067a9f](https://github.com/crack00r/eidolon/commit/b067a9fe5ad990dc42127d34aeeea00f2c7b4805))
+* **types:** strengthen type safety and Zod boundary validation ([a9d65f3](https://github.com/crack00r/eidolon/commit/a9d65f3c009444d208914111bf4490ca7effc093))
+
+
+### Miscellaneous
+
+* release main ([5425158](https://github.com/crack00r/eidolon/commit/5425158b66a595b5368e9304e385de917b2334c6))
+* release main ([bd7ede4](https://github.com/crack00r/eidolon/commit/bd7ede4f647fe54f5307002bfcea06060219233c))
+
+
+### Tests
+
+* fix error code expectation in daemon memory integration test ([afb668a](https://github.com/crack00r/eidolon/commit/afb668a3ae38b24c07eb8ff4e87d09fb622b11e6))
+* update tests for audit fixes ([f688ef2](https://github.com/crack00r/eidolon/commit/f688ef2bc3c151aa2bbb34d20def1014447ace63))
+
 ## [0.1.13](https://github.com/crack00r/eidolon/compare/v0.1.12...v0.1.13) (2026-03-08)
 
 

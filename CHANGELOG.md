@@ -9,6 +9,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > [release-please](https://github.com/googleapis/release-please).
 > Do not edit manually.
 
+## [0.1.15](https://github.com/crack00r/eidolon/compare/v0.1.14...v0.1.15) (2026-03-08)
+
+
+### Bug Fixes
+
+* **apps:** harden desktop, web, and CLI frontends ([3bbbf96](https://github.com/crack00r/eidolon/commit/3bbbf967d5e0cff74d21efa048a6746affec8a01))
+* **channels:** harden all communication channels ([9f5e783](https://github.com/crack00r/eidolon/commit/9f5e783b9df8e569ba34157c43fe3f71c9d3577c))
+* **ci:** remove deprecated macOS Intel target and fix Linux AppImage build ([098224d](https://github.com/crack00r/eidolon/commit/098224dc5c605d68e0564bc1af31af33d8982e82))
+* **cli:** add missing zod dependency for Ollama schema validation ([d3d4c4e](https://github.com/crack00r/eidolon/commit/d3d4c4e3b07878a3f7d3010beaef06126aa6a099))
+* **config:** sync versions, release-please, and config validation ([f8ad461](https://github.com/crack00r/eidolon/commit/f8ad461e7e57f5cb49e0a00f14aca820d2ba536b))
+* **data:** add transactions, UPSERT, and data integrity guards ([4b0ec58](https://github.com/crack00r/eidolon/commit/4b0ec585f9d0f221385b351f6292eb5142cea543))
+* **desktop:** fix daemon exit event payload and add updater bundles ([c6df384](https://github.com/crack00r/eidolon/commit/c6df3846ea4223f7375b6400165c38a4eb10786c))
+* **errors:** improve error handling, resource cleanup, and resilience ([dd97686](https://github.com/crack00r/eidolon/commit/dd976860105237363d5d5921252ee79c4787d775))
+* **resources:** add bounds, rate limits, and memory safety ([613509f](https://github.com/crack00r/eidolon/commit/613509fc71db6c624ba6b01d95a18e45a1873f4a))
+* **security:** prevent injection, SSRF, and auth vulnerabilities ([b067a9f](https://github.com/crack00r/eidolon/commit/b067a9fe5ad990dc42127d34aeeea00f2c7b4805))
+* **types:** strengthen type safety and Zod boundary validation ([a9d65f3](https://github.com/crack00r/eidolon/commit/a9d65f3c009444d208914111bf4490ca7effc093))
+
+
+### Miscellaneous
+
+* update agent memory ([3172675](https://github.com/crack00r/eidolon/commit/3172675021a5da9ba808c92557e9adc24fb5e49d))
+
+
+### Tests
+
+* fix error code expectation in daemon memory integration test ([afb668a](https://github.com/crack00r/eidolon/commit/afb668a3ae38b24c07eb8ff4e87d09fb622b11e6))
+* update tests for audit fixes ([f688ef2](https://github.com/crack00r/eidolon/commit/f688ef2bc3c151aa2bbb34d20def1014447ace63))
+
 ## [0.1.14](https://github.com/crack00r/eidolon/compare/v0.1.13...v0.1.14) (2026-03-08)
 
 

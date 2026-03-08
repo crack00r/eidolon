@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.1.14](https://github.com/crack00r/eidolon/compare/v0.1.13...v0.1.14) (2026-03-08)
+
+
+### Bug Fixes
+
+* **apps:** harden desktop, web, and CLI frontends ([3bbbf96](https://github.com/crack00r/eidolon/commit/3bbbf967d5e0cff74d21efa048a6746affec8a01))
+* **cli:** add missing zod dependency for Ollama schema validation ([d3d4c4e](https://github.com/crack00r/eidolon/commit/d3d4c4e3b07878a3f7d3010beaef06126aa6a099))
+* comprehensive bugfix across desktop, protocol, core, CLI, and CI ([6615af4](https://github.com/crack00r/eidolon/commit/6615af40d7554acf43b5358138671431f9b15843))
+* critical bugfixes for chat, credentials, onboarding, and daemon ([858f4a8](https://github.com/crack00r/eidolon/commit/858f4a87b615b84f41ed0303df9604b064218e3d))
+
+
+### Miscellaneous
+
+* release main ([5425158](https://github.com/crack00r/eidolon/commit/5425158b66a595b5368e9304e385de917b2334c6))
+* release main ([bd7ede4](https://github.com/crack00r/eidolon/commit/bd7ede4f647fe54f5307002bfcea06060219233c))
+
+
+### Tests
+
+* update tests for audit fixes ([f688ef2](https://github.com/crack00r/eidolon/commit/f688ef2bc3c151aa2bbb34d20def1014447ace63))
+
 ## [0.1.13](https://github.com/crack00r/eidolon/compare/v0.1.12...v0.1.13) (2026-03-08)
 
 
