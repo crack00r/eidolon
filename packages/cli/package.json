@@ -32,8 +32,8 @@
     "registry": "https://registry.npmjs.org/"
   },
   "scripts": {
-    "build": "bun build src/index.ts --outdir dist --target bun",
-    "prepublishOnly": "bun build src/index.ts --outfile dist/eidolon --target bun",
+    "build": "bun build src/index.ts --outfile dist/eidolon --target bun",
+    "prepublishOnly": "pnpm run build",
     "test": "bun test src/",
     "typecheck": "tsc --noEmit",
     "lint": "biome check src/",
