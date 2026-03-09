@@ -49,7 +49,9 @@ export class ClientManager {
     private readonly tracer: ITracer,
     private readonly handlers: Map<GatewayMethod, MethodHandler>,
     private readonly getAuthConfig: () => { type: string; token?: string | Record<string, unknown> },
-  ) {}
+  ) {
+    this.startCleanup();
+  }
 
   startCleanup(): void {
     if (this.cleanupTimer) return;
@@ -232,6 +234,7 @@ export class ClientManager {
           this.clients.delete(clientId);
         }
       }, AUTH_TIMEOUT_MS);
+      authTimer.unref();
       this.authTimers.set(clientId, authTimer);
     }
   }
@@ -343,7 +346,8 @@ export class ClientManager {
     }
     this.authTimers.clear();
 
-    for (const client of this.clients.values()) {
+    for (const [clientId, client] of this.clients) {
+      cleanupVoiceSessionForClient(clientId);
       try {
         client.ws.close(1001, "Server shutting down");
       } catch {

@@ -271,6 +271,13 @@ function registerClientHandlers(deps: BuiltinHandlerDeps): void {
       "client.execute",
       `Client ${fromClientId} sent command "${command}" to ${targetClientId} (${commandId})`,
     );
+
+    eventBus.publish(
+      "gateway:client_execute",
+      { fromClientId, targetClientId, command, commandId },
+      { source: "gateway" },
+    );
+
     return { sent: true, commandId, targetClientId };
   });
 

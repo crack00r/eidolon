@@ -147,7 +147,7 @@ export function parseJsonRpcRequest(data: string): Result<GatewayRequest, Gatewa
   }
 
   if (!validateMethod(obj.method)) {
-    return Err(createJsonRpcError(obj.id, JSON_RPC_METHOD_NOT_FOUND, `Method not found: ${obj.method}`));
+    return Err(createJsonRpcError(obj.id, JSON_RPC_METHOD_NOT_FOUND, "Method not found"));
   }
 
   const request: GatewayRequest = {
