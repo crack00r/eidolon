@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > [release-please](https://github.com/googleapis/release-please).
 > Do not edit manually.
 
+## [0.2.2](https://github.com/crack00r/eidolon/compare/v0.2.1...v0.2.2) (2026-03-09)
+
+
+### Bug Fixes
+
+* **desktop:** downgrade zerocopy to 0.8.23 for Ubuntu 22.04 GLIBC compatibility ([57ada8a](https://github.com/crack00r/eidolon/commit/57ada8a99f273427436a5de38b3021e8c75f454a))
+
 ## [0.2.1](https://github.com/crack00r/eidolon/compare/v0.2.0...v0.2.1) (2026-03-09)
 
 
