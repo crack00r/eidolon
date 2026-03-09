@@ -32,7 +32,7 @@ export function buildClaudeArgs(prompt: string, options: ClaudeSessionOptions): 
     args.push("--mcp-config", options.mcpConfig);
   }
 
-  if (options.maxTurns) {
+  if (options.maxTurns != null) {
     args.push("--max-turns", String(options.maxTurns));
   }
 

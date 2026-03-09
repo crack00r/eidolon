@@ -11,6 +11,7 @@ import type { EidolonError, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 import type { Logger } from "../logging/logger.ts";
 import type { SafetyLevel } from "./safety.ts";
+import { normalizeUrl } from "./url-normalize.ts";
 
 export type SourceType = "reddit" | "hackernews" | "github" | "rss" | "arxiv";
 
@@ -76,42 +77,6 @@ const MAX_TITLE_LENGTH = 1000;
 
 /** Allowed URL schemes for discoveries. */
 const ALLOWED_URL_SCHEMES = new Set(["https:", "http:"]);
-
-/** UTM and common tracking parameters to strip during URL normalization. */
-const TRACKING_PARAMS = new Set([
-  "utm_source",
-  "utm_medium",
-  "utm_campaign",
-  "utm_term",
-  "utm_content",
-  "utm_id",
-  "fbclid",
-  "gclid",
-  "ref",
-  "source",
-  "mc_cid",
-  "mc_eid",
-]);
-
-/** Normalize a URL for consistent storage and deduplication. */
-function normalizeUrl(url: string): string {
-  try {
-    const parsed = new URL(url);
-    parsed.hostname = parsed.hostname.toLowerCase();
-    for (const param of TRACKING_PARAMS) {
-      parsed.searchParams.delete(param);
-    }
-    parsed.hash = "";
-    let normalized = parsed.toString();
-    if (normalized.endsWith("/")) {
-      normalized = normalized.slice(0, -1);
-    }
-    return normalized;
-  } catch {
-    // Intentional: invalid URL falls back to simple lowercase normalization
-    return url.toLowerCase().replace(/\/$/, "");
-  }
-}
 
 /**
  * Valid status transitions for discoveries.

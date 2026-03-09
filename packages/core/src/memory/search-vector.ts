@@ -265,7 +265,7 @@ export function searchVectorBruteForce(
       if (rows.length === 0) break;
 
       for (const row of rows) {
-        const embedding = new Float32Array(new Uint8Array(row.embedding).buffer.slice(0));
+        const embedding = new Float32Array(row.embedding.buffer.slice(row.embedding.byteOffset, row.embedding.byteOffset + row.embedding.byteLength));
         if (embedding.length !== EXPECTED_DIMENSIONS) {
           logger.warn(
             "searchVectorBruteForce",
@@ -359,6 +359,18 @@ export function storeEmbedding(
           error: cause instanceof Error ? cause.message : String(cause),
         });
         db.query("UPDATE memories SET embedding = ? WHERE id = ?").run(bytes, memoryId);
+
+        // Clean up any stale vec0 row to prevent wrong ANN results
+        const staleRow = db.query("SELECT rowid FROM memories WHERE id = ?").get(memoryId) as {
+          rowid: number;
+        } | null;
+        if (staleRow) {
+          try {
+            db.query(`DELETE FROM ${VEC0_TABLE_NAME} WHERE rowid = ?`).run(staleRow.rowid);
+          } catch {
+            // Best-effort cleanup; vec0 table may not exist or row may not be present
+          }
+        }
       }
     } else {
       db.query("UPDATE memories SET embedding = ? WHERE id = ?").run(bytes, memoryId);
@@ -381,7 +393,7 @@ export function getEmbedding(db: Database, memoryId: string): Result<Float32Arra
       return Ok(null);
     }
 
-    const embedding = new Float32Array(new Uint8Array(row.embedding).buffer.slice(0));
+    const embedding = new Float32Array(row.embedding.buffer.slice(row.embedding.byteOffset, row.embedding.byteOffset + row.embedding.byteLength));
     return Ok(embedding);
   } catch (cause) {
     return Err(createError(ErrorCode.DB_QUERY_FAILED, `Failed to get embedding for memory ${memoryId}`, cause));

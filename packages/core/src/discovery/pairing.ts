@@ -74,6 +74,11 @@ export function buildPairingUrl(config: GatewayConfig, tailscale?: TailscaleDete
 
 /**
  * Build machine-readable JSON suitable for QR code encoding.
+ *
+ * SECURITY NOTE: The QR code payload contains the raw auth token required for
+ * client pairing. This is by design for local LAN pairing -- the QR code must
+ * only be displayed in trusted physical contexts (e.g., on-screen in a private
+ * room, never transmitted over untrusted channels or logged at info level).
  */
 export function buildPairingJson(config: GatewayConfig, tailscale?: TailscaleDetector): string {
   const pairing = buildPairingUrl(config, tailscale);

@@ -37,16 +37,23 @@ function formatIcsDateTime(timestamp: number): string {
 // ICS field extraction
 // ---------------------------------------------------------------------------
 
+/** Escape special regex characters in a string for safe use in RegExp constructors. */
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 function extractIcsField(vevent: string, field: string): string | null {
   // Handle both simple fields and fields with parameters (e.g., DTSTART;VALUE=DATE:20260101)
-  const regex = new RegExp(`^${field}(?:;[^:]*)?:(.+)$`, "mi");
+  const escaped = escapeRegExp(field);
+  const regex = new RegExp(`^${escaped}(?:;[^:]*)?:(.+)$`, "mi");
   const match = regex.exec(vevent);
   return match?.[1]?.trim() ?? null;
 }
 
 /** Extract the TZID parameter from a DTSTART/DTEND line. */
 function extractTzid(vevent: string, field: string): string | null {
-  const regex = new RegExp(`^${field};[^:]*TZID=([^;:]+)`, "mi");
+  const escaped = escapeRegExp(field);
+  const regex = new RegExp(`^${escaped};[^:]*TZID=([^;:]+)`, "mi");
   const match = regex.exec(vevent);
   return match?.[1]?.trim() ?? null;
 }

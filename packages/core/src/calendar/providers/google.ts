@@ -174,6 +174,7 @@ export class GoogleCalendarProvider implements CalendarProvider {
         method: "DELETE",
         headers: { Authorization: `Bearer ${this.accessToken}` },
         signal: AbortSignal.timeout(GOOGLE_TIMEOUT_MS),
+        redirect: "error",
       });
 
       if (response.status === 401) {
@@ -183,6 +184,7 @@ export class GoogleCalendarProvider implements CalendarProvider {
           method: "DELETE",
           headers: { Authorization: `Bearer ${this.accessToken}` },
           signal: AbortSignal.timeout(GOOGLE_TIMEOUT_MS),
+          redirect: "error",
         });
         if (!retryResponse.ok && retryResponse.status !== 204) {
           return Err(createError(ErrorCode.CALENDAR_PROVIDER_ERROR, `Delete failed: ${retryResponse.status}`));
@@ -298,6 +300,7 @@ export class GoogleCalendarProvider implements CalendarProvider {
       let response = await fetch(`${GOOGLE_API_BASE}${path}`, {
         headers: { Authorization: `Bearer ${this.accessToken}` },
         signal: AbortSignal.timeout(GOOGLE_TIMEOUT_MS),
+        redirect: "error",
       });
 
       if (response.status === 401) {
@@ -306,6 +309,7 @@ export class GoogleCalendarProvider implements CalendarProvider {
         response = await fetch(`${GOOGLE_API_BASE}${path}`, {
           headers: { Authorization: `Bearer ${this.accessToken}` },
           signal: AbortSignal.timeout(GOOGLE_TIMEOUT_MS),
+          redirect: "error",
         });
       }
 
@@ -336,6 +340,7 @@ export class GoogleCalendarProvider implements CalendarProvider {
         },
         body: JSON.stringify(body),
         signal: AbortSignal.timeout(GOOGLE_TIMEOUT_MS),
+        redirect: "error",
       });
 
       if (response.status === 401) {
@@ -349,6 +354,7 @@ export class GoogleCalendarProvider implements CalendarProvider {
           },
           body: JSON.stringify(body),
           signal: AbortSignal.timeout(GOOGLE_TIMEOUT_MS),
+          redirect: "error",
         });
       }
 
@@ -378,6 +384,7 @@ export class GoogleCalendarProvider implements CalendarProvider {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         signal: AbortSignal.timeout(GOOGLE_TIMEOUT_MS),
+        redirect: "error",
         body: new URLSearchParams({
           client_id: this.clientId,
           client_secret: this.clientSecret,

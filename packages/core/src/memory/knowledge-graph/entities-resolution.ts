@@ -8,21 +8,14 @@ import type { EidolonError, KGEntity, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 import type { Logger } from "../../logging/logger.ts";
 import { stringSimilarity } from "../dreaming/housekeeping.ts";
-import type { CreateEntityInput, EntityResolutionThresholds, EntityType, KGEntityStore } from "./entities.ts";
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-/** Internal row shape from SQLite. */
-interface EntityRow {
-  readonly id: string;
-  readonly name: string;
-  readonly type: string;
-  readonly attributes: string;
-  readonly created_at: number;
-  readonly updated_at: number;
-}
+import {
+  rowToEntity,
+  type CreateEntityInput,
+  type EntityResolutionThresholds,
+  type EntityRow,
+  type EntityType,
+  type KGEntityStore,
+} from "./entities.ts";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -53,27 +46,6 @@ function getThresholdForType(type: string, thresholds: EntityResolutionThreshold
     default:
       return thresholds.technologyThreshold;
   }
-}
-
-function rowToEntity(row: EntityRow): KGEntity {
-  let attributes: Record<string, unknown>;
-  try {
-    const parsed: unknown = JSON.parse(row.attributes);
-    attributes =
-      typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
-        ? (parsed as Record<string, unknown>)
-        : {};
-  } catch {
-    attributes = {};
-  }
-
-  return {
-    id: row.id,
-    name: row.name,
-    type: row.type,
-    attributes,
-    createdAt: row.created_at,
-  };
 }
 
 // ---------------------------------------------------------------------------
@@ -170,19 +142,31 @@ export function mergeEntities(
   targetId: string,
 ): Result<void, EidolonError> {
   try {
-    const source = db.query("SELECT 1 FROM kg_entities WHERE id = ?").get(sourceId);
-    if (!source) {
-      return Err(createError(ErrorCode.DB_QUERY_FAILED, `Source entity ${sourceId} not found`));
-    }
-    const target = db.query("SELECT 1 FROM kg_entities WHERE id = ?").get(targetId);
-    if (!target) {
-      return Err(createError(ErrorCode.DB_QUERY_FAILED, `Target entity ${targetId} not found`));
-    }
-
     const mergeFn = db.transaction(() => {
+      // Existence checks inside transaction to prevent TOCTOU race
+      const source = db.query("SELECT 1 FROM kg_entities WHERE id = ?").get(sourceId);
+      if (!source) {
+        throw new Error(`Source entity ${sourceId} not found`);
+      }
+      const target = db.query("SELECT 1 FROM kg_entities WHERE id = ?").get(targetId);
+      if (!target) {
+        throw new Error(`Target entity ${targetId} not found`);
+      }
+
       db.query("UPDATE kg_relations SET source_id = ? WHERE source_id = ?").run(targetId, sourceId);
       db.query("UPDATE kg_relations SET target_id = ? WHERE target_id = ?").run(targetId, sourceId);
       db.query("DELETE FROM kg_relations WHERE source_id = ? AND source_id = target_id").run(targetId);
+      // Deduplicate relations involving targetId that now share the same (source_id, target_id, type) triple
+      db.query(
+        `DELETE FROM kg_relations
+         WHERE (source_id = ? OR target_id = ?)
+           AND rowid NOT IN (
+             SELECT MIN(rowid) FROM kg_relations
+             WHERE source_id = ? OR target_id = ?
+             GROUP BY source_id, target_id, type
+           )`,
+      ).run(targetId, targetId, targetId, targetId);
+      db.query("DELETE FROM kg_complex_embeddings WHERE entity_id = ?").run(sourceId);
       db.query("DELETE FROM kg_entities WHERE id = ?").run(sourceId);
     });
 
@@ -191,6 +175,10 @@ export function mergeEntities(
     logger.debug("merge", `Merged entity ${sourceId} into ${targetId}`);
     return Ok(undefined);
   } catch (cause) {
-    return Err(createError(ErrorCode.DB_QUERY_FAILED, `Failed to merge entities`, cause));
+    const msg = cause instanceof Error ? cause.message : String(cause);
+    if (msg.includes("not found")) {
+      return Err(createError(ErrorCode.DB_QUERY_FAILED, msg));
+    }
+    return Err(createError(ErrorCode.DB_QUERY_FAILED, "Failed to merge entities", cause));
   }
 }

@@ -1,7 +1,7 @@
 /**
  * ArxivCrawler -- searches arXiv papers via the public API.
  *
- * Uses `http://export.arxiv.org/api/query` which returns Atom XML.
+ * Uses `https://export.arxiv.org/api/query` which returns Atom XML.
  * Rate limit: arXiv asks for max 1 request per 3 seconds.
  */
 
@@ -26,7 +26,7 @@ export class ArxivCrawler extends BaseCrawler {
       .split(",")
       .map((s) => s.trim())
       .filter(Boolean);
-    const limit = options.maxItems ?? Number(config.config.limit ?? DEFAULT_LIMIT);
+    const limit = options.maxItems ?? Math.max(1, Number(config.config.limit) || DEFAULT_LIMIT);
 
     if (!query && categories.length === 0) {
       this.logger.warn("crawlSource", "No query or categories configured, skipping arXiv crawl");
@@ -37,16 +37,16 @@ export class ArxivCrawler extends BaseCrawler {
     const searchParts: string[] = [];
 
     if (query) {
-      searchParts.push(`all:${query}`);
+      searchParts.push(`all:${encodeURIComponent(query)}`);
     }
 
     if (categories.length > 0) {
-      const catQuery = categories.map((c) => `cat:${c}`).join("+OR+");
+      const catQuery = categories.map((c) => `cat:${encodeURIComponent(c)}`).join("+OR+");
       searchParts.push(catQuery);
     }
 
     const searchQuery = searchParts.join("+AND+");
-    const url = `https://export.arxiv.org/api/query?search_query=${searchQuery}&sortBy=submittedDate&sortOrder=descending&max_results=${limit}`;
+    const url = `https://export.arxiv.org/api/query?search_query=${searchQuery}&sortBy=submittedDate&sortOrder=descending&max_results=${encodeURIComponent(String(limit))}`;
 
     const response = await this.rateLimitedFetch(url);
     const xml = await response.text();

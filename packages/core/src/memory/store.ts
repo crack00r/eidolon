@@ -29,6 +29,8 @@ import {
   MAX_CONTENT_LENGTH,
   MAX_LIST_LIMIT,
   MAX_SEARCH_LIMIT,
+  VALID_MEMORY_LAYERS,
+  VALID_MEMORY_TYPES,
   rowToMemory,
 } from "./store-helpers.ts";
 
@@ -48,14 +50,18 @@ export class MemoryStore {
     this.logger = logger.child("memory-store");
   }
 
-  /** Run a function inside a SQLite transaction. */
-  runInTransaction<T>(fn: () => T): T {
-    const txn = this.db.transaction(fn);
-    return txn();
-  }
-
   /** Create a new memory. Generates a UUID as the ID. */
   create(input: CreateMemoryInput): Result<Memory, EidolonError> {
+    if (!VALID_MEMORY_TYPES.has(input.type)) {
+      return Err(
+        createError(ErrorCode.DB_QUERY_FAILED, `Invalid memory type: "${input.type}"`),
+      );
+    }
+    if (!VALID_MEMORY_LAYERS.has(input.layer)) {
+      return Err(
+        createError(ErrorCode.DB_QUERY_FAILED, `Invalid memory layer: "${input.layer}"`),
+      );
+    }
     if (input.content.length > MAX_CONTENT_LENGTH) {
       return Err(
         createError(
@@ -78,11 +84,12 @@ export class MemoryStore {
       const tags = JSON.stringify(input.tags ?? []);
       const metadata = JSON.stringify(input.metadata ?? {});
       const sensitive = input.sensitive ? 1 : 0;
+      const userId = input.userId ?? "default";
 
       this.db
         .query(
-          `INSERT INTO memories (id, type, layer, content, confidence, source, tags, created_at, updated_at, accessed_at, access_count, metadata, sensitive)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
+          `INSERT INTO memories (id, type, layer, content, confidence, source, tags, created_at, updated_at, accessed_at, access_count, metadata, sensitive, user_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)`,
         )
         .run(
           id,
@@ -97,6 +104,7 @@ export class MemoryStore {
           now,
           metadata,
           sensitive,
+          userId,
         );
 
       const memory: Memory = {
@@ -119,6 +127,16 @@ export class MemoryStore {
       return Ok(memory);
     } catch (cause) {
       return Err(createError(ErrorCode.DB_QUERY_FAILED, "Failed to create memory", cause));
+    }
+  }
+
+  /** Get a memory by ID without updating accessed_at or access_count. */
+  getWithoutTouch(id: string): Result<Memory | null, EidolonError> {
+    try {
+      const row = this.db.query("SELECT * FROM memories WHERE id = ?").get(id) as MemoryRow | null;
+      return Ok(row ? rowToMemory(row) : null);
+    } catch (cause) {
+      return Err(createError(ErrorCode.DB_QUERY_FAILED, `Failed to get memory ${id}`, cause));
     }
   }
 
@@ -214,7 +232,7 @@ export class MemoryStore {
         this.db.query(`UPDATE memories SET ${setClauses.join(", ")} WHERE id = ?`).run(...params);
 
         // Re-read the updated row
-        return this.db.query("SELECT * FROM memories WHERE id = ?").get(id) as MemoryRow;
+        return this.db.query("SELECT * FROM memories WHERE id = ?").get(id) as MemoryRow | null;
       });
 
       const updated = txn();
@@ -323,6 +341,7 @@ export class MemoryStore {
 
   /** Full-text search via FTS5. Returns ranked results (higher rank = better). */
   searchText(query: string, limit?: number): Result<Array<{ memory: Memory; rank: number }>, EidolonError> {
+    if (!query.trim()) return Ok([]);
     try {
       const maxResults = Math.max(1, Math.min(limit ?? DEFAULT_SEARCH_LIMIT, MAX_SEARCH_LIMIT));
 

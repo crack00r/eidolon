@@ -6,6 +6,7 @@
  * RelevanceFilter via the existing `RelevanceScorerFn` injection point.
  */
 
+import { randomUUID } from "node:crypto";
 import type { ClaudeSessionOptions, IClaudeProcess } from "@eidolon/protocol";
 import { z } from "zod";
 import { StructuredOutputParser } from "../claude/structured-output.ts";
@@ -35,17 +36,33 @@ export type RelevanceResponse = z.infer<typeof RelevanceResponseSchema>;
  * The system prompt with schema instructions is added by the StructuredOutputParser;
  * this function only builds the user-facing prompt that describes the task.
  */
+/**
+ * Escape < and > in untrusted text to prevent delimiter injection.
+ */
+function escapeDelimiters(text: string): string {
+  return text.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
 function buildRelevancePrompt(title: string, content: string, interests: readonly string[]): string {
   const interestList =
     interests.length > 0 ? interests.map((i) => `  - ${i}`).join("\n") : "  (no specific interests configured)";
 
+  // Use random boundaries and escape delimiters to mitigate prompt injection
+  const boundary = `---BOUNDARY-${randomUUID()}---`;
+  const safeTitle = escapeDelimiters(title);
+  const safeContent = escapeDelimiters(content.slice(0, 4000));
+
   return [
     "Evaluate the relevance of this content against the user's interests.",
     "",
-    `TITLE: ${title}`,
+    boundary,
+    `TITLE: ${safeTitle}`,
+    boundary,
     "",
+    boundary,
     "CONTENT:",
-    content.slice(0, 4000), // Limit content length to control token usage
+    safeContent, // Limit content length to control token usage
+    boundary,
     "",
     "USER INTERESTS:",
     interestList,

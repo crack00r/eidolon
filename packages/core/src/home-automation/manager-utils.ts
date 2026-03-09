@@ -28,7 +28,10 @@ export interface HAEntityRow {
 export function rowToEntity(row: HAEntityRow): HAEntity {
   let attributes: Record<string, unknown> = {};
   try {
-    attributes = JSON.parse(row.attributes) as Record<string, unknown>;
+    const parsed: unknown = JSON.parse(row.attributes);
+    if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
+      attributes = parsed as Record<string, unknown>;
+    }
   } catch {
     // Ignore parse errors
   }
@@ -110,12 +113,20 @@ export function evaluateCondition(entity: HAEntity, condition: string): boolean 
 // Text helpers
 // ---------------------------------------------------------------------------
 
+/** Strip markdown/HTML injection patterns from interpolated values. */
+function sanitizeInterpolationValue(value: string): string {
+  return value
+    .replace(/[[\](){}!#*_~`<>|]/g, "")
+    .replace(/\r?\n/g, " ")
+    .trim();
+}
+
 /** Interpolate {entityId}, {friendlyName}, {state} in a message template. */
 export function interpolateMessage(template: string, entity: HAEntity): string {
   return template
-    .replace(/\{entityId\}/g, entity.entityId)
-    .replace(/\{friendlyName\}/g, entity.friendlyName)
-    .replace(/\{state\}/g, entity.state);
+    .replace(/\{entityId\}/g, sanitizeInterpolationValue(entity.entityId))
+    .replace(/\{friendlyName\}/g, sanitizeInterpolationValue(entity.friendlyName))
+    .replace(/\{state\}/g, sanitizeInterpolationValue(entity.state));
 }
 
 export function capitalizeFirst(s: string): string {

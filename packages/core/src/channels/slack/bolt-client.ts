@@ -73,6 +73,51 @@ const MAX_FILE_SIZE = 25 * 1024 * 1024;
 /** File download timeout (30 seconds). */
 const FILE_DOWNLOAD_TIMEOUT_MS = 30_000;
 
+/** Hostnames blocked for SSRF protection. */
+const BLOCKED_DOWNLOAD_HOSTNAMES = new Set([
+  "localhost",
+  "metadata.google.internal",
+  "instance-data",
+  "169.254.169.254",
+  "0.0.0.0",
+]);
+
+/** IPv4 patterns for private/internal networks. */
+const PRIVATE_IP_PATTERNS = [
+  /^127\./, // loopback
+  /^10\./, // Class A private
+  /^192\.168\./, // Class C private
+  /^172\.(1[6-9]|2\d|3[01])\./, // Class B private
+  /^169\.254\./, // link-local
+  /^0\./, // current network
+  /^::1$/, // IPv6 loopback
+  /^fc/i, // IPv6 unique local
+  /^fd/i, // IPv6 unique local
+  /^fe80/i, // IPv6 link-local
+];
+
+/** Validate a download URL is safe (HTTPS, no private/loopback addresses). */
+function validateDownloadUrl(url: string): void {
+  if (!url.startsWith("https://")) {
+    throw new Error("File download URL must use HTTPS");
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new Error("Invalid file download URL");
+  }
+  const hostname = parsed.hostname.replace(/^\[/, "").replace(/]$/, "").toLowerCase().replace(/^::ffff:/, "");
+  if (BLOCKED_DOWNLOAD_HOSTNAMES.has(hostname)) {
+    throw new Error(`File download blocked: ${hostname} is a blocked hostname (SSRF protection)`);
+  }
+  for (const pattern of PRIVATE_IP_PATTERNS) {
+    if (pattern.test(hostname)) {
+      throw new Error(`File download blocked: ${hostname} is a private address (SSRF protection)`);
+    }
+  }
+}
+
 /**
  * Create a BoltSlackClient by dynamically importing @slack/bolt.
  *
@@ -250,6 +295,8 @@ export async function createBoltSlackClient(
       },
 
       async downloadFile(url: string): Promise<Uint8Array> {
+        validateDownloadUrl(url);
+
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), FILE_DOWNLOAD_TIMEOUT_MS);
 

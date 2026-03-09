@@ -13,20 +13,8 @@ import type { EidolonError, HAEntity, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 import type { Logger } from "../logging/logger.ts";
 import type { EmbeddingModel } from "../memory/embeddings.ts";
-
-// ---------------------------------------------------------------------------
-// DB row type
-// ---------------------------------------------------------------------------
-
-interface HAEntityRow {
-  entity_id: string;
-  domain: string;
-  friendly_name: string;
-  state: string;
-  attributes: string;
-  last_changed: number;
-  synced_at: number;
-}
+import { cosineSimilarity } from "../memory/store-helpers.ts";
+import { type HAEntityRow, rowToEntity } from "./manager-utils.ts";
 
 // ---------------------------------------------------------------------------
 // Match result
@@ -213,46 +201,4 @@ export class HAEntityResolver {
 
     return bestMatch;
   }
-}
-
-// ---------------------------------------------------------------------------
-// Utility functions
-// ---------------------------------------------------------------------------
-
-function rowToEntity(row: HAEntityRow): HAEntity {
-  let attributes: Record<string, unknown> = {};
-  try {
-    attributes = JSON.parse(row.attributes) as Record<string, unknown>;
-  } catch {
-    // Ignore parse errors, use empty object
-  }
-
-  return {
-    entityId: row.entity_id,
-    domain: row.domain,
-    friendlyName: row.friendly_name,
-    state: row.state,
-    attributes,
-    lastChanged: row.last_changed,
-  };
-}
-
-function cosineSimilarity(a: Float32Array, b: Float32Array): number {
-  if (a.length !== b.length || a.length === 0) return 0;
-
-  let dotProduct = 0;
-  let normA = 0;
-  let normB = 0;
-
-  for (let i = 0; i < a.length; i++) {
-    const ai = a[i] ?? 0;
-    const bi = b[i] ?? 0;
-    dotProduct += ai * bi;
-    normA += ai * ai;
-    normB += bi * bi;
-  }
-
-  const denominator = Math.sqrt(normA) * Math.sqrt(normB);
-  if (denominator < 1e-10) return 0;
-  return dotProduct / denominator;
 }

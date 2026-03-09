@@ -8,6 +8,7 @@
  */
 
 import { randomUUID } from "node:crypto";
+import { sleep } from "../../utils/async.ts";
 import type {
   Channel,
   ChannelCapabilities,
@@ -351,11 +352,4 @@ export class DiscordChannel implements Channel {
     }
     return false;
   }
-}
-
-/** Promise-based sleep for retry delays. */
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
 }

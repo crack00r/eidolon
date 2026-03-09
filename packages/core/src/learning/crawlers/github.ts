@@ -52,7 +52,7 @@ export class GitHubCrawler extends BaseCrawler {
       .map((s) => s.trim())
       .filter(Boolean);
     const minStars = options.minScore ?? Number(config.config.minStars ?? DEFAULT_MIN_STARS);
-    const limit = options.maxItems ?? Number(config.config.limit ?? DEFAULT_LIMIT);
+    const limit = options.maxItems ?? Math.max(1, Number(config.config.limit) || DEFAULT_LIMIT);
 
     // Build search query
     const queryParts: string[] = [];

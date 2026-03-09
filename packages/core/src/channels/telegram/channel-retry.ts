@@ -7,6 +7,7 @@
 
 import { GrammyError, HttpError } from "grammy";
 import type { Logger } from "../../logging/logger.ts";
+import { sleep } from "../../utils/async.ts";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -88,15 +89,4 @@ export async function sendWithRetry<T>(fn: () => Promise<T>, logger: Logger): Pr
     }
   }
   throw lastError;
-}
-
-// ---------------------------------------------------------------------------
-// Sleep helper
-// ---------------------------------------------------------------------------
-
-/** Promise-based sleep for retry delays. */
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
 }

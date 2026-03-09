@@ -54,7 +54,7 @@ export interface UpdateEntityInput {
 // Internal row shape from SQLite
 // ---------------------------------------------------------------------------
 
-interface EntityRow {
+export interface EntityRow {
   readonly id: string;
   readonly name: string;
   readonly type: string;
@@ -67,7 +67,7 @@ interface EntityRow {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function rowToEntity(row: EntityRow): KGEntity {
+export function rowToEntity(row: EntityRow): KGEntity {
   let attributes: Record<string, unknown>;
   try {
     const parsed: unknown = JSON.parse(row.attributes);
@@ -204,68 +204,88 @@ export class KGEntityStore {
 
   /** Update an entity. */
   update(id: string, input: UpdateEntityInput): Result<KGEntity, EidolonError> {
+    // Validate inputs before entering transaction
+    if (input.name !== undefined) {
+      const sanitizedName = stripControlChars(input.name).trim();
+      if (sanitizedName.length === 0) {
+        return Err(createError(ErrorCode.DB_QUERY_FAILED, "Entity name must not be empty"));
+      }
+      if (sanitizedName.length > MAX_ENTITY_NAME_LENGTH) {
+        return Err(
+          createError(
+            ErrorCode.DB_QUERY_FAILED,
+            `Entity name too long: ${sanitizedName.length} characters (max ${MAX_ENTITY_NAME_LENGTH})`,
+          ),
+        );
+      }
+    }
+    if (input.type !== undefined && !VALID_ENTITY_TYPES.has(input.type)) {
+      return Err(
+        createError(
+          ErrorCode.DB_QUERY_FAILED,
+          `Invalid entity type "${input.type}". Must be one of: ${[...VALID_ENTITY_TYPES].join(", ")}`,
+        ),
+      );
+    }
+
     try {
-      const existing = this.db.query("SELECT * FROM kg_entities WHERE id = ?").get(id) as EntityRow | null;
-      if (!existing) {
-        return Err(createError(ErrorCode.DB_QUERY_FAILED, `Entity ${id} not found`));
-      }
-
-      const now = Date.now();
-      const setClauses: string[] = ["updated_at = ?"];
-      const params: Array<string | number> = [now];
-
-      if (input.name !== undefined) {
-        const sanitizedName = stripControlChars(input.name).trim();
-        if (sanitizedName.length === 0) {
-          return Err(createError(ErrorCode.DB_QUERY_FAILED, "Entity name must not be empty"));
+      const txn = this.db.transaction(() => {
+        const existing = this.db.query("SELECT * FROM kg_entities WHERE id = ?").get(id) as EntityRow | null;
+        if (!existing) {
+          throw createError(ErrorCode.DB_QUERY_FAILED, `Entity ${id} not found`);
         }
-        if (sanitizedName.length > MAX_ENTITY_NAME_LENGTH) {
-          return Err(
-            createError(
-              ErrorCode.DB_QUERY_FAILED,
-              `Entity name too long: ${sanitizedName.length} characters (max ${MAX_ENTITY_NAME_LENGTH})`,
-            ),
-          );
-        }
-        setClauses.push("name = ?");
-        params.push(sanitizedName);
-      }
-      if (input.type !== undefined) {
-        if (!VALID_ENTITY_TYPES.has(input.type)) {
-          return Err(
-            createError(
-              ErrorCode.DB_QUERY_FAILED,
-              `Invalid entity type "${input.type}". Must be one of: ${[...VALID_ENTITY_TYPES].join(", ")}`,
-            ),
-          );
-        }
-        setClauses.push("type = ?");
-        params.push(input.type);
-      }
-      if (input.attributes !== undefined) {
-        setClauses.push("attributes = ?");
-        params.push(JSON.stringify(input.attributes));
-      }
 
-      params.push(id);
-      this.db.query(`UPDATE kg_entities SET ${setClauses.join(", ")} WHERE id = ?`).run(...params);
+        const now = Date.now();
+        const setClauses: string[] = ["updated_at = ?"];
+        const params: Array<string | number> = [now];
 
-      const updated = this.db.query("SELECT * FROM kg_entities WHERE id = ?").get(id) as EntityRow;
+        if (input.name !== undefined) {
+          setClauses.push("name = ?");
+          params.push(stripControlChars(input.name).trim());
+        }
+        if (input.type !== undefined) {
+          setClauses.push("type = ?");
+          params.push(input.type);
+        }
+        if (input.attributes !== undefined) {
+          setClauses.push("attributes = ?");
+          params.push(JSON.stringify(input.attributes));
+        }
+
+        params.push(id);
+        this.db.query(`UPDATE kg_entities SET ${setClauses.join(", ")} WHERE id = ?`).run(...params);
+
+        return this.db.query("SELECT * FROM kg_entities WHERE id = ?").get(id) as EntityRow | null;
+      });
+
+      const updated = txn();
+      if (!updated) {
+        return Err(createError(ErrorCode.DB_QUERY_FAILED, `Entity ${id} not found after update`));
+      }
       this.logger.debug("update", `Updated entity ${id}`);
       return Ok(rowToEntity(updated));
     } catch (cause) {
+      if (typeof cause === "object" && cause !== null && "code" in cause) {
+        return Err(cause as EidolonError);
+      }
       return Err(createError(ErrorCode.DB_QUERY_FAILED, `Failed to update entity ${id}`, cause));
     }
   }
 
-  /** Delete an entity (cascades to relations via foreign key). */
+  /** Delete an entity and its relations. */
   delete(id: string): Result<void, EidolonError> {
     try {
-      const existing = this.db.query("SELECT 1 FROM kg_entities WHERE id = ?").get(id);
-      if (!existing) {
+      const txn = this.db.transaction(() => {
+        this.db.query("DELETE FROM kg_complex_embeddings WHERE entity_id = ?").run(id);
+        this.db.query("DELETE FROM kg_relations WHERE source_id = ? OR target_id = ?").run(id, id);
+        const result = this.db.query("DELETE FROM kg_entities WHERE id = ?").run(id);
+        return result.changes;
+      });
+
+      const changes = txn();
+      if (changes === 0) {
         return Err(createError(ErrorCode.DB_QUERY_FAILED, `Entity ${id} not found`));
       }
-      this.db.query("DELETE FROM kg_entities WHERE id = ?").run(id);
       this.logger.debug("delete", `Deleted entity ${id}`);
       return Ok(undefined);
     } catch (cause) {
@@ -275,21 +295,33 @@ export class KGEntityStore {
 
   /** Find or create: if entity with same name+type exists, return it; otherwise create. */
   findOrCreate(input: CreateEntityInput): Result<{ entity: KGEntity; created: boolean }, EidolonError> {
+    const sanitizedName = stripControlChars(input.name).trim();
+    if (sanitizedName.length === 0) {
+      return Err(createError(ErrorCode.DB_QUERY_FAILED, "Entity name must not be empty"));
+    }
+
     try {
-      const row = this.db
-        .query("SELECT * FROM kg_entities WHERE LOWER(name) = LOWER(?) AND type = ? LIMIT 1")
-        .get(input.name, input.type) as EntityRow | null;
+      const txn = this.db.transaction(() => {
+        const row = this.db
+          .query("SELECT * FROM kg_entities WHERE LOWER(name) = LOWER(?) AND type = ? LIMIT 1")
+          .get(sanitizedName, input.type) as EntityRow | null;
 
-      if (row) {
-        return Ok({ entity: rowToEntity(row), created: false });
-      }
+        if (row) {
+          return { entity: rowToEntity(row), created: false };
+        }
 
-      const createResult = this.create(input);
-      if (!createResult.ok) {
-        return createResult;
-      }
-      return Ok({ entity: createResult.value, created: true });
+        const createResult = this.create(input);
+        if (!createResult.ok) {
+          throw createResult.error;
+        }
+        return { entity: createResult.value, created: true };
+      });
+
+      return Ok(txn());
     } catch (cause) {
+      if (typeof cause === "object" && cause !== null && "code" in cause) {
+        return Err(cause as EidolonError);
+      }
       return Err(createError(ErrorCode.DB_QUERY_FAILED, "Failed to find or create entity", cause));
     }
   }

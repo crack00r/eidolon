@@ -112,7 +112,7 @@ export class UserManager {
         params.push(id);
         this.db.query(`UPDATE users SET ${setClauses.join(", ")} WHERE id = ?`).run(...params);
 
-        return this.db.query("SELECT * FROM users WHERE id = ?").get(id) as UserRow;
+        return this.db.query("SELECT * FROM users WHERE id = ?").get(id) as UserRow | null;
       });
 
       const updated = txn();

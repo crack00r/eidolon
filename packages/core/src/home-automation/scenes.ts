@@ -250,38 +250,71 @@ export class HASceneEngine {
     id: string,
     updates: { name?: string; actions?: readonly HASceneAction[] },
   ): Result<HAScene, EidolonError> {
+    // Validate inputs before entering the transaction
+    const trimmedName = updates.name?.trim();
+    if (updates.name !== undefined && (trimmedName === undefined || trimmedName.length === 0)) {
+      return Err(createError(ErrorCode.INVALID_INPUT, "Scene name must not be empty"));
+    }
+
+    if (updates.actions !== undefined && updates.actions.length > MAX_ACTIONS_PER_SCENE) {
+      return Err(
+        createError(
+          ErrorCode.INVALID_INPUT,
+          `Too many actions (${updates.actions.length}, max ${MAX_ACTIONS_PER_SCENE})`,
+        ),
+      );
+    }
+
     try {
-      const existing = this.db.query("SELECT * FROM ha_scenes WHERE id = ?").get(id) as HASceneRow | null;
+      // Wrap name uniqueness check + UPDATE in a transaction to prevent TOCTOU races
+      // (same pattern as createScene which already uses a transaction).
+      const updateSceneTx = this.db.transaction(() => {
+        const existing = this.db.query("SELECT * FROM ha_scenes WHERE id = ?").get(id) as HASceneRow | null;
 
-      if (!existing) {
-        return Err(createError(ErrorCode.HA_SCENE_NOT_FOUND, `Scene not found: ${id}`));
-      }
-
-      const newName = updates.name?.trim() ?? existing.name;
-      const newActions = updates.actions ?? parseActions(existing.actions);
-
-      // Check name uniqueness if changing name
-      if (newName !== existing.name) {
-        const duplicate = this.db.query("SELECT id FROM ha_scenes WHERE name = ? AND id != ?").get(newName, id) as {
-          id: string;
-        } | null;
-        if (duplicate) {
-          return Err(createError(ErrorCode.INVALID_INPUT, `Scene with name "${newName}" already exists`));
+        if (!existing) {
+          throw new Error(`NOTFOUND:Scene not found: ${id}`);
         }
+
+        const newName = trimmedName ?? existing.name;
+        const newActions = updates.actions ?? parseActions(existing.actions);
+
+        // Check name uniqueness if changing name
+        if (newName !== existing.name) {
+          const duplicate = this.db.query("SELECT id FROM ha_scenes WHERE name = ? AND id != ?").get(newName, id) as {
+            id: string;
+          } | null;
+          if (duplicate) {
+            throw new Error(`DUPLICATE:Scene with name "${newName}" already exists`);
+          }
+        }
+
+        const actionsJson = JSON.stringify(newActions);
+        this.db.query("UPDATE ha_scenes SET name = ?, actions = ? WHERE id = ?").run(newName, actionsJson, id);
+
+        return {
+          id,
+          name: newName,
+          actions: newActions,
+          createdAt: existing.created_at,
+          lastExecutedAt: existing.last_executed_at ?? undefined,
+        } satisfies HAScene;
+      });
+
+      let updated: HAScene;
+      try {
+        updated = updateSceneTx();
+      } catch (txErr: unknown) {
+        const msg = txErr instanceof Error ? txErr.message : String(txErr);
+        if (msg.startsWith("NOTFOUND:")) {
+          return Err(createError(ErrorCode.HA_SCENE_NOT_FOUND, msg.slice(msg.indexOf(":") + 1)));
+        }
+        if (msg.startsWith("DUPLICATE:")) {
+          return Err(createError(ErrorCode.INVALID_INPUT, msg.slice(msg.indexOf(":") + 1)));
+        }
+        throw txErr;
       }
 
-      const actionsJson = JSON.stringify(newActions);
-      this.db.query("UPDATE ha_scenes SET name = ?, actions = ? WHERE id = ?").run(newName, actionsJson, id);
-
-      const updated: HAScene = {
-        id,
-        name: newName,
-        actions: newActions,
-        createdAt: existing.created_at,
-        lastExecutedAt: existing.last_executed_at ?? undefined,
-      };
-
-      this.logger.info("updateScene", `Updated scene: ${newName}`);
+      this.logger.info("updateScene", `Updated scene: ${updated.name}`);
       return Ok(updated);
     } catch (cause) {
       return Err(createError(ErrorCode.DB_QUERY_FAILED, `Failed to update scene: ${id}`, cause));

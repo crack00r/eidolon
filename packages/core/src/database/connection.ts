@@ -40,55 +40,55 @@ export function createConnection(path: string, options?: ConnectionOptions): Res
 
     const db = new Database(path, { create: true });
 
-    // Enable WAL mode (better concurrent read performance)
-    if (options?.walMode !== false) {
-      db.exec("PRAGMA journal_mode=WAL");
-    }
+    try {
+      // Enable WAL mode (better concurrent read performance)
+      if (options?.walMode !== false) {
+        db.exec("PRAGMA journal_mode=WAL");
+      }
 
-    // Set busy timeout (wait rather than fail immediately on lock)
-    // Validate as safe integer to prevent PRAGMA injection
-    const busyTimeout = Math.max(0, Math.trunc(options?.busyTimeout ?? DEFAULT_BUSY_TIMEOUT_MS));
-    if (!Number.isFinite(busyTimeout)) {
-      return Err(createError(ErrorCode.DB_CONNECTION_FAILED, "Invalid busy_timeout value"));
-    }
-    db.exec(`PRAGMA busy_timeout=${busyTimeout}`);
+      // Set busy timeout (wait rather than fail immediately on lock)
+      // Validate as safe integer to prevent PRAGMA injection
+      const busyTimeout = Math.max(0, Math.trunc(options?.busyTimeout ?? DEFAULT_BUSY_TIMEOUT_MS));
+      if (!Number.isFinite(busyTimeout)) {
+        db.close();
+        return Err(createError(ErrorCode.DB_CONNECTION_FAILED, "Invalid busy_timeout value"));
+      }
+      db.exec(`PRAGMA busy_timeout=${busyTimeout}`);
 
-    // Enable foreign keys
-    db.exec("PRAGMA foreign_keys=ON");
+      // Enable foreign keys
+      db.exec("PRAGMA foreign_keys=ON");
 
-    // Securely delete data -- overwrite freed pages with zeros to prevent
-    // recovery of sensitive information from the database file.
-    db.exec("PRAGMA secure_delete=ON");
+      // Securely delete data -- overwrite freed pages with zeros to prevent
+      // recovery of sensitive information from the database file.
+      db.exec("PRAGMA secure_delete=ON");
 
-    // Enable incremental auto-vacuum so the database file can shrink
-    // when data is deleted, preventing unbounded file growth.
-    // NOTE: auto_vacuum mode can only be changed before any tables are created.
-    // On existing databases, check the current mode and log a warning if mismatched.
-    const currentAutoVacuum = db.query("PRAGMA auto_vacuum").get() as { auto_vacuum: number } | null;
-    const currentMode = currentAutoVacuum?.auto_vacuum ?? 0;
-    if (currentMode !== 2) {
-      // Attempt to set it (succeeds only on fresh databases with no tables)
-      db.exec("PRAGMA auto_vacuum=INCREMENTAL");
-      const afterSet = db.query("PRAGMA auto_vacuum").get() as { auto_vacuum: number } | null;
-      if ((afterSet?.auto_vacuum ?? 0) !== 2) {
-        // Existing DB -- cannot change auto_vacuum mode without VACUUM INTO
-        // This is non-fatal; the DB will continue to work but won't shrink on delete.
-        // SEC-H4: console.warn is used here intentionally instead of Logger because
-        // createConnection() runs during DatabaseManager initialization, before
-        // the Logger subsystem is fully wired up. This is the only safe output
-        // channel at this stage of the boot sequence.
-        if (typeof console !== "undefined") {
-          console.warn(
-            `[eidolon] auto_vacuum=INCREMENTAL could not be set on "${path}" (current mode: ${currentMode}). ` +
-              "Run VACUUM to apply on an existing database.",
-          );
+      // Enable incremental auto-vacuum so the database file can shrink
+      // when data is deleted, preventing unbounded file growth.
+      // NOTE: auto_vacuum mode can only be changed before any tables are created.
+      // On existing databases, check the current mode and log a warning if mismatched.
+      const currentAutoVacuum = db.query("PRAGMA auto_vacuum").get() as { auto_vacuum: number } | null;
+      const currentMode = currentAutoVacuum?.auto_vacuum ?? 0;
+      if (currentMode !== 2) {
+        // Attempt to set it (succeeds only on fresh databases with no tables)
+        db.exec("PRAGMA auto_vacuum=INCREMENTAL");
+        const afterSet = db.query("PRAGMA auto_vacuum").get() as { auto_vacuum: number } | null;
+        if ((afterSet?.auto_vacuum ?? 0) !== 2) {
+          if (typeof console !== "undefined") {
+            console.warn(
+              `[eidolon] auto_vacuum=INCREMENTAL could not be set on "${path}" (current mode: ${currentMode}). ` +
+                "Run VACUUM to apply on an existing database.",
+            );
+          }
         }
       }
-    }
 
-    // Set WAL autocheckpoint to prevent unbounded WAL growth
-    if (options?.walMode !== false) {
-      db.exec(`PRAGMA wal_autocheckpoint=${WAL_AUTOCHECKPOINT_PAGES}`);
+      // Set WAL autocheckpoint to prevent unbounded WAL growth
+      if (options?.walMode !== false) {
+        db.exec(`PRAGMA wal_autocheckpoint=${WAL_AUTOCHECKPOINT_PAGES}`);
+      }
+    } catch (pragmaErr) {
+      try { db.close(); } catch { /* best-effort cleanup */ }
+      return Err(createError(ErrorCode.DB_CONNECTION_FAILED, "Failed to configure database PRAGMAs", pragmaErr));
     }
 
     // Restrict database file permissions to owner-only (skip for :memory:)

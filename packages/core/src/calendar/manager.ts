@@ -21,7 +21,7 @@ import {
   type CalendarEventRow,
   type ConflictInfo,
   checkConflictsForEvent,
-  checkReminders as checkRemindersFn,
+  createReminderTracker,
   findConflicts as findConflictsFn,
   rowToCalendarEvent,
 } from "./calendar-utils.ts";
@@ -43,6 +43,7 @@ export class CalendarManager {
   private readonly config: CalendarConfig;
   private readonly providers: Map<string, CalendarProvider> = new Map();
   private syncIntervals: Map<string, ReturnType<typeof setInterval>> = new Map();
+  private readonly reminderTracker = createReminderTracker();
 
   constructor(deps: CalendarManagerDeps) {
     this.db = deps.db;
@@ -79,6 +80,7 @@ export class CalendarManager {
       const interval = setInterval(() => {
         void this.syncProvider(providerConfig.name);
       }, intervalMs);
+      interval.unref();
       this.syncIntervals.set(providerConfig.name, interval);
     }
 
@@ -228,7 +230,7 @@ export class CalendarManager {
     const eventsResult = this.listEvents(now, end);
     if (!eventsResult.ok) return;
 
-    checkRemindersFn(eventsResult.value, this.config, this.eventBus);
+    this.reminderTracker.checkReminders(eventsResult.value, this.config, this.eventBus);
   }
 
   /** Find all scheduling conflicts within a time range. */
@@ -265,7 +267,10 @@ export class CalendarManager {
       const eventsResult = await provider.listEvents(start, end);
       if (eventsResult.ok) {
         for (const event of eventsResult.value) {
-          this.upsertEvent(event);
+          const upsertResult = this.upsertEvent(event);
+          if (!upsertResult.ok) {
+            this.logger.warn("calendar", `Failed to persist synced event ${event.id}: ${upsertResult.error.message}`);
+          }
         }
       }
     }

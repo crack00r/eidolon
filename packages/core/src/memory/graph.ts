@@ -79,9 +79,9 @@ export class GraphMemory {
           `INSERT INTO memory_edges (source_id, target_id, relation, weight, created_at)
            VALUES (?, ?, ?, ?, ?)
            ON CONFLICT (source_id, target_id, relation)
-           DO UPDATE SET weight = ?, created_at = ?`,
+           DO UPDATE SET weight = ?`,
         )
-        .run(input.sourceId, input.targetId, input.relation, weight, now, weight, now);
+        .run(input.sourceId, input.targetId, input.relation, weight, now, weight);
 
       const edge: MemoryEdge = {
         sourceId: input.sourceId,
@@ -145,18 +145,24 @@ export class GraphMemory {
     }
   }
 
-  /** Delete all edges for a memory (when memory is deleted). */
+  /** Delete all edges for a memory (when memory is deleted).
+   *  Wrapped in a transaction to prevent TOCTOU between count and delete. */
   deleteAllForMemory(memoryId: string): Result<number, EidolonError> {
     try {
-      const countRow = this.db
-        .query("SELECT COUNT(*) as count FROM memory_edges WHERE source_id = ? OR target_id = ?")
-        .get(memoryId, memoryId) as { count: number };
-      const count = countRow.count;
+      const deleteInTransaction = this.db.transaction(() => {
+        const countRow = this.db
+          .query("SELECT COUNT(*) as count FROM memory_edges WHERE source_id = ? OR target_id = ?")
+          .get(memoryId, memoryId) as { count: number };
+        const count = countRow.count;
 
-      if (count > 0) {
-        this.db.query("DELETE FROM memory_edges WHERE source_id = ? OR target_id = ?").run(memoryId, memoryId);
-      }
+        if (count > 0) {
+          this.db.query("DELETE FROM memory_edges WHERE source_id = ? OR target_id = ?").run(memoryId, memoryId);
+        }
 
+        return count;
+      });
+
+      const count = deleteInTransaction();
       this.logger.debug("deleteAllForMemory", `Deleted ${count} edges for memory ${memoryId}`);
       return Ok(count);
     } catch (cause) {
@@ -193,16 +199,44 @@ export class GraphMemory {
       for (let d = 0; d < clampedDepth; d++) {
         const nextFrontier: Array<{ id: string; weight: number }> = [];
 
+        // Batched query: fetch all edges for the entire frontier in one query
+        const frontierIds = frontier.map((f) => f.id);
+        const frontierWeightMap = new Map<string, number>();
+        for (const { id, weight } of frontier) {
+          frontierWeightMap.set(id, weight);
+        }
+
+        let batchedEdges: EdgeRow[] = [];
+        if (frontierIds.length > 0) {
+          const placeholders = frontierIds.map(() => "?").join(",");
+          const sql = `SELECT * FROM memory_edges WHERE source_id IN (${placeholders}) OR target_id IN (${placeholders})`;
+          const params = [...frontierIds, ...frontierIds];
+          batchedEdges = this.db.query(sql).all(...params) as EdgeRow[];
+        }
+
+        // Group edges by the frontier node they belong to
+        const edgesByNode = new Map<string, EdgeRow[]>();
+        for (const edge of batchedEdges) {
+          if (frontierWeightMap.has(edge.source_id)) {
+            const arr = edgesByNode.get(edge.source_id) ?? [];
+            arr.push(edge);
+            edgesByNode.set(edge.source_id, arr);
+          }
+          if (frontierWeightMap.has(edge.target_id) && edge.target_id !== edge.source_id) {
+            const arr = edgesByNode.get(edge.target_id) ?? [];
+            arr.push(edge);
+            edgesByNode.set(edge.target_id, arr);
+          }
+        }
+
         for (const { id, weight } of frontier) {
           if (visited.size >= MAX_GRAPH_WALK_NODES) break;
 
-          const edges = this.getAll(id);
-          if (!edges.ok) continue;
-
-          for (const edge of edges.value) {
+          const nodeEdges = edgesByNode.get(id) ?? [];
+          for (const edge of nodeEdges) {
             if (visited.size >= MAX_GRAPH_WALK_NODES) break;
 
-            const neighborId = edge.sourceId === id ? edge.targetId : edge.sourceId;
+            const neighborId = edge.source_id === id ? edge.target_id : edge.source_id;
             const newWeight = weight * edge.weight * 0.5; // Decay by 50% per hop
 
             const currentWeight = visited.get(neighborId);
@@ -269,13 +303,19 @@ export class GraphMemory {
         createError(ErrorCode.DB_QUERY_FAILED, `Decay factor must be a finite number in (0, 1], got ${factor}`),
       );
     }
+    // factor=1 means no decay -- skip the DB update to avoid touching all rows
+    if (factor >= 1) return Ok(0);
     try {
-      // Apply decay to all edges, then prune those below threshold
-      this.db.query("UPDATE memory_edges SET weight = weight * ?").run(factor);
+      const txn = this.db.transaction(() => {
+        // Apply decay to all edges, then prune those below threshold
+        this.db.query("UPDATE memory_edges SET weight = weight * ?").run(factor);
 
-      // Delete edges that fell below threshold
-      const deleteResult = this.db.query("DELETE FROM memory_edges WHERE weight < 0.01").run();
-      const deleted = deleteResult.changes;
+        // Delete edges that fell below threshold
+        const deleteResult = this.db.query("DELETE FROM memory_edges WHERE weight < 0.01").run();
+        return deleteResult.changes;
+      });
+
+      const deleted = txn();
 
       // Count remaining edges
       const countRow = this.db.query("SELECT COUNT(*) as count FROM memory_edges").get() as { count: number };

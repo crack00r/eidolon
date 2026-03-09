@@ -39,7 +39,7 @@ export class HackerNewsCrawler extends BaseCrawler {
   }
 
   protected async crawlSource(config: CrawlerSourceConfig, options: CrawlOptions): Promise<CrawledItem[]> {
-    const limit = options.maxItems ?? Number(config.config.limit ?? DEFAULT_LIMIT);
+    const limit = options.maxItems ?? Math.max(1, Number(config.config.limit) || DEFAULT_LIMIT);
     const minScore = options.minScore ?? Number(config.config.minScore ?? DEFAULT_MIN_SCORE);
 
     // Fetch top story IDs
@@ -53,7 +53,7 @@ export class HackerNewsCrawler extends BaseCrawler {
     }
 
     // Take only the top N story IDs
-    const idsToFetch = storyIds.slice(0, limit) as number[];
+    const idsToFetch = storyIds.filter((id): id is number => typeof id === "number").slice(0, limit);
     const items: CrawledItem[] = [];
 
     for (const storyId of idsToFetch) {

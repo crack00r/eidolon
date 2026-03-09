@@ -130,15 +130,17 @@ export class DreamScheduler {
       timeZone: this.config.timezone,
       hour: "numeric",
       minute: "numeric",
-      hour12: false,
+      second: "numeric",
+      hourCycle: "h23",
     });
     const parts = formatter.formatToParts(now);
     const tzHour = parseInt(parts.find((p) => p.type === "hour")?.value ?? "0", 10);
     const tzMinute = parseInt(parts.find((p) => p.type === "minute")?.value ?? "0", 10);
+    const tzSecond = parseInt(parts.find((p) => p.type === "second")?.value ?? "0", 10);
 
-    const nowMinutes = tzHour * 60 + tzMinute;
-    const targetMinutes = hours * 60 + minutes;
-    let diffMs = (targetMinutes - nowMinutes) * 60 * 1000;
+    const nowSeconds = tzHour * 3600 + tzMinute * 60 + tzSecond;
+    const targetSeconds = hours * 3600 + minutes * 60;
+    let diffMs = (targetSeconds - nowSeconds) * 1000;
     if (diffMs <= 0) {
       // Already past today's schedule, next is tomorrow
       diffMs += 24 * 60 * 60 * 1000;
@@ -157,7 +159,7 @@ export class DreamScheduler {
       timeZone: this.config.timezone,
       hour: "numeric",
       minute: "numeric",
-      hour12: false,
+      hourCycle: "h23",
     });
     const parts = formatter.formatToParts(now);
     const tzHour = parseInt(parts.find((p) => p.type === "hour")?.value ?? "0", 10);

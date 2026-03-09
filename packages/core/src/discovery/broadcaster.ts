@@ -87,7 +87,7 @@ export class DiscoveryBroadcaster {
     this.gatewayPort = deps.gatewayPort;
     this.tlsEnabled = deps.tlsEnabled;
     this.tailscale = deps.tailscale ?? null;
-    this.beaconKey = deps.beaconKey ?? null;
+    this.beaconKey = deps.beaconKey || null;
     this.startedAt = Date.now();
   }
 
@@ -172,9 +172,12 @@ export class DiscoveryBroadcaster {
    * Receivers must verify this HMAC before trusting beacon data.
    */
   signBeacon(beacon: DiscoveryBeacon): SignedBeacon {
+    if (!this.beaconKey) {
+      throw new Error("Cannot sign beacon without a key");
+    }
     const nonce = randomBytes(16).toString("hex");
     const beaconJson = JSON.stringify(beacon);
-    const hmac = createHmac("sha256", this.beaconKey ?? "")
+    const hmac = createHmac("sha256", this.beaconKey)
       .update(beaconJson + nonce)
       .digest("hex");
     return { beacon, nonce, hmac };

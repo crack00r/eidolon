@@ -13,6 +13,13 @@ import { BaseCrawler, type CrawledItem, type CrawlerSourceConfig, type CrawlOpti
 /** Default maximum items per feed. */
 const DEFAULT_LIMIT = 20;
 
+/**
+ * Maximum XML input length accepted for regex-based parsing (2 MB).
+ * Prevents ReDoS on pathologically crafted feeds by rejecting oversized payloads
+ * before they reach the regex engine.
+ */
+const MAX_XML_LENGTH = 2 * 1024 * 1024;
+
 /** Maximum age of feed items to consider (7 days). */
 const DEFAULT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -102,8 +109,21 @@ interface FeedEntry {
 /**
  * Parse RSS 2.0 or Atom feed XML into entries.
  * Uses simple regex extraction -- no XML parser dependency needed.
+ *
+ * Known limitations:
+ * - No XML namespace support (e.g., `dc:creator`, `content:encoded` are not extracted).
+ * - Nested tags with the same name will match incorrectly (regex is non-recursive).
+ * - Self-closing tags (other than Atom `<link/>`) are not handled.
+ * - CDATA sections are supported only for direct tag content, not nested structures.
+ * These limitations are acceptable for basic RSS/Atom feed parsing. If more robust
+ * parsing is needed, consider adding a proper XML parser dependency.
  */
 function parseFeed(xml: string): FeedEntry[] {
+  // Guard against oversized input to prevent ReDoS on regex-based XML parsing
+  if (xml.length > MAX_XML_LENGTH) {
+    return [];
+  }
+
   const entries: FeedEntry[] = [];
 
   // Try RSS 2.0 format first (<item> elements)

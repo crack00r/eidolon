@@ -161,10 +161,10 @@ export class HousekeepingPhase {
    * The "newer" is determined by updatedAt timestamp.
    */
   mergeDuplicates(keepId: string, removeId: string): Result<void, EidolonError> {
-    // Get both memories to determine which is newer
-    const keepResult = this.store.get(keepId);
+    // Use getWithoutTouch to avoid inflating access counters during housekeeping
+    const keepResult = this.store.getWithoutTouch(keepId);
     if (!keepResult.ok) return keepResult;
-    const removeResult = this.store.get(removeId);
+    const removeResult = this.store.getWithoutTouch(removeId);
     if (!removeResult.ok) return removeResult;
 
     if (!keepResult.value || !removeResult.value) {
@@ -180,19 +180,23 @@ export class HousekeepingPhase {
 
     // Boost confidence of newer (capped at 1.0)
     const boostedConfidence = Math.min(newer.confidence + 0.05, 1.0);
-    const updateResult = this.store.update(newer.id, { confidence: boostedConfidence });
-    if (!updateResult.ok) return updateResult;
 
-    // Delete the older memory and its edges
-    this.graph.deleteAllForMemory(older.id);
-    const deleteResult = this.store.delete(older.id);
-    if (!deleteResult.ok) return deleteResult;
+    // Wrap merge operations in a transaction for atomicity
+    return this.store.withTransaction(() => {
+      const updateResult = this.store.update(newer.id, { confidence: boostedConfidence });
+      if (!updateResult.ok) return updateResult;
 
-    this.logger.debug("mergeDuplicates", `Merged ${older.id} into ${newer.id}`, {
-      boostedConfidence,
+      // Delete the older memory and its edges
+      this.graph.deleteAllForMemory(older.id);
+      const deleteResult = this.store.delete(older.id);
+      if (!deleteResult.ok) return deleteResult;
+
+      this.logger.debug("mergeDuplicates", `Merged ${older.id} into ${newer.id}`, {
+        boostedConfidence,
+      });
+
+      return Ok(undefined);
     });
-
-    return Ok(undefined);
   }
 
   // -------------------------------------------------------------------------

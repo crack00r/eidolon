@@ -102,7 +102,7 @@ export class OllamaProvider implements ILLMProvider {
   async isAvailable(): Promise<boolean> {
     try {
       guardFetch(this.config.host, this.allowPrivateHosts);
-      const res = await fetch(`${this.config.host}/api/tags`, { signal: AbortSignal.timeout(3000) });
+      const res = await fetch(`${this.config.host}/api/tags`, { signal: AbortSignal.timeout(3000), redirect: "error" });
       return res.ok;
     } catch {
       // Intentional: network error means Ollama server is unreachable
@@ -113,7 +113,10 @@ export class OllamaProvider implements ILLMProvider {
   async listModels(): Promise<readonly string[]> {
     try {
       guardFetch(this.config.host, this.allowPrivateHosts);
-      const res = await fetch(`${this.config.host}/api/tags`);
+      const res = await fetch(`${this.config.host}/api/tags`, {
+        signal: AbortSignal.timeout(10_000),
+        redirect: "error",
+      });
       if (!res.ok) return [];
       const raw: unknown = await res.json();
       const parsed = OllamaTagsResponseSchema.safeParse(raw);
@@ -146,6 +149,8 @@ export class OllamaProvider implements ILLMProvider {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(120_000),
+      redirect: "error",
     });
 
     if (!res.ok) {
@@ -191,6 +196,8 @@ export class OllamaProvider implements ILLMProvider {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(300_000),
+      redirect: "error",
     });
 
     if (!res.ok) {
@@ -207,14 +214,18 @@ export class OllamaProvider implements ILLMProvider {
     const decoder = new TextDecoder();
     let inputTokens = 0;
     let outputTokens = 0;
+    let lineBuffer = "";
 
     try {
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
-        const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split("\n").filter(Boolean);
+        lineBuffer += decoder.decode(value, { stream: true });
+        const segments = lineBuffer.split("\n");
+        // Keep the last segment as it may be incomplete
+        lineBuffer = segments.pop() ?? "";
+        const lines = segments.filter(Boolean);
 
         for (const line of lines) {
           try {
@@ -243,6 +254,26 @@ export class OllamaProvider implements ILLMProvider {
       reader.releaseLock();
     }
 
+    // Process any remaining data in the line buffer
+    if (lineBuffer.trim()) {
+      try {
+        const raw: unknown = JSON.parse(lineBuffer);
+        const parsed = OllamaChatStreamChunkSchema.safeParse(raw);
+        if (parsed.success) {
+          const data = parsed.data;
+          if (data.message?.content) {
+            yield { type: "text", text: data.message.content };
+          }
+          if (data.done) {
+            inputTokens = data.prompt_eval_count ?? 0;
+            outputTokens = data.eval_count ?? 0;
+          }
+        }
+      } catch {
+        // Skip malformed final line
+      }
+    }
+
     yield { type: "done", usage: { inputTokens, outputTokens } };
   }
 
@@ -255,6 +286,8 @@ export class OllamaProvider implements ILLMProvider {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ model: this.config.defaultModel, prompt: text }),
+        signal: AbortSignal.timeout(30_000),
+        redirect: "error",
       });
 
       if (!res.ok) throw new Error(`Ollama embeddings failed (${res.status})`);

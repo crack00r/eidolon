@@ -204,7 +204,7 @@ export class MemorySearch {
     for (const entry of fused) {
       if (results.length >= limit) break;
 
-      const memResult = this.store.get(entry.id);
+      const memResult = this.store.getWithoutTouch(entry.id);
       if (!memResult.ok) continue;
       if (memResult.value === null) continue;
 

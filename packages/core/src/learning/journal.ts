@@ -12,6 +12,7 @@
  */
 
 import type { Database } from "bun:sqlite";
+import { randomUUID } from "node:crypto";
 import type { Logger } from "../logging/logger.ts";
 import { capitalizeFirst, exportJournalToFile, formatDate, sanitizeForMarkdown } from "./journal-export.ts";
 
@@ -31,12 +32,9 @@ const DEFAULT_MAX_ENTRIES = 10_000;
 /** Maximum number of entries that can be retrieved at once. */
 const MAX_RECENT_LIMIT = 1000;
 
-let nextEntryId = 0;
-
 /** Generate a unique entry ID. */
 function generateEntryId(): string {
-  nextEntryId += 1;
-  return `journal-${Date.now()}-${nextEntryId}`;
+  return `journal-${randomUUID()}`;
 }
 
 /** Valid entry types for DB CHECK constraint validation. */

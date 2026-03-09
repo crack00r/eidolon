@@ -43,8 +43,8 @@ export function validateCronExpression(cron: string): string | null {
   // "*/N" format
   if (/^\*\/\d+$/.test(cron)) {
     const interval = Number.parseInt(cron.slice(2), 10);
-    if (interval < 1 || interval > 59) {
-      return `Invalid interval ${interval}: must be 1-59`;
+    if (interval < 1 || interval > 1440) {
+      return `Invalid interval ${interval}: must be 1-1440`;
     }
     return null;
   }
@@ -65,7 +65,31 @@ export function validateCronExpression(cron: string): string | null {
     return null;
   }
 
-  return `Unrecognized cron format: "${cron}". Use "HH:MM", "*/N", or "HH:MM:dow"`;
+  // "HH:MM:dow1-dow2" range format (e.g., "09:00:1-5" for weekdays)
+  if (/^\d{2}:\d{2}:\d-\d$/.test(cron)) {
+    const parts = cron.split(":").map((p) => Number.parseInt(p, 10));
+    const hours = parts[0] as number;
+    const minutes = parts[1] as number;
+    if (hours < CRON_FIELD_RANGES.hour.min || hours > CRON_FIELD_RANGES.hour.max) {
+      return `Invalid hour ${hours}: must be ${CRON_FIELD_RANGES.hour.min}-${CRON_FIELD_RANGES.hour.max}`;
+    }
+    if (minutes < CRON_FIELD_RANGES.minute.min || minutes > CRON_FIELD_RANGES.minute.max) {
+      return `Invalid minute ${minutes}: must be ${CRON_FIELD_RANGES.minute.min}-${CRON_FIELD_RANGES.minute.max}`;
+    }
+    const dowPart = cron.slice(6); // e.g., "1-5"
+    const [startDowStr, endDowStr] = dowPart.split("-");
+    const startDow = Number.parseInt(startDowStr ?? "0", 10);
+    const endDow = Number.parseInt(endDowStr ?? "0", 10);
+    if (startDow > endDow) {
+      return `Invalid day-of-week range ${startDow}-${endDow}: start must be <= end`;
+    }
+    if (startDow < CRON_FIELD_RANGES.dayOfWeek.min || endDow > CRON_FIELD_RANGES.dayOfWeek.max) {
+      return `Invalid day-of-week range ${startDow}-${endDow}: must be within ${CRON_FIELD_RANGES.dayOfWeek.min}-${CRON_FIELD_RANGES.dayOfWeek.max}`;
+    }
+    return null;
+  }
+
+  return `Unrecognized cron format: "${cron}". Use "HH:MM", "*/N", "HH:MM:dow", or "HH:MM:dow1-dow2"`;
 }
 
 /**
@@ -109,7 +133,9 @@ function getTimeInTimezone(epochMs: number, timezone?: string): { hours: number;
   const minutePart = parts.find((p) => p.type === "minute");
   const weekdayPart = parts.find((p) => p.type === "weekday");
 
-  const hours = hourPart ? Number.parseInt(hourPart.value, 10) : 0;
+  // Some locales with hour12:false return "24" instead of "00" for midnight
+  const rawHours = hourPart ? Number.parseInt(hourPart.value, 10) : 0;
+  const hours = rawHours === 24 ? 0 : rawHours;
   const minutes = minutePart ? Number.parseInt(minutePart.value, 10) : 0;
 
   const DAY_MAP: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };

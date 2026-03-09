@@ -21,6 +21,8 @@ export interface CreateMemoryInput {
   readonly metadata?: Record<string, unknown>;
   /** Flag for PII-containing memories that may need special handling (GDPR, encryption). */
   readonly sensitive?: boolean;
+  /** User ID for multi-user memory isolation. Defaults to 'default'. */
+  readonly userId?: string;
 }
 
 export interface UpdateMemoryInput {

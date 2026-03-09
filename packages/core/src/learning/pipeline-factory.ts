@@ -20,6 +20,21 @@ import type { ImplementFn, RunCommandFn } from "./implementation.ts";
 /** Maximum command execution time (5 minutes). */
 const DEFAULT_COMMAND_TIMEOUT_MS = 300_000;
 
+/** Environment variable keys safe to pass to spawned commands. */
+const SAFE_ENV_KEYS = ["PATH", "HOME", "USER", "LANG", "TERM", "SHELL", "TMPDIR", "TZ", "NODE_ENV"] as const;
+
+/** Build a minimal environment from process.env using only safe keys. */
+function buildSafeEnv(): Record<string, string> {
+  const env: Record<string, string> = {};
+  for (const key of SAFE_ENV_KEYS) {
+    const val = process.env[key];
+    if (val !== undefined) {
+      env[key] = val;
+    }
+  }
+  return env;
+}
+
 /** Whitelisted command prefixes allowed by createRunCommandFn. */
 const ALLOWED_COMMAND_PREFIXES: readonly string[] = ["pnpm ", "git "];
 
@@ -74,11 +89,12 @@ export function createRunCommandFn(logger: Logger, timeoutMs?: number): RunComma
     childLogger.debug("run", `Executing: ${command}`, { cwd });
 
     try {
-      const proc = Bun.spawn(["bash", "-c", command], {
+      const args = command.split(/\s+/).filter((arg) => arg.length > 0);
+      const proc = Bun.spawn(args, {
         cwd,
         stdout: "pipe",
         stderr: "pipe",
-        env: { ...process.env },
+        env: buildSafeEnv(),
       });
 
       // Read stdout and stderr

@@ -40,6 +40,11 @@ const PRIVATE_IP_PATTERNS: readonly RegExp[] = [
   /^192\.168\./,
   /^169\.254\./,
   /^0\./,
+  // IPv6-mapped IPv4 addresses (e.g. ::ffff:127.0.0.1)
+  /^::ffff:127\./,
+  /^::ffff:10\./,
+  /^::ffff:192\.168\./,
+  /^::ffff:172\.(1[6-9]|2\d|3[01])\./,
 ];
 
 function validateUrlNotPrivate(url: string): void {
@@ -135,12 +140,42 @@ export abstract class BaseCrawler {
       ...(init?.headers as Record<string, string> | undefined),
     };
 
-    const response = await fetch(url, { ...init, headers, redirect: "manual" });
+    const MAX_REDIRECTS = 5;
+    let currentUrl = url;
 
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status} ${response.statusText} for ${url}`);
+    for (let redirectCount = 0; redirectCount <= MAX_REDIRECTS; redirectCount++) {
+      const response = await fetch(currentUrl, { ...init, headers, redirect: "manual", signal: AbortSignal.timeout(30_000) });
+
+      // Follow redirects with SSRF validation on each hop
+      if (response.status >= 300 && response.status < 400) {
+        const location = response.headers.get("location");
+        if (!location) {
+          throw new Error(`HTTP ${response.status} redirect with no Location header for ${currentUrl}`);
+        }
+
+        // Resolve relative redirects against the current URL
+        const resolvedLocation = new URL(location, currentUrl).toString();
+
+        if (redirectCount === MAX_REDIRECTS) {
+          throw new Error(`Too many redirects (>${MAX_REDIRECTS}) starting from ${url}`);
+        }
+
+        // Validate the redirect target against SSRF rules
+        if (!this.skipSsrfCheck) {
+          validateUrlNotPrivate(resolvedLocation);
+        }
+
+        currentUrl = resolvedLocation;
+        continue;
+      }
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status} ${response.statusText} for ${currentUrl}`);
+      }
+
+      return response;
     }
 
-    return response;
+    throw new Error(`Too many redirects (>${MAX_REDIRECTS}) starting from ${url}`);
   }
 }

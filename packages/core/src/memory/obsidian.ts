@@ -7,8 +7,8 @@
  */
 
 import type { Database } from "bun:sqlite";
-import { existsSync, lstatSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { join, relative, resolve } from "node:path";
+import { existsSync, lstatSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
+import { basename, join, relative, resolve } from "node:path";
 import type { EidolonError, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 import type { Logger } from "../logging/logger.ts";
@@ -152,8 +152,23 @@ export class ObsidianIndexer {
     vaultRoot: string,
   ): Result<{ chunksStored: number; entitiesCreated: number; relationsCreated: number }, EidolonError> {
     try {
-      const absPath = resolve(filePath);
-      const absVaultRoot = resolve(vaultRoot);
+      const resolvedPath = resolve(filePath);
+      const resolvedVaultRoot = resolve(vaultRoot);
+
+      // Use realpathSync to resolve symlinks and macOS /private prefix,
+      // falling back to resolve() if the path doesn't exist yet.
+      let absPath: string;
+      let absVaultRoot: string;
+      try {
+        absPath = realpathSync(resolvedPath);
+      } catch {
+        absPath = resolvedPath;
+      }
+      try {
+        absVaultRoot = realpathSync(resolvedVaultRoot);
+      } catch {
+        absVaultRoot = resolvedVaultRoot;
+      }
 
       // Path containment check: ensure file is within the vault root
       if (!absPath.startsWith(absVaultRoot + "/") && absPath !== absVaultRoot) {
@@ -178,10 +193,6 @@ export class ObsidianIndexer {
       const relPath = relative(resolve(vaultRoot), absPath);
       const sourceTag = `obsidian:${relPath}`;
 
-      // Remove existing memories for this note (re-index)
-      this.db.query("DELETE FROM memories WHERE source = ?").run(sourceTag);
-
-      // Store the note content as a memory
       const tags = parseObsidianTags(content);
       const inputs = [
         {
@@ -195,7 +206,11 @@ export class ObsidianIndexer {
         },
       ];
 
-      const batchResult = this.store.createBatch(inputs);
+      // Wrap DELETE + createBatch in a transaction for atomicity
+      const batchResult = this.store.withTransaction(() => {
+        this.db.query("DELETE FROM memories WHERE source = ?").run(sourceTag);
+        return this.store.createBatch(inputs);
+      });
       if (!batchResult.ok) return batchResult;
 
       // Create KG entity for this note
@@ -280,7 +295,5 @@ export class ObsidianIndexer {
 
 /** Extract a note name from a file path (filename without extension). */
 function noteNameFromPath(filePath: string): string {
-  const parts = filePath.split("/");
-  const filename = parts[parts.length - 1] ?? "";
-  return filename.replace(/\.md$/, "");
+  return basename(filePath, ".md");
 }

@@ -52,7 +52,7 @@ const TaskPayloadSchema = z.record(z.unknown());
 /** Zod schema for validating schedule type from DB. */
 const ScheduleTypeSchema = z.enum(["once", "recurring", "conditional"]);
 
-function rowToTask(row: TaskRow): ScheduledTask {
+function rowToTask(row: TaskRow, logger?: Logger): ScheduledTask {
   // Safely parse JSON payload from DB -- corrupted rows get an empty payload
   let payload: Record<string, unknown> = {};
   try {
@@ -63,6 +63,9 @@ function rowToTask(row: TaskRow): ScheduledTask {
     }
   } catch {
     // Corrupted JSON in DB -- use empty payload rather than crashing
+    if (logger) {
+      logger.warn("rowToTask", `Failed to parse task payload for task "${row.id}"`);
+    }
   }
 
   // Validate schedule type from DB
@@ -164,7 +167,7 @@ export class TaskScheduler {
   get(id: string): Result<ScheduledTask | null, EidolonError> {
     try {
       const row = this.db.query("SELECT * FROM scheduled_tasks WHERE id = ?").get(id) as TaskRow | null;
-      return Ok(row ? rowToTask(row) : null);
+      return Ok(row ? rowToTask(row, this.logger) : null);
     } catch (cause) {
       return Err(createError(ErrorCode.DB_QUERY_FAILED, `Failed to get task: ${id}`, cause));
     }
@@ -177,7 +180,7 @@ export class TaskScheduler {
         ? "SELECT * FROM scheduled_tasks WHERE enabled = 1 ORDER BY next_run_at ASC"
         : "SELECT * FROM scheduled_tasks ORDER BY created_at DESC";
       const rows = this.db.query(query).all() as TaskRow[];
-      return Ok(rows.map(rowToTask));
+      return Ok(rows.map((r) => rowToTask(r, this.logger)));
     } catch (cause) {
       return Err(createError(ErrorCode.DB_QUERY_FAILED, "Failed to list tasks", cause));
     }
@@ -192,7 +195,7 @@ export class TaskScheduler {
           "SELECT * FROM scheduled_tasks WHERE enabled = 1 AND next_run_at IS NOT NULL AND next_run_at <= ? ORDER BY next_run_at ASC LIMIT 1",
         )
         .get(now) as TaskRow | null;
-      return Ok(row ? rowToTask(row) : null);
+      return Ok(row ? rowToTask(row, this.logger) : null);
     } catch (cause) {
       return Err(createError(ErrorCode.DB_QUERY_FAILED, "Failed to get next due task", cause));
     }
@@ -207,7 +210,7 @@ export class TaskScheduler {
           "SELECT * FROM scheduled_tasks WHERE enabled = 1 AND next_run_at IS NOT NULL AND next_run_at <= ? ORDER BY next_run_at ASC",
         )
         .all(now) as TaskRow[];
-      return Ok(rows.map(rowToTask));
+      return Ok(rows.map((r) => rowToTask(r, this.logger)));
     } catch (cause) {
       return Err(createError(ErrorCode.DB_QUERY_FAILED, "Failed to get due tasks", cause));
     }
@@ -216,31 +219,41 @@ export class TaskScheduler {
   /** Mark a task as executed. Updates lastRunAt and computes nextRunAt. */
   markExecuted(taskId: string): Result<void, EidolonError> {
     try {
-      const row = this.db.query("SELECT * FROM scheduled_tasks WHERE id = ?").get(taskId) as TaskRow | null;
-      if (!row) {
+      // Wrap SELECT + UPDATE in a transaction to prevent TOCTOU race conditions
+      const txn = this.db.transaction(() => {
+        const row = this.db.query("SELECT * FROM scheduled_tasks WHERE id = ?").get(taskId) as TaskRow | null;
+        if (!row) {
+          return { found: false as const };
+        }
+
+        const now = Date.now();
+        const task = rowToTask(row, this.logger);
+
+        if (task.type === "once") {
+          // One-off tasks are disabled after execution
+          this.db
+            .query("UPDATE scheduled_tasks SET last_run_at = ?, next_run_at = NULL, enabled = 0 WHERE id = ?")
+            .run(now, taskId);
+          this.logger.info("markExecuted", `One-off task completed and disabled: ${task.name}`, { taskId });
+        } else if (task.type === "recurring" && task.cron) {
+          // Recurring tasks compute the next run time (timezone-aware)
+          const nextRunAt = TaskScheduler.computeNextRun(task.cron, now, task.timezone);
+          this.db
+            .query("UPDATE scheduled_tasks SET last_run_at = ?, next_run_at = ? WHERE id = ?")
+            .run(now, nextRunAt, taskId);
+          this.logger.info("markExecuted", `Recurring task executed: ${task.name}, next at ${nextRunAt}`, { taskId });
+        } else {
+          // Conditional tasks: just update lastRunAt, keep nextRunAt as-is
+          this.db.query("UPDATE scheduled_tasks SET last_run_at = ? WHERE id = ?").run(now, taskId);
+          this.logger.info("markExecuted", `Task executed: ${task.name}`, { taskId });
+        }
+
+        return { found: true as const };
+      });
+
+      const result = txn();
+      if (!result.found) {
         return Err(createError(ErrorCode.DB_QUERY_FAILED, `Task not found: ${taskId}`));
-      }
-
-      const now = Date.now();
-      const task = rowToTask(row);
-
-      if (task.type === "once") {
-        // One-off tasks are disabled after execution
-        this.db
-          .query("UPDATE scheduled_tasks SET last_run_at = ?, next_run_at = NULL, enabled = 0 WHERE id = ?")
-          .run(now, taskId);
-        this.logger.info("markExecuted", `One-off task completed and disabled: ${task.name}`, { taskId });
-      } else if (task.type === "recurring" && task.cron) {
-        // Recurring tasks compute the next run time (timezone-aware)
-        const nextRunAt = TaskScheduler.computeNextRun(task.cron, now, task.timezone);
-        this.db
-          .query("UPDATE scheduled_tasks SET last_run_at = ?, next_run_at = ? WHERE id = ?")
-          .run(now, nextRunAt, taskId);
-        this.logger.info("markExecuted", `Recurring task executed: ${task.name}, next at ${nextRunAt}`, { taskId });
-      } else {
-        // Conditional tasks: just update lastRunAt, keep nextRunAt as-is
-        this.db.query("UPDATE scheduled_tasks SET last_run_at = ? WHERE id = ?").run(now, taskId);
-        this.logger.info("markExecuted", `Task executed: ${task.name}`, { taskId });
       }
 
       return Ok(undefined);
@@ -286,7 +299,7 @@ export class TaskScheduler {
   //
   // When timezone is provided, HH:MM values are interpreted in that timezone.
   // The "*/N" format is timezone-independent (always relative to `after`).
-  static computeNextRun(cron: string, after?: number, timezone?: string): number {
+  static computeNextRun(cron: string, after?: number, timezone?: string, logger?: Logger): number {
     const now = after ?? Date.now();
 
     // "HH:MM" format -- next occurrence of this time
@@ -308,7 +321,33 @@ export class TaskScheduler {
       return computeNextDowInTimezone(hours, mins, dow, now, timezone);
     }
 
-    // Fallback: 1 hour from now
+    // "HH:MM:dow1-dow2" format -- at time on day-of-week range (e.g., "09:00:1-5" for weekdays)
+    if (/^\d{2}:\d{2}:\d-\d$/.test(cron)) {
+      const timePart = cron.slice(0, 5);
+      const [hours, mins] = timePart.split(":").map(Number) as [number, number];
+      const dowPart = cron.slice(6); // e.g., "1-5"
+      const [startDowStr, endDowStr] = dowPart.split("-");
+      const startDow = Number.parseInt(startDowStr ?? "0", 10);
+      const endDow = Number.parseInt(endDowStr ?? "0", 10);
+
+      // Find the nearest matching day in the range
+      let earliest = Number.POSITIVE_INFINITY;
+      for (let dow = startDow; dow <= endDow; dow++) {
+        const candidate = computeNextDowInTimezone(hours, mins, dow, now, timezone);
+        if (candidate < earliest) {
+          earliest = candidate;
+        }
+      }
+      return earliest;
+    }
+
+    // Fallback: 1 hour from now -- log warning for unrecognized cron expression
+    if (logger) {
+      logger.warn(
+        "computeNextRun",
+        `Unrecognized cron expression "${cron}", falling back to 1 hour from now`,
+      );
+    }
     return now + 3_600_000;
   }
 
@@ -316,9 +355,9 @@ export class TaskScheduler {
    * Create a scheduled task from a natural language description.
    * Delegates parsing to AutomationEngine and stores as an automation task.
    */
-  createFromNaturalLanguage(input: string, defaultChannel?: string): Result<ScheduledTask, EidolonError> {
+  async createFromNaturalLanguage(input: string, defaultChannel?: string): Promise<Result<ScheduledTask, EidolonError>> {
     // Lazy import to avoid circular dependency at module load time
-    const { extractScheduleAndAction, deriveName } = require("./automation.ts") as {
+    const { extractScheduleAndAction, deriveName } = (await import("./automation.ts")) as {
       extractScheduleAndAction: (input: string) => { cron: string; actionText: string } | null;
       deriveName: (actionText: string) => string;
     };

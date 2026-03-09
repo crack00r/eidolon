@@ -6,6 +6,7 @@
  */
 
 import type { StreamEvent } from "@eidolon/protocol";
+import type { Logger } from "../logging/logger.ts";
 
 /**
  * Type guard: checks that a value is a non-null object.
@@ -18,7 +19,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  * Parse a single line of Claude Code streaming JSON output into a StreamEvent.
  * Returns null for lines that don't represent meaningful events (empty lines, etc.)
  */
-export function parseStreamLine(line: string): StreamEvent | null {
+export function parseStreamLine(line: string, logger?: Logger): StreamEvent | null {
   const trimmed = line.trim();
   if (!trimmed) return null;
 
@@ -26,9 +27,12 @@ export function parseStreamLine(line: string): StreamEvent | null {
   try {
     parsed = JSON.parse(trimmed);
   } catch {
-    console.warn(
-      `[parser] Failed to parse stream line as JSON: ${trimmed.length > 200 ? `${trimmed.slice(0, 200)}...` : trimmed}`,
-    );
+    const snippet = trimmed.length > 200 ? `${trimmed.slice(0, 200)}...` : trimmed;
+    if (logger) {
+      logger.warn("parser", `Failed to parse stream line as JSON: ${snippet}`);
+    } else {
+      console.warn(`[parser] Failed to parse stream line as JSON: ${snippet}`);
+    }
     return null;
   }
 
@@ -82,9 +86,9 @@ export function parseStreamLine(line: string): StreamEvent | null {
 /**
  * Parse multiple lines of streaming output into an array of StreamEvents.
  */
-export function parseStreamOutput(output: string): StreamEvent[] {
+export function parseStreamOutput(output: string, logger?: Logger): StreamEvent[] {
   return output
     .split("\n")
-    .map(parseStreamLine)
+    .map((line) => parseStreamLine(line, logger))
     .filter((event): event is StreamEvent => event !== null);
 }

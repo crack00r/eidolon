@@ -129,51 +129,69 @@ export function buildScheduleContext(events: readonly CalendarEvent[]): string {
 // Reminder checking
 // ---------------------------------------------------------------------------
 
-/**
- * Track fired reminders to prevent duplicates across periodic calls.
- * Key: "eventId:minutesBefore:startTime", evicted when older than 2 hours.
- */
-const firedReminders = new Set<string>();
 const REMINDER_EVICTION_MS = 7_200_000;
-let lastReminderEviction = 0;
+
+/** Encapsulates fired-reminder state so each CalendarManager gets its own instance. */
+export interface ReminderTracker {
+  readonly firedReminders: Map<string, number>;
+  checkReminders: (events: readonly CalendarEvent[], config: CalendarConfig, eventBus: EventBus) => void;
+}
 
 /**
- * Check upcoming events and publish reminder events.
- * Called periodically by the daemon. Deduplicates to avoid firing the same reminder twice.
+ * Create an isolated reminder tracker instance.
+ * Each CalendarManager should call this once so reminder deduplication is per-instance,
+ * not shared as a module-level singleton.
  */
-export function checkReminders(events: readonly CalendarEvent[], config: CalendarConfig, eventBus: EventBus): void {
-  const now = Date.now();
-  const reminderMinutes = config.reminders.defaultMinutesBefore ?? [15, 60];
+export function createReminderTracker(): ReminderTracker {
+  const firedReminders = new Map<string, number>();
 
-  // Periodically evict old entries to prevent unbounded growth
-  if (now - lastReminderEviction > REMINDER_EVICTION_MS) {
-    firedReminders.clear();
-    lastReminderEviction = now;
-  }
+  function checkReminders(events: readonly CalendarEvent[], config: CalendarConfig, eventBus: EventBus): void {
+    const now = Date.now();
+    const reminderMinutes = config.reminders.defaultMinutesBefore ?? [15, 60];
 
-  for (const event of events) {
-    const minutesUntil = Math.floor((event.startTime - now) / 60_000);
+    // Evict only entries older than REMINDER_EVICTION_MS to prevent unbounded growth
+    for (const [key, timestamp] of firedReminders) {
+      if (now - timestamp > REMINDER_EVICTION_MS) {
+        firedReminders.delete(key);
+      }
+    }
 
-    for (const reminderBefore of reminderMinutes) {
-      // Fire reminder if we are within 1 minute of the reminder time
-      if (Math.abs(minutesUntil - reminderBefore) < 1) {
-        const dedupKey = `${event.id}:${reminderBefore}:${event.startTime}`;
-        if (firedReminders.has(dedupKey)) continue;
-        firedReminders.add(dedupKey);
+    for (const event of events) {
+      const minutesUntil = Math.floor((event.startTime - now) / 60_000);
 
-        eventBus.publish(
-          "calendar:event_upcoming",
-          {
-            eventId: event.id,
-            title: event.title,
-            startTime: event.startTime,
-            minutesBefore: reminderBefore,
-          },
-          { source: "calendar", priority: "high" },
-        );
+      for (const reminderBefore of reminderMinutes) {
+        // Fire reminder if we are within 1 minute of the reminder time
+        if (Math.abs(minutesUntil - reminderBefore) < 1) {
+          const dedupKey = `${event.id}:${reminderBefore}:${event.startTime}`;
+          if (firedReminders.has(dedupKey)) continue;
+          firedReminders.set(dedupKey, now);
+
+          eventBus.publish(
+            "calendar:event_upcoming",
+            {
+              eventId: event.id,
+              title: event.title,
+              startTime: event.startTime,
+              minutesBefore: reminderBefore,
+            },
+            { source: "calendar", priority: "high" },
+          );
+        }
       }
     }
   }
+
+  return { firedReminders, checkReminders };
+}
+
+/**
+ * Check upcoming events and publish reminder events.
+ * @deprecated Use createReminderTracker() for per-instance deduplication.
+ * This legacy wrapper uses a module-level singleton for backward compatibility.
+ */
+const _legacyTracker = createReminderTracker();
+export function checkReminders(events: readonly CalendarEvent[], config: CalendarConfig, eventBus: EventBus): void {
+  _legacyTracker.checkReminders(events, config, eventBus);
 }
 
 // ---------------------------------------------------------------------------

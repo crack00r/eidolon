@@ -69,7 +69,7 @@ export function applyDecision(
       };
       const memoryId = decision.memoryId;
       try {
-        const txnResult = store.runInTransaction(() => {
+        const txnResult = store.withTransaction(() => {
           const deleteResult = store.delete(memoryId);
           if (!deleteResult.ok) return Err(deleteResult.error);
           const createResult = store.create(replaceInput);

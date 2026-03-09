@@ -171,8 +171,12 @@ export class WyomingHandler {
       return Err(createError(ErrorCode.WYOMING_PROTOCOL_ERROR, "Received audio-chunk without audio-start"));
     }
 
-    // Validate chunk data header (optional, but good practice)
-    AudioChunkDataSchema.safeParse(event.data);
+    const chunkParse = AudioChunkDataSchema.safeParse(event.data);
+    if (!chunkParse.success) {
+      return Err(
+        createError(ErrorCode.WYOMING_PROTOCOL_ERROR, `Invalid audio-chunk data: ${chunkParse.error.message}`),
+      );
+    }
 
     if (event.payload === null || event.payload.byteLength === 0) {
       return Ok([]);

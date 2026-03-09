@@ -9,6 +9,7 @@
  * providers and follows the task-based routing configuration.
  */
 
+import { randomUUID } from "node:crypto";
 import type { IModelRouter, LLMCompletionOptions } from "@eidolon/protocol";
 import { z } from "zod";
 import type { Logger } from "../logging/logger.ts";
@@ -28,18 +29,34 @@ const RouterRelevanceResponseSchema = z.object({
 // Prompt builder
 // ---------------------------------------------------------------------------
 
+/**
+ * Escape < and > in untrusted text to prevent delimiter injection.
+ */
+function escapeDelimiters(text: string): string {
+  return text.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
 function buildPrompt(title: string, content: string, interests: readonly string[]): string {
   const interestList =
     interests.length > 0 ? interests.map((i) => `  - ${i}`).join("\n") : "  (no specific interests configured)";
+
+  // Use random boundaries and escape delimiters to mitigate prompt injection
+  const boundary = `---BOUNDARY-${randomUUID()}---`;
+  const safeTitle = escapeDelimiters(title);
+  const safeContent = escapeDelimiters(content.slice(0, 4000));
 
   return [
     "Evaluate the relevance of this content against the user's interests.",
     "Respond ONLY with a JSON object, no other text.",
     "",
-    `TITLE: ${title}`,
+    boundary,
+    `TITLE: ${safeTitle}`,
+    boundary,
     "",
+    boundary,
     "CONTENT:",
-    content.slice(0, 4000),
+    safeContent,
+    boundary,
     "",
     "USER INTERESTS:",
     interestList,

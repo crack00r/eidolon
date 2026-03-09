@@ -198,8 +198,7 @@ export class EmailChannel implements Channel {
         return Err(createError("CHANNEL_SEND_FAILED", `Invalid recipient email address: ${to}`));
       }
 
-      span.setAttribute("email.to", to);
-      span.setAttribute("email.subject", finalSubject);
+      span.setAttribute("email.to_domain", to.split("@")[1] || "unknown");
 
       let inReplyTo: string | undefined;
       let references: readonly string[] | undefined;
@@ -263,6 +262,7 @@ export class EmailChannel implements Channel {
         this.logger.error("email", `Poll failed unexpectedly: ${message}`, err);
       });
     }, this.config.imap.pollIntervalMs);
+    this.pollTimer.unref();
   }
 
   private stopPolling(): void {

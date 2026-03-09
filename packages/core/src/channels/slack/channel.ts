@@ -8,6 +8,7 @@
  */
 
 import { randomUUID } from "node:crypto";
+import { sleep } from "../../utils/async.ts";
 import type {
   Channel,
   ChannelCapabilities,
@@ -379,10 +380,4 @@ export class SlackChannel implements Channel {
     }
     return false;
   }
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
 }

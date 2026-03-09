@@ -233,11 +233,15 @@ export class KGRelationStore {
   /** Delete a relation. */
   delete(id: string): Result<void, EidolonError> {
     try {
-      const existing = this.db.query("SELECT 1 FROM kg_relations WHERE id = ?").get(id);
-      if (!existing) {
+      const deleted = this.db.transaction(() => {
+        const existing = this.db.query("SELECT 1 FROM kg_relations WHERE id = ?").get(id);
+        if (!existing) return false;
+        this.db.query("DELETE FROM kg_relations WHERE id = ?").run(id);
+        return true;
+      })();
+      if (!deleted) {
         return Err(createError(ErrorCode.DB_QUERY_FAILED, `Relation ${id} not found`));
       }
-      this.db.query("DELETE FROM kg_relations WHERE id = ?").run(id);
       this.logger.debug("delete", `Deleted relation ${id}`);
       return Ok(undefined);
     } catch (cause) {
@@ -248,14 +252,18 @@ export class KGRelationStore {
   /** Delete all relations for an entity. */
   deleteByEntity(entityId: string): Result<number, EidolonError> {
     try {
-      const countRow = this.db
-        .query("SELECT COUNT(*) as count FROM kg_relations WHERE source_id = ? OR target_id = ?")
-        .get(entityId, entityId) as { count: number };
-      const count = countRow.count;
+      const count = this.db.transaction(() => {
+        const countRow = this.db
+          .query("SELECT COUNT(*) as count FROM kg_relations WHERE source_id = ? OR target_id = ?")
+          .get(entityId, entityId) as { count: number };
+        const c = countRow.count;
 
-      if (count > 0) {
-        this.db.query("DELETE FROM kg_relations WHERE source_id = ? OR target_id = ?").run(entityId, entityId);
-      }
+        if (c > 0) {
+          this.db.query("DELETE FROM kg_relations WHERE source_id = ? OR target_id = ?").run(entityId, entityId);
+        }
+
+        return c;
+      })();
 
       this.logger.debug("deleteByEntity", `Deleted ${count} relations for entity ${entityId}`);
       return Ok(count);
@@ -275,11 +283,15 @@ export class KGRelationStore {
       );
     }
     try {
-      const existing = this.db.query("SELECT 1 FROM kg_relations WHERE id = ?").get(id);
-      if (!existing) {
+      const updated = this.db.transaction(() => {
+        const existing = this.db.query("SELECT 1 FROM kg_relations WHERE id = ?").get(id);
+        if (!existing) return false;
+        this.db.query("UPDATE kg_relations SET confidence = ? WHERE id = ?").run(confidence, id);
+        return true;
+      })();
+      if (!updated) {
         return Err(createError(ErrorCode.DB_QUERY_FAILED, `Relation ${id} not found`));
       }
-      this.db.query("UPDATE kg_relations SET confidence = ? WHERE id = ?").run(confidence, id);
       this.logger.debug("updateConfidence", `Updated confidence for relation ${id}`, { confidence });
       return Ok(undefined);
     } catch (cause) {

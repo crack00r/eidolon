@@ -105,8 +105,18 @@ export class HAManager {
     // Start periodic sync
     const intervalMs = this.config.syncIntervalMinutes * 60_000;
     this.syncInterval = setInterval(() => {
-      void this.checkAnomalies();
+      const result = this.checkAnomalies();
+      if (!result.ok) {
+        this.logger.error("checkAnomalies", "Anomaly detection failed", result.error);
+      } else if (result.value.length > 0) {
+        this.logger.warn(
+          "checkAnomalies",
+          `Detected ${result.value.length} anomalie(s)`,
+          { entities: result.value.map((a) => a.entityId) },
+        );
+      }
     }, intervalMs);
+    this.syncInterval.unref();
 
     this.logger.info("initialize", `HA manager initialized (sync every ${this.config.syncIntervalMinutes}m)`);
     return Ok(undefined);

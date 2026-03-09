@@ -183,7 +183,7 @@ export class ProjectManager {
         params.push(id);
         this.db.query(`UPDATE projects SET ${setClauses.join(", ")} WHERE id = ?`).run(...params);
 
-        return this.db.query("SELECT * FROM projects WHERE id = ?").get(id) as ProjectRow;
+        return this.db.query("SELECT * FROM projects WHERE id = ?").get(id) as ProjectRow | null;
       });
 
       const updated = txn();

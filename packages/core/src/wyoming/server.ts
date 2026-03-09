@@ -89,12 +89,16 @@ export class WyomingServer {
 
   /** Stop the TCP server and close all connections. */
   async stop(): Promise<void> {
-    // Close all satellite connections
-    for (const [id, conn] of this.connections) {
-      conn.handler.reset();
-      conn.socket.destroy();
-      this.connections.delete(id);
+    // Close all satellite connections (collect IDs first to avoid modifying Map while iterating)
+    const ids = [...this.connections.keys()];
+    for (const id of ids) {
+      const conn = this.connections.get(id);
+      if (conn) {
+        conn.handler.reset();
+        conn.socket.destroy();
+      }
     }
+    this.connections.clear();
 
     if (this.server !== null) {
       const srv = this.server;
@@ -212,7 +216,7 @@ export class WyomingServer {
     }
   }
 
-  private isSatelliteAllowed(satelliteId: string, remoteAddress: string): boolean {
+  private isSatelliteAllowed(_satelliteId: string, remoteAddress: string): boolean {
     // Empty allowlist means all satellites are allowed
     if (this.config.allowedSatellites.length === 0) {
       return true;
@@ -222,9 +226,14 @@ export class WyomingServer {
     // to prevent allowlist bypass via IPv4-mapped IPv6 addresses.
     const normalizedAddress = remoteAddress.startsWith("::ffff:") ? remoteAddress.slice(7) : remoteAddress;
 
-    // Check if satellite ID or remote address (normalized) is in the allowlist
+    // Extract IP only (strip port) to prevent allowlist bypass via port appending
+    const ipOnly = normalizedAddress.includes(":") && !normalizedAddress.includes("[")
+      ? normalizedAddress
+      : normalizedAddress.split(":")[0] ?? normalizedAddress;
+
+    // Check if remote address IP is in the allowlist
     return this.config.allowedSatellites.some(
-      (allowed) => allowed === satelliteId || allowed === remoteAddress || allowed === normalizedAddress,
+      (allowed) => allowed === ipOnly || allowed === normalizedAddress,
     );
   }
 }

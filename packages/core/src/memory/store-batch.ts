@@ -12,7 +12,7 @@ import type { EidolonError, Memory, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 import type { Logger } from "../logging/logger.ts";
 import type { CreateMemoryInput, MemoryRow } from "./store-helpers.ts";
-import { cosineSimilarity, MAX_BATCH_SIZE, MAX_CONTENT_LENGTH, rowToMemory } from "./store-helpers.ts";
+import { cosineSimilarity, MAX_BATCH_SIZE, MAX_CONTENT_LENGTH, VALID_MEMORY_LAYERS, VALID_MEMORY_TYPES, rowToMemory } from "./store-helpers.ts";
 
 // ---------------------------------------------------------------------------
 // findSimilar
@@ -28,6 +28,7 @@ export function findSimilarMemories(
   embedding: Float32Array,
   limit: number,
   minSimilarity?: number,
+  logger?: Logger,
 ): Result<Array<{ memory: Memory; similarity: number }>, EidolonError> {
   try {
     const MIN_SIMILARITY = minSimilarity ?? 0;
@@ -47,7 +48,7 @@ export function findSimilarMemories(
       if (batchRows.length === 0) break;
 
       for (const row of batchRows) {
-        const storedEmbedding = new Float32Array(new Uint8Array(row.embedding).buffer.slice(0));
+        const storedEmbedding = new Float32Array(row.embedding.buffer.slice(row.embedding.byteOffset, row.embedding.byteOffset + row.embedding.byteLength));
         if (storedEmbedding.length !== EXPECTED_DIMENSIONS) continue;
         if (embedding.length !== EXPECTED_DIMENSIONS) continue;
 
@@ -70,6 +71,25 @@ export function findSimilarMemories(
       }
 
       if (batchRows.length < BATCH_SIZE) break;
+    }
+
+    // Warn if the scan was truncated at MAX_ROWS -- consolidation may miss duplicates
+    if (topK.length > 0) {
+      const totalScanned = topK.length; // approximate; actual count may differ
+      // Check if we hit the MAX_ROWS ceiling by seeing if the last batch was full
+      const lastBatchOffset = Math.floor((MAX_ROWS - BATCH_SIZE) / BATCH_SIZE) * BATCH_SIZE;
+      if (lastBatchOffset + BATCH_SIZE <= MAX_ROWS) {
+        const checkRows = db
+          .query("SELECT COUNT(*) as cnt FROM memories WHERE embedding IS NOT NULL")
+          .get() as { cnt: number } | null;
+        if (checkRows && checkRows.cnt >= MAX_ROWS) {
+          const msg = `findSimilarMemories: result set truncated at ${MAX_ROWS} rows (total: ${checkRows.cnt}), consolidation may miss duplicates`;
+          if (logger) {
+            logger.warn("store-batch", msg);
+          }
+          // No fallback to console.warn -- callers should always provide a logger
+        }
+      }
     }
 
     topK.sort((a, b) => b.similarity - a.similarity);
@@ -105,6 +125,16 @@ export function createMemoryBatch(
     );
   }
   for (const input of inputs) {
+    if (!VALID_MEMORY_TYPES.has(input.type)) {
+      return Err(
+        createError(ErrorCode.DB_QUERY_FAILED, `Invalid memory type: "${input.type}"`),
+      );
+    }
+    if (!VALID_MEMORY_LAYERS.has(input.layer)) {
+      return Err(
+        createError(ErrorCode.DB_QUERY_FAILED, `Invalid memory layer: "${input.layer}"`),
+      );
+    }
     if (input.content.length > MAX_CONTENT_LENGTH) {
       return Err(
         createError(
@@ -132,10 +162,11 @@ export function createMemoryBatch(
         const tags = JSON.stringify(input.tags ?? []);
         const metadata = JSON.stringify(input.metadata ?? {});
         const sensitive = input.sensitive ? 1 : 0;
+        const userId = input.userId ?? "default";
 
         db.query(
-          `INSERT INTO memories (id, type, layer, content, confidence, source, tags, created_at, updated_at, accessed_at, access_count, metadata, sensitive)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
+          `INSERT INTO memories (id, type, layer, content, confidence, source, tags, created_at, updated_at, accessed_at, access_count, metadata, sensitive, user_id)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)`,
         ).run(
           id,
           input.type,
@@ -149,6 +180,7 @@ export function createMemoryBatch(
           now,
           metadata,
           sensitive,
+          userId,
         );
 
         memories.push({

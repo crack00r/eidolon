@@ -12,6 +12,7 @@ import type { EidolonError, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 import { getCacheDir } from "../config/paths.ts";
 import type { Logger } from "../logging/logger.ts";
+import { cosineSimilarity } from "./store-helpers.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -51,9 +52,6 @@ type FeatureExtractionPipeline = (
 
 const DEFAULT_MODEL_ID = "Xenova/multilingual-e5-small";
 const DEFAULT_DIMENSIONS = 384;
-
-/** Epsilon for floating-point comparison to avoid division by near-zero. */
-const COSINE_EPSILON = 1e-10;
 
 // ---------------------------------------------------------------------------
 // EmbeddingModel
@@ -209,31 +207,8 @@ export class EmbeddingModel {
     }
   }
 
-  /**
-   * Compute cosine similarity between two embedding vectors.
-   * Since multilingual-e5 outputs are L2-normalized, this reduces to dot product.
-   */
   static cosineSimilarity(a: Float32Array, b: Float32Array): number {
-    if (a.length !== b.length) {
-      throw new Error(`Vector length mismatch: ${a.length} vs ${b.length}`);
-    }
-
-    let dotProduct = 0;
-    let normA = 0;
-    let normB = 0;
-
-    for (let i = 0; i < a.length; i++) {
-      const ai = a[i] as number;
-      const bi = b[i] as number;
-      dotProduct += ai * bi;
-      normA += ai * ai;
-      normB += bi * bi;
-    }
-
-    const denominator = Math.sqrt(normA) * Math.sqrt(normB);
-    if (denominator < COSINE_EPSILON) return 0;
-
-    return dotProduct / denominator;
+    return cosineSimilarity(a, b);
   }
 
   /** Check if the model has been loaded. */

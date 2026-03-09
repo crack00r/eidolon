@@ -77,7 +77,7 @@ const SERVER_EXPIRY_MS = 20_000;
 const EXPIRY_CHECK_INTERVAL_MS = 5_000;
 
 /** Maximum beacon payload size accepted (same as broadcaster). */
-const MAX_BEACON_SIZE = 2048;
+const MAX_BEACON_SIZE = 1024;
 
 /** Maximum beacons per source IP within the rate limit window before dropping. */
 const BEACON_RATE_LIMIT_MAX = 10;
@@ -106,7 +106,7 @@ export class DiscoveryListener {
     beaconKey?: string;
   }) {
     this.logger = deps.logger.child("discovery-listener");
-    this.beaconKey = deps.beaconKey ?? null;
+    this.beaconKey = deps.beaconKey || null;
   }
 
   /** Register a handler called when a new server is discovered. */
@@ -262,6 +262,17 @@ export class DiscoveryListener {
     recent.push(now);
     this.beaconTimestamps.set(addr, recent);
 
+    // Periodically prune stale IP entries to prevent unbounded map growth
+    for (const [ip, ts] of this.beaconTimestamps) {
+      if (ip === addr) continue;
+      const recentTs = ts.filter((t) => now - t < BEACON_RATE_LIMIT_WINDOW_MS);
+      if (recentTs.length === 0) {
+        this.beaconTimestamps.delete(ip);
+      } else if (recentTs.length !== ts.length) {
+        this.beaconTimestamps.set(ip, recentTs);
+      }
+    }
+
     return recent.length > BEACON_RATE_LIMIT_MAX;
   }
 
@@ -300,7 +311,7 @@ export class DiscoveryListener {
       addr,
     });
 
-    for (const handler of this.onFoundHandlers) {
+    for (const handler of [...this.onFoundHandlers]) {
       try {
         handler(record);
       } catch (err) {
@@ -317,7 +328,7 @@ export class DiscoveryListener {
         this.servers.delete(key);
         this.logger.info("lost", `Server lost: ${server.hostname} at ${server.host}:${server.port}`);
 
-        for (const handler of this.onLostHandlers) {
+        for (const handler of [...this.onLostHandlers]) {
           try {
             handler(server);
           } catch (err) {

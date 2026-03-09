@@ -169,11 +169,13 @@ const WyomingHeaderSchema = z.object({
  */
 export function serializeEvent(event: WyomingEvent): Uint8Array {
   const payloadLength = event.payload?.byteLength ?? 0;
+  const dataJson = JSON.stringify(event.data);
+  const dataLength = new TextEncoder().encode(dataJson).byteLength;
 
   const header = JSON.stringify({
     type: event.type,
     data: event.data,
-    data_length: 0,
+    data_length: dataLength,
     payload_length: payloadLength,
   });
 

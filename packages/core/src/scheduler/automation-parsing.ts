@@ -44,10 +44,13 @@ const DAY_MAP: Record<string, number> = {
   mon: 1,
   tuesday: 2,
   tue: 2,
+  tues: 2,
   wednesday: 3,
   wed: 3,
   thursday: 4,
   thu: 4,
+  thur: 4,
+  thurs: 4,
   friday: 5,
   fri: 5,
   saturday: 6,
@@ -76,6 +79,8 @@ export function parseTime(raw: string): string | null {
     let hours = Number.parseInt(amPmColonMatch[1] as string, 10);
     const minutes = Number.parseInt(amPmColonMatch[2] as string, 10);
     const period = amPmColonMatch[3] as string;
+    // Validate 12-hour clock range: hours must be 1-12, minutes 0-59
+    if (hours < 1 || hours > 12 || minutes < 0 || minutes > 59) return null;
     if (period === "pm" && hours < 12) hours += 12;
     if (period === "am" && hours === 12) hours = 0;
     return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
@@ -86,6 +91,8 @@ export function parseTime(raw: string): string | null {
   if (amPmMatch) {
     let hours = Number.parseInt(amPmMatch[1] as string, 10);
     const period = amPmMatch[2] as string;
+    // Validate 12-hour clock range: hours must be 1-12
+    if (hours < 1 || hours > 12) return null;
     if (period === "pm" && hours < 12) hours += 12;
     if (period === "am" && hours === 12) hours = 0;
     return `${String(hours).padStart(2, "0")}:00`;
@@ -128,7 +135,7 @@ const SCHEDULE_PATTERNS: SchedulePattern[] = [
   // "every <day> at <time>"
   {
     pattern:
-      /every\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tue|wed|thu|fri|sat|sun)s?\s+at\s+(\S+)/i,
+      /every\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tue|tues|wed|thu|thur|thurs|fri|sat|sun)s?\s+at\s+(\S+)/i,
     extract: (m) => {
       const day = parseDay(m[1] as string);
       const time = parseTime(m[2] as string);
@@ -178,16 +185,14 @@ const SCHEDULE_PATTERNS: SchedulePattern[] = [
     pattern: /every\s+evening/i,
     extract: () => "18:00",
   },
-  // "weekdays at <time>"
+  // "weekdays at <time>" -> Mon-Fri (days 1-5)
   {
-    // Weekday-only not directly expressible in our simple cron;
-    // use Monday as representative (user can adjust)
     pattern: /weekdays?\s+at\s+(\S+)/i,
     extract: (m) => {
       const time = parseTime(m[1] as string);
       if (!time) return "";
-      // Create a Monday schedule as approximation
-      return `${time}:1`;
+      // Use day-of-week range format: HH:MM:1-5 for Mon through Fri
+      return `${time}:1-5`;
     },
   },
 ];

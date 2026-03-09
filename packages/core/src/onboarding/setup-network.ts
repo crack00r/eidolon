@@ -41,6 +41,8 @@ export async function detectTailscale(): Promise<string | null> {
       stderr: "ignore",
     });
     const output = await new Response(proc.stdout).text();
+    const exitCode = await proc.exited;
+    if (exitCode !== 0) return null;
     const ip = output.trim().split("\n")[0]?.trim();
     return ip && /^\d+\.\d+\.\d+\.\d+$/.test(ip) ? ip : null;
   } catch {

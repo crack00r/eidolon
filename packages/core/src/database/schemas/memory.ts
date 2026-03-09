@@ -215,4 +215,22 @@ export const MEMORY_MIGRATIONS: ReadonlyArray<Migration> = [
       -- SQLite cannot drop columns in older versions; user_id column remains.
     `,
   },
+  {
+    version: 7,
+    name: "add_composite_and_expression_indexes",
+    database: "memory",
+    up: `
+      -- Composite indexes for ScopedMemoryStore queries that filter by user_id + type/layer.
+      CREATE INDEX IF NOT EXISTS idx_memories_user_type ON memories(user_id, type);
+      CREATE INDEX IF NOT EXISTS idx_memories_user_layer ON memories(user_id, layer);
+
+      -- Expression index for sessionId lookups in metadata JSON.
+      CREATE INDEX IF NOT EXISTS idx_memories_session_id ON memories(json_extract(metadata, '$.sessionId')) WHERE json_extract(metadata, '$.sessionId') IS NOT NULL;
+    `,
+    down: `
+      DROP INDEX IF EXISTS idx_memories_session_id;
+      DROP INDEX IF EXISTS idx_memories_user_layer;
+      DROP INDEX IF EXISTS idx_memories_user_type;
+    `,
+  },
 ];
