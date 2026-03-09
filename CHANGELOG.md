@@ -9,6 +9,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > [release-please](https://github.com/googleapis/release-please).
 > Do not edit manually.
 
+## [0.2.0](https://github.com/crack00r/eidolon/compare/v0.1.15...v0.2.0) (2026-03-09)
+
+
+### Bug Fixes
+
+* **core:** gateway event publishing and client manager cleanup ([03f2cc8](https://github.com/crack00r/eidolon/commit/03f2cc8dfca501bb8288cc7537bca469fb286aea))
+* **core:** harden daemon, workflow, GPU, and infrastructure subsystems ([1c3f112](https://github.com/crack00r/eidolon/commit/1c3f1120f83fd22a094d451e67d24440f764ff3a))
+* **core:** harden memory, learning, channels, and data layer ([ecaec57](https://github.com/crack00r/eidolon/commit/ecaec57f8881637b8cf249bbc240ada5e80ba404))
+* **core:** improve resource cleanup, resilience, and error handling ([237dfa4](https://github.com/crack00r/eidolon/commit/237dfa43a65f2b1d90c40f7804ea3b0df7fae802))
+* **protocol:** strengthen type safety and config schemas ([0b03760](https://github.com/crack00r/eidolon/commit/0b03760fbda5bf7a40b01c7620f4d9f82996530b))
+* **security:** harden auth, SSRF protection, secrets, and privacy across codebase ([60310fa](https://github.com/crack00r/eidolon/commit/60310fa43aeefa6b5b5310af32d904cad2120f78))
+
+
+### Miscellaneous
+
+* release v0.2.0 -- 20-round comprehensive security audit ([b957408](https://github.com/crack00r/eidolon/commit/b95740890155b6b065aa1ff51d42bb8a7e1b682d))
+* update agent memory ([6cda069](https://github.com/crack00r/eidolon/commit/6cda0692e63fbaf93e3ab01d1648e5ffae179b6a))
+
+
+### Tests
+
+* **core:** add security tests and update test expectations for audit fixes ([08ba348](https://github.com/crack00r/eidolon/commit/08ba3484dbedc98f2c536456dbbd8fb718e050c7))
+
 ## [0.1.15](https://github.com/crack00r/eidolon/compare/v0.1.14...v0.1.15) (2026-03-08)
 
 

@@ -1,9 +1,9 @@
 {
-  ".": "0.1.15",
-  "packages/protocol": "0.1.14",
-  "packages/core": "0.1.14",
-  "packages/cli": "0.1.14",
-  "packages/test-utils": "0.1.14",
-  "apps/desktop": "0.1.15",
-  "apps/web": "0.1.1"
+  ".": "0.2.0",
+  "packages/protocol": "0.2.0",
+  "packages/core": "0.2.0",
+  "packages/cli": "0.2.0",
+  "packages/test-utils": "0.2.0",
+  "apps/desktop": "0.2.0",
+  "apps/web": "0.2.0"
 }
