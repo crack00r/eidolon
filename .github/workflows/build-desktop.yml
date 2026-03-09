@@ -109,10 +109,12 @@ jobs:
         run: |
           mkdir -p apps/desktop/src-tauri/binaries
           TARGET="${{ matrix.config.rust-target }}"
+          CLI_VERSION=$(node -p "require('./packages/cli/package.json').version")
+          DEFINE_FLAG="--define \"process.env.EIDOLON_BUILD_VERSION='${CLI_VERSION}'\""
           if [[ "$TARGET" == *"windows"* ]]; then
-            bun build packages/cli/src/index.ts --compile --outfile "apps/desktop/src-tauri/binaries/eidolon-cli-${TARGET}.exe"
+            eval bun build packages/cli/src/index.ts --compile --outfile "apps/desktop/src-tauri/binaries/eidolon-cli-${TARGET}.exe" $DEFINE_FLAG
           else
-            bun build packages/cli/src/index.ts --compile --outfile "apps/desktop/src-tauri/binaries/eidolon-cli-${TARGET}"
+            eval bun build packages/cli/src/index.ts --compile --outfile "apps/desktop/src-tauri/binaries/eidolon-cli-${TARGET}" $DEFINE_FLAG
           fi
           ls -la apps/desktop/src-tauri/binaries/
 

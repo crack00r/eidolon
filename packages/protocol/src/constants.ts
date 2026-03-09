@@ -10,6 +10,16 @@ import { fileURLToPath } from "node:url";
 import type { SessionType } from "./types/sessions.ts";
 
 function loadVersion(): string {
+  // Build-time injected version (works in compiled binaries via --define)
+  if (
+    typeof process.env.EIDOLON_BUILD_VERSION === "string" &&
+    process.env.EIDOLON_BUILD_VERSION !== "" &&
+    process.env.EIDOLON_BUILD_VERSION !== "undefined"
+  ) {
+    return process.env.EIDOLON_BUILD_VERSION;
+  }
+
+  // Runtime file-based fallback (works in normal bun run / bun build --outfile)
   try {
     const thisDir = dirname(fileURLToPath(import.meta.url));
     const pkgPath = join(thisDir, "..", "package.json");

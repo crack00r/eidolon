@@ -32,7 +32,7 @@
     "registry": "https://registry.npmjs.org/"
   },
   "scripts": {
-    "build": "bun build src/index.ts --outfile dist/eidolon --target bun",
+    "build": "bun build src/index.ts --outfile dist/eidolon --target bun --define \"process.env.EIDOLON_BUILD_VERSION='$(node -p \"require('./package.json').version\")'\"",
     "prepublishOnly": "pnpm run build",
     "test": "bun test src/",
     "typecheck": "tsc --noEmit",
