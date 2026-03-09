@@ -111,10 +111,7 @@ export class ConfigWatcher {
     } catch {
       // On non-POSIX systems statSync may not return meaningful mode bits.
       // Deny by default to fail-safe rather than fail-open.
-      this.logger?.warn(
-        "watcher",
-        "Could not verify config file permissions. Refusing reload as a precaution.",
-      );
+      this.logger?.warn("watcher", "Could not verify config file permissions. Refusing reload as a precaution.");
       return false;
     }
   }

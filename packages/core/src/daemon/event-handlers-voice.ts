@@ -142,7 +142,12 @@ async function handleVoiceAudioStt(
       source: "voice-stt",
     });
     if (!publishResult.ok) {
-      logger.error("loop-handler", `Failed to publish user:message from voice STT: ${publishResult.error.message}`, undefined, { eventId });
+      logger.error(
+        "loop-handler",
+        `Failed to publish user:message from voice STT: ${publishResult.error.message}`,
+        undefined,
+        { eventId },
+      );
     }
     return { success: true, tokensUsed: 0 };
   }

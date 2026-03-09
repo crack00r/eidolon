@@ -197,7 +197,9 @@ export function forgetEntity(dbManager: DatabaseManager, entity: string): Deleti
               SELECT RAISE(ABORT, 'Audit log entries cannot be modified');
             END
         `);
-      } catch { /* trigger may already exist */ }
+      } catch {
+        /* trigger may already exist */
+      }
       deletedCounts.audit_log_redacted = 0;
     }
   });

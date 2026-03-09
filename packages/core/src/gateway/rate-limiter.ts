@@ -130,10 +130,7 @@ export class AuthRateLimiter {
       entry.firstFailureAt = 0;
 
       // Finding #18: Anonymize IP in log output
-      this.logger.warn(
-        "rate-limit",
-        `Blocked IP ${anonymizeIp(ip)} for ${backoffMs}ms (block #${entry.blockCount})`,
-      );
+      this.logger.warn("rate-limit", `Blocked IP ${anonymizeIp(ip)} for ${backoffMs}ms (block #${entry.blockCount})`);
 
       return true;
     }

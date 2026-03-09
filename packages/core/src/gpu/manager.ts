@@ -46,7 +46,11 @@ function validateGpuManagerUrl(url: string, allowPrivate: boolean): void {
   if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
     throw new Error(`GPU worker URL must use http or https: ${url}`);
   }
-  const hostname = parsed.hostname.replace(/^\[/, "").replace(/]$/, "").toLowerCase().replace(/^::ffff:/, "");
+  const hostname = parsed.hostname
+    .replace(/^\[/, "")
+    .replace(/]$/, "")
+    .toLowerCase()
+    .replace(/^::ffff:/, "");
   if (BLOCKED_GPU_HOSTNAMES.has(hostname)) {
     throw new Error(`GPU worker URL rejected: ${hostname} is a blocked hostname (SSRF protection)`);
   }

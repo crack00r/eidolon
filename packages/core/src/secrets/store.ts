@@ -208,7 +208,10 @@ export class SecretStore {
       try {
         this.db.query("UPDATE secrets SET accessed_at = ? WHERE key = ?").run(Date.now(), key);
       } catch (updateErr) {
-        this.logger?.warn("get", `Failed to update accessed_at for secret: ${key}: ${updateErr instanceof Error ? updateErr.message : String(updateErr)}`);
+        this.logger?.warn(
+          "get",
+          `Failed to update accessed_at for secret: ${key}: ${updateErr instanceof Error ? updateErr.message : String(updateErr)}`,
+        );
       }
       this.logAudit("secret.read", key, "success");
     } else {

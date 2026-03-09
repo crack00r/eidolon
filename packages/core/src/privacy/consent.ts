@@ -64,7 +64,10 @@ export class ConsentManager {
       return row !== null && row.granted === 1;
     } catch (err) {
       // If the table doesn't exist yet (pre-migration), treat as no consent
-      this.logger.warn("checkConsentStatus", `DB error checking consent for ${consentType}: ${err instanceof Error ? err.message : String(err)}`);
+      this.logger.warn(
+        "checkConsentStatus",
+        `DB error checking consent for ${consentType}: ${err instanceof Error ? err.message : String(err)}`,
+      );
       return false;
     }
   }

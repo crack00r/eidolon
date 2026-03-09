@@ -79,7 +79,9 @@ export async function handleUserMessage(
           staticContext = `${profileSection}\nTime: ${new Date().toISOString()}`;
         }
       } catch (err: unknown) {
-        logger.warn("user-handler", "Profile generation failed", { error: err instanceof Error ? err.message : String(err) });
+        logger.warn("user-handler", "Profile generation failed", {
+          error: err instanceof Error ? err.message : String(err),
+        });
       }
     }
 

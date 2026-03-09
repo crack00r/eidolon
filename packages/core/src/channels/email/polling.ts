@@ -6,10 +6,10 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { sleep } from "../../utils/async.ts";
 import type { InboundMessage } from "@eidolon/protocol";
 import type { Logger } from "../../logging/logger.ts";
 import type { ITracer } from "../../telemetry/tracer.ts";
+import { sleep } from "../../utils/async.ts";
 import { filterAttachments } from "./attachments.ts";
 import type { IImapClient, ImapMessage } from "./imap.ts";
 import { extractThreadInfo, parseEmailBody, sanitizeEmailContent, stripQuotedReply, stripSignature } from "./parser.ts";

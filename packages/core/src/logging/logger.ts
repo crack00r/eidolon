@@ -142,7 +142,9 @@ function writeEntry(entry: LogEntry, format: "json" | "pretty", rotator?: LogRot
   process.stdout.write(`${line}\n`);
   if (rotator) {
     // Fire-and-forget; rotation errors should not crash the caller
-    rotator.writeLine(line).catch((err) => { console.error("[eidolon] Log write failed:", err instanceof Error ? err.message : String(err)); });
+    rotator.writeLine(line).catch((err) => {
+      console.error("[eidolon] Log write failed:", err instanceof Error ? err.message : String(err));
+    });
   }
 }
 

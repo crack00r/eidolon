@@ -55,6 +55,7 @@ export class GpuTtsProvider implements TtsFallbackProvider {
   }
 
   async synthesize(text: string): Promise<Result<Uint8Array, EidolonError>> {
+    this.logger.debug("synthesize", "GPU TTS request", { textLength: text.length });
     const result = await this.pool.tts({
       text,
       voice: this.config.voice,
@@ -175,7 +176,9 @@ export class SystemTtsProvider implements TtsFallbackProvider {
       clearTimeout(timeoutId);
 
       if (exitCode !== 0) {
-        return Err(createError(ErrorCode.TTS_FAILED, `System TTS failed (exit ${exitCode}): ${stderrText.slice(0, 200)}`));
+        return Err(
+          createError(ErrorCode.TTS_FAILED, `System TTS failed (exit ${exitCode}): ${stderrText.slice(0, 200)}`),
+        );
       }
 
       const audio = new Uint8Array(stdoutBuf);

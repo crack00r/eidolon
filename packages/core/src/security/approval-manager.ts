@@ -207,9 +207,7 @@ export class ApprovalManager {
         const existing = this.getById(params.requestId);
         if (!existing.ok) return existing;
         if (!existing.value) {
-          return Err(
-            createError(ErrorCode.APPROVAL_NOT_FOUND, `Approval request not found: ${params.requestId}`),
-          );
+          return Err(createError(ErrorCode.APPROVAL_NOT_FOUND, `Approval request not found: ${params.requestId}`));
         }
         return Err(
           createError(
@@ -308,7 +306,9 @@ export class ApprovalManager {
 
     try {
       this.db
-        .query("UPDATE approval_requests SET status = ?, responded_by = ?, responded_at = ? WHERE id = ? AND status = 'pending'")
+        .query(
+          "UPDATE approval_requests SET status = ?, responded_by = ?, responded_at = ? WHERE id = ? AND status = 'pending'",
+        )
         .run(finalStatus, `auto:timeout:${finalStatus}`, now, request.id);
     } catch (cause) {
       this.logger.error("checkTimeouts", `Failed to resolve timed-out request ${request.id}`, cause);

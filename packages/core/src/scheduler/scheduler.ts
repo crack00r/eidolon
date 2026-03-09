@@ -343,10 +343,7 @@ export class TaskScheduler {
 
     // Fallback: 1 hour from now -- log warning for unrecognized cron expression
     if (logger) {
-      logger.warn(
-        "computeNextRun",
-        `Unrecognized cron expression "${cron}", falling back to 1 hour from now`,
-      );
+      logger.warn("computeNextRun", `Unrecognized cron expression "${cron}", falling back to 1 hour from now`);
     }
     return now + 3_600_000;
   }
@@ -355,7 +352,10 @@ export class TaskScheduler {
    * Create a scheduled task from a natural language description.
    * Delegates parsing to AutomationEngine and stores as an automation task.
    */
-  async createFromNaturalLanguage(input: string, defaultChannel?: string): Promise<Result<ScheduledTask, EidolonError>> {
+  async createFromNaturalLanguage(
+    input: string,
+    defaultChannel?: string,
+  ): Promise<Result<ScheduledTask, EidolonError>> {
     // Lazy import to avoid circular dependency at module load time
     const { extractScheduleAndAction, deriveName } = (await import("./automation.ts")) as {
       extractScheduleAndAction: (input: string) => { cron: string; actionText: string } | null;

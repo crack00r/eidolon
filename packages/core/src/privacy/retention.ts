@@ -49,13 +49,11 @@ const DEFAULT_RETENTION: RetentionConfig = {
 
 export class RetentionEnforcer {
   private readonly operational: Database;
-  private readonly audit: Database;
   private readonly config: RetentionConfig;
   private readonly logger: Logger;
 
-  constructor(operational: Database, audit: Database, privacyConfig: PrivacyConfig | undefined, logger: Logger) {
+  constructor(operational: Database, _audit: Database, privacyConfig: PrivacyConfig | undefined, logger: Logger) {
     this.operational = operational;
-    this.audit = audit;
     this.config = privacyConfig?.retention
       ? {
           conversationsDays: privacyConfig.retention.conversationsDays,

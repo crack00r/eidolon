@@ -57,7 +57,7 @@ export async function createMetricsBridge(
   registry: MetricsRegistry,
   enabled: boolean,
   logger: Logger,
-  syncIntervalMs: number = DEFAULT_SYNC_INTERVAL_MS,
+  _syncIntervalMs: number = DEFAULT_SYNC_INTERVAL_MS,
 ): Promise<MetricsBridgeHandle> {
   if (!enabled) {
     return NOOP_HANDLE;

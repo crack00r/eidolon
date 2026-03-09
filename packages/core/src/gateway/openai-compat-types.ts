@@ -6,7 +6,7 @@
 
 import type { BrainConfig } from "@eidolon/protocol";
 import type { ModelRouter } from "../llm/router.ts";
-import { SECURITY_HEADERS, constantTimeCompare } from "./server-helpers.ts";
+import { constantTimeCompare, SECURITY_HEADERS } from "./server-helpers.ts";
 
 // ---------------------------------------------------------------------------
 // OpenAI-format response types

@@ -226,9 +226,7 @@ export class BunSmtpClient implements ISmtpClient {
   async connect(): Promise<Result<void, EidolonError>> {
     try {
       if (!this.config.tls) {
-        console.warn(
-          "[SMTP] SECURITY WARNING: Connecting without TLS. Credentials will be sent in plaintext.",
-        );
+        console.warn("[SMTP] SECURITY WARNING: Connecting without TLS. Credentials will be sent in plaintext.");
       }
 
       let onGreeting: (() => void) | null = null;
@@ -299,7 +297,9 @@ export class BunSmtpClient implements ISmtpClient {
         greetingTimer = setTimeout(() => {
           try {
             socket.end();
-          } catch { /* best-effort */ }
+          } catch {
+            /* best-effort */
+          }
           reject(new Error("SMTP greeting timeout after 30 seconds"));
         }, 30_000);
         greetingTimer.unref();

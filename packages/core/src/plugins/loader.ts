@@ -98,7 +98,7 @@ export async function discoverPlugins(pluginDir: string, logger: Logger): Promis
       // to prevent path traversal attacks (e.g., main: "../../etc/passwd")
       const entryPath = resolve(dir, manifest.main);
       const resolvedDir = resolve(dir);
-      if (!entryPath.startsWith(resolvedDir + "/") && entryPath !== resolvedDir) {
+      if (!entryPath.startsWith(`${resolvedDir}/`) && entryPath !== resolvedDir) {
         logger.warn("plugins:loader", `Plugin ${manifest.name}: path traversal detected in main: ${manifest.main}`);
         failedPlugins.push(manifest.name);
         continue;
@@ -120,11 +120,10 @@ export async function discoverPlugins(pluginDir: string, logger: Logger): Promis
   }
 
   if (failedPlugins.length > 0) {
-    logger.warn(
-      "plugins:loader",
-      `${failedPlugins.length} plugin(s) failed to load: ${failedPlugins.join(", ")}`,
-      { failedCount: failedPlugins.length, failedNames: failedPlugins },
-    );
+    logger.warn("plugins:loader", `${failedPlugins.length} plugin(s) failed to load: ${failedPlugins.join(", ")}`, {
+      failedCount: failedPlugins.length,
+      failedNames: failedPlugins,
+    });
   }
 
   return results;

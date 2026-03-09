@@ -35,7 +35,7 @@ export class LogRotator {
   async writeLine(line: string): Promise<void> {
     // Chain onto the existing lock to serialize concurrent writes
     const prev = this.writeLock;
-    let releaseResolve: () => void;
+    let releaseResolve: (() => void) | undefined;
     this.writeLock = new Promise<void>((resolve) => {
       releaseResolve = resolve;
     });
@@ -49,7 +49,7 @@ export class LogRotator {
       }
       await appendFile(this.currentPath, `${line}\n`, "utf-8");
     } finally {
-      releaseResolve!();
+      releaseResolve?.();
     }
   }
 

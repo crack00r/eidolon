@@ -13,8 +13,8 @@
 
 import { createHmac } from "node:crypto";
 import { hostname } from "node:os";
-import { constantTimeCompare } from "../gateway/server-helpers.ts";
 import type { DatabaseManager } from "../database/manager.ts";
+import { constantTimeCompare } from "../gateway/server-helpers.ts";
 import type { Logger } from "../logging/logger.ts";
 import {
   createDemote,
@@ -394,7 +394,13 @@ export class ReplicationManager {
       const chunkResult = chunkSnapshotFile(file.path, file.fileName);
       if (!chunkResult.ok) {
         this.logger.error("snapshot", `Failed to chunk ${file.fileName}: ${chunkResult.error.message}`);
-        this.send({ type: "error", timestamp: Date.now(), nodeId: this.nodeId, errorCode: "SNAPSHOT_FAILED", errorMessage: `Chunk failure for ${file.fileName}: ${chunkResult.error.message}` });
+        this.send({
+          type: "error",
+          timestamp: Date.now(),
+          nodeId: this.nodeId,
+          errorCode: "SNAPSHOT_FAILED",
+          errorMessage: `Chunk failure for ${file.fileName}: ${chunkResult.error.message}`,
+        });
         aborted = true;
         break;
       }

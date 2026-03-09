@@ -80,8 +80,7 @@ export function getEnabledSteps(def: WorkflowDefinition, stepResults: readonly S
       typeof rawConfig === "object" && rawConfig !== null
         ? (rawConfig as { thenSteps?: string[]; elseSteps?: string[] })
         : { thenSteps: undefined, elseSteps: undefined };
-    const conditionResult =
-      typeof result.output === "boolean" ? result.output : null;
+    const conditionResult = typeof result.output === "boolean" ? result.output : null;
 
     if (conditionResult === true) {
       for (const elseId of config.elseSteps ?? []) {

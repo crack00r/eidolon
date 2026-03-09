@@ -250,4 +250,3 @@ function normalizeMessageType(raw: string): WhatsAppMessageType {
       return "unknown";
   }
 }
-

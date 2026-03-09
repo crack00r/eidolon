@@ -9,12 +9,12 @@ import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 import type { Logger } from "../../logging/logger.ts";
 import { stringSimilarity } from "../dreaming/housekeeping.ts";
 import {
-  rowToEntity,
   type CreateEntityInput,
   type EntityResolutionThresholds,
   type EntityRow,
   type EntityType,
   type KGEntityStore,
+  rowToEntity,
 } from "./entities.ts";
 
 // ---------------------------------------------------------------------------

@@ -22,7 +22,7 @@ import {
   unlinkSync,
   writeFileSync,
 } from "node:fs";
-import { join, resolve, sep } from "node:path";
+import { resolve, sep } from "node:path";
 import type { EidolonError, Result } from "@eidolon/protocol";
 import {
   AUDIT_DB_FILENAME,

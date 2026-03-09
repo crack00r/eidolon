@@ -143,8 +143,12 @@ export class MCPHealthMonitor {
       // Filter out $secret: references from env -- they cannot be resolved here.
       // Only pass through literal values.
       const DANGEROUS_ENV_KEYS = new Set([
-        "LD_PRELOAD", "DYLD_INSERT_LIBRARIES", "DYLD_FRAMEWORK_PATH",
-        "DYLD_LIBRARY_PATH", "NODE_OPTIONS", "PYTHONPATH",
+        "LD_PRELOAD",
+        "DYLD_INSERT_LIBRARIES",
+        "DYLD_FRAMEWORK_PATH",
+        "DYLD_LIBRARY_PATH",
+        "NODE_OPTIONS",
+        "PYTHONPATH",
       ]);
       const filteredEnv: Record<string, string> = {};
       if (config.env) {

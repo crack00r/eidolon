@@ -142,7 +142,9 @@ export class MemoryMcpServer {
   stop(): void {
     this.running = false;
     if (this.reader) {
-      this.reader.cancel().catch((e: unknown) => this.logger.debug("mcp", "reader cancel failed", { error: String(e) }));
+      this.reader
+        .cancel()
+        .catch((e: unknown) => this.logger.debug("mcp", "reader cancel failed", { error: String(e) }));
     }
   }
 

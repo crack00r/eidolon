@@ -14,7 +14,7 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { Logger } from "../logging/logger.ts";
-import { SECURITY_HEADERS, constantTimeCompare } from "./server-helpers.ts";
+import { constantTimeCompare, SECURITY_HEADERS } from "./server-helpers.ts";
 
 // ---------------------------------------------------------------------------
 // Schema

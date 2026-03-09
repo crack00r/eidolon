@@ -35,15 +35,19 @@ export interface CalDAVConfig {
 /** Request timeout for CalDAV HTTP calls (30 seconds). */
 const CALDAV_TIMEOUT_MS = 30_000;
 
-const BLOCKED_HOSTNAMES = new Set([
-  "localhost",
-  "metadata.google.internal",
-  "instance-data",
-]);
+const BLOCKED_HOSTNAMES = new Set(["localhost", "metadata.google.internal", "instance-data"]);
 
 const PRIVATE_IP_PATTERNS = [
-  /^127\./, /^10\./, /^172\.(1[6-9]|2\d|3[01])\./, /^192\.168\./,
-  /^0\./, /^169\.254\./, /^::1$/, /^fc/i, /^fd/i, /^fe80/i,
+  /^127\./,
+  /^10\./,
+  /^172\.(1[6-9]|2\d|3[01])\./,
+  /^192\.168\./,
+  /^0\./,
+  /^169\.254\./,
+  /^::1$/,
+  /^fc/i,
+  /^fd/i,
+  /^fe80/i,
 ];
 
 function isBlockedCalDAVHost(url: string): string | undefined {

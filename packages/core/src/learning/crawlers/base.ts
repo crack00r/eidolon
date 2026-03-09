@@ -144,7 +144,12 @@ export abstract class BaseCrawler {
     let currentUrl = url;
 
     for (let redirectCount = 0; redirectCount <= MAX_REDIRECTS; redirectCount++) {
-      const response = await fetch(currentUrl, { ...init, headers, redirect: "manual", signal: AbortSignal.timeout(30_000) });
+      const response = await fetch(currentUrl, {
+        ...init,
+        headers,
+        redirect: "manual",
+        signal: AbortSignal.timeout(30_000),
+      });
 
       // Follow redirects with SSRF validation on each hop
       if (response.status >= 300 && response.status < 400) {

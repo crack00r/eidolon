@@ -139,22 +139,26 @@ function compare(left: unknown, op: string, right: unknown): boolean {
     case "!=":
       return left !== right && String(left) !== String(right);
     case ">": {
-      const l = Number(left), r = Number(right);
+      const l = Number(left),
+        r = Number(right);
       if (Number.isNaN(l) || Number.isNaN(r)) return false;
       return l > r;
     }
     case "<": {
-      const l = Number(left), r = Number(right);
+      const l = Number(left),
+        r = Number(right);
       if (Number.isNaN(l) || Number.isNaN(r)) return false;
       return l < r;
     }
     case ">=": {
-      const l = Number(left), r = Number(right);
+      const l = Number(left),
+        r = Number(right);
       if (Number.isNaN(l) || Number.isNaN(r)) return false;
       return l >= r;
     }
     case "<=": {
-      const l = Number(left), r = Number(right);
+      const l = Number(left),
+        r = Number(right);
       if (Number.isNaN(l) || Number.isNaN(r)) return false;
       return l <= r;
     }

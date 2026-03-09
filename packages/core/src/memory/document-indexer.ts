@@ -109,7 +109,7 @@ export class DocumentIndexer {
       if (baseDir) {
         const realPath = realpathSync(absPath);
         const realBase = realpathSync(baseDir);
-        if (realPath !== realBase && !realPath.startsWith(realBase + "/")) {
+        if (realPath !== realBase && !realPath.startsWith(`${realBase}/`)) {
           return Err(createError(ErrorCode.DB_QUERY_FAILED, `File is outside base directory: ${absPath}`));
         }
       }
@@ -299,7 +299,7 @@ export class DocumentIndexer {
     if (baseDir) {
       const realPath = realpathSync(absPath);
       const realBase = realpathSync(baseDir);
-      if (realPath !== realBase && !realPath.startsWith(realBase + "/")) {
+      if (realPath !== realBase && !realPath.startsWith(`${realBase}/`)) {
         return Err(createError(ErrorCode.DB_QUERY_FAILED, `File is outside base directory: ${absPath}`));
       }
     }

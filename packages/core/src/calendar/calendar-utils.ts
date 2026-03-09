@@ -5,7 +5,7 @@
  * Extracted from manager.ts to keep CalendarManager under 300 lines.
  */
 
-import type { CalendarConfig, CalendarEvent, CalendarProviderType } from "@eidolon/protocol";
+import type { CalendarConfig, CalendarEvent } from "@eidolon/protocol";
 import { z } from "zod";
 import type { EventBus } from "../loop/event-bus.ts";
 

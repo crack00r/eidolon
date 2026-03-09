@@ -12,7 +12,14 @@ import type { EidolonError, Memory, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 import type { Logger } from "../logging/logger.ts";
 import type { CreateMemoryInput, MemoryRow } from "./store-helpers.ts";
-import { cosineSimilarity, MAX_BATCH_SIZE, MAX_CONTENT_LENGTH, VALID_MEMORY_LAYERS, VALID_MEMORY_TYPES, rowToMemory } from "./store-helpers.ts";
+import {
+  cosineSimilarity,
+  MAX_BATCH_SIZE,
+  MAX_CONTENT_LENGTH,
+  rowToMemory,
+  VALID_MEMORY_LAYERS,
+  VALID_MEMORY_TYPES,
+} from "./store-helpers.ts";
 
 // ---------------------------------------------------------------------------
 // findSimilar
@@ -48,7 +55,9 @@ export function findSimilarMemories(
       if (batchRows.length === 0) break;
 
       for (const row of batchRows) {
-        const storedEmbedding = new Float32Array(row.embedding.buffer.slice(row.embedding.byteOffset, row.embedding.byteOffset + row.embedding.byteLength));
+        const storedEmbedding = new Float32Array(
+          row.embedding.buffer.slice(row.embedding.byteOffset, row.embedding.byteOffset + row.embedding.byteLength),
+        );
         if (storedEmbedding.length !== EXPECTED_DIMENSIONS) continue;
         if (embedding.length !== EXPECTED_DIMENSIONS) continue;
 
@@ -75,13 +84,12 @@ export function findSimilarMemories(
 
     // Warn if the scan was truncated at MAX_ROWS -- consolidation may miss duplicates
     if (topK.length > 0) {
-      const totalScanned = topK.length; // approximate; actual count may differ
       // Check if we hit the MAX_ROWS ceiling by seeing if the last batch was full
       const lastBatchOffset = Math.floor((MAX_ROWS - BATCH_SIZE) / BATCH_SIZE) * BATCH_SIZE;
       if (lastBatchOffset + BATCH_SIZE <= MAX_ROWS) {
-        const checkRows = db
-          .query("SELECT COUNT(*) as cnt FROM memories WHERE embedding IS NOT NULL")
-          .get() as { cnt: number } | null;
+        const checkRows = db.query("SELECT COUNT(*) as cnt FROM memories WHERE embedding IS NOT NULL").get() as {
+          cnt: number;
+        } | null;
         if (checkRows && checkRows.cnt >= MAX_ROWS) {
           const msg = `findSimilarMemories: result set truncated at ${MAX_ROWS} rows (total: ${checkRows.cnt}), consolidation may miss duplicates`;
           if (logger) {
@@ -126,14 +134,10 @@ export function createMemoryBatch(
   }
   for (const input of inputs) {
     if (!VALID_MEMORY_TYPES.has(input.type)) {
-      return Err(
-        createError(ErrorCode.DB_QUERY_FAILED, `Invalid memory type: "${input.type}"`),
-      );
+      return Err(createError(ErrorCode.DB_QUERY_FAILED, `Invalid memory type: "${input.type}"`));
     }
     if (!VALID_MEMORY_LAYERS.has(input.layer)) {
-      return Err(
-        createError(ErrorCode.DB_QUERY_FAILED, `Invalid memory layer: "${input.layer}"`),
-      );
+      return Err(createError(ErrorCode.DB_QUERY_FAILED, `Invalid memory layer: "${input.layer}"`));
     }
     if (input.content.length > MAX_CONTENT_LENGTH) {
       return Err(

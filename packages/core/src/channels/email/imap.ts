@@ -172,9 +172,7 @@ export class BunImapClient implements IImapClient {
   async connect(): Promise<Result<void, EidolonError>> {
     try {
       if (!this.config.tls) {
-        console.warn(
-          "[IMAP] SECURITY WARNING: Connecting without TLS. Credentials will be sent in plaintext.",
-        );
+        console.warn("[IMAP] SECURITY WARNING: Connecting without TLS. Credentials will be sent in plaintext.");
       }
 
       const _responseBuffer: string[] = [];
@@ -262,7 +260,9 @@ export class BunImapClient implements IImapClient {
         greetingTimer = setTimeout(() => {
           try {
             socket.end();
-          } catch { /* best-effort */ }
+          } catch {
+            /* best-effort */
+          }
           reject(new Error("IMAP greeting timeout after 30 seconds"));
         }, 30_000);
         greetingTimer.unref();
@@ -400,7 +400,10 @@ export class BunImapClient implements IImapClient {
   }
 
   private escapeImapStr(s: string): string {
-    return s.replace(/[\r\n\0]/g, "").replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+    return s
+      .replace(/[\r\n\0]/g, "")
+      .replace(/\\/g, "\\\\")
+      .replace(/"/g, '\\"');
   }
 
   private async sendCommand(command: string): Promise<string> {

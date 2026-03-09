@@ -307,7 +307,8 @@ export class CognitiveLoop {
     if (this.handler) {
       try {
         const result = await this.handler(event, priority);
-        tokensUsed = (Number.isFinite(result.tokensUsed) && result.tokensUsed > 0) ? result.tokensUsed : this.defaultTokenEstimate;
+        tokensUsed =
+          Number.isFinite(result.tokensUsed) && result.tokensUsed > 0 ? result.tokensUsed : this.defaultTokenEstimate;
         if (!result.success) {
           handlerSucceeded = false;
           tokensUsed = 0;

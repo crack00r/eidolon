@@ -227,13 +227,12 @@ export class WyomingServer {
     const normalizedAddress = remoteAddress.startsWith("::ffff:") ? remoteAddress.slice(7) : remoteAddress;
 
     // Extract IP only (strip port) to prevent allowlist bypass via port appending
-    const ipOnly = normalizedAddress.includes(":") && !normalizedAddress.includes("[")
-      ? normalizedAddress
-      : normalizedAddress.split(":")[0] ?? normalizedAddress;
+    const ipOnly =
+      normalizedAddress.includes(":") && !normalizedAddress.includes("[")
+        ? normalizedAddress
+        : (normalizedAddress.split(":")[0] ?? normalizedAddress);
 
     // Check if remote address IP is in the allowlist
-    return this.config.allowedSatellites.some(
-      (allowed) => allowed === ipOnly || allowed === normalizedAddress,
-    );
+    return this.config.allowedSatellites.some((allowed) => allowed === ipOnly || allowed === normalizedAddress);
   }
 }

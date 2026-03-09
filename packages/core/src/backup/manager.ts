@@ -9,7 +9,17 @@
  */
 
 import { createCipheriv, createDecipheriv, createHmac, randomBytes } from "node:crypto";
-import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { join, resolve } from "node:path";
 import type { DatabaseConfig, EidolonError, Result } from "@eidolon/protocol";
 import {

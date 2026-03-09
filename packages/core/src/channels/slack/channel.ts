@@ -8,7 +8,6 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { sleep } from "../../utils/async.ts";
 import type {
   Channel,
   ChannelCapabilities,
@@ -20,6 +19,7 @@ import type {
 } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 import type { Logger } from "../../logging/logger.ts";
+import { sleep } from "../../utils/async.ts";
 import { formatForSlack, splitSlackMessage } from "./formatter.ts";
 
 // ---------------------------------------------------------------------------

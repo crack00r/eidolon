@@ -280,14 +280,10 @@ export class EventBus {
       deferFn();
 
       if (deadLettered) {
-        this.logger.warn(
-          "event-bus",
-          `Event ${eventId} (${eventType}) exceeded max retries, moving to dead letter`,
-          {
-            retryCount,
-            eventType,
-          },
-        );
+        this.logger.warn("event-bus", `Event ${eventId} (${eventType}) exceeded max retries, moving to dead letter`, {
+          retryCount,
+          eventType,
+        });
         return Ok(undefined);
       }
 

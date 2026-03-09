@@ -4,14 +4,7 @@
  */
 
 import { z } from "zod";
-import type {
-  StepResult,
-  StepStatus,
-  WorkflowContext,
-  WorkflowDefinition,
-  WorkflowRun,
-  WorkflowStatus,
-} from "./types.ts";
+import type { StepResult, WorkflowContext, WorkflowDefinition, WorkflowRun } from "./types.ts";
 import { STEP_STATUSES, WORKFLOW_STATUSES } from "./types.ts";
 
 /** Zod schema for validating workflow status from DB. */
@@ -86,17 +79,19 @@ function safeParseJson<T>(column: string, json: string, fallback: T, rowId: stri
 
 export function rowToDefinition(row: DefinitionRow): WorkflowDefinition {
   const trigger = safeParseJson<WorkflowDefinition["trigger"]>(
-    "trigger_config", row.trigger_config, { type: "manual" } as WorkflowDefinition["trigger"], row.id,
+    "trigger_config",
+    row.trigger_config,
+    { type: "manual" } as WorkflowDefinition["trigger"],
+    row.id,
   );
-  const steps = safeParseJson<WorkflowDefinition["steps"]>(
-    "steps", row.steps, [], row.id,
-  );
+  const steps = safeParseJson<WorkflowDefinition["steps"]>("steps", row.steps, [], row.id);
   const onFailure = safeParseJson<WorkflowDefinition["onFailure"]>(
-    "on_failure", row.on_failure, { type: "abort" }, row.id,
+    "on_failure",
+    row.on_failure,
+    { type: "abort" },
+    row.id,
   );
-  const metadata = safeParseJson<Record<string, unknown>>(
-    "metadata", row.metadata, {}, row.id,
-  );
+  const metadata = safeParseJson<Record<string, unknown>>("metadata", row.metadata, {}, row.id);
 
   return {
     id: row.id,

@@ -194,7 +194,7 @@ describe("validateSafePath", () => {
   });
 
   test("rejects paths exceeding max length", () => {
-    const longPath = "/" + "a".repeat(4096);
+    const longPath = `/${"a".repeat(4096)}`;
     expect(() => validateSafePath(longPath)).toThrow("too long");
   });
 });

@@ -77,9 +77,7 @@ export function gdprEraseAuditRecords(
   params: readonly (string | number)[],
 ): Result<number, EidolonError> {
   if (!filter.trim()) {
-    return Err(
-      createError(ErrorCode.INVALID_INPUT, "GDPR audit erasure requires a non-empty filter clause"),
-    );
+    return Err(createError(ErrorCode.INVALID_INPUT, "GDPR audit erasure requires a non-empty filter clause"));
   }
 
   const validationResult = validateFilter(filter);
@@ -109,8 +107,6 @@ export function gdprEraseAuditRecords(
     } catch {
       // Best-effort: trigger recreation may fail if DB is in bad state
     }
-    return Err(
-      createError(ErrorCode.DB_QUERY_FAILED, "Failed to erase audit records for GDPR compliance", cause),
-    );
+    return Err(createError(ErrorCode.DB_QUERY_FAILED, "Failed to erase audit records for GDPR compliance", cause));
   }
 }

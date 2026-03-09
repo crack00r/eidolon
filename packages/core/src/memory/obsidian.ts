@@ -171,7 +171,7 @@ export class ObsidianIndexer {
       }
 
       // Path containment check: ensure file is within the vault root
-      if (!absPath.startsWith(absVaultRoot + "/") && absPath !== absVaultRoot) {
+      if (!absPath.startsWith(`${absVaultRoot}/`) && absPath !== absVaultRoot) {
         return Err(
           createError(ErrorCode.DB_QUERY_FAILED, `File path ${absPath} is outside vault root ${absVaultRoot}`),
         );

@@ -102,9 +102,8 @@ function parseCommitLine(line: string): GitCommit | null {
 // ---------------------------------------------------------------------------
 
 export class GitAnalyzer {
-  constructor(_logger: Logger) {
-    // Logger reserved for future diagnostic use
-  }
+  // biome-ignore lint/complexity/noUselessConstructor: logger reserved for future diagnostic use
+  constructor(_logger: Logger) {}
 
   /** Verify that a path is a valid git repository. */
   async isGitRepo(repoPath: string): Promise<Result<boolean, EidolonError>> {

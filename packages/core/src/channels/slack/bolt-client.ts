@@ -107,7 +107,11 @@ function validateDownloadUrl(url: string): void {
   } catch {
     throw new Error("Invalid file download URL");
   }
-  const hostname = parsed.hostname.replace(/^\[/, "").replace(/]$/, "").toLowerCase().replace(/^::ffff:/, "");
+  const hostname = parsed.hostname
+    .replace(/^\[/, "")
+    .replace(/]$/, "")
+    .toLowerCase()
+    .replace(/^::ffff:/, "");
   if (BLOCKED_DOWNLOAD_HOSTNAMES.has(hostname)) {
     throw new Error(`File download blocked: ${hostname} is a blocked hostname (SSRF protection)`);
   }

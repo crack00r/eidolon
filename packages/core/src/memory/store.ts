@@ -29,9 +29,9 @@ import {
   MAX_CONTENT_LENGTH,
   MAX_LIST_LIMIT,
   MAX_SEARCH_LIMIT,
+  rowToMemory,
   VALID_MEMORY_LAYERS,
   VALID_MEMORY_TYPES,
-  rowToMemory,
 } from "./store-helpers.ts";
 
 // Re-export types for backward compatibility
@@ -53,14 +53,10 @@ export class MemoryStore {
   /** Create a new memory. Generates a UUID as the ID. */
   create(input: CreateMemoryInput): Result<Memory, EidolonError> {
     if (!VALID_MEMORY_TYPES.has(input.type)) {
-      return Err(
-        createError(ErrorCode.DB_QUERY_FAILED, `Invalid memory type: "${input.type}"`),
-      );
+      return Err(createError(ErrorCode.DB_QUERY_FAILED, `Invalid memory type: "${input.type}"`));
     }
     if (!VALID_MEMORY_LAYERS.has(input.layer)) {
-      return Err(
-        createError(ErrorCode.DB_QUERY_FAILED, `Invalid memory layer: "${input.layer}"`),
-      );
+      return Err(createError(ErrorCode.DB_QUERY_FAILED, `Invalid memory layer: "${input.layer}"`));
     }
     if (input.content.length > MAX_CONTENT_LENGTH) {
       return Err(

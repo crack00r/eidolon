@@ -56,6 +56,7 @@ import type { TokenTracker } from "../metrics/token-tracker.ts";
 import type { MetricsWiringHandle } from "../metrics/wiring.ts";
 import type { PluginLifecycleManager } from "../plugins/lifecycle.ts";
 import type { PluginRegistry } from "../plugins/registry.ts";
+import type { ReplicationManager } from "../replication/manager.ts";
 import type { ResearchEngine } from "../research/engine.ts";
 import type { AutomationEngine } from "../scheduler/automation.ts";
 import type { TaskScheduler } from "../scheduler/scheduler.ts";
@@ -63,7 +64,6 @@ import type { SecretStore } from "../secrets/store.ts";
 import type { ApprovalManager } from "../security/approval-manager.ts";
 import type { MetricsBridgeHandle } from "../telemetry/metrics-bridge.ts";
 import type { TelemetryProvider } from "../telemetry/provider.ts";
-import type { ReplicationManager } from "../replication/manager.ts";
 import type { WorkflowEngine } from "../workflow/engine.ts";
 import type { WorkflowStore } from "../workflow/store.ts";
 

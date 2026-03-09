@@ -109,11 +109,9 @@ export class HAManager {
       if (!result.ok) {
         this.logger.error("checkAnomalies", "Anomaly detection failed", result.error);
       } else if (result.value.length > 0) {
-        this.logger.warn(
-          "checkAnomalies",
-          `Detected ${result.value.length} anomalie(s)`,
-          { entities: result.value.map((a) => a.entityId) },
-        );
+        this.logger.warn("checkAnomalies", `Detected ${result.value.length} anomalie(s)`, {
+          entities: result.value.map((a) => a.entityId),
+        });
       }
     }, intervalMs);
     this.syncInterval.unref();

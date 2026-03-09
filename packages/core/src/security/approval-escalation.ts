@@ -112,7 +112,9 @@ function resolveMaxEscalation(request: ApprovalRequest, deps: EscalateDeps): Res
 
   try {
     deps.db
-      .query("UPDATE approval_requests SET status = ?, responded_by = ?, responded_at = ? WHERE id = ? AND status = 'pending'")
+      .query(
+        "UPDATE approval_requests SET status = ?, responded_by = ?, responded_at = ? WHERE id = ? AND status = 'pending'",
+      )
       .run(finalStatus, `auto:max_escalation:${finalStatus}`, now, request.id);
   } catch (cause) {
     return Err(createError(ErrorCode.DB_QUERY_FAILED, `Failed to resolve max-escalated request ${request.id}`, cause));
@@ -151,7 +153,9 @@ function createEscalatedRequest(
   try {
     deps.db.transaction(() => {
       deps.db
-        .query("UPDATE approval_requests SET status = 'escalated', responded_by = ?, responded_at = ? WHERE id = ? AND status = 'pending'")
+        .query(
+          "UPDATE approval_requests SET status = 'escalated', responded_by = ?, responded_at = ? WHERE id = ? AND status = 'pending'",
+        )
         .run("auto:escalated", now, request.id);
 
       deps.db
@@ -173,7 +177,11 @@ function createEscalatedRequest(
     })();
   } catch (cause) {
     return Err(
-      createError(ErrorCode.DB_QUERY_FAILED, `Failed to escalate request ${request.id}: transaction rolled back`, cause),
+      createError(
+        ErrorCode.DB_QUERY_FAILED,
+        `Failed to escalate request ${request.id}: transaction rolled back`,
+        cause,
+      ),
     );
   }
 

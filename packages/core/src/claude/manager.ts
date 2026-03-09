@@ -193,7 +193,9 @@ export class ClaudeCodeManager implements IClaudeProcess {
     this.activeSessions.set(sessionId, proc);
 
     // Drain stderr unconditionally in the background to prevent pipe deadlocks
-    const stderrPromise: Promise<string> = (proc.stderr ? new Response(proc.stderr).text() : Promise.resolve("")).catch(() => "");
+    const stderrPromise: Promise<string> = (proc.stderr ? new Response(proc.stderr).text() : Promise.resolve("")).catch(
+      () => "",
+    );
 
     // Set up timeout if configured
     let timedOut = false;
@@ -284,7 +286,9 @@ export class ClaudeCodeManager implements IClaudeProcess {
       }
       this.activeSessions.delete(sessionId);
       // Ensure stderr is consumed even if generator is abandoned early
-      stderrPromise.catch((e: unknown) => this.logger.debug("claude", "stderr consumption failed", { error: String(e) }));
+      stderrPromise.catch((e: unknown) =>
+        this.logger.debug("claude", "stderr consumption failed", { error: String(e) }),
+      );
       span.end();
     }
   }

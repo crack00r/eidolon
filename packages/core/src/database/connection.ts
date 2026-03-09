@@ -87,7 +87,11 @@ export function createConnection(path: string, options?: ConnectionOptions): Res
         db.exec(`PRAGMA wal_autocheckpoint=${WAL_AUTOCHECKPOINT_PAGES}`);
       }
     } catch (pragmaErr) {
-      try { db.close(); } catch { /* best-effort cleanup */ }
+      try {
+        db.close();
+      } catch {
+        /* best-effort cleanup */
+      }
       return Err(createError(ErrorCode.DB_CONNECTION_FAILED, "Failed to configure database PRAGMAs", pragmaErr));
     }
 

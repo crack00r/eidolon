@@ -265,7 +265,9 @@ export function searchVectorBruteForce(
       if (rows.length === 0) break;
 
       for (const row of rows) {
-        const embedding = new Float32Array(row.embedding.buffer.slice(row.embedding.byteOffset, row.embedding.byteOffset + row.embedding.byteLength));
+        const embedding = new Float32Array(
+          row.embedding.buffer.slice(row.embedding.byteOffset, row.embedding.byteOffset + row.embedding.byteLength),
+        );
         if (embedding.length !== EXPECTED_DIMENSIONS) {
           logger.warn(
             "searchVectorBruteForce",
@@ -393,7 +395,9 @@ export function getEmbedding(db: Database, memoryId: string): Result<Float32Arra
       return Ok(null);
     }
 
-    const embedding = new Float32Array(row.embedding.buffer.slice(row.embedding.byteOffset, row.embedding.byteOffset + row.embedding.byteLength));
+    const embedding = new Float32Array(
+      row.embedding.buffer.slice(row.embedding.byteOffset, row.embedding.byteOffset + row.embedding.byteLength),
+    );
     return Ok(embedding);
   } catch (cause) {
     return Err(createError(ErrorCode.DB_QUERY_FAILED, `Failed to get embedding for memory ${memoryId}`, cause));
