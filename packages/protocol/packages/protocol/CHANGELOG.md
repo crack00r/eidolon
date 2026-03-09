@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.2.0](https://github.com/crack00r/eidolon/compare/v0.1.14...v0.2.0) (2026-03-09)
+
+
+### Bug Fixes
+
+* **protocol:** strengthen type safety and config schemas ([0b03760](https://github.com/crack00r/eidolon/commit/0b03760fbda5bf7a40b01c7620f4d9f82996530b))
+* **types:** strengthen type safety and Zod boundary validation ([a9d65f3](https://github.com/crack00r/eidolon/commit/a9d65f3c009444d208914111bf4490ca7effc093))
+
+
+### Miscellaneous
+
+* release main ([030003a](https://github.com/crack00r/eidolon/commit/030003afdfe87c2fcee1a2c79609bf53b091f505))
+* release main ([79c0465](https://github.com/crack00r/eidolon/commit/79c04652619f2fbab897a0112f72c7265a353c5d))
+* release v0.2.0 -- 20-round comprehensive security audit ([b957408](https://github.com/crack00r/eidolon/commit/b95740890155b6b065aa1ff51d42bb8a7e1b682d))
+
 ## [0.1.14](https://github.com/crack00r/eidolon/compare/v0.1.13...v0.1.14) (2026-03-08)
 
 

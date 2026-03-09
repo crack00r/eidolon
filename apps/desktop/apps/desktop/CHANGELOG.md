@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.2.0](https://github.com/crack00r/eidolon/compare/v0.1.15...v0.2.0) (2026-03-09)
+
+
+### Bug Fixes
+
+* **protocol:** strengthen type safety and config schemas ([0b03760](https://github.com/crack00r/eidolon/commit/0b03760fbda5bf7a40b01c7620f4d9f82996530b))
+
+
+### Miscellaneous
+
+* release v0.2.0 -- 20-round comprehensive security audit ([b957408](https://github.com/crack00r/eidolon/commit/b95740890155b6b065aa1ff51d42bb8a7e1b682d))
+
 ## [0.1.15](https://github.com/crack00r/eidolon/compare/v0.1.14...v0.1.15) (2026-03-08)
 
 

@@ -1,5 +1,36 @@
 # Changelog
 
+## [0.2.0](https://github.com/crack00r/eidolon/compare/v0.1.14...v0.2.0) (2026-03-09)
+
+
+### Bug Fixes
+
+* **channels:** harden all communication channels ([9f5e783](https://github.com/crack00r/eidolon/commit/9f5e783b9df8e569ba34157c43fe3f71c9d3577c))
+* **config:** sync versions, release-please, and config validation ([f8ad461](https://github.com/crack00r/eidolon/commit/f8ad461e7e57f5cb49e0a00f14aca820d2ba536b))
+* **core:** gateway event publishing and client manager cleanup ([03f2cc8](https://github.com/crack00r/eidolon/commit/03f2cc8dfca501bb8288cc7537bca469fb286aea))
+* **core:** harden daemon, workflow, GPU, and infrastructure subsystems ([1c3f112](https://github.com/crack00r/eidolon/commit/1c3f1120f83fd22a094d451e67d24440f764ff3a))
+* **core:** harden memory, learning, channels, and data layer ([ecaec57](https://github.com/crack00r/eidolon/commit/ecaec57f8881637b8cf249bbc240ada5e80ba404))
+* **data:** add transactions, UPSERT, and data integrity guards ([4b0ec58](https://github.com/crack00r/eidolon/commit/4b0ec585f9d0f221385b351f6292eb5142cea543))
+* **errors:** improve error handling, resource cleanup, and resilience ([dd97686](https://github.com/crack00r/eidolon/commit/dd976860105237363d5d5921252ee79c4787d775))
+* **resources:** add bounds, rate limits, and memory safety ([613509f](https://github.com/crack00r/eidolon/commit/613509fc71db6c624ba6b01d95a18e45a1873f4a))
+* **security:** harden auth, SSRF protection, secrets, and privacy across codebase ([60310fa](https://github.com/crack00r/eidolon/commit/60310fa43aeefa6b5b5310af32d904cad2120f78))
+* **security:** prevent injection, SSRF, and auth vulnerabilities ([b067a9f](https://github.com/crack00r/eidolon/commit/b067a9fe5ad990dc42127d34aeeea00f2c7b4805))
+* **types:** strengthen type safety and Zod boundary validation ([a9d65f3](https://github.com/crack00r/eidolon/commit/a9d65f3c009444d208914111bf4490ca7effc093))
+
+
+### Miscellaneous
+
+* release main ([030003a](https://github.com/crack00r/eidolon/commit/030003afdfe87c2fcee1a2c79609bf53b091f505))
+* release main ([79c0465](https://github.com/crack00r/eidolon/commit/79c04652619f2fbab897a0112f72c7265a353c5d))
+* release v0.2.0 -- 20-round comprehensive security audit ([b957408](https://github.com/crack00r/eidolon/commit/b95740890155b6b065aa1ff51d42bb8a7e1b682d))
+
+
+### Tests
+
+* **core:** add security tests and update test expectations for audit fixes ([08ba348](https://github.com/crack00r/eidolon/commit/08ba3484dbedc98f2c536456dbbd8fb718e050c7))
+* fix error code expectation in daemon memory integration test ([afb668a](https://github.com/crack00r/eidolon/commit/afb668a3ae38b24c07eb8ff4e87d09fb622b11e6))
+* update tests for audit fixes ([f688ef2](https://github.com/crack00r/eidolon/commit/f688ef2bc3c151aa2bbb34d20def1014447ace63))
+
 ## [0.1.14](https://github.com/crack00r/eidolon/compare/v0.1.13...v0.1.14) (2026-03-08)
 
 

@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.2.0](https://github.com/crack00r/eidolon/compare/v0.1.14...v0.2.0) (2026-03-09)
+
+
+### Bug Fixes
+
+* **apps:** harden desktop, web, and CLI frontends ([3bbbf96](https://github.com/crack00r/eidolon/commit/3bbbf967d5e0cff74d21efa048a6746affec8a01))
+* **cli:** add missing zod dependency for Ollama schema validation ([d3d4c4e](https://github.com/crack00r/eidolon/commit/d3d4c4e3b07878a3f7d3010beaef06126aa6a099))
+* **core:** improve resource cleanup, resilience, and error handling ([237dfa4](https://github.com/crack00r/eidolon/commit/237dfa43a65f2b1d90c40f7804ea3b0df7fae802))
+* **security:** harden auth, SSRF protection, secrets, and privacy across codebase ([60310fa](https://github.com/crack00r/eidolon/commit/60310fa43aeefa6b5b5310af32d904cad2120f78))
+
+
+### Miscellaneous
+
+* release main ([030003a](https://github.com/crack00r/eidolon/commit/030003afdfe87c2fcee1a2c79609bf53b091f505))
+* release main ([79c0465](https://github.com/crack00r/eidolon/commit/79c04652619f2fbab897a0112f72c7265a353c5d))
+* release v0.2.0 -- 20-round comprehensive security audit ([b957408](https://github.com/crack00r/eidolon/commit/b95740890155b6b065aa1ff51d42bb8a7e1b682d))
+
+
+### Tests
+
+* update tests for audit fixes ([f688ef2](https://github.com/crack00r/eidolon/commit/f688ef2bc3c151aa2bbb34d20def1014447ace63))
+
 ## [0.1.14](https://github.com/crack00r/eidolon/compare/v0.1.13...v0.1.14) (2026-03-08)
 
 
