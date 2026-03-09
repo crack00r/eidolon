@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.2.1](https://github.com/crack00r/eidolon/compare/v0.2.0...v0.2.1) (2026-03-09)
+
+
+### Features
+
+* **desktop:** add chat history, conversation sidebar, and improved memory/learning views ([3714cb6](https://github.com/crack00r/eidolon/commit/3714cb669f75552152bb54ac40d8022a3af5027b))
+
+
+### Bug Fixes
+
+* **desktop:** fix reconnect on restart and resolve $secret references in Rust ([373c82f](https://github.com/crack00r/eidolon/commit/373c82f818652817a1b19a453782b5d3e631bf6b))
+
 ## [0.2.0](https://github.com/crack00r/eidolon/compare/v0.1.15...v0.2.0) (2026-03-09)
 
 

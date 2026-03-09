@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.1](https://github.com/crack00r/eidolon/compare/v0.2.0...v0.2.1) (2026-03-09)
+
+
+### Bug Fixes
+
+* **ci:** fix CLI build output path and pin Linux runner to Ubuntu 22.04 ([614f7b7](https://github.com/crack00r/eidolon/commit/614f7b70022403a108a3ad43971c14fb5d029cee))
+* **cli:** inject version at build time for compiled binaries ([2800887](https://github.com/crack00r/eidolon/commit/2800887b3b0ab25668f19abc6331a2e2ae9f937b))
+
 ## [0.2.0](https://github.com/crack00r/eidolon/compare/v0.1.14...v0.2.0) (2026-03-09)
 
 
