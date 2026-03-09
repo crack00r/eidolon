@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { randomBytes } from "node:crypto";
+import { createTestConfig } from "@eidolon/test-utils";
 import { SecretStore } from "../store.ts";
 
 const TEST_KEY = randomBytes(32);
@@ -163,5 +164,185 @@ describe("SecretStore", () => {
     if (listResult.ok) {
       expect(listResult.value[0]?.description).toBe("initial");
     }
+  });
+
+  // =========================================================================
+  // Gap 1: Key validation
+  // =========================================================================
+
+  describe("key validation", () => {
+    test("set() rejects empty key", () => {
+      const store = createStore();
+      const result = store.set("", "value");
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.code).toBe("INVALID_INPUT");
+        expect(result.error.message).toContain("empty");
+      }
+    });
+
+    test("get() rejects empty key", () => {
+      const store = createStore();
+      const result = store.get("");
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.code).toBe("INVALID_INPUT");
+      }
+    });
+
+    test("delete() rejects empty key", () => {
+      const store = createStore();
+      const result = store.delete("");
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.code).toBe("INVALID_INPUT");
+      }
+    });
+
+    test("set() rejects key exceeding MAX_KEY_LENGTH (256)", () => {
+      const store = createStore();
+      const longKey = "a".repeat(257);
+      const result = store.set(longKey, "value");
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.code).toBe("INVALID_INPUT");
+        expect(result.error.message).toContain("maximum length");
+      }
+    });
+
+    test("set() accepts key at exactly MAX_KEY_LENGTH (256)", () => {
+      const store = createStore();
+      const exactKey = "a".repeat(256);
+      const result = store.set(exactKey, "value");
+      expect(result.ok).toBe(true);
+    });
+
+    test("set() rejects key with spaces", () => {
+      const store = createStore();
+      const result = store.set("key with spaces", "value");
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.code).toBe("INVALID_INPUT");
+        expect(result.error.message).toContain("invalid characters");
+      }
+    });
+
+    test("set() rejects key with SQL injection attempt", () => {
+      const store = createStore();
+      const result = store.set("key;DROP TABLE", "value");
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.code).toBe("INVALID_INPUT");
+        expect(result.error.message).toContain("invalid characters");
+      }
+    });
+
+    test("set() rejects key with special characters", () => {
+      const store = createStore();
+      for (const badKey of ["key@value", "key=value", "key value", "key\ttab", "key\nnewline"]) {
+        const result = store.set(badKey, "value");
+        expect(result.ok).toBe(false);
+        if (!result.ok) {
+          expect(result.error.code).toBe("INVALID_INPUT");
+        }
+      }
+    });
+
+    test("set() accepts valid keys with dots, hyphens, underscores, and slashes", () => {
+      const store = createStore();
+      const validKeys = [
+        "simple-key",
+        "dotted.key.name",
+        "under_scored",
+        "service/api-key",
+        "my.service/nested_key-v2",
+        "UPPERCASE",
+        "MiXeD.CaSe-Key_123",
+      ];
+      for (const key of validKeys) {
+        const result = store.set(key, "value");
+        expect(result.ok).toBe(true);
+      }
+    });
+  });
+
+  // =========================================================================
+  // Gap 2: resolveSecretRefs
+  // =========================================================================
+
+  describe("resolveSecretRefs", () => {
+    test("resolves $secret reference to decrypted value", () => {
+      const store = createStore();
+      store.set("test-api-key", "sk-resolved-secret-value-1234567890abcde");
+
+      // Create a config with a $secret reference in the brain.accounts[0].credential field
+      const baseConfig = createTestConfig();
+      // Inject a $secret reference into the raw config object
+      const rawConfig = JSON.parse(JSON.stringify(baseConfig));
+      rawConfig.brain.accounts[0].credential = { $secret: "test-api-key" };
+
+      const result = store.resolveSecretRefs(rawConfig);
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value.brain.accounts[0]?.credential).toBe("sk-resolved-secret-value-1234567890abcde");
+      }
+    });
+
+    test("resolves nested $secret references", () => {
+      const store = createStore();
+      store.set("identity-name-secret", "SecretEidolon");
+
+      const baseConfig = createTestConfig();
+      const rawConfig = JSON.parse(JSON.stringify(baseConfig));
+      rawConfig.identity.name = { $secret: "identity-name-secret" };
+
+      const result = store.resolveSecretRefs(rawConfig);
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value.identity.name).toBe("SecretEidolon");
+      }
+    });
+
+    test("returns error for $secret reference to non-existent key", () => {
+      const store = createStore();
+
+      const baseConfig = createTestConfig();
+      const rawConfig = JSON.parse(JSON.stringify(baseConfig));
+      rawConfig.brain.accounts[0].credential = { $secret: "nonexistent-key" };
+
+      const result = store.resolveSecretRefs(rawConfig);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.code).toBe("SECRET_NOT_FOUND");
+      }
+    });
+
+    test("returns CONFIG_INVALID when resolved value violates schema", () => {
+      const store = createStore();
+      // Store an invalid role value -- the role field accepts only "server" | "client" | "hybrid"
+      store.set("bad-role", "not-a-valid-role");
+
+      const baseConfig = createTestConfig();
+      const rawConfig = JSON.parse(JSON.stringify(baseConfig));
+      rawConfig.role = { $secret: "bad-role" };
+
+      const result = store.resolveSecretRefs(rawConfig);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.code).toBe("CONFIG_INVALID");
+      }
+    });
+
+    test("passes through config without $secret references unchanged", () => {
+      const store = createStore();
+      const baseConfig = createTestConfig();
+      const rawConfig = JSON.parse(JSON.stringify(baseConfig));
+
+      const result = store.resolveSecretRefs(rawConfig);
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value.identity.ownerName).toBe(baseConfig.identity.ownerName);
+      }
+    });
   });
 });

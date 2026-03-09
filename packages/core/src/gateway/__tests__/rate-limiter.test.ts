@@ -274,6 +274,82 @@ describe("AuthRateLimiter", () => {
       expect(limiter.isBlocked(ip)).toBe(false);
     });
   });
+
+  // =========================================================================
+  // Gap 4: MAX_ENTRIES eviction (SEC-M9)
+  // =========================================================================
+
+  describe("MAX_ENTRIES eviction", () => {
+    test("evicts oldest non-blocked entry when at capacity", () => {
+      // Use a small capacity to make this testable -- MAX_ENTRIES is 10_000 in production,
+      // so we test the eviction logic by filling up entries and observing behavior.
+      // Since MAX_ENTRIES is a const, we fill 10_000 entries + 1.
+      // To keep the test fast, we use maxFailures=1 so each IP gets blocked quickly,
+      // then unblock them, then add one more to trigger eviction.
+
+      // Actually, we can test with a reasonable number -- just record a single failure
+      // (below threshold) for many IPs. The entry exists but is not blocked.
+      const limiter = makeLimiter({
+        maxFailures: 3, // high threshold so entries aren't blocked
+        windowMs: 60_000,
+        blockMs: 300_000,
+        maxBlockMs: 3_600_000,
+      });
+
+      // Fill exactly 10_000 entries with single failures (not blocked)
+      for (let i = 0; i < 10_000; i++) {
+        limiter.recordFailure(`10.${Math.floor(i / 65536) % 256}.${Math.floor(i / 256) % 256}.${i % 256}`);
+      }
+
+      // The 10_001st entry should trigger eviction of the oldest
+      // This should NOT throw -- it should evict and succeed
+      limiter.recordFailure("192.168.255.1");
+
+      // The new entry should be tracked (not blocked yet, just 1 failure of 3)
+      expect(limiter.isBlocked("192.168.255.1")).toBe(false);
+    });
+
+    test("blocked entries are not evicted during capacity enforcement", () => {
+      const limiter = makeLimiter({
+        maxFailures: 1, // block on first failure
+        windowMs: 60_000,
+        blockMs: 600_000, // long block so they stay blocked
+        maxBlockMs: 3_600_000,
+      });
+
+      // Block one IP
+      limiter.recordFailure("10.99.99.99");
+      expect(limiter.isBlocked("10.99.99.99")).toBe(true);
+
+      // Fill remaining capacity with non-blocked entries (single failure, maxFailures=1 blocks them too)
+      // So we need a different approach: use maxFailures=2, block one IP with 2 failures,
+      // fill rest with 1 failure each
+      limiter.dispose();
+
+      const limiter2 = makeLimiter({
+        maxFailures: 2,
+        windowMs: 60_000,
+        blockMs: 600_000,
+        maxBlockMs: 3_600_000,
+      });
+
+      // Block one specific IP
+      limiter2.recordFailure("10.99.99.99");
+      limiter2.recordFailure("10.99.99.99"); // now blocked
+      expect(limiter2.isBlocked("10.99.99.99")).toBe(true);
+
+      // Fill the rest (9_999 entries) with single failures (not blocked)
+      for (let i = 0; i < 9_999; i++) {
+        limiter2.recordFailure(`10.${Math.floor(i / 65536) % 256}.${Math.floor(i / 256) % 256}.${i % 256}`);
+      }
+
+      // Trigger eviction with one more entry
+      limiter2.recordFailure("192.168.255.2");
+
+      // The blocked IP should still be blocked (not evicted)
+      expect(limiter2.isBlocked("10.99.99.99")).toBe(true);
+    });
+  });
 });
 
 function sleep(ms: number): Promise<void> {

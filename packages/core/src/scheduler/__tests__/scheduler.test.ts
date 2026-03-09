@@ -408,7 +408,8 @@ describe("validateCronExpression", () => {
     expect(result).not.toBeNull();
     expect(result).toContain("interval");
 
-    const result2 = validateCronExpression("*/60");
+    // */60 is now valid (range extended to 1440 for hourly intervals)
+    const result2 = validateCronExpression("*/1441");
     expect(result2).not.toBeNull();
     expect(result2).toContain("interval");
   });

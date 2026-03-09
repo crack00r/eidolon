@@ -1,6 +1,6 @@
 import { Database } from "bun:sqlite";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runMigrations } from "../../database/migrations.ts";
@@ -40,7 +40,8 @@ function createTestDb(): Database {
 function createTempVault(): string {
   const vaultPath = join(tmpdir(), `eidolon-test-vault-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   mkdirSync(vaultPath, { recursive: true });
-  return vaultPath;
+  // Resolve symlinks (e.g., macOS /tmp -> /private/tmp) to match realpathSync in obsidian.ts
+  return realpathSync(vaultPath);
 }
 
 // ---------------------------------------------------------------------------

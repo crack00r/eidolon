@@ -16,7 +16,7 @@ import {
   validateMethod,
 } from "../protocol.ts";
 import { AuthRateLimiter } from "../rate-limiter.ts";
-import { anonymizeIp, constantTimeCompare, GatewayServer, normalizeOrigin } from "../server.ts";
+import { anonymizeIp, constantTimeCompare, GatewayServer, normalizeIp, normalizeOrigin } from "../server.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -372,6 +372,39 @@ describe("anonymizeIp", () => {
   test("anonymizes IPv6 by keeping first 3 groups", () => {
     expect(anonymizeIp("2001:db8:85a3:0:0:8a2e:370:7334")).toBe("2001:db8:85a3::");
     expect(anonymizeIp("::1")).toBe("::1");
+  });
+});
+
+// ===========================================================================
+// normalizeIp tests (Gap 3: IPv4-mapped IPv6 stripping)
+// ===========================================================================
+
+describe("normalizeIp", () => {
+  test("strips ::ffff: prefix from IPv4-mapped IPv6 (loopback)", () => {
+    expect(normalizeIp("::ffff:127.0.0.1")).toBe("127.0.0.1");
+  });
+
+  test("strips ::ffff: prefix from IPv4-mapped IPv6 (private)", () => {
+    expect(normalizeIp("::ffff:192.168.1.1")).toBe("192.168.1.1");
+  });
+
+  test("strips ::ffff: prefix from IPv4-mapped IPv6 (other)", () => {
+    expect(normalizeIp("::ffff:10.0.0.1")).toBe("10.0.0.1");
+  });
+
+  test("leaves plain IPv4 unchanged", () => {
+    expect(normalizeIp("10.0.0.1")).toBe("10.0.0.1");
+    expect(normalizeIp("192.168.1.100")).toBe("192.168.1.100");
+  });
+
+  test("leaves native IPv6 unchanged", () => {
+    expect(normalizeIp("2001:db8::1")).toBe("2001:db8::1");
+    expect(normalizeIp("::1")).toBe("::1");
+    expect(normalizeIp("fe80::1%eth0")).toBe("fe80::1%eth0");
+  });
+
+  test("leaves empty string unchanged", () => {
+    expect(normalizeIp("")).toBe("");
   });
 });
 

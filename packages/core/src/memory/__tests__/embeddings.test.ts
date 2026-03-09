@@ -63,10 +63,10 @@ describe("EmbeddingModel.cosineSimilarity", () => {
     expect(similarity).toBe(0);
   });
 
-  test("throws on mismatched vector lengths", () => {
+  test("returns 0 on mismatched vector lengths", () => {
     const a = new Float32Array([1, 2]);
     const b = new Float32Array([1, 2, 3]);
-    expect(() => EmbeddingModel.cosineSimilarity(a, b)).toThrow("Vector length mismatch");
+    expect(EmbeddingModel.cosineSimilarity(a, b)).toBe(0);
   });
 });
 

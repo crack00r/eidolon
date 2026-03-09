@@ -86,10 +86,15 @@ function createAuditDb(): Database {
     CREATE TABLE audit_log (
       id TEXT PRIMARY KEY,
       timestamp INTEGER NOT NULL,
-      actor TEXT NOT NULL,
-      action TEXT NOT NULL,
-      target TEXT NOT NULL,
-      result TEXT NOT NULL CHECK(result IN ('success','failure','denied')),
+      level TEXT NOT NULL DEFAULT 'info',
+      category TEXT NOT NULL DEFAULT 'system',
+      message TEXT NOT NULL DEFAULT '',
+      actor TEXT NOT NULL DEFAULT 'system',
+      action TEXT NOT NULL DEFAULT '',
+      target TEXT NOT NULL DEFAULT '',
+      result TEXT NOT NULL DEFAULT 'success' CHECK(result IN ('success','failure','denied')),
+      session_id TEXT DEFAULT NULL,
+      integrity_hash TEXT DEFAULT '',
       metadata TEXT DEFAULT '{}'
     );
   `);
@@ -130,8 +135,8 @@ function insertDiscovery(db: Database, id: string, status: string, createdAt: nu
 /** Insert an audit log entry. */
 function insertAuditEntry(db: Database, id: string, timestamp: number): void {
   db.query(
-    "INSERT INTO audit_log (id, timestamp, actor, action, target, result) VALUES (?, ?, 'system', 'test_action', 'test_target', 'success')",
-  ).run(id, timestamp);
+    "INSERT INTO audit_log (id, timestamp, actor, action, target, result, integrity_hash) VALUES (?, ?, 'system', 'test_action', 'test_target', 'success', ?)",
+  ).run(id, timestamp, `hash-${id}`);
 }
 
 /** Count rows in a table. */
@@ -350,7 +355,7 @@ describe("RetentionEnforcer", () => {
     expect(count(audit, "audit_log")).toBe(2);
   });
 
-  test("deletes audit logs when auditLogDays is explicitly set to a positive value", () => {
+  test("does not delete audit logs even when auditLogDays is explicitly set to a positive value", () => {
     const now = Date.now();
     const old = now - 400 * MS_PER_DAY;
     const recent = now - 10 * MS_PER_DAY;
@@ -365,11 +370,13 @@ describe("RetentionEnforcer", () => {
     const enforcer = new RetentionEnforcer(operational, audit, config, logger);
     const result = enforcer.enforce();
 
+    // audit_log is protected by audit_no_delete trigger; retention is skipped entirely
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.value.deletedCounts.audit_log).toBe(1);
+      expect(result.value.deletedCounts.audit_log).toBe(0);
     }
-    expect(count(audit, "audit_log")).toBe(1);
+    // Both entries remain (no deletion, no checkpoint)
+    expect(count(audit, "audit_log")).toBe(2);
   });
 
   // -----------------------------------------------------------------------
@@ -458,16 +465,17 @@ describe("RetentionEnforcer", () => {
       expect(result.value.deletedCounts.events).toBe(1);
       expect(result.value.deletedCounts.token_usage).toBe(1);
       expect(result.value.deletedCounts.discoveries).toBe(1);
-      expect(result.value.deletedCounts.audit_log).toBe(1);
-      expect(result.value.totalDeleted).toBe(5);
+      expect(result.value.deletedCounts.audit_log).toBe(0); // audit_log protected by trigger
+      expect(result.value.totalDeleted).toBe(4);
     }
 
-    // Verify only recent data remains
+    // Verify only recent data remains in operational tables
     expect(count(operational, "sessions")).toBe(1);
     expect(count(operational, "events")).toBe(1);
     expect(count(operational, "token_usage")).toBe(1);
     expect(count(operational, "discoveries")).toBe(1);
-    expect(count(audit, "audit_log")).toBe(1);
+    // Both audit entries remain (audit_no_delete trigger prevents deletion)
+    expect(count(audit, "audit_log")).toBe(2);
   });
 
   // -----------------------------------------------------------------------

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import { randomBytes } from "node:crypto";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DatabaseConfig } from "@eidolon/protocol";
@@ -133,5 +134,110 @@ describe("BackupManager", () => {
     if (afterList.ok) {
       expect(afterList.value).toHaveLength(1);
     }
+  });
+
+  // =========================================================================
+  // Gap 5: Backup path validation (SQL injection prevention)
+  // =========================================================================
+
+  describe("backup path validation", () => {
+    test("rejects backupPath containing single quote (SQL injection vector)", () => {
+      const dir = makeTempDir();
+      // Create a backup path with a single quote in the directory name
+      const maliciousBackupPath = join(dir, "backup's");
+      mkdirSync(maliciousBackupPath, { recursive: true });
+
+      const config = makeConfig(dir, maliciousBackupPath);
+      const dbManager = new DatabaseManager(config, logger);
+      managers.push(dbManager);
+      dbManager.initialize();
+      const backupMgr = new BackupManager(dbManager, config, logger);
+
+      const result = backupMgr.runBackup();
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.code).toBe("INVALID_INPUT");
+        expect(result.error.message).toContain("forbidden characters");
+      }
+    });
+
+    test("rejects backupPath containing null byte", () => {
+      const dir = makeTempDir();
+      // Null bytes in paths are generally rejected by the OS, but the validation
+      // should catch it. The FORBIDDEN_PATH_CHARS regex includes \0.
+      const config = makeConfig(dir, join(dir, "backup\0dir"));
+      const dbManager = new DatabaseManager(config, logger);
+      managers.push(dbManager);
+      dbManager.initialize();
+      const backupMgr = new BackupManager(dbManager, config, logger);
+
+      const result = backupMgr.runBackup();
+      // Either the OS rejects the null byte (error), or our validation catches it
+      expect(result.ok).toBe(false);
+    });
+
+    test("rejects backupPath containing semicolon (SQL injection)", () => {
+      const dir = makeTempDir();
+      const maliciousPath = join(dir, "backup;rm -rf");
+      mkdirSync(maliciousPath, { recursive: true });
+
+      const config = makeConfig(dir, maliciousPath);
+      const dbManager = new DatabaseManager(config, logger);
+      managers.push(dbManager);
+      dbManager.initialize();
+      const backupMgr = new BackupManager(dbManager, config, logger);
+
+      const result = backupMgr.runBackup();
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.code).toBe("INVALID_INPUT");
+        expect(result.error.message).toContain("forbidden characters");
+      }
+    });
+
+    test("accepts valid backup path and creates backup successfully", () => {
+      const { backupMgr, backupDir } = setup();
+
+      const result = backupMgr.runBackup();
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        const backupPath = join(backupDir, result.value);
+        expect(existsSync(backupPath)).toBe(true);
+        // All 3 DB files should be present
+        const files = readdirSync(backupPath);
+        expect(files).toContain("memory.db");
+        expect(files).toContain("operational.db");
+        expect(files).toContain("audit.db");
+      }
+    });
+
+    test("encrypted backup creates .enc files and removes plaintext", () => {
+      const dir = makeTempDir();
+      const backupDir = join(dir, "backups");
+      const config = makeConfig(dir, backupDir);
+      const dbManager = new DatabaseManager(config, logger);
+      managers.push(dbManager);
+      dbManager.initialize();
+
+      const encryptionKey = randomBytes(32);
+      const backupMgr = new BackupManager(dbManager, config, logger, encryptionKey);
+
+      const result = backupMgr.runBackup();
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        const backupPath = join(backupDir, result.value);
+        const files = readdirSync(backupPath);
+        // Should have .enc files, not plaintext
+        expect(files).toContain("memory.db.enc");
+        expect(files).toContain("operational.db.enc");
+        expect(files).toContain("audit.db.enc");
+        // Plaintext should NOT exist
+        expect(files).not.toContain("memory.db");
+        expect(files).not.toContain("operational.db");
+        expect(files).not.toContain("audit.db");
+      }
+
+      backupMgr.dispose();
+    });
   });
 });

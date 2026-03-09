@@ -76,6 +76,7 @@ describe("Replication Health", () => {
       nodeId: "peer-1",
       role: "secondary",
       uptime: 1000,
+      failoverCount: 0,
     });
 
     registerReplicationHealthCheck(checker, manager, 300_000);

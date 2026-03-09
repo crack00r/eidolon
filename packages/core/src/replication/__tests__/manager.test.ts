@@ -97,6 +97,7 @@ describe("ReplicationManager", () => {
       nodeId: "peer-1",
       role: "primary",
       uptime: 5000,
+      failoverCount: 0,
     });
 
     expect(manager.getState().peerConnected).toBe(true);

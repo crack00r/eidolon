@@ -36,6 +36,9 @@ function makeRouter(provider?: FakeLLMProvider): ModelRouter {
   return router;
 }
 
+/** Default auth token used by makeDeps and makeRequest/makeAuthRequest. */
+const DEFAULT_TEST_TOKEN = "test-api-token";
+
 function makeDeps(overrides?: Partial<OpenAICompatDeps>): OpenAICompatDeps {
   // By default wire up a fake provider so completions work
   const defaultProvider = FakeLLMProvider.withResponse("Hello from the LLM provider!", "ollama");
@@ -47,6 +50,7 @@ function makeDeps(overrides?: Partial<OpenAICompatDeps>): OpenAICompatDeps {
   return {
     logger,
     router: makeRouter(defaultProvider),
+    authToken: DEFAULT_TEST_TOKEN,
     ...overrides,
   };
 }
@@ -66,6 +70,17 @@ function makeBrainConfig(overrides?: Partial<BrainConfig["model"]>): BrainConfig
 }
 
 function makeRequest(path: string, options?: RequestInit): Request {
+  return new Request(`http://localhost:8419${path}`, {
+    ...options,
+    headers: {
+      Authorization: `Bearer ${DEFAULT_TEST_TOKEN}`,
+      ...(options?.headers ?? {}),
+    },
+  });
+}
+
+/** Create a request without any auth header (for testing auth rejection). */
+function makeUnauthRequest(path: string, options?: RequestInit): Request {
   return new Request(`http://localhost:8419${path}`, options);
 }
 
@@ -133,11 +148,15 @@ describe("handleOpenAIRequest", () => {
   // ---------------------------------------------------------------------------
 
   describe("authentication", () => {
-    test("allows requests when no authToken is configured", async () => {
-      const req = makeRequest("/v1/models");
-      const resp = await handleOpenAIRequest(req, makeDeps());
+    test("returns 503 when no authToken is configured", async () => {
+      const req = makeUnauthRequest("/v1/models");
+      const resp = await handleOpenAIRequest(req, makeDeps({ authToken: undefined }));
       expect(resp).not.toBeNull();
-      expect(resp?.status).toBe(200);
+      expect(resp?.status).toBe(503);
+
+      const body = (await parseJsonBody(resp!)) as Record<string, unknown>;
+      const error = body.error as Record<string, unknown>;
+      expect(error.code).toBe("auth_not_configured");
     });
 
     test("allows requests with valid Bearer token", async () => {
@@ -148,7 +167,7 @@ describe("handleOpenAIRequest", () => {
     });
 
     test("rejects requests with missing Authorization header", async () => {
-      const req = makeRequest("/v1/models");
+      const req = makeUnauthRequest("/v1/models");
       const resp = await handleOpenAIRequest(req, makeDeps({ authToken: "my-secret" }));
       expect(resp).not.toBeNull();
       expect(resp?.status).toBe(401);

@@ -192,7 +192,7 @@ describe("extractScheduleAndAction", () => {
   test("parses 'weekdays at <time>' pattern", () => {
     const result = extractScheduleAndAction("weekdays at 9am check my calendar");
     expect(result).not.toBeNull();
-    expect(result!.cron).toBe("09:00:1");
+    expect(result!.cron).toBe("09:00:1-5");
     expect(result!.actionText).toBe("check my calendar");
   });
 
