@@ -14,7 +14,7 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { Logger } from "../logging/logger.ts";
-import { constantTimeCompare } from "./server-helpers.ts";
+import { SECURITY_HEADERS, constantTimeCompare } from "./server-helpers.ts";
 
 // ---------------------------------------------------------------------------
 // Schema
@@ -56,10 +56,8 @@ const POISON_KEYS = new Set(["__proto__", "constructor", "prototype"]);
 
 const JSON_CONTENT_TYPE = "application/json";
 
-const SECURITY_HEADERS: Record<string, string> = {
-  "X-Content-Type-Options": "nosniff",
-  "X-Frame-Options": "DENY",
-  "Cache-Control": "no-store",
+const WEBHOOK_HEADERS: Record<string, string> = {
+  ...SECURITY_HEADERS,
   "Content-Type": JSON_CONTENT_TYPE,
 };
 
@@ -111,7 +109,7 @@ async function verifyHmacSignature(body: string, signature: string, secret: stri
 }
 
 function jsonResponse(body: Record<string, unknown>, status: number): Response {
-  return new Response(JSON.stringify(body), { status, headers: SECURITY_HEADERS });
+  return new Response(JSON.stringify(body), { status, headers: WEBHOOK_HEADERS });
 }
 
 // ---------------------------------------------------------------------------

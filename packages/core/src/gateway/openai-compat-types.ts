@@ -6,7 +6,7 @@
 
 import type { BrainConfig } from "@eidolon/protocol";
 import type { ModelRouter } from "../llm/router.ts";
-import { constantTimeCompare } from "./server-helpers.ts";
+import { SECURITY_HEADERS, constantTimeCompare } from "./server-helpers.ts";
 
 // ---------------------------------------------------------------------------
 // OpenAI-format response types
@@ -51,18 +51,8 @@ export interface OpenAIErrorBody {
   };
 }
 
-// ---------------------------------------------------------------------------
-// Security headers (same set as the main gateway server)
-// ---------------------------------------------------------------------------
-
-export const SECURITY_HEADERS: Readonly<Record<string, string>> = {
-  "X-Content-Type-Options": "nosniff",
-  "X-Frame-Options": "DENY",
-  "X-XSS-Protection": "0",
-  "Cache-Control": "no-store",
-  "Referrer-Policy": "no-referrer",
-  "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
-};
+// Re-export SECURITY_HEADERS from server-helpers for backward compatibility
+export { SECURITY_HEADERS } from "./server-helpers.ts";
 
 // ---------------------------------------------------------------------------
 // Response helpers
@@ -93,7 +83,9 @@ export function extractBearerToken(req: Request): string | undefined {
 }
 
 export function checkAuth(req: Request, expectedToken: string | undefined): Response | null {
-  if (!expectedToken) return null;
+  if (!expectedToken) {
+    return openAIError("API authentication not configured", "server_error", "auth_not_configured", 503);
+  }
   const provided = extractBearerToken(req);
   if (!provided || !constantTimeCompare(provided, expectedToken)) {
     return openAIError("Invalid or missing authentication token", "authentication_error", "invalid_api_key", 401);

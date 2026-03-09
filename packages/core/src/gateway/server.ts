@@ -191,7 +191,7 @@ export class GatewayServer {
     if (!this.server) return;
 
     this.clientManager.dispose();
-    this.server.stop(true);
+    this.server.stop(false);
     this.server = undefined;
     this.rateLimiter.dispose();
     this.logger.info("stop", "Gateway server stopped");
@@ -216,7 +216,22 @@ export class GatewayServer {
     }
 
     if (url.pathname === "/metrics" && req.method === "GET") {
+      // Restrict /metrics to localhost to prevent information leakage.
+      // Prometheus should scrape via localhost or a secure reverse proxy.
+      const reqIp = normalizeIp(server.requestIP(req)?.address ?? "");
+      if (reqIp !== "127.0.0.1" && reqIp !== "::1") {
+        return secureResponse("Forbidden", 403, isTls);
+      }
       return this.handleMetricsRequest(isTls);
+    }
+
+    // Origin check for HTTP routes (WebSocket upgrade has its own check)
+    if (this.config.allowedOrigins.length > 0 && req.headers.has("Origin")) {
+      const origin = normalizeOrigin(req.headers.get("Origin") ?? "");
+      const allowed = this.config.allowedOrigins.some((o) => normalizeOrigin(o) === origin);
+      if (!allowed) {
+        return secureResponse("Forbidden", 403, isTls);
+      }
     }
 
     if (url.pathname === "/webhooks/whatsapp" && (req.method === "GET" || req.method === "POST")) {
@@ -229,6 +244,14 @@ export class GatewayServer {
     }
 
     if (url.pathname.startsWith("/v1/")) {
+      // Rate-limit /v1/ routes by IP
+      const ip = normalizeIp(server.requestIP(req)?.address ?? "unknown");
+      if (this.rateLimiter.isBlocked(ip)) {
+        const anonIp = anonymizeIp(ip);
+        this.logger.warn("fetch", `Rate-limited IP ${anonIp} on /v1/ route`);
+        return secureResponse("Too Many Requests", 429, isTls);
+      }
+
       const openAIDeps: OpenAICompatDeps = {
         logger: this.logger,
         brainConfig: this.brainConfig,
@@ -236,7 +259,12 @@ export class GatewayServer {
         authToken: typeof this.config.auth.token === "string" ? this.config.auth.token : undefined,
       };
       const openAIResp = await handleOpenAIRequest(req, openAIDeps);
-      if (openAIResp) return openAIResp;
+      if (openAIResp) {
+        if (openAIResp.status === 401) {
+          this.rateLimiter.recordFailure(ip);
+        }
+        return openAIResp;
+      }
     }
 
     if (url.pathname !== "/ws") return secureResponse("Not found", 404, isTls);
@@ -349,3 +377,7 @@ export class GatewayServer {
     return this.server !== undefined;
   }
 }
+
+// TODO(audit): This file is 366 lines (exceeds 300-line guideline).
+// Consider extracting HTTP fetch routing into a separate `fetch-routing.ts` module
+// to keep this file focused on server lifecycle and WebSocket upgrade logic.

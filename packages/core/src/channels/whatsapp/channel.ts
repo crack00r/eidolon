@@ -219,7 +219,13 @@ export class WhatsAppChannel implements Channel {
     if (this.isRateLimited(msg.from)) return;
 
     // Update 24-hour messaging window
-    this.lastInboundTimestamp.set(msg.from, Date.now());
+    const now = Date.now();
+    this.lastInboundTimestamp.set(msg.from, now);
+
+    // Prune expired inbound timestamps to prevent unbounded Map growth
+    if (this.lastInboundTimestamp.size > 1000) {
+      this.pruneInboundTimestamps(now);
+    }
 
     // Mark as read (best-effort, do not block message processing)
     this.api.markAsRead(msg.messageId).catch((err: unknown) => {
@@ -272,6 +278,15 @@ export class WhatsAppChannel implements Channel {
     for (const [key, entry] of this.userRateLimits) {
       if (now - entry.windowStart > RATE_LIMIT_WINDOW_MS) {
         this.userRateLimits.delete(key);
+      }
+    }
+  }
+
+  /** Remove inbound timestamps older than the 24-hour messaging window. */
+  private pruneInboundTimestamps(now: number): void {
+    for (const [key, timestamp] of this.lastInboundTimestamp) {
+      if (now - timestamp >= MESSAGING_WINDOW_MS) {
+        this.lastInboundTimestamp.delete(key);
       }
     }
   }

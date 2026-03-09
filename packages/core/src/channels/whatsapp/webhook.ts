@@ -7,6 +7,7 @@
 
 import type { EidolonError, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
+import { constantTimeCompare } from "../../gateway/server-helpers.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -58,6 +59,10 @@ export function handleVerificationChallenge(
     return Err(createError(ErrorCode.WHATSAPP_WEBHOOK_INVALID, "Missing hub.verify_token or hub.challenge"));
   }
 
+  if (challenge.length > 1024) {
+    return Err(createError(ErrorCode.WHATSAPP_WEBHOOK_INVALID, "hub.challenge exceeds maximum length"));
+  }
+
   // Constant-time comparison to prevent timing attacks
   if (!constantTimeCompare(token, verifyToken)) {
     return Err(createError(ErrorCode.WHATSAPP_WEBHOOK_INVALID, "Verify token mismatch"));
@@ -94,13 +99,8 @@ export async function verifyWebhookSignature(body: string, signature: string, ap
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
 
-  // Constant-time comparison
-  if (expectedHex.length !== actualHex.length) return false;
-  let mismatch = 0;
-  for (let i = 0; i < expectedHex.length; i++) {
-    mismatch |= expectedHex.charCodeAt(i) ^ actualHex.charCodeAt(i);
-  }
-  return mismatch === 0;
+  // Constant-time comparison (reuse shared helper)
+  return constantTimeCompare(actualHex, expectedHex);
 }
 
 // ---------------------------------------------------------------------------
@@ -251,19 +251,3 @@ function normalizeMessageType(raw: string): WhatsAppMessageType {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Utilities
-// ---------------------------------------------------------------------------
-
-function constantTimeCompare(a: string, b: string): boolean {
-  // Pad the shorter string to match the longer to prevent length leakage
-  // through timing differences in the comparison loop.
-  const maxLen = Math.max(a.length, b.length);
-  let mismatch = a.length ^ b.length;
-  for (let i = 0; i < maxLen; i++) {
-    const ca = i < a.length ? a.charCodeAt(i) : 0;
-    const cb = i < b.length ? b.charCodeAt(i) : 0;
-    mismatch |= ca ^ cb;
-  }
-  return mismatch === 0;
-}

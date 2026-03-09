@@ -8,7 +8,7 @@
 
 import { randomUUID } from "node:crypto";
 import type { EidolonError, Result } from "@eidolon/protocol";
-import { createError, Err, Ok } from "@eidolon/protocol";
+import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -90,6 +90,25 @@ function sanitizeHeaderValue(value: string): string {
   return value.replace(/[\r\n]/g, "");
 }
 
+/** Strip characters that could cause SMTP command injection from email addresses. */
+function sanitizeSmtpAddress(address: string): string {
+  return address.replace(/[\r\n<>]/g, "");
+}
+
+/** Sanitize an attachment filename to prevent MIME header injection. */
+function sanitizeFilename(filename: string): string {
+  // Strip CRLF, quotes, backslashes, path separators, and control characters
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: intentional sanitization
+  return filename.replace(/[\r\n"\\/:*?<>|\x00-\x1f\x7f]/g, "_");
+}
+
+/** Sanitize a MIME type string to prevent header injection. */
+function sanitizeMimeType(mimeType: string): string {
+  // Strip CRLF, quotes, backslashes, and control characters
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: intentional sanitization
+  return mimeType.replace(/[\r\n"\\;\x00-\x1f\x7f]/g, "").trim() || "application/octet-stream";
+}
+
 /** Build a complete MIME message string. */
 export function buildMimeMessage(
   from: string,
@@ -156,8 +175,10 @@ export function buildMimeMessage(
 
     for (const att of attachments ?? []) {
       const encoded = foldBase64(base64Encode(att.content));
+      const safeName = sanitizeFilename(att.filename);
+      const safeType = sanitizeMimeType(att.mimeType);
       parts.push(
-        `--${mixedBoundary}${CRLF}Content-Type: ${att.mimeType}; name="${att.filename}"${CRLF}Content-Disposition: attachment; filename="${att.filename}"${CRLF}Content-Transfer-Encoding: base64${CRLF}${CRLF}${encoded}${CRLF}`,
+        `--${mixedBoundary}${CRLF}Content-Type: ${safeType}; name="${safeName}"${CRLF}Content-Disposition: attachment; filename="${safeName}"${CRLF}Content-Transfer-Encoding: base64${CRLF}${CRLF}${encoded}${CRLF}`,
       );
     }
 
@@ -189,20 +210,27 @@ export function buildMimeMessage(
  * Implements EHLO, AUTH PLAIN, MAIL FROM, RCPT TO, DATA, QUIT.
  * Uses STARTTLS when port is 587, direct TLS when port is 465.
  */
+const MAX_SMTP_BUFFER_SIZE = 10 * 1024 * 1024; // 10 MB
+
 export class BunSmtpClient implements ISmtpClient {
   private readonly config: SmtpConfig;
-  private socket: ReturnType<typeof Bun.connect> extends Promise<infer T> ? T : never;
+  private socket: (ReturnType<typeof Bun.connect> extends Promise<infer T> ? T : never) | null = null;
   private connected = false;
   private buffer = "";
   private pendingResolve: ((data: string) => void) | null = null;
 
   constructor(config: SmtpConfig) {
     this.config = config;
-    this.socket = null as unknown as typeof this.socket;
   }
 
   async connect(): Promise<Result<void, EidolonError>> {
     try {
+      if (!this.config.tls) {
+        console.warn(
+          "[SMTP] SECURITY WARNING: Connecting without TLS. Credentials will be sent in plaintext.",
+        );
+      }
+
       let onGreeting: (() => void) | null = null;
       const greetingPromise = new Promise<void>((resolve) => {
         onGreeting = resolve;
@@ -216,6 +244,21 @@ export class BunSmtpClient implements ISmtpClient {
           data: (_socket, data) => {
             const text = new TextDecoder().decode(data);
             this.buffer += text;
+
+            if (this.buffer.length > MAX_SMTP_BUFFER_SIZE) {
+              this.buffer = "";
+              this.connected = false;
+              if (this.pendingResolve) {
+                this.pendingResolve("500 Buffer overflow: exceeded 10MB limit");
+                this.pendingResolve = null;
+              }
+              try {
+                _socket.end();
+              } catch {
+                /* best-effort */
+              }
+              return;
+            }
 
             // SMTP greeting: "220 ..."
             if (onGreeting && this.buffer.includes("220 ")) {
@@ -251,13 +294,27 @@ export class BunSmtpClient implements ISmtpClient {
       });
 
       this.socket = socket;
-      await greetingPromise;
+      let greetingTimer: ReturnType<typeof setTimeout> | undefined;
+      const greetingTimeout = new Promise<never>((_resolve, reject) => {
+        greetingTimer = setTimeout(() => {
+          try {
+            socket.end();
+          } catch { /* best-effort */ }
+          reject(new Error("SMTP greeting timeout after 30 seconds"));
+        }, 30_000);
+        greetingTimer.unref();
+      });
+      try {
+        await Promise.race([greetingPromise, greetingTimeout]);
+      } finally {
+        if (greetingTimer !== undefined) clearTimeout(greetingTimer);
+      }
 
       // EHLO
       const ehloResp = await this.sendLine(`EHLO eidolon`);
       if (!ehloResp.startsWith("250")) {
         socket.end();
-        return Err(createError("CHANNEL_AUTH_FAILED" as EidolonError["code"], `SMTP EHLO failed: ${ehloResp}`));
+        return Err(createError(ErrorCode.EMAIL_AUTH_ERROR, `SMTP EHLO failed: ${ehloResp}`));
       }
 
       // AUTH PLAIN
@@ -265,13 +322,13 @@ export class BunSmtpClient implements ISmtpClient {
       const authResp = await this.sendLine(`AUTH PLAIN ${credentials}`);
       if (!authResp.startsWith("235")) {
         socket.end();
-        return Err(createError("CHANNEL_AUTH_FAILED" as EidolonError["code"], `SMTP AUTH failed: ${authResp}`));
+        return Err(createError(ErrorCode.EMAIL_AUTH_ERROR, "SMTP authentication failed"));
       }
 
       this.connected = true;
       return Ok(undefined);
     } catch (cause) {
-      return Err(createError("CHANNEL_AUTH_FAILED" as EidolonError["code"], "SMTP connection failed", cause));
+      return Err(createError(ErrorCode.EMAIL_AUTH_ERROR, "SMTP connection failed", cause));
     }
   }
 
@@ -293,7 +350,7 @@ export class BunSmtpClient implements ISmtpClient {
 
   async send(message: SmtpMessage): Promise<Result<string, EidolonError>> {
     if (!this.connected) {
-      return Err(createError("CHANNEL_SEND_FAILED" as EidolonError["code"], "SMTP not connected"));
+      return Err(createError(ErrorCode.EMAIL_SMTP_ERROR, "SMTP not connected"));
     }
 
     try {
@@ -309,36 +366,38 @@ export class BunSmtpClient implements ISmtpClient {
       );
 
       // MAIL FROM
-      const mailResp = await this.sendLine(`MAIL FROM:<${this.config.from}>`);
+      const mailResp = await this.sendLine(`MAIL FROM:<${sanitizeSmtpAddress(this.config.from)}>`);
       if (!mailResp.startsWith("250")) {
-        return Err(createError("CHANNEL_SEND_FAILED" as EidolonError["code"], `SMTP MAIL FROM failed: ${mailResp}`));
+        return Err(createError(ErrorCode.EMAIL_SMTP_ERROR, `SMTP MAIL FROM failed: ${mailResp}`));
       }
 
       // RCPT TO for each recipient
       for (const recipient of message.to) {
-        const rcptResp = await this.sendLine(`RCPT TO:<${recipient}>`);
+        const rcptResp = await this.sendLine(`RCPT TO:<${sanitizeSmtpAddress(recipient)}>`);
         if (!rcptResp.startsWith("250")) {
-          return Err(createError("CHANNEL_SEND_FAILED" as EidolonError["code"], `SMTP RCPT TO failed: ${rcptResp}`));
+          return Err(createError(ErrorCode.EMAIL_SMTP_ERROR, `SMTP RCPT TO failed: ${rcptResp}`));
         }
       }
 
       // DATA
       const dataResp = await this.sendLine("DATA");
       if (!dataResp.startsWith("354")) {
-        return Err(createError("CHANNEL_SEND_FAILED" as EidolonError["code"], `SMTP DATA failed: ${dataResp}`));
+        return Err(createError(ErrorCode.EMAIL_SMTP_ERROR, `SMTP DATA failed: ${dataResp}`));
       }
 
       // Send message body, terminated by CRLF.CRLF
-      // Dot-stuff lines starting with a dot per RFC 5321
-      const stuffed = raw.replace(/\r\n\./g, "\r\n..");
+      // Normalize all line endings to CRLF first, then dot-stuff per RFC 5321
+      const normalized = raw.replace(/\r\n/g, "\n").replace(/\r/g, "\n").replace(/\n/g, "\r\n");
+      // Dot-stuff lines starting with a dot (must match at start of line after CRLF normalization)
+      const stuffed = normalized.replace(/^\.(.*)$/gm, "..$1");
       const endResp = await this.sendLine(`${stuffed}\r\n.`);
       if (!endResp.startsWith("250")) {
-        return Err(createError("CHANNEL_SEND_FAILED" as EidolonError["code"], `SMTP message send failed: ${endResp}`));
+        return Err(createError(ErrorCode.EMAIL_SMTP_ERROR, `SMTP message send failed: ${endResp}`));
       }
 
       return Ok(messageId);
     } catch (cause) {
-      return Err(createError("CHANNEL_SEND_FAILED" as EidolonError["code"], "SMTP send failed", cause));
+      return Err(createError(ErrorCode.EMAIL_SMTP_ERROR, "SMTP send failed", cause));
     }
   }
 
@@ -353,17 +412,32 @@ export class BunSmtpClient implements ISmtpClient {
   private sendLine(line: string): Promise<string> {
     this.buffer = "";
     return new Promise<string>((resolve) => {
+      // If there's already a pending resolve, reject it to prevent overwrites
+      if (this.pendingResolve !== null) {
+        const stale = this.pendingResolve;
+        this.pendingResolve = null;
+        stale("500 Overlapping SMTP command (previous promise rejected)");
+      }
+
+      const wrappedResolve = (data: string): void => {
+        clearTimeout(timer);
+        resolve(data);
+      };
+
       const timer = setTimeout(() => {
-        if (this.pendingResolve === resolve) {
+        if (this.pendingResolve === wrappedResolve) {
           this.pendingResolve = null;
           resolve("500 Timeout");
         }
       }, 30_000);
+      timer.unref();
 
-      this.pendingResolve = (data: string): void => {
+      this.pendingResolve = wrappedResolve;
+      if (!this.socket) {
         clearTimeout(timer);
-        resolve(data);
-      };
+        resolve("500 Socket not connected");
+        return;
+      }
       this.socket.write(new TextEncoder().encode(`${line}\r\n`));
     });
   }

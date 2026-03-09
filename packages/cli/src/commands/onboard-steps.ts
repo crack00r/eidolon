@@ -106,6 +106,7 @@ export async function setupMasterKey(ask: AskFn): Promise<string | undefined> {
     masterKey = generateMasterKey();
     console.log("\nMaster key generated. Copy it now -- it will NOT be shown again.\n");
     console.log(`  EIDOLON_MASTER_KEY=${masterKey}\n`);
+    console.warn("  ⚠ Clear your terminal history after copying this key (Cmd+K / clear)");
     console.log("  Add the line above to your shell profile (e.g. ~/.bashrc or ~/.zshrc).");
   } else {
     masterKey = await ask("Enter master key (hex string or passphrase): ");
@@ -236,6 +237,7 @@ export async function setupGpuWorker(ask: AskFn): Promise<GpuSetupResult> {
   try {
     const response = await fetch(`http://${hostInput}:${port}/health`, {
       signal: AbortSignal.timeout(3000),
+      redirect: "error",
     });
     if (response.ok) {
       console.log(formatCheck("pass", "GPU worker is reachable"));

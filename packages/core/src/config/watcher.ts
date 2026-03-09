@@ -13,6 +13,7 @@ import { type FSWatcher, statSync, watch } from "node:fs";
 import type { EidolonConfig } from "@eidolon/protocol";
 import type { Logger } from "../logging/logger.ts";
 import { loadConfig } from "./loader.ts";
+import { getNestedValue } from "./utils.ts";
 
 /**
  * Security-critical config paths that cannot change via hot-reload.
@@ -28,16 +29,6 @@ const LOCKED_FIELDS: ReadonlySet<string> = new Set([
 ]);
 
 export type ConfigChangeHandler = (config: EidolonConfig) => void;
-
-/** Resolve a dot-separated path (e.g. "brain.accounts") to a value in a nested object. */
-function getNestedValue(obj: Record<string, unknown>, path: string): unknown {
-  let current: unknown = obj;
-  for (const segment of path.split(".")) {
-    if (current === null || current === undefined || typeof current !== "object") return undefined;
-    current = (current as Record<string, unknown>)[segment];
-  }
-  return current;
-}
 
 /** Acceptable file permission masks: owner-only (0o600) or owner+group-read (0o640). */
 const ALLOWED_PERMISSION_MASKS = new Set([0o600, 0o640]);
@@ -66,6 +57,10 @@ export class ConfigWatcher {
   /** Start watching the config file */
   start(): void {
     if (this.watcher) return;
+    // NOTE: fs.watch may not fire on Linux when editors use atomic file replacement
+    // (write to temp file + rename). This is a known Node/Bun limitation. The
+    // debounced reload mitigates partial-write issues but cannot fix missing events.
+    // Workaround: use inotifywait or poll-based fallback if atomic saves are needed.
     this.watcher = watch(this.configPath, () => {
       this.scheduleReload();
     });
@@ -93,6 +88,13 @@ export class ConfigWatcher {
    * Returns true if permissions are acceptable, false otherwise.
    */
   private checkFilePermissions(): boolean {
+    // SEC-M1: POSIX mode bits are meaningless on NTFS. Skip the check on Windows
+    // and allow the reload since Windows has its own ACL-based permission model.
+    if (process.platform === "win32") {
+      this.logger?.debug("watcher", "Skipping POSIX permission check on Windows (NTFS uses ACLs).");
+      return true;
+    }
+
     try {
       const stats = statSync(this.configPath);
       // Extract lower 9 bits (owner/group/other rwx)
@@ -107,11 +109,11 @@ export class ConfigWatcher {
       }
       return true;
     } catch {
-      // SEC-M1: On non-POSIX systems (Windows) statSync may not return meaningful
-      // mode bits. Deny by default to fail-safe rather than fail-open.
+      // On non-POSIX systems statSync may not return meaningful mode bits.
+      // Deny by default to fail-safe rather than fail-open.
       this.logger?.warn(
         "watcher",
-        "Could not verify config file permissions (non-POSIX system?). Refusing reload as a precaution.",
+        "Could not verify config file permissions. Refusing reload as a precaution.",
       );
       return false;
     }
@@ -126,7 +128,7 @@ export class ConfigWatcher {
     for (const path of LOCKED_FIELDS) {
       const oldVal = getNestedValue(oldConfig as unknown as Record<string, unknown>, path);
       const newVal = getNestedValue(newConfig as unknown as Record<string, unknown>, path);
-      if (JSON.stringify(oldVal) !== JSON.stringify(newVal)) {
+      if (!Bun.deepEquals(oldVal, newVal)) {
         changed.push(path);
       }
     }

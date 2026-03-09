@@ -193,7 +193,7 @@ export class ClaudeCodeManager implements IClaudeProcess {
     this.activeSessions.set(sessionId, proc);
 
     // Drain stderr unconditionally in the background to prevent pipe deadlocks
-    const stderrPromise: Promise<string> = proc.stderr ? new Response(proc.stderr).text() : Promise.resolve("");
+    const stderrPromise: Promise<string> = (proc.stderr ? new Response(proc.stderr).text() : Promise.resolve("")).catch(() => "");
 
     // Set up timeout if configured
     let timedOut = false;
@@ -284,7 +284,7 @@ export class ClaudeCodeManager implements IClaudeProcess {
       }
       this.activeSessions.delete(sessionId);
       // Ensure stderr is consumed even if generator is abandoned early
-      stderrPromise.catch(() => {});
+      stderrPromise.catch((e: unknown) => this.logger.debug("claude", "stderr consumption failed", { error: String(e) }));
       span.end();
     }
   }
@@ -297,7 +297,7 @@ export class ClaudeCodeManager implements IClaudeProcess {
       const result = Bun.spawnSync([findClaudeBinary(), "--version"], {
         stdout: "pipe",
         stderr: "pipe",
-        env: { ...process.env, PATH: buildExtendedPath() },
+        env: { PATH: buildExtendedPath(), HOME: process.env.HOME ?? "", LANG: process.env.LANG ?? "" },
       });
       return result.exitCode === 0;
     } catch {
@@ -314,7 +314,7 @@ export class ClaudeCodeManager implements IClaudeProcess {
       const result = Bun.spawnSync([findClaudeBinary(), "--version"], {
         stdout: "pipe",
         stderr: "pipe",
-        env: { ...process.env, PATH: buildExtendedPath() },
+        env: { PATH: buildExtendedPath(), HOME: process.env.HOME ?? "", LANG: process.env.LANG ?? "" },
       });
       if (result.exitCode !== 0) {
         return Err(createError(ErrorCode.CLAUDE_NOT_INSTALLED, "Claude Code CLI not found or not working"));

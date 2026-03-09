@@ -131,7 +131,7 @@ async function testConnection(host: string, port: number, tls: boolean): Promise
   console.log("\n--- Testing connection... ---\n");
   const protocol = tls ? "https" : "http";
   try {
-    const resp = await fetch(`${protocol}://${host}:${port}/health`, { signal: AbortSignal.timeout(3000) });
+    const resp = await fetch(`${protocol}://${host}:${port}/health`, { signal: AbortSignal.timeout(3000), redirect: "error" });
     if (resp.ok) {
       const data = (await resp.json()) as Record<string, unknown>;
       console.log(`  Server is reachable! Status: ${String(data.status ?? "unknown")}`);

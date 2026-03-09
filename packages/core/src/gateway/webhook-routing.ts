@@ -45,7 +45,7 @@ export async function handleWhatsAppWebhook(
     const result = handleVerificationChallenge(url.searchParams, state.verifyToken);
     if (result.ok) {
       logger.info("whatsapp-webhook", "Verification challenge accepted");
-      return new Response(result.value, { status: 200, headers: { "Content-Type": "text/plain" } });
+      return secureResponse(result.value, 200, isTls);
     }
     logger.warn("whatsapp-webhook", `Verification failed: ${result.error.message}`);
     return secureResponse("Verification failed", 403, isTls);
@@ -56,9 +56,23 @@ export async function handleWhatsAppWebhook(
       return secureResponse("WhatsApp webhook not configured", 503, isTls);
     }
 
+    // Body size limit: 1 MB (same as generic webhook handler)
+    const MAX_WHATSAPP_BODY_BYTES = 1_048_576;
+    const contentLength = req.headers.get("Content-Length");
+    if (contentLength !== null) {
+      const size = parseInt(contentLength, 10);
+      if (!Number.isNaN(size) && size > MAX_WHATSAPP_BODY_BYTES) {
+        return secureResponse("Payload too large", 413, isTls);
+      }
+    }
+
     let bodyText: string;
     try {
-      bodyText = await req.text();
+      const bodyBuffer = await req.arrayBuffer();
+      if (bodyBuffer.byteLength > MAX_WHATSAPP_BODY_BYTES) {
+        return secureResponse("Payload too large", 413, isTls);
+      }
+      bodyText = new TextDecoder().decode(bodyBuffer);
     } catch {
       // Intentional: body read failure returns 400
       return secureResponse("Failed to read body", 400, isTls);
@@ -82,7 +96,7 @@ export async function handleWhatsAppWebhook(
     const parseResult = parseWebhookPayload(body);
     if (!parseResult.ok) {
       logger.warn("whatsapp-webhook", `Payload parse error: ${parseResult.error.message}`);
-      return new Response("OK", { status: 200 });
+      return secureResponse("OK", 200, isTls);
     }
 
     if (parseResult.value.length > 0) {
@@ -91,7 +105,7 @@ export async function handleWhatsAppWebhook(
       });
     }
 
-    return new Response("OK", { status: 200 });
+    return secureResponse("OK", 200, isTls);
   }
 
   return secureResponse("Method not allowed", 405, isTls);
@@ -112,7 +126,8 @@ export async function handleWebhookRoute(
   const endpoints = config.webhooks?.endpoints ?? [];
   const endpointConfig = endpoints.find((ep) => ep.id === endpointId);
 
-  if (endpointConfig && !endpointConfig.enabled) return secureResponse("Not found", 404, isTls);
+  if (!endpointConfig) return secureResponse("Not found", 404, isTls);
+  if (!endpointConfig.enabled) return secureResponse("Not found", 404, isTls);
 
   let resolvedToken: string | undefined;
   if (endpointConfig) {
@@ -127,7 +142,8 @@ export async function handleWebhookRoute(
   const result = extractWebhookResult(response);
   if (result) {
     const priority = endpointConfig?.priority ?? "normal";
-    const eventType = (endpointConfig?.eventType ?? "webhook:received") as "webhook:received";
+    const rawEventType = endpointConfig?.eventType ?? "webhook:received";
+    const eventType = (rawEventType.startsWith("webhook:") ? rawEventType : "webhook:received") as "webhook:received";
 
     eventBus.publish(
       eventType,

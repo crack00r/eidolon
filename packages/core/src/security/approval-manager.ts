@@ -104,6 +104,7 @@ export class ApprovalManager {
     this.checkTimer = setInterval(() => {
       this.checkTimeouts();
     }, intervalMs);
+    this.checkTimer.unref();
     this.logger.info("start", `Approval timeout checker started (interval: ${intervalMs}ms)`);
   }
 
@@ -190,33 +191,46 @@ export class ApprovalManager {
     approved: boolean;
     respondedBy: string;
   }): Result<ApprovalRequest, EidolonError> {
-    const existing = this.getById(params.requestId);
-    if (!existing.ok) return existing;
-    if (!existing.value) {
-      return Err(createError(ErrorCode.APPROVAL_NOT_FOUND, `Approval request not found: ${params.requestId}`));
-    }
-    if (existing.value.status !== "pending") {
-      return Err(
-        createError(
-          ErrorCode.APPROVAL_ALREADY_RESOLVED,
-          `Approval request ${params.requestId} already resolved (status: ${existing.value.status})`,
-        ),
-      );
-    }
-
     const newStatus: ApprovalStatus = params.approved ? "approved" : "denied";
     const now = Date.now();
 
+    // Atomic UPDATE with status='pending' guard eliminates TOCTOU race
     try {
-      this.db
-        .query("UPDATE approval_requests SET status = ?, responded_by = ?, responded_at = ? WHERE id = ?")
+      const result = this.db
+        .query(
+          "UPDATE approval_requests SET status = ?, responded_by = ?, responded_at = ? WHERE id = ? AND status = 'pending'",
+        )
         .run(newStatus, params.respondedBy, now, params.requestId);
+
+      if (result.changes === 0) {
+        // Either not found or already resolved -- fetch to distinguish
+        const existing = this.getById(params.requestId);
+        if (!existing.ok) return existing;
+        if (!existing.value) {
+          return Err(
+            createError(ErrorCode.APPROVAL_NOT_FOUND, `Approval request not found: ${params.requestId}`),
+          );
+        }
+        return Err(
+          createError(
+            ErrorCode.APPROVAL_ALREADY_RESOLVED,
+            `Approval request ${params.requestId} already resolved (status: ${existing.value.status})`,
+          ),
+        );
+      }
     } catch (cause) {
       return Err(createError(ErrorCode.DB_QUERY_FAILED, `Failed to respond to approval: ${params.requestId}`, cause));
     }
 
     this.logger.info("respond", `Approval ${params.requestId} ${newStatus} by ${params.respondedBy}`);
-    return Ok({ ...existing.value, status: newStatus, respondedBy: params.respondedBy, respondedAt: now });
+
+    // Re-fetch the updated record to return accurate state
+    const updated = this.getById(params.requestId);
+    if (!updated.ok) return updated;
+    if (!updated.value) {
+      return Err(createError(ErrorCode.DB_QUERY_FAILED, `Failed to fetch updated approval: ${params.requestId}`));
+    }
+    return Ok(updated.value);
   }
 
   /** Check all pending requests for timeouts. Returns count processed. */
@@ -294,7 +308,7 @@ export class ApprovalManager {
 
     try {
       this.db
-        .query("UPDATE approval_requests SET status = ?, responded_by = ?, responded_at = ? WHERE id = ?")
+        .query("UPDATE approval_requests SET status = ?, responded_by = ?, responded_at = ? WHERE id = ? AND status = 'pending'")
         .run(finalStatus, `auto:timeout:${finalStatus}`, now, request.id);
     } catch (cause) {
       this.logger.error("checkTimeouts", `Failed to resolve timed-out request ${request.id}`, cause);

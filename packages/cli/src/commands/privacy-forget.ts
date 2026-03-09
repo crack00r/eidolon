@@ -9,6 +9,7 @@
  */
 
 import type { Database } from "bun:sqlite";
+import { createHash } from "node:crypto";
 import { BackupManager, createLogger, type DatabaseManager, getDataDir } from "@eidolon/core";
 
 // ---------------------------------------------------------------------------
@@ -32,14 +33,20 @@ function escapeLikePattern(input: string): string {
   return input.replace(/[%_\\]/g, (ch) => `\\${ch}`);
 }
 
-/** Safe table delete -- returns 0 on failure. */
+/** Safe table delete -- returns 0 if the table does not exist, re-throws other errors. */
 function safeDelete(db: Database, sql: string, ...params: string[]): number {
   try {
     const result = db.query(sql).run(...params);
     return result.changes;
   } catch (err) {
-    console.warn(`[privacy-forget] safeDelete failed: ${err instanceof Error ? err.message : String(err)}`);
-    return 0;
+    const message = err instanceof Error ? err.message : String(err);
+    // Only swallow "table not found" errors -- all other errors must propagate
+    // so that the enclosing transaction rolls back for GDPR atomicity.
+    if (message.includes("no such table")) {
+      console.warn(`[privacy-forget] safeDelete skipped (table not found): ${message}`);
+      return 0;
+    }
+    throw err;
   }
 }
 
@@ -48,6 +55,10 @@ function safeDelete(db: Database, sql: string, ...params: string[]): number {
 // ---------------------------------------------------------------------------
 
 export function forgetEntity(dbManager: DatabaseManager, entity: string): DeletionReport {
+  if (!entity || entity.trim().length === 0) {
+    throw new Error("Entity must not be empty or whitespace-only");
+  }
+
   const deletedCounts: Record<string, number> = {};
   const escaped = escapeLikePattern(entity);
   const pattern = `%${escaped}%`;
@@ -156,15 +167,37 @@ export function forgetEntity(dbManager: DatabaseManager, entity: string): Deleti
   operationalTx();
 
   // --- audit.db: KEEP entries (legal requirement) but REDACT PII fields ---
+  // The audit_no_update trigger prevents UPDATE on audit_log, so we must
+  // temporarily drop it, perform the redaction, then recreate it.
   const auditTx = dbManager.audit.transaction(() => {
     try {
+      dbManager.audit.run("DROP TRIGGER IF EXISTS audit_no_update");
+
       const result = dbManager.audit
         .query(
-          "UPDATE audit_log SET target = '[REDACTED]', metadata = '{}' WHERE target LIKE ? ESCAPE '\\' OR actor LIKE ? ESCAPE '\\' OR metadata LIKE ? ESCAPE '\\'",
+          "UPDATE audit_log SET target = '[REDACTED]', metadata = '{}', integrity_hash = 'REDACTED:' || id WHERE target LIKE ? ESCAPE '\\' OR actor LIKE ? ESCAPE '\\' OR metadata LIKE ? ESCAPE '\\'",
         )
         .run(pattern, pattern, pattern);
       deletedCounts.audit_log_redacted = result.changes;
-    } catch {
+
+      dbManager.audit.run(`
+        CREATE TRIGGER IF NOT EXISTS audit_no_update
+          BEFORE UPDATE ON audit_log
+          BEGIN
+            SELECT RAISE(ABORT, 'Audit log entries cannot be modified');
+          END
+      `);
+    } catch (err: unknown) {
+      console.error("[GDPR] Audit log PII redaction failed -- erasure incomplete:", err);
+      try {
+        dbManager.audit.run(`
+          CREATE TRIGGER IF NOT EXISTS audit_no_update
+            BEFORE UPDATE ON audit_log
+            BEGIN
+              SELECT RAISE(ABORT, 'Audit log entries cannot be modified');
+            END
+        `);
+      } catch { /* trigger may already exist */ }
       deletedCounts.audit_log_redacted = 0;
     }
   });
@@ -209,7 +242,8 @@ export function forgetEntity(dbManager: DatabaseManager, entity: string): Deleti
     // Best effort
   }
 
-  // Log deletion to audit
+  // Log deletion to audit -- hash entity name to avoid storing PII after GDPR erasure
+  const entityHash = createHash("sha256").update(entity).digest("hex");
   try {
     dbManager.audit
       .query(
@@ -220,7 +254,7 @@ export function forgetEntity(dbManager: DatabaseManager, entity: string): Deleti
         Date.now(),
         "system",
         "privacy:forget",
-        entity,
+        `sha256:${entityHash}`,
         "success",
         JSON.stringify({ deletedCounts, backupsDeleted }),
       );

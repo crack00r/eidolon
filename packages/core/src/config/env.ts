@@ -7,6 +7,13 @@
  *          -> config.loop.energybudget.maxtokenperhour = 50000
  *
  * Supported types: string, number, boolean.
+ *
+ * LIMITATION: Env override keys are lowercased and split on underscore, so they
+ * only reliably map to flat/single-word keys or section names that are explicitly
+ * listed in CONFIG_SECTIONS below. Multi-word camelCase keys (e.g. "energyBudget")
+ * lose their casing when lowercased ("energybudget") and cannot be automatically
+ * restored. For such keys, add an explicit entry to CONFIG_SECTIONS or use the
+ * config file instead of env overrides.
  */
 
 import type { EidolonConfig } from "@eidolon/protocol";
@@ -122,11 +129,11 @@ function setNestedValue(obj: Record<string, unknown>, path: string[], value: unk
 }
 
 function coerceValue(value: string): string | number | boolean {
+  if (value === "") return value;
   if (value === "true") return true;
   if (value === "false") return false;
 
   const num = Number(value);
-  if (!Number.isNaN(num) && value.trim() !== "") return num;
-
+  if (Number.isFinite(num) && value.trim() !== "") return num;
   return value;
 }

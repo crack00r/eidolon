@@ -127,7 +127,22 @@ export class ChannelResolver {
     return Ok(result.value);
   }
 
+  /** Maximum number of auto-created users before falling back to default. */
+  private static readonly MAX_AUTO_CREATED_USERS = 10_000;
+
   private autoCreate(context: ResolveContext): Result<User, EidolonError> {
+    // Rate limit: prevent unbounded user creation
+    const countResult = this.userManager.count();
+    if (!countResult.ok) return countResult;
+    if (countResult.value >= ChannelResolver.MAX_AUTO_CREATED_USERS) {
+      this.logger.warn(
+        "auto-create",
+        `User count (${countResult.value}) exceeds maximum (${ChannelResolver.MAX_AUTO_CREATED_USERS}), ` +
+          `falling back to default user for ${context.channelType}:${context.externalUserId}`,
+      );
+      return this.getDefaultUser();
+    }
+
     const name = context.displayName ?? `${context.channelType}:${context.externalUserId}`;
 
     const createResult = this.userManager.create({

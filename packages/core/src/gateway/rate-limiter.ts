@@ -6,6 +6,7 @@
  */
 
 import type { Logger } from "../logging/logger.ts";
+import { anonymizeIp } from "./server-helpers.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -42,20 +43,6 @@ export const DEFAULT_RATE_LIMIT_CONFIG: RateLimitConfig = {
 // AuthRateLimiter
 // ---------------------------------------------------------------------------
 
-/**
- * Anonymize an IP address for logging: replace last octet (IPv4) or truncate (IPv6).
- */
-function anonymizeIpForLog(ip: string): string {
-  if (ip.includes(".") && !ip.includes(":")) {
-    const lastDot = ip.lastIndexOf(".");
-    if (lastDot === -1) return ip;
-    return `${ip.slice(0, lastDot)}.0`;
-  }
-  const parts = ip.split(":").filter((p) => p.length > 0);
-  if (parts.length < 3) return ip;
-  return `${parts.slice(0, 3).join(":")}::`;
-}
-
 const CLEANUP_INTERVAL_MS = 60_000;
 
 /**
@@ -77,6 +64,7 @@ export class AuthRateLimiter {
     this.cleanupTimer = setInterval(() => {
       this.cleanupExpired();
     }, CLEANUP_INTERVAL_MS);
+    this.cleanupTimer.unref();
   }
 
   /** Check whether an IP is currently blocked. */
@@ -144,7 +132,7 @@ export class AuthRateLimiter {
       // Finding #18: Anonymize IP in log output
       this.logger.warn(
         "rate-limit",
-        `Blocked IP ${anonymizeIpForLog(ip)} for ${backoffMs}ms (block #${entry.blockCount})`,
+        `Blocked IP ${anonymizeIp(ip)} for ${backoffMs}ms (block #${entry.blockCount})`,
       );
 
       return true;
@@ -208,8 +196,9 @@ export class AuthRateLimiter {
     for (const [ip, entry] of this.entries) {
       // Skip currently blocked IPs -- they must not be evicted
       if (entry.blockedUntil > 0 && Date.now() < entry.blockedUntil) continue;
-      if (entry.firstFailureAt < oldestTime) {
-        oldestTime = entry.firstFailureAt;
+      const entryTime = Math.max(entry.firstFailureAt, entry.lastViolationAt);
+      if (entryTime < oldestTime) {
+        oldestTime = entryTime;
         oldestKey = ip;
       }
     }

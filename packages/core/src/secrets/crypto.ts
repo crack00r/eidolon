@@ -97,7 +97,7 @@ export function encrypt(value: string, masterKey: Buffer): Result<EncryptedData,
   if (value.length === 0) {
     return Err(createError(ErrorCode.SECRET_ENCRYPTION_FAILED, "Encryption failed: value must not be empty"));
   }
-  if (value.length > MAX_PLAINTEXT_LENGTH) {
+  if (Buffer.byteLength(value, "utf8") > MAX_PLAINTEXT_LENGTH) {
     return Err(createError(ErrorCode.SECRET_ENCRYPTION_FAILED, "Encryption failed: value exceeds maximum length"));
   }
 

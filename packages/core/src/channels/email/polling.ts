@@ -6,6 +6,7 @@
  */
 
 import { randomUUID } from "node:crypto";
+import { sleep } from "../../utils/async.ts";
 import type { InboundMessage } from "@eidolon/protocol";
 import type { Logger } from "../../logging/logger.ts";
 import type { ITracer } from "../../telemetry/tracer.ts";
@@ -23,6 +24,12 @@ const MAX_INBOUND_TEXT_LENGTH = 100_000;
 /** Per-sender rate limit: max messages per window. */
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX_MESSAGES = 20;
+
+/** Maximum entries in the rate limit map before pruning expired entries. */
+const RATE_LIMIT_MAX_ENTRIES = 500;
+
+/** Maximum age for rate limit entries before they are considered stale (1 hour). */
+const RATE_LIMIT_PRUNE_AGE_MS = 3_600_000;
 
 /** Retry delay for reconnection attempts. */
 const RECONNECT_DELAY_MS = 5_000;
@@ -56,11 +63,24 @@ export function isRateLimited(senderRateLimits: Map<string, RateWindow>, sender:
 
   if (!entry || now - entry.windowStart > RATE_LIMIT_WINDOW_MS) {
     senderRateLimits.set(key, { count: 1, windowStart: now });
+    // Prune expired entries when the map grows too large
+    if (senderRateLimits.size > RATE_LIMIT_MAX_ENTRIES) {
+      pruneRateLimits(senderRateLimits, now);
+    }
     return false;
   }
 
   entry.count++;
   return entry.count > RATE_LIMIT_MAX_MESSAGES;
+}
+
+/** Remove rate limit entries older than RATE_LIMIT_PRUNE_AGE_MS. */
+function pruneRateLimits(rateLimits: Map<string, RateWindow>, now: number): void {
+  for (const [key, entry] of rateLimits) {
+    if (now - entry.windowStart > RATE_LIMIT_PRUNE_AGE_MS) {
+      rateLimits.delete(key);
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -105,16 +125,14 @@ export interface ProcessEmailDeps {
 
 export async function processInboundEmail(email: ImapMessage, deps: ProcessEmailDeps): Promise<void> {
   const span = deps.tracer.startSpan("email.process_inbound", {
-    "email.from": email.from,
-    "email.subject": email.subject,
+    "email.from_domain": email.from.split("@")[1] || "unknown",
     "email.uid": email.uid,
   });
 
   // Check sender authorization
   if (!isAllowedSender(email.from, deps.allowedPatterns)) {
     deps.logger.warn("email", "Email from unauthorized sender", {
-      from: email.from,
-      subject: email.subject,
+      from: email.from.replace(/^[^@]+/, "***"),
     });
     // Mark as read to avoid re-processing
     await deps.imapClient.markAsRead(email.uid);
@@ -126,7 +144,7 @@ export async function processInboundEmail(email: ImapMessage, deps: ProcessEmail
 
   // Per-sender rate limiting
   if (isRateLimited(deps.senderRateLimits, email.from)) {
-    deps.logger.warn("email", "Rate limited sender", { from: email.from });
+    deps.logger.warn("email", "Rate limited sender", { from: email.from.replace(/^[^@]+/, "***") });
     await deps.imapClient.markAsRead(email.uid);
     span.setAttribute("email.skipped", "rate_limited");
     span.setStatus("ok");
@@ -243,14 +261,4 @@ export async function attemptReconnect(
 
   logger.error("email", "IMAP reconnect failed", result.error);
   return { newAttempts: attempts };
-}
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
 }

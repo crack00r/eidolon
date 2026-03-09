@@ -8,6 +8,7 @@
  * 4. Platform-specific config directory
  */
 
+import { statSync } from "node:fs";
 import { join } from "node:path";
 import type { EidolonConfig, EidolonError, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode } from "@eidolon/protocol";
@@ -59,12 +60,31 @@ export async function loadConfig(path?: string): Promise<Result<EidolonConfig, E
     );
   }
 
+  // Warn if file permissions are too open (group/other can read)
+  try {
+    const stats = statSync(usedPath);
+    const mode = stats.mode & 0o777;
+    if ((mode & 0o077) !== 0) {
+      console.warn(
+        `[config] Warning: ${usedPath} has permissions 0o${mode.toString(8)} -- ` +
+          "group/other can read. Consider restricting to 0600 or 0640.",
+      );
+    }
+  } catch {
+    // Non-POSIX or file not stat-able -- skip warning
+  }
+
   // Parse JSON
   let parsed: unknown;
   try {
     parsed = JSON.parse(rawJson);
   } catch (cause) {
     return Err(createError(ErrorCode.CONFIG_PARSE_ERROR, `Invalid JSON in ${usedPath}`, cause));
+  }
+
+  // Validate that parsed JSON is an object
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    return Err(createError(ErrorCode.CONFIG_PARSE_ERROR, "Config must be a JSON object"));
   }
 
   // Migrate legacy field names before validation

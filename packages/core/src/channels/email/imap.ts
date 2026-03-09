@@ -7,7 +7,8 @@
  */
 
 import type { EidolonError, Result } from "@eidolon/protocol";
-import { createError, Err, Ok } from "@eidolon/protocol";
+import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
+import type { Logger } from "../../logging/logger.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -150,23 +151,32 @@ function extractBodyText(raw: string): { text?: string; html?: string } {
 /** Maximum IMAP buffer size (10 MB). Disconnect if exceeded. */
 const MAX_BUFFER_SIZE = 10 * 1024 * 1024;
 
+/** Maximum number of messages to fetch per poll to prevent blocking the poll loop. */
+const MAX_FETCH_PER_POLL = 50;
+
 export class BunImapClient implements IImapClient {
   private readonly config: ImapConfig;
-  private socket: ReturnType<typeof Bun.connect> extends Promise<infer T> ? T : never;
+  private readonly logger: Logger | null;
+  private socket: (ReturnType<typeof Bun.connect> extends Promise<infer T> ? T : never) | null = null;
   private connected = false;
   private tagCounter = 0;
   private buffer = "";
   private pendingResolve: ((lines: string) => void) | null = null;
   private currentTag = "";
 
-  constructor(config: ImapConfig) {
+  constructor(config: ImapConfig, logger?: Logger) {
     this.config = config;
-    // socket will be assigned during connect()
-    this.socket = null as unknown as typeof this.socket;
+    this.logger = logger ?? null;
   }
 
   async connect(): Promise<Result<void, EidolonError>> {
     try {
+      if (!this.config.tls) {
+        console.warn(
+          "[IMAP] SECURITY WARNING: Connecting without TLS. Credentials will be sent in plaintext.",
+        );
+      }
+
       const _responseBuffer: string[] = [];
       let onGreeting: (() => void) | null = null;
       const greetingPromise = new Promise<void>((resolve) => {
@@ -205,14 +215,30 @@ export class BunImapClient implements IImapClient {
             }
 
             // Check for tagged response completion
+            // Tag must appear at position 0 or immediately after \r\n to avoid
+            // matching tag strings embedded in body data.
             if (this.pendingResolve && this.currentTag) {
-              const lines = this.buffer.split("\r\n");
-              const taggedLine = lines.find((l) => l.startsWith(this.currentTag));
-              if (taggedLine) {
-                const response = this.buffer;
-                this.buffer = "";
-                this.pendingResolve(response);
-                this.pendingResolve = null;
+              const tagWithSpace = `${this.currentTag} `;
+              let tagIndex = -1;
+
+              if (this.buffer.startsWith(tagWithSpace)) {
+                tagIndex = 0;
+              } else {
+                const crlfTag = `\r\n${tagWithSpace}`;
+                const idx = this.buffer.indexOf(crlfTag);
+                if (idx !== -1) {
+                  tagIndex = idx + 2; // skip past \r\n to point at tag
+                }
+              }
+
+              if (tagIndex !== -1) {
+                const endOfLine = this.buffer.indexOf("\r\n", tagIndex);
+                if (endOfLine !== -1) {
+                  const response = this.buffer.slice(0, endOfLine + 2);
+                  this.buffer = this.buffer.slice(endOfLine + 2);
+                  this.pendingResolve(response);
+                  this.pendingResolve = null;
+                }
               }
             }
           },
@@ -231,7 +257,21 @@ export class BunImapClient implements IImapClient {
       });
 
       this.socket = socket;
-      await greetingPromise;
+      let greetingTimer: ReturnType<typeof setTimeout> | undefined;
+      const greetingTimeout = new Promise<never>((_resolve, reject) => {
+        greetingTimer = setTimeout(() => {
+          try {
+            socket.end();
+          } catch { /* best-effort */ }
+          reject(new Error("IMAP greeting timeout after 30 seconds"));
+        }, 30_000);
+        greetingTimer.unref();
+      });
+      try {
+        await Promise.race([greetingPromise, greetingTimeout]);
+      } finally {
+        if (greetingTimer !== undefined) clearTimeout(greetingTimer);
+      }
 
       // LOGIN
       const loginResult = await this.sendCommand(
@@ -239,7 +279,7 @@ export class BunImapClient implements IImapClient {
       );
       if (!loginResult.includes(" OK")) {
         socket.end();
-        return Err(createError("CHANNEL_AUTH_FAILED" as EidolonError["code"], `IMAP LOGIN failed: ${loginResult}`));
+        return Err(createError(ErrorCode.EMAIL_AUTH_ERROR, "IMAP authentication failed"));
       }
 
       // SELECT folder (validate folder name to prevent IMAP command injection)
@@ -247,7 +287,7 @@ export class BunImapClient implements IImapClient {
         socket.end();
         return Err(
           createError(
-            "CHANNEL_AUTH_FAILED" as EidolonError["code"],
+            ErrorCode.EMAIL_IMAP_ERROR,
             `Unsafe IMAP folder name: ${this.config.folder}. Only alphanumeric, dots, hyphens, underscores, and slashes are allowed.`,
           ),
         );
@@ -255,13 +295,13 @@ export class BunImapClient implements IImapClient {
       const selectResult = await this.sendCommand(`SELECT "${this.escapeImapStr(this.config.folder)}"`);
       if (!selectResult.includes(" OK")) {
         socket.end();
-        return Err(createError("CHANNEL_AUTH_FAILED" as EidolonError["code"], `IMAP SELECT failed: ${selectResult}`));
+        return Err(createError(ErrorCode.EMAIL_IMAP_ERROR, "IMAP SELECT failed for configured folder"));
       }
 
       this.connected = true;
       return Ok(undefined);
     } catch (cause) {
-      return Err(createError("CHANNEL_AUTH_FAILED" as EidolonError["code"], "IMAP connection failed", cause));
+      return Err(createError(ErrorCode.EMAIL_AUTH_ERROR, "IMAP connection failed", cause));
     }
   }
 
@@ -283,12 +323,12 @@ export class BunImapClient implements IImapClient {
 
   async fetchNewMessages(_since?: Date): Promise<Result<readonly ImapMessage[], EidolonError>> {
     if (!this.connected) {
-      return Err(createError("CHANNEL_AUTH_FAILED" as EidolonError["code"], "IMAP not connected"));
+      return Err(createError(ErrorCode.EMAIL_IMAP_ERROR, "IMAP not connected"));
     }
 
     try {
-      // SEARCH for unseen messages
-      const searchCmd = "SEARCH UNSEEN";
+      // SEARCH for unseen messages (use UID variants for stable message identifiers)
+      const searchCmd = "UID SEARCH UNSEEN";
       const searchResult = await this.sendCommand(searchCmd);
 
       // Parse UIDs from SEARCH response: "* SEARCH 1 2 3"
@@ -308,11 +348,14 @@ export class BunImapClient implements IImapClient {
         return Ok([]);
       }
 
+      // Limit the number of messages fetched per poll to prevent blocking
+      const limitedUids = uids.slice(0, MAX_FETCH_PER_POLL);
+
       // FETCH each message
       const messages: ImapMessage[] = [];
-      for (const uid of uids) {
+      for (const uid of limitedUids) {
         const fetchResult = await this.sendCommand(
-          `FETCH ${uid} (BODY[HEADER.FIELDS (From To Subject Date Message-ID In-Reply-To References)] BODY[TEXT])`,
+          `UID FETCH ${uid} (BODY[HEADER.FIELDS (From To Subject Date Message-ID In-Reply-To References)] BODY[TEXT])`,
         );
 
         const msg = this.parseFetchResponse(uid, fetchResult);
@@ -323,23 +366,23 @@ export class BunImapClient implements IImapClient {
 
       return Ok(messages);
     } catch (cause) {
-      return Err(createError("CHANNEL_AUTH_FAILED" as EidolonError["code"], "IMAP fetch failed", cause));
+      return Err(createError(ErrorCode.EMAIL_IMAP_ERROR, "IMAP fetch failed", cause));
     }
   }
 
   async markAsRead(uid: number): Promise<Result<void, EidolonError>> {
     if (!this.connected) {
-      return Err(createError("CHANNEL_AUTH_FAILED" as EidolonError["code"], "IMAP not connected"));
+      return Err(createError(ErrorCode.EMAIL_IMAP_ERROR, "IMAP not connected"));
     }
 
     try {
-      const result = await this.sendCommand(`STORE ${uid} +FLAGS (\\Seen)`);
+      const result = await this.sendCommand(`UID STORE ${uid} +FLAGS (\\Seen)`);
       if (!result.includes(" OK")) {
-        return Err(createError("CHANNEL_AUTH_FAILED" as EidolonError["code"], `IMAP STORE failed: ${result}`));
+        return Err(createError(ErrorCode.EMAIL_IMAP_ERROR, `IMAP STORE failed: ${result}`));
       }
       return Ok(undefined);
     } catch (cause) {
-      return Err(createError("CHANNEL_AUTH_FAILED" as EidolonError["code"], "IMAP STORE failed", cause));
+      return Err(createError(ErrorCode.EMAIL_IMAP_ERROR, "IMAP STORE failed", cause));
     }
   }
 
@@ -357,13 +400,12 @@ export class BunImapClient implements IImapClient {
   }
 
   private escapeImapStr(s: string): string {
-    return s.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+    return s.replace(/[\r\n\0]/g, "").replace(/\\/g, "\\\\").replace(/"/g, '\\"');
   }
 
   private async sendCommand(command: string): Promise<string> {
     const tag = this.nextTag();
     this.currentTag = tag;
-    this.buffer = "";
 
     return new Promise<string>((resolve) => {
       // Timeout after 30 seconds
@@ -373,6 +415,7 @@ export class BunImapClient implements IImapClient {
           resolve(`${tag} BAD Timeout`);
         }
       }, 30_000);
+      timer.unref();
 
       const wrappedResolve = (data: string): void => {
         clearTimeout(timer);
@@ -380,6 +423,11 @@ export class BunImapClient implements IImapClient {
       };
 
       this.pendingResolve = wrappedResolve;
+      if (!this.socket) {
+        clearTimeout(timer);
+        resolve(`${tag} BAD Socket not connected`);
+        return;
+      }
       const line = `${tag} ${command}\r\n`;
       this.socket.write(new TextEncoder().encode(line));
     });
@@ -419,8 +467,11 @@ export class BunImapClient implements IImapClient {
         references: references.length > 0 ? references : undefined,
         attachments: [], // Basic impl does not parse MIME attachments
       };
-    } catch {
-      // Intentional: malformed email message is skipped
+    } catch (err) {
+      // Malformed email message is skipped, but log a warning for diagnostics
+      if (this.logger) {
+        this.logger.warn("imap", `Failed to parse message UID ${uid}, skipping`, { uid, error: String(err) });
+      }
       return null;
     }
   }

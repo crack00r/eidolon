@@ -112,7 +112,7 @@ function resolveMaxEscalation(request: ApprovalRequest, deps: EscalateDeps): Res
 
   try {
     deps.db
-      .query("UPDATE approval_requests SET status = ?, responded_by = ?, responded_at = ? WHERE id = ?")
+      .query("UPDATE approval_requests SET status = ?, responded_by = ?, responded_at = ? WHERE id = ? AND status = 'pending'")
       .run(finalStatus, `auto:max_escalation:${finalStatus}`, now, request.id);
   } catch (cause) {
     return Err(createError(ErrorCode.DB_QUERY_FAILED, `Failed to resolve max-escalated request ${request.id}`, cause));
@@ -140,14 +140,6 @@ function createEscalatedRequest(
   const now = Date.now();
   const newTimeoutAt = now + newTimeoutMs;
 
-  try {
-    deps.db
-      .query("UPDATE approval_requests SET status = 'escalated', responded_by = ?, responded_at = ? WHERE id = ?")
-      .run("auto:escalated", now, request.id);
-  } catch (cause) {
-    return Err(createError(ErrorCode.DB_QUERY_FAILED, `Failed to mark request ${request.id} as escalated`, cause));
-  }
-
   const newId = randomUUID();
   const metadataJson = JSON.stringify({
     ...(request.metadata ?? {}),
@@ -155,25 +147,34 @@ function createEscalatedRequest(
     escalatedFrom: request.channel,
   });
 
+  // Wrap UPDATE (old request) + INSERT (new request) in a transaction for atomicity
   try {
-    deps.db
-      .query(
-        `INSERT INTO approval_requests (id, action, level, description, requested_at, timeout_at, channel, status, escalation_level, metadata)
-         VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)`,
-      )
-      .run(
-        newId,
-        request.action,
-        request.level,
-        request.description,
-        now,
-        newTimeoutAt,
-        newChannel,
-        nextLevel,
-        metadataJson,
-      );
+    deps.db.transaction(() => {
+      deps.db
+        .query("UPDATE approval_requests SET status = 'escalated', responded_by = ?, responded_at = ? WHERE id = ? AND status = 'pending'")
+        .run("auto:escalated", now, request.id);
+
+      deps.db
+        .query(
+          `INSERT INTO approval_requests (id, action, level, description, requested_at, timeout_at, channel, status, escalation_level, metadata)
+           VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)`,
+        )
+        .run(
+          newId,
+          request.action,
+          request.level,
+          request.description,
+          now,
+          newTimeoutAt,
+          newChannel,
+          nextLevel,
+          metadataJson,
+        );
+    })();
   } catch (cause) {
-    return Err(createError(ErrorCode.DB_QUERY_FAILED, `Failed to create escalated request for ${request.id}`, cause));
+    return Err(
+      createError(ErrorCode.DB_QUERY_FAILED, `Failed to escalate request ${request.id}: transaction rolled back`, cause),
+    );
   }
 
   deps.eventBus.publish(

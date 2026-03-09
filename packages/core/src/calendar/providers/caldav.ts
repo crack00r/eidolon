@@ -35,6 +35,40 @@ export interface CalDAVConfig {
 /** Request timeout for CalDAV HTTP calls (30 seconds). */
 const CALDAV_TIMEOUT_MS = 30_000;
 
+const BLOCKED_HOSTNAMES = new Set([
+  "localhost",
+  "metadata.google.internal",
+  "instance-data",
+]);
+
+const PRIVATE_IP_PATTERNS = [
+  /^127\./, /^10\./, /^172\.(1[6-9]|2\d|3[01])\./, /^192\.168\./,
+  /^0\./, /^169\.254\./, /^::1$/, /^fc/i, /^fd/i, /^fe80/i,
+];
+
+function isBlockedCalDAVHost(url: string): string | undefined {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return "Invalid CalDAV server URL";
+  }
+
+  const hostname = parsed.hostname.replace(/^\[/, "").replace(/]$/, "").toLowerCase();
+
+  if (BLOCKED_HOSTNAMES.has(hostname)) {
+    return `Blocked hostname: ${hostname} (SSRF protection)`;
+  }
+
+  for (const pattern of PRIVATE_IP_PATTERNS) {
+    if (pattern.test(hostname)) {
+      return `Blocked private IP: ${hostname} (SSRF protection)`;
+    }
+  }
+
+  return undefined;
+}
+
 export class CalDAVProvider implements CalendarProvider {
   readonly id: string;
   readonly name: string;
@@ -45,6 +79,11 @@ export class CalDAVProvider implements CalendarProvider {
   private readonly calendarPath: string;
 
   constructor(config: CalDAVConfig, _logger: Logger, name?: string) {
+    const blocked = isBlockedCalDAVHost(config.serverUrl);
+    if (blocked) {
+      throw new Error(`CalDAV server URL rejected: ${blocked}`);
+    }
+
     this.id = `caldav-${config.calendarPath.replace(/\//g, "-")}`;
     this.name = name ?? `CalDAV (${config.calendarPath})`;
     this.serverUrl = config.serverUrl.replace(/\/$/, "");
@@ -106,6 +145,7 @@ export class CalDAVProvider implements CalendarProvider {
         },
         body: icsData,
         signal: AbortSignal.timeout(CALDAV_TIMEOUT_MS),
+        redirect: "error",
       });
 
       if (!response.ok) {
@@ -132,6 +172,7 @@ export class CalDAVProvider implements CalendarProvider {
         method: "DELETE",
         headers: this.authHeaders(),
         signal: AbortSignal.timeout(CALDAV_TIMEOUT_MS),
+        redirect: "error",
       });
 
       if (!response.ok && response.status !== 204 && response.status !== 404) {
@@ -204,6 +245,7 @@ export class CalDAVProvider implements CalendarProvider {
         },
         body,
         signal: AbortSignal.timeout(CALDAV_TIMEOUT_MS),
+        redirect: "error",
       });
 
       if (!response.ok && response.status !== 207) {
@@ -228,6 +270,7 @@ export class CalDAVProvider implements CalendarProvider {
         },
         body,
         signal: AbortSignal.timeout(CALDAV_TIMEOUT_MS),
+        redirect: "error",
       });
 
       if (!response.ok && response.status !== 207) {

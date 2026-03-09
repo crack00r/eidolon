@@ -30,7 +30,7 @@ const ErrorReportEntrySchema = z
     timestamp: z.union([z.string().max(64), z.number()]).optional(),
     data: z.record(z.unknown()).optional(),
   })
-  .passthrough();
+  .strip();
 
 export const ErrorReportParamsSchema = z.object({
   errors: z.array(ErrorReportEntrySchema).max(100),
@@ -39,7 +39,7 @@ export const ErrorReportParamsSchema = z.object({
       platform: z.string().max(64).optional(),
       version: z.string().max(64).optional(),
     })
-    .passthrough()
+    .strip()
     .optional(),
 });
 
@@ -109,26 +109,32 @@ export const SystemHealthParamsSchema = z.object({
 });
 
 // Calendar RPC param schemas
-export const CalendarListEventsParamsSchema = z.object({
-  start: z.number().int().nonnegative(),
-  end: z.number().int().nonnegative(),
-});
+export const CalendarListEventsParamsSchema = z
+  .object({
+    start: z.number().int().nonnegative(),
+    end: z.number().int().nonnegative(),
+  })
+  .refine((d) => d.start <= d.end, { message: "start must be <= end" });
 
 export const CalendarGetUpcomingParamsSchema = z.object({
   hours: z.number().positive().optional(),
 });
 
-export const CalendarCreateEventParamsSchema = z.object({
-  title: z.string().min(1).max(512),
-  startTime: z.number().int().nonnegative(),
-  endTime: z.number().int().nonnegative(),
-  description: z.string().max(4096).optional(),
-  location: z.string().max(512).optional(),
-  allDay: z.boolean().optional(),
-  calendarId: z.string().min(1).max(256).optional(),
-});
+export const CalendarCreateEventParamsSchema = z
+  .object({
+    title: z.string().min(1).max(512),
+    startTime: z.number().int().nonnegative(),
+    endTime: z.number().int().nonnegative(),
+    description: z.string().max(4096).optional(),
+    location: z.string().max(512).optional(),
+    allDay: z.boolean().optional(),
+    calendarId: z.string().min(1).max(256).optional(),
+  })
+  .refine((d) => d.startTime <= d.endTime, { message: "startTime must be <= endTime" });
 
-export const CalendarConflictsParamsSchema = z.object({
-  start: z.number().int().nonnegative().optional(),
-  end: z.number().int().nonnegative().optional(),
-});
+export const CalendarConflictsParamsSchema = z
+  .object({
+    start: z.number().int().nonnegative().optional(),
+    end: z.number().int().nonnegative().optional(),
+  })
+  .refine((d) => !d.start || !d.end || d.start <= d.end, { message: "start must be <= end" });

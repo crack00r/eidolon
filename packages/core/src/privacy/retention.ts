@@ -81,8 +81,15 @@ export class RetentionEnforcer {
     });
 
     // --- operational.db: sessions (conversations) ---
+    // Delete token_usage records for sessions about to be deleted, then delete the sessions.
     try {
       const cutoff = now - this.config.conversationsDays * MS_PER_DAY;
+      const tokenResult = this.operational
+        .query(
+          "DELETE FROM token_usage WHERE session_id IN (SELECT id FROM sessions WHERE started_at < ? AND status IN ('completed', 'failed'))",
+        )
+        .run(cutoff);
+      deletedCounts.session_token_usage = tokenResult.changes;
       const result = this.operational
         .query("DELETE FROM sessions WHERE started_at < ? AND status IN ('completed', 'failed')")
         .run(cutoff);
@@ -92,6 +99,7 @@ export class RetentionEnforcer {
       errors.push(msg);
       this.logger.warn("enforce", msg);
       deletedCounts.sessions = 0;
+      deletedCounts.session_token_usage = 0;
     }
 
     // --- operational.db: events ---
@@ -134,20 +142,17 @@ export class RetentionEnforcer {
       deletedCounts.discoveries = 0;
     }
 
-    // --- audit.db: audit_log -- ONLY if explicitly configured (not -1) ---
+    // --- audit.db: audit_log ---
+    // audit_log entries are protected by the audit_no_delete trigger (tamper-proof compliance).
+    // DELETE operations on audit_log will be ABORTed by the trigger, so we skip deletion entirely.
+    deletedCounts.audit_log = 0;
     if (this.config.auditLogDays > 0) {
-      try {
-        const cutoff = now - this.config.auditLogDays * MS_PER_DAY;
-        const result = this.audit.query("DELETE FROM audit_log WHERE timestamp < ?").run(cutoff);
-        deletedCounts.audit_log = result.changes;
-      } catch (cause) {
-        const msg = `Failed to enforce retention on audit_log: ${String(cause)}`;
-        errors.push(msg);
-        this.logger.warn("enforce", msg);
-        deletedCounts.audit_log = 0;
-      }
+      this.logger.warn(
+        "enforce",
+        `auditLogDays is set to ${this.config.auditLogDays} but audit log retention is not enforced ` +
+          "due to tamper-proof audit_no_delete trigger. Audit log entries cannot be deleted.",
+      );
     } else {
-      deletedCounts.audit_log = 0;
       this.logger.debug("enforce", "Audit log retention: NEVER delete (legal requirement)");
     }
 

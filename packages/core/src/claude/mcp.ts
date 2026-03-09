@@ -8,7 +8,7 @@
  * from the encrypted secret store.
  */
 
-import { chmodSync, unlinkSync } from "node:fs";
+import { chmodSync, readdirSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 import type { BrainConfig, EidolonError, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
@@ -81,6 +81,38 @@ function resolveEnvSecrets(
   return Ok(resolved);
 }
 
+/** Name of the MCP config file written to workspace directories. */
+const MCP_CONFIG_FILENAME = ".mcp-servers.json";
+
+/**
+ * Remove stale `.mcp-servers.json` files from a workspace directory.
+ *
+ * If the daemon crashes, MCP config files containing resolved secrets
+ * may persist on disk. Call this during daemon init to clean them up.
+ * Scans immediate subdirectories of `workspaceDir` (one level deep,
+ * matching the WorkspacePreparer layout).
+ */
+export function cleanupStaleMcpConfigs(workspaceDir: string): number {
+  let removed = 0;
+  let entries: string[];
+  try {
+    entries = readdirSync(workspaceDir);
+  } catch {
+    // Directory may not exist yet -- nothing to clean
+    return 0;
+  }
+  for (const entry of entries) {
+    const configPath = join(workspaceDir, entry, MCP_CONFIG_FILENAME);
+    try {
+      unlinkSync(configPath);
+      removed++;
+    } catch {
+      // File doesn't exist or can't be removed -- skip
+    }
+  }
+  return removed;
+}
+
 /**
  * Generate an MCP config file for Claude Code CLI.
  * Writes the file to the workspace directory and returns the path.
@@ -113,7 +145,7 @@ export async function generateMcpConfig(
   }
 
   const mcpConfig: McpConfigFile = { mcpServers };
-  const configPath = join(workspaceDir, ".mcp-servers.json");
+  const configPath = join(workspaceDir, MCP_CONFIG_FILENAME);
 
   try {
     await Bun.write(configPath, JSON.stringify(mcpConfig, null, 2));

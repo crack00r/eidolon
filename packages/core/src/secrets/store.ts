@@ -12,10 +12,11 @@
  * - Key names are validated to prevent empty or excessively long keys.
  */
 
-import { Database } from "bun:sqlite";
-import { chmodSync, existsSync } from "node:fs";
+import type { Database } from "bun:sqlite";
 import type { EidolonConfig, EidolonError, Result, SecretMetadata } from "@eidolon/protocol";
 import { createError, EidolonConfigSchema, Err, ErrorCode, Ok } from "@eidolon/protocol";
+import type { AuditLogger } from "../audit/logger.ts";
+import { createConnection } from "../database/connection.ts";
 import type { Logger } from "../logging/logger.ts";
 import { decrypt, encrypt } from "./crypto.ts";
 
@@ -64,42 +65,34 @@ export class SecretStore {
   private readonly db: Database;
   private readonly masterKey: Buffer;
   private readonly logger: Logger | undefined;
+  private readonly auditLogger: AuditLogger | undefined;
 
   /**
-   * @param dbPath    - Path to the SQLite database file, or `":memory:"` for tests.
-   * @param masterKey - 32-byte master encryption key. The buffer is referenced (not copied)
-   *                    and must remain valid for the lifetime of the store.
-   * @param logger    - Optional structured logger for audit-grade secret access logging.
+   * @param dbPath      - Path to the SQLite database file, or `":memory:"` for tests.
+   * @param masterKey   - 32-byte master encryption key. The buffer is referenced (not copied)
+   *                      and must remain valid for the lifetime of the store.
+   * @param logger      - Optional structured logger for audit-grade secret access logging.
+   * @param auditLogger - Optional AuditLogger for recording security-relevant operations.
    */
-  constructor(dbPath: string, masterKey: Buffer, logger?: Logger) {
-    this.db = new Database(dbPath, { create: true });
+  constructor(dbPath: string, masterKey: Buffer, logger?: Logger, auditLogger?: AuditLogger) {
+    // Use the shared connection factory to ensure busy_timeout, foreign_keys,
+    // auto_vacuum, WAL mode, secure_delete, and file permissions are all set.
+    const connResult = createConnection(dbPath);
+    if (!connResult.ok) {
+      throw new Error(`Failed to open secrets database: ${connResult.error.message}`);
+    }
+    this.db = connResult.value;
     // Copy the master key so that close() only zeroizes our internal copy,
     // not the caller's buffer.
     this.masterKey = Buffer.from(masterKey);
     this.logger = logger?.child("secrets");
-    this.restrictFilePermissions(dbPath);
+    this.auditLogger = auditLogger;
     this.initialize();
   }
 
-  /** Restrict secrets database file permissions to owner-only (0o600). */
-  private restrictFilePermissions(dbPath: string): void {
-    if (dbPath === ":memory:") return;
-    try {
-      chmodSync(dbPath, 0o600);
-      // Also restrict WAL and SHM files if they exist
-      const walPath = `${dbPath}-wal`;
-      const shmPath = `${dbPath}-shm`;
-      if (existsSync(walPath)) chmodSync(walPath, 0o600);
-      if (existsSync(shmPath)) chmodSync(shmPath, 0o600);
-    } catch {
-      // Best-effort: may fail on non-POSIX systems (e.g., Windows)
-    }
-  }
-
   private initialize(): void {
-    this.db.exec("PRAGMA journal_mode=WAL");
-    // SEC: Overwrite deleted content on disk instead of marking as free.
-    // Prevents recovery of plaintext fragments after DELETE operations.
+    // SEC: Ensure secure_delete is ON (connection factory already sets it,
+    // but we enforce it explicitly for defense-in-depth on the secrets DB).
     this.db.exec("PRAGMA secure_delete=ON");
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS secrets (
@@ -139,9 +132,10 @@ export class SecretStore {
 
     const now = Date.now();
 
-    this.db
-      .query(
-        `INSERT INTO secrets (key, encrypted_value, iv, auth_tag, salt, description, created_at, updated_at, accessed_at)
+    try {
+      this.db
+        .query(
+          `INSERT INTO secrets (key, encrypted_value, iv, auth_tag, salt, description, created_at, updated_at, accessed_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(key) DO UPDATE SET
           encrypted_value = excluded.encrypted_value,
@@ -150,19 +144,24 @@ export class SecretStore {
           salt = excluded.salt,
           description = COALESCE(excluded.description, secrets.description),
           updated_at = excluded.updated_at`,
-      )
-      .run(
-        key,
-        encrypted.value.ciphertext,
-        encrypted.value.iv,
-        encrypted.value.authTag,
-        encrypted.value.salt,
-        description ?? null,
-        now,
-        now,
-        now,
-      );
+        )
+        .run(
+          key,
+          encrypted.value.ciphertext,
+          encrypted.value.iv,
+          encrypted.value.authTag,
+          encrypted.value.salt,
+          description ?? null,
+          now,
+          now,
+          now,
+        );
+    } catch (cause) {
+      this.logAudit("secret.write", key, "failure");
+      return Err(createError(ErrorCode.DB_QUERY_FAILED, `Failed to store secret '${key}'`, cause));
+    }
     this.logger?.info("set", `Secret set: ${key}`);
+    this.logAudit("secret.write", key, "success");
 
     return Ok(undefined);
   }
@@ -187,6 +186,7 @@ export class SecretStore {
 
     if (!row) {
       this.logger?.warn("get", `Secret not found: ${key}`);
+      this.logAudit("secret.read", key, "failure");
       return Err(createError(ErrorCode.SECRET_NOT_FOUND, `Secret '${key}' not found`));
     }
 
@@ -205,9 +205,15 @@ export class SecretStore {
 
     if (result.ok) {
       // Only update accessed_at on successful decryption
-      this.db.query("UPDATE secrets SET accessed_at = ? WHERE key = ?").run(Date.now(), key);
+      try {
+        this.db.query("UPDATE secrets SET accessed_at = ? WHERE key = ?").run(Date.now(), key);
+      } catch (updateErr) {
+        this.logger?.warn("get", `Failed to update accessed_at for secret: ${key}: ${updateErr instanceof Error ? updateErr.message : String(updateErr)}`);
+      }
+      this.logAudit("secret.read", key, "success");
     } else {
       this.logger?.warn("get", `Decryption failed for secret: ${key}`);
+      this.logAudit("secret.read", key, "failure");
     }
 
     return result;
@@ -225,27 +231,33 @@ export class SecretStore {
     const result = this.db.query("DELETE FROM secrets WHERE key = ?").run(key);
     if (result.changes === 0) {
       this.logger?.warn("delete", `Secret not found for deletion: ${key}`);
+      this.logAudit("secret.delete", key, "failure");
       return Err(createError(ErrorCode.SECRET_NOT_FOUND, `Secret '${key}' not found`));
     }
     this.logger?.info("delete", `Secret deleted: ${key}`);
+    this.logAudit("secret.delete", key, "success");
     return Ok(undefined);
   }
 
   /** List all secret metadata (never returns values). */
   list(): Result<SecretMetadata[], EidolonError> {
-    const rows = this.db
-      .query("SELECT key, description, created_at, updated_at, accessed_at FROM secrets ORDER BY key")
-      .all() as MetadataRow[];
+    try {
+      const rows = this.db
+        .query("SELECT key, description, created_at, updated_at, accessed_at FROM secrets ORDER BY key")
+        .all() as MetadataRow[];
 
-    return Ok(
-      rows.map((r) => ({
-        key: r.key,
-        createdAt: r.created_at,
-        updatedAt: r.updated_at,
-        accessedAt: r.accessed_at,
-        description: r.description ?? undefined,
-      })),
-    );
+      return Ok(
+        rows.map((r) => ({
+          key: r.key,
+          createdAt: r.created_at,
+          updatedAt: r.updated_at,
+          accessedAt: r.accessed_at,
+          description: r.description ?? undefined,
+        })),
+      );
+    } catch (cause) {
+      return Err(createError(ErrorCode.DB_QUERY_FAILED, "Failed to list secrets", cause));
+    }
   }
 
   /**
@@ -269,8 +281,10 @@ export class SecretStore {
   rotate(key: string, newValue: string): Result<void, EidolonError> {
     if (!this.has(key)) {
       this.logger?.warn("rotate", `Secret not found for rotation: ${key}`);
+      this.logAudit("secret.rotate", key, "failure");
       return Err(createError(ErrorCode.SECRET_NOT_FOUND, `Secret '${key}' not found`));
     }
+    this.logAudit("secret.rotate", key, "success");
     this.logger?.info("rotate", `Secret rotated: ${key}`);
     return this.set(key, newValue);
   }
@@ -328,6 +342,20 @@ export class SecretStore {
       resolved[k] = r.value;
     }
     return Ok(resolved);
+  }
+
+  /**
+   * Log a security-relevant secret operation to the audit log.
+   * Failures are logged but never propagate -- audit logging must not break secret ops.
+   */
+  private logAudit(action: string, target: string, result: "success" | "failure"): void {
+    if (!this.auditLogger) return;
+    this.auditLogger.log({
+      actor: "system",
+      action,
+      target,
+      result,
+    });
   }
 
   /**

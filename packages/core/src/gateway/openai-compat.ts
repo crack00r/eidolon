@@ -120,9 +120,8 @@ async function executeCompletion(
 
     return jsonResponse(response, 200);
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown provider error";
     log.error("chat", "Completion failed", err instanceof Error ? err : undefined, { model: resolvedModel });
-    return openAIError(`Provider error: ${message}`, "server_error", "provider_error", 502);
+    return openAIError("An internal error occurred", "server_error", "provider_error", 502);
   }
 }
 
@@ -143,7 +142,6 @@ function executeStreamingCompletion(
   const stream = new ReadableStream({
     async start(controller): Promise<void> {
       try {
-        let _totalText = "";
         const streamIter = provider.stream(toLLMMessages(request.messages), {
           model: resolvedModel,
           temperature: request.temperature,
@@ -152,7 +150,6 @@ function executeStreamingCompletion(
 
         for await (const event of streamIter) {
           if (event.type === "text" && event.text) {
-            _totalText += event.text;
             const chunk = {
               id: completionId,
               object: "chat.completion.chunk",
@@ -181,13 +178,15 @@ function executeStreamingCompletion(
             controller.enqueue(encoder.encode(`data: ${JSON.stringify(finalChunk)}\n\n`));
             controller.enqueue(encoder.encode("data: [DONE]\n\n"));
           } else if (event.type === "error") {
-            log.error("chat", `Stream error: ${event.error ?? "unknown"}`);
+            const errorMessage = event.error ?? "unknown";
+            log.error("chat", `Stream error: ${errorMessage}`);
             const errorChunk = {
               id: completionId,
               object: "chat.completion.chunk",
               created,
               model: resolvedModel,
-              choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
+              choices: [{ index: 0, delta: {}, finish_reason: "error" }],
+              error: { message: "An internal error occurred", type: "server_error", code: "stream_error" },
             };
             controller.enqueue(encoder.encode(`data: ${JSON.stringify(errorChunk)}\n\n`));
             controller.enqueue(encoder.encode("data: [DONE]\n\n"));
@@ -262,17 +261,34 @@ export async function handleOpenAIRequest(req: Request, deps: OpenAICompatDeps):
   }
 
   // Unknown /v1/ endpoint
-  return openAIError(`Unknown endpoint: ${req.method} ${path}`, "invalid_request_error", "not_found", 404);
+  return openAIError("Unknown endpoint", "invalid_request_error", "not_found", 404);
 }
 
 // ---------------------------------------------------------------------------
 // Chat completions sub-handler
 // ---------------------------------------------------------------------------
 
+/** Maximum request body size for chat completions: 10 MB. */
+const MAX_BODY_BYTES = 10_485_760;
+
 async function handleChatCompletions(req: Request, log: Logger, deps: OpenAICompatDeps): Promise<Response> {
+  // Body size check via Content-Length header (fast reject before reading)
+  const contentLength = req.headers.get("Content-Length");
+  if (contentLength !== null) {
+    const size = parseInt(contentLength, 10);
+    if (!Number.isNaN(size) && size > MAX_BODY_BYTES) {
+      return openAIError("Request body too large", "invalid_request_error", "payload_too_large", 413);
+    }
+  }
+
+  // Read body with explicit size check (Content-Length may be absent or spoofed)
   let body: unknown;
   try {
-    body = await req.json();
+    const bodyBuffer = await req.arrayBuffer();
+    if (bodyBuffer.byteLength > MAX_BODY_BYTES) {
+      return openAIError("Request body too large", "invalid_request_error", "payload_too_large", 413);
+    }
+    body = JSON.parse(new TextDecoder().decode(bodyBuffer));
   } catch {
     // Intentional: malformed JSON returns OpenAI-compatible error
     return openAIError("Invalid JSON in request body", "invalid_request_error", "invalid_json", 400);

@@ -238,7 +238,14 @@ export class AuditLogger {
       this.logger.info("verify", `Audit log integrity verified for ${rows.length} entries`);
       return Ok(rows.length);
     } catch (cause) {
-      if (typeof cause === "object" && cause !== null && "code" in cause) {
+      if (
+        typeof cause === "object" &&
+        cause !== null &&
+        "code" in cause &&
+        "message" in cause &&
+        typeof (cause as Record<string, unknown>).code === "string" &&
+        typeof (cause as Record<string, unknown>).message === "string"
+      ) {
         return Err(cause as EidolonError);
       }
       return Err(createError(ErrorCode.DB_QUERY_FAILED, "Failed to verify audit log integrity", cause));

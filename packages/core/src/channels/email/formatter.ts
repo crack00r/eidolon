@@ -156,18 +156,22 @@ function formatInline(text: string): string {
   result = result.replace(/\*(.+?)\*/g, "<em>$1</em>");
   result = result.replace(/(?<!\w)_(.+?)_(?!\w)/g, "<em>$1</em>");
 
-  // Links: [text](url)
-  result = result.replace(
-    /\[([^\]]+)\]\(([^)]+)\)/g,
-    '<a href="$2" style="color:#0066cc;text-decoration:underline;">$1</a>',
-  );
+  // Links: [text](url) -- only allow safe URL schemes
+  result = result.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_match, text: string, url: string) => {
+    const trimmedUrl = url.trim().toLowerCase();
+    if (trimmedUrl.startsWith("http://") || trimmedUrl.startsWith("https://") || trimmedUrl.startsWith("mailto:")) {
+      return `<a href="${escapeHtml(url.trim())}" style="color:#0066cc;text-decoration:underline;">${text}</a>`;
+    }
+    // Reject dangerous schemes (javascript:, data:, vbscript:, etc.)
+    return text;
+  });
 
   return result;
 }
 
 /** Escape HTML special characters. */
 function escapeHtml(text: string): string {
-  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 
 // ---------------------------------------------------------------------------

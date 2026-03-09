@@ -107,7 +107,17 @@ export function handleClientAuth(
 
   const authConfig = deps.getAuthConfig();
   const configToken = authConfig.token;
-  if (typeof configToken !== "string" || !constantTimeCompare(token, configToken)) {
+  if (typeof configToken !== "string") {
+    deps.logger.warn(
+      "auth",
+      `Token secret reference could not be resolved for auth type "${authConfig.type}". ` +
+        "Check that the secret exists in the secret store.",
+    );
+    deps.rateLimiter.recordFailure(client.ip);
+    emitAuthFailure(ws, client, "Authentication failed", deps, jsonRpcId, authTimers);
+    return;
+  }
+  if (!constantTimeCompare(token, configToken)) {
     deps.rateLimiter.recordFailure(client.ip);
     emitAuthFailure(ws, client, "Authentication failed", deps, jsonRpcId, authTimers);
     return;

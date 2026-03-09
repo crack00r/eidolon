@@ -8,6 +8,7 @@
 import type { EidolonError, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 import type { Logger } from "../../logging/logger.ts";
+import { sleep } from "../../utils/async.ts";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -237,7 +238,7 @@ export class WhatsAppCloudApi implements WhatsAppApiClient {
           options.body = JSON.stringify(body);
         }
 
-        const response = await fetch(url, options);
+        const response = await fetch(url, { ...options, redirect: "error" });
 
         if (!response.ok) {
           const errorBody = await response.text().catch(() => "");
@@ -281,11 +282,4 @@ export class WhatsAppCloudApi implements WhatsAppApiClient {
 
     return false;
   }
-}
-
-/** Promise-based sleep for retry delays. */
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
 }

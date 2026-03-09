@@ -16,6 +16,7 @@ async function fetchHealthEndpoint(path: string, port: number): Promise<unknown>
   const response = await fetch(url, {
     headers: { Host: "127.0.0.1" },
     signal: AbortSignal.timeout(5_000),
+    redirect: "error",
   });
   return response.json();
 }
@@ -69,6 +70,7 @@ export function registerReplicationCommand(program: Command): void {
           method: "POST",
           headers: { Host: "127.0.0.1" },
           signal: AbortSignal.timeout(5_000),
+          redirect: "error",
         });
 
         if (response.ok) {
@@ -98,6 +100,7 @@ export function registerReplicationCommand(program: Command): void {
           method: "POST",
           headers: { Host: "127.0.0.1" },
           signal: AbortSignal.timeout(5_000),
+          redirect: "error",
         });
 
         if (response.ok) {

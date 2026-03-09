@@ -8,8 +8,8 @@
  * When `privacy forget` is executed, all backups must be deleted.
  */
 
-import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
-import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { createCipheriv, createDecipheriv, createHmac, randomBytes } from "node:crypto";
+import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import type { DatabaseConfig, EidolonError, Result } from "@eidolon/protocol";
 import {
@@ -41,6 +41,9 @@ const ENCRYPTION_ALGORITHM = "aes-256-gcm";
 const IV_LENGTH = 12;
 const AUTH_TAG_LENGTH = 16;
 const ENCRYPTED_SUFFIX = ".enc";
+
+/** Domain separation tag for deriving a backup-specific key from the master key. */
+const BACKUP_KEY_DOMAIN = "eidolon-backup-v1";
 
 /**
  * Characters forbidden in backup paths to prevent SQL injection via VACUUM INTO.
@@ -90,23 +93,40 @@ function isBackupDir(name: string): boolean {
 }
 
 /**
+ * Derive a backup-specific key from the master key using HMAC-SHA256.
+ * This provides domain separation so the master key is never used directly.
+ */
+function deriveBackupKey(masterKey: Buffer): Buffer {
+  return createHmac("sha256", masterKey).update(BACKUP_KEY_DOMAIN).digest();
+}
+
+/**
  * Encrypt a file in-place using AES-256-GCM.
  * Writes: [12-byte IV] [16-byte auth tag] [ciphertext]
  */
 function encryptFile(filePath: string, key: Buffer): void {
   const plaintext = readFileSync(filePath);
-  const iv = randomBytes(IV_LENGTH);
-  const cipher = createCipheriv(ENCRYPTION_ALGORITHM, key, iv);
-  const encrypted = Buffer.concat([cipher.update(plaintext), cipher.final()]);
-  const authTag = cipher.getAuthTag();
+  try {
+    const iv = randomBytes(IV_LENGTH);
+    const cipher = createCipheriv(ENCRYPTION_ALGORITHM, key, iv, { authTagLength: AUTH_TAG_LENGTH });
+    const encrypted = Buffer.concat([cipher.update(plaintext), cipher.final()]);
+    const authTag = cipher.getAuthTag();
 
-  const output = Buffer.concat([iv, authTag, encrypted]);
-  const encPath = `${filePath}${ENCRYPTED_SUFFIX}`;
-  writeFileSync(encPath, output);
-  chmodSync(encPath, BACKUP_FILE_PERMISSIONS);
+    const output = Buffer.concat([iv, authTag, encrypted]);
+    const encPath = `${filePath}${ENCRYPTED_SUFFIX}`;
+    const tmpPath = `${encPath}.tmp`;
 
-  // Remove the unencrypted original
-  rmSync(filePath, { force: true });
+    // Atomic write: write to temp file, then rename (atomic on same filesystem)
+    writeFileSync(tmpPath, output);
+    chmodSync(tmpPath, BACKUP_FILE_PERMISSIONS);
+    renameSync(tmpPath, encPath);
+
+    // Remove the unencrypted original
+    rmSync(filePath, { force: true });
+  } finally {
+    // Zeroize plaintext buffer to prevent sensitive data lingering in memory
+    plaintext.fill(0);
+  }
 }
 
 /**
@@ -119,7 +139,7 @@ function decryptFile(encPath: string, key: Buffer): Buffer {
   const authTag = data.subarray(IV_LENGTH, IV_LENGTH + AUTH_TAG_LENGTH);
   const ciphertext = data.subarray(IV_LENGTH + AUTH_TAG_LENGTH);
 
-  const decipher = createDecipheriv(ENCRYPTION_ALGORITHM, key, iv);
+  const decipher = createDecipheriv(ENCRYPTION_ALGORITHM, key, iv, { authTagLength: AUTH_TAG_LENGTH });
   decipher.setAuthTag(authTag);
   return Buffer.concat([decipher.update(ciphertext), decipher.final()]);
 }
@@ -128,13 +148,22 @@ export class BackupManager {
   private readonly dbManager: DatabaseManager;
   private readonly config: DatabaseConfig;
   private readonly logger: Logger;
-  private readonly encryptionKey?: Buffer;
+  private encryptionKey?: Buffer;
 
   constructor(dbManager: DatabaseManager, config: DatabaseConfig, logger: Logger, encryptionKey?: Buffer) {
     this.dbManager = dbManager;
     this.config = config;
     this.logger = logger.child("backup");
-    this.encryptionKey = encryptionKey;
+    this.encryptionKey = encryptionKey ? deriveBackupKey(encryptionKey) : undefined;
+  }
+
+  /** Zeroize the encryption key material and release it. */
+  dispose(): void {
+    if (this.encryptionKey) {
+      this.encryptionKey.fill(0);
+      this.encryptionKey = undefined;
+      this.logger.debug("dispose", "Encryption key zeroized");
+    }
   }
 
   /** Resolve the backup root path from config, falling back to a 'backups' subdirectory. */
