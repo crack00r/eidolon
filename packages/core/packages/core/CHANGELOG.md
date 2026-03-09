@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.2.1](https://github.com/crack00r/eidolon/compare/v0.2.0...v0.2.1) (2026-03-09)
+
+
+### Features
+
+* **core:** add memory population, learning activation, parallel sessions, and REST API ([6def0ea](https://github.com/crack00r/eidolon/commit/6def0eaa834c616fd2ad7d21b434c4407c4d55ca))
+
+
+### Bug Fixes
+
+* **core:** remove stale session-resume test and old ConversationSessionStore init ([1b170d3](https://github.com/crack00r/eidolon/commit/1b170d3a8d195f00335f2df354df0383eb08d8c4))
+
 ## [0.2.0](https://github.com/crack00r/eidolon/compare/v0.1.14...v0.2.0) (2026-03-09)
 
 

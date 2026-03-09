@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.2.1](https://github.com/crack00r/eidolon/compare/v0.2.0...v0.2.1) (2026-03-09)
+
+
+### Features
+
+* **core:** add memory population, learning activation, parallel sessions, and REST API ([6def0ea](https://github.com/crack00r/eidolon/commit/6def0eaa834c616fd2ad7d21b434c4407c4d55ca))
+
+
+### Bug Fixes
+
+* **cli:** inject version at build time for compiled binaries ([2800887](https://github.com/crack00r/eidolon/commit/2800887b3b0ab25668f19abc6331a2e2ae9f937b))
+
 ## [0.2.0](https://github.com/crack00r/eidolon/compare/v0.1.14...v0.2.0) (2026-03-09)
 
 

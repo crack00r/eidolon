@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > [release-please](https://github.com/googleapis/release-please).
 > Do not edit manually.
 
+## [0.2.1](https://github.com/crack00r/eidolon/compare/v0.2.0...v0.2.1) (2026-03-09)
+
+
+### Features
+
+* **core:** add memory population, learning activation, parallel sessions, and REST API ([6def0ea](https://github.com/crack00r/eidolon/commit/6def0eaa834c616fd2ad7d21b434c4407c4d55ca))
+* **desktop:** add chat history, conversation sidebar, and improved memory/learning views ([3714cb6](https://github.com/crack00r/eidolon/commit/3714cb669f75552152bb54ac40d8022a3af5027b))
+
+
+### Bug Fixes
+
+* **ci:** fix CLI build output path and pin Linux runner to Ubuntu 22.04 ([614f7b7](https://github.com/crack00r/eidolon/commit/614f7b70022403a108a3ad43971c14fb5d029cee))
+* **cli:** inject version at build time for compiled binaries ([2800887](https://github.com/crack00r/eidolon/commit/2800887b3b0ab25668f19abc6331a2e2ae9f937b))
+* **core:** remove stale session-resume test and old ConversationSessionStore init ([1b170d3](https://github.com/crack00r/eidolon/commit/1b170d3a8d195f00335f2df354df0383eb08d8c4))
+* **desktop:** fix reconnect on restart and resolve $secret references in Rust ([373c82f](https://github.com/crack00r/eidolon/commit/373c82f818652817a1b19a453782b5d3e631bf6b))
+
 ## [0.2.0](https://github.com/crack00r/eidolon/compare/v0.1.15...v0.2.0) (2026-03-09)
 
 
