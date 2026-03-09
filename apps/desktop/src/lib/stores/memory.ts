@@ -72,6 +72,47 @@ export async function searchMemory(query: string): Promise<void> {
   }
 }
 
+/** Fetch recent memories without a search query (browse mode). */
+export async function browseMemories(): Promise<void> {
+  const client = getClient();
+  if (!client || client.state !== "connected") {
+    errorStore.set("Not connected to gateway");
+    return;
+  }
+
+  searchingStore.set(true);
+  errorStore.set(null);
+  queryStore.set("");
+
+  try {
+    // Use a wildcard-like broad search to fetch recent memories
+    const response = await client.call<{
+      results: Array<Record<string, unknown>>;
+      total: number;
+    }>("memory.search", {
+      query: "*",
+      limit: 50,
+    });
+    const items: MemoryItem[] = response.results.map((r) => ({
+      id: String(r.id ?? ""),
+      type: (["episodic", "semantic", "procedural", "working", "meta"].includes(r.type as string)
+        ? r.type
+        : "semantic") as MemoryItem["type"],
+      content: String(r.content ?? ""),
+      importance: typeof r.confidence === "number" ? r.confidence : (typeof r.importance === "number" ? r.importance : 0),
+      createdAt: typeof r.createdAt === "number" ? r.createdAt : 0,
+      metadata: typeof r.metadata === "object" && r.metadata !== null ? r.metadata as Record<string, unknown> : undefined,
+    }));
+    resultsStore.set(items);
+  } catch (err) {
+    clientLog("error", "memory", "browseMemories failed", err);
+    // Not critical -- the browse feature is best-effort
+    resultsStore.set([]);
+  } finally {
+    searchingStore.set(false);
+  }
+}
+
 export function selectMemoryItem(item: MemoryItem | null): void {
   selectedStore.set(item);
 }

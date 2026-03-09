@@ -1,12 +1,20 @@
 <script lang="ts">
+import { onMount } from "svelte";
 import { clientLog } from "../../lib/logger";
-import { clearMessages, isStreaming, messages, rateMessage, sendMessage } from "../../lib/stores/chat";
+import { clearMessages, isStreaming, loadPersistedMessages, messages, rateMessage, sendMessage } from "../../lib/stores/chat";
 import { isConnected } from "../../lib/stores/connection";
+import { ensureConversation } from "../../lib/stores/conversations";
 import { sanitizeErrorForDisplay } from "../../lib/utils";
+import ConversationSidebar from "../../lib/components/ConversationSidebar.svelte";
 
 let inputValue = $state("");
 let sendError = $state<string | null>(null);
 let messagesContainer: HTMLDivElement | undefined = $state();
+
+onMount(() => {
+  ensureConversation();
+  loadPersistedMessages();
+});
 
 function scrollToBottom(): void {
   if (messagesContainer) {
@@ -37,6 +45,9 @@ async function handleSend(): Promise<void> {
     return;
   }
   if (!content) return;
+
+  // Ensure a conversation exists before sending
+  ensureConversation();
 
   try {
     await sendMessage(content);
@@ -71,7 +82,9 @@ $effect(() => {
 });
 </script>
 
-<div class="chat-page">
+<div class="chat-page-wrapper">
+  <ConversationSidebar />
+  <div class="chat-page">
   <header class="chat-header">
     <h2>Chat</h2>
     <button class="clear-btn" onclick={() => clearMessages()} disabled={$messages.length === 0}>
@@ -149,12 +162,21 @@ $effect(() => {
     </button>
   </div>
 </div>
+</div>
 
 <style>
+  .chat-page-wrapper {
+    display: flex;
+    height: 100%;
+    overflow: hidden;
+  }
+
   .chat-page {
     display: flex;
     flex-direction: column;
+    flex: 1;
     height: 100%;
+    min-width: 0;
   }
 
   .chat-header {

@@ -1,7 +1,8 @@
 <script lang="ts">
-import { onDestroy } from "svelte";
+import { onDestroy, onMount } from "svelte";
 import { isConnected } from "../../lib/stores/connection";
 import {
+  browseMemories,
   clearSearch,
   deleteMemory,
   isDeleting,
@@ -14,6 +15,17 @@ import {
   selectedMemory,
   selectMemoryItem,
 } from "../../lib/stores/memory";
+
+onMount(() => {
+  // Auto-browse when the page loads and we're connected
+  let unsub: (() => void) | undefined;
+  unsub = isConnected.subscribe((connected) => {
+    if (connected) {
+      browseMemories();
+      unsub?.();
+    }
+  });
+});
 
 let searchInput = $state("");
 let debounceTimer: ReturnType<typeof setTimeout> | undefined;
@@ -121,6 +133,8 @@ onDestroy(() => {
     />
     {#if searchInput}
       <button class="clear-btn" onclick={handleClear} aria-label="Clear search">Clear</button>
+    {:else}
+      <button class="clear-btn" onclick={() => browseMemories()} disabled={!$isConnected || $isSearching} aria-label="Browse all memories">Browse All</button>
     {/if}
     {#if $isSearching}
       <span class="searching-indicator" role="status" aria-live="polite">Searching...</span>
@@ -136,7 +150,13 @@ onDestroy(() => {
       {#if $memoryResults.length === 0 && $memoryQuery && !$isSearching}
         <div class="no-results">No memories found for "{$memoryQuery}"</div>
       {:else if $memoryResults.length === 0 && !$memoryQuery}
-        <div class="no-results">Enter a search query to browse memories.</div>
+        <div class="no-results">
+          {#if $isConnected}
+            Search for memories or click "Browse All" to see recent entries.
+          {:else}
+            Connect to the gateway to browse memories.
+          {/if}
+        </div>
       {:else}
         {#each $memoryResults as item (item.id)}
           <button

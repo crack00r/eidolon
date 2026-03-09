@@ -103,8 +103,12 @@ async function handleRefresh(): Promise<void> {
       </div>
     {:else if $learningItems.length === 0 && !$isLoadingLearning}
       <div class="empty-state">
-        <p class="empty-title">No learning discoveries</p>
-        <p>Click Refresh to check for new discoveries from Eidolon.</p>
+        <p class="empty-title">No learning discoveries yet</p>
+        <p>Eidolon discovers relevant articles, repos, and resources based on your</p>
+        <p>configured learning sources. Click Refresh to check for new discoveries.</p>
+        <p class="empty-hint">
+          Configure sources in Settings to enable automatic discovery.
+        </p>
       </div>
     {:else}
       {#each $learningItems as item (item.id)}
@@ -239,8 +243,14 @@ async function handleRefresh(): Promise<void> {
 
   .empty-title {
     font-size: 16px;
-    margin-bottom: 4px;
+    margin-bottom: 8px;
     color: var(--text-primary);
+  }
+
+  .empty-hint {
+    margin-top: 12px;
+    font-size: 12px;
+    opacity: 0.7;
   }
 
   .learning-item {

@@ -1,6 +1,10 @@
 /**
  * Chat messages store — manages conversation state and
  * communicates with the Core gateway for message exchange.
+ *
+ * Integrates with the conversations store for persistence:
+ * messages are saved to localStorage per conversation so they
+ * survive app restarts.
  */
 
 import { derived, writable } from "svelte/store";
@@ -8,6 +12,12 @@ import type { GatewayClient } from "../api";
 import { clientLog } from "../logger";
 import { sanitizeErrorForDisplay } from "../utils";
 import { getClient } from "./connection";
+import {
+  persistMessage,
+  updateLastMessage,
+  clearActiveMessages,
+  getActiveMessages,
+} from "./conversations";
 
 export interface ChatMessage {
   id: string;
@@ -60,6 +70,16 @@ function generateId(): string {
   return `msg-${crypto.randomUUID()}`;
 }
 
+/** Load persisted messages for the active conversation into the messages store. */
+export function loadPersistedMessages(): void {
+  const persisted = getActiveMessages();
+  // Strip any leftover streaming flags from persisted messages
+  const cleaned = persisted.map((msg) =>
+    msg.streaming ? { ...msg, streaming: false } : msg,
+  );
+  messagesStore.set(cleaned);
+}
+
 export async function sendMessage(content: string): Promise<void> {
   const client = getClient();
   if (!client || client.state !== "connected") {
@@ -85,6 +105,7 @@ export async function sendMessage(content: string): Promise<void> {
   };
 
   messagesStore.update((msgs) => [...msgs, userMessage]);
+  persistMessage(userMessage);
 
   const assistantId = generateId();
   const assistantMessage: ChatMessage = {
@@ -96,6 +117,7 @@ export async function sendMessage(content: string): Promise<void> {
   };
 
   messagesStore.update((msgs) => [...msgs, assistantMessage]);
+  persistMessage(assistantMessage);
   streamingStore.set(true);
 
   try {
@@ -195,6 +217,23 @@ export function setupChatPushHandlers(client: GatewayClient): () => void {
         },
       ];
     });
+
+    // Persist the final assistant response: update the streaming placeholder
+    // in storage, or add as a new message if no placeholder was found.
+    const updatedInPlace = updateLastMessage(
+      (m) => m.role === "assistant" && m.streaming === true,
+      { content: text, streaming: false, id, format },
+    );
+    if (!updatedInPlace) {
+      persistMessage({
+        id,
+        role: "assistant",
+        content: text,
+        timestamp: typeof params.timestamp === "number" ? params.timestamp : Date.now(),
+        format,
+      });
+    }
+
     clearStreamingTimeout();
     streamingStore.set(false);
   });
@@ -206,6 +245,7 @@ export function setupChatPushHandlers(client: GatewayClient): () => void {
 
 export function clearMessages(): void {
   messagesStore.set([]);
+  clearActiveMessages();
 }
 
 /** Clear the streaming state (e.g., on WebSocket disconnect).
