@@ -108,6 +108,12 @@ export function buildEventHandler(modules: InitializedModules): EventHandler {
           return { success: false, tokensUsed: 0, error: errMsg };
         }
       }
+      case "learning:crawl": {
+        // The learning:crawl event is handled directly via EventBus.subscribe
+        // in init-learning.ts (fire-and-forget). Acknowledge here so the
+        // cognitive loop doesn't treat it as unhandled.
+        return { success: true, tokensUsed: 0 };
+      }
       case "approval:timeout": {
         logger.warn("loop-handler", "Approval timed out", {
           eventId: event.id,

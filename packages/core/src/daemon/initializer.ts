@@ -14,6 +14,7 @@
  */
 
 import { buildFoundationSteps } from "./init-foundation.ts";
+import { buildLearningSteps } from "./init-learning.ts";
 import { buildLoopSteps } from "./init-loop.ts";
 import { buildMemorySteps } from "./init-memory.ts";
 import { buildServiceSteps } from "./init-services.ts";
@@ -32,5 +33,6 @@ export function buildCoreInitSteps(
     ...buildServiceSteps(modules, options),
     ...buildMemorySteps(modules),
     ...buildLoopSteps(modules),
+    ...buildLearningSteps(modules),
   ];
 }

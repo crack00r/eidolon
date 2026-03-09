@@ -7,6 +7,7 @@
 
 import { join } from "node:path";
 import { ClaudeCodeManager } from "../claude/manager.ts";
+import { ConversationSessionStore } from "../claude/session-store.ts";
 import { getCacheDir } from "../config/paths.ts";
 import { ClaudeProvider } from "../llm/claude-provider.ts";
 import { LlamaCppProvider } from "../llm/llamacpp-provider.ts";
@@ -287,7 +288,8 @@ export function buildMemorySteps(modules: InitializedModules): InitStep[] {
         }
 
         modules.claudeManager = new ClaudeCodeManager(logger, { apiKey });
-        logger.info("daemon", "ClaudeCodeManager initialized");
+        modules.conversationSessionStore = new ConversationSessionStore();
+        logger.info("daemon", "ClaudeCodeManager initialized (with session resume store)");
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);
         logger.warn("daemon", `ClaudeCodeManager skipped: ${message}`);

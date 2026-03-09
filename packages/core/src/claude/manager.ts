@@ -235,7 +235,9 @@ export class ClaudeCodeManager implements IClaudeProcess {
               const completeLine = buffer.shift();
               buffer.unshift(part);
               if (completeLine !== undefined) {
-                const event = parseStreamLine(completeLine);
+                const extra: StreamEvent[] = [];
+                const event = parseStreamLine(completeLine, undefined, extra);
+                for (const e of extra) yield e;
                 if (event) yield event;
               }
             }
@@ -244,7 +246,9 @@ export class ClaudeCodeManager implements IClaudeProcess {
           // Process remaining buffer
           const remaining = buffer[0] ?? "";
           if (remaining.trim()) {
-            const event = parseStreamLine(remaining);
+            const extra: StreamEvent[] = [];
+            const event = parseStreamLine(remaining, undefined, extra);
+            for (const e of extra) yield e;
             if (event) yield event;
           }
         } finally {

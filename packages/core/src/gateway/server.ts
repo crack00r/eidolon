@@ -26,6 +26,7 @@ import { registerBuiltinHandlers } from "./builtin-handlers.ts";
 import { ClientManager } from "./client-manager.ts";
 import { handleOpenAIRequest, type OpenAICompatDeps } from "./openai-compat.ts";
 import { AuthRateLimiter } from "./rate-limiter.ts";
+import { handleRestApiRoute, handleRestApiRouteAsync, type RestApiDeps } from "./rest-api.ts";
 import {
   anonymizeIp,
   type MethodHandler,
@@ -62,6 +63,7 @@ export class GatewayServer {
     verifyToken: undefined,
     appSecret: undefined,
   };
+  private restApiDeps: RestApiDeps | undefined;
   private startTime = 0;
   private server: ReturnType<typeof Bun.serve> | undefined;
 
@@ -267,6 +269,19 @@ export class GatewayServer {
       }
     }
 
+    // REST API routes (/api/*)
+    if (url.pathname.startsWith("/api/") && this.restApiDeps) {
+      // Try async routes first (POST, hybrid search)
+      const asyncResponse = await handleRestApiRouteAsync(req, url, this.restApiDeps);
+      if (asyncResponse) return asyncResponse;
+
+      // Then sync routes (GET endpoints)
+      const syncResponse = handleRestApiRoute(req, url, this.restApiDeps);
+      if (syncResponse) return syncResponse;
+
+      return secureResponse("Not found", 404, isTls);
+    }
+
     if (url.pathname !== "/ws") return secureResponse("Not found", 404, isTls);
 
     return this.handleWsUpgrade(req, server, isTls);
@@ -332,6 +347,17 @@ export class GatewayServer {
   // -------------------------------------------------------------------------
   // WhatsApp webhook setup
   // -------------------------------------------------------------------------
+
+  /** Set dependencies for the REST API endpoints (/api/*). */
+  setRestApiDeps(deps: Omit<RestApiDeps, "logger" | "isTls">): void {
+    this.restApiDeps = {
+      ...deps,
+      logger: this.logger,
+      isTls: this.config.tls.enabled,
+      authToken: typeof this.config.auth.token === "string" ? this.config.auth.token : undefined,
+    };
+    this.logger.info("rest-api", "REST API deps configured");
+  }
 
   setWhatsAppChannel(channel: WhatsAppChannel, verifyToken: string, appSecret: string): void {
     this.whatsAppState.channel = channel;

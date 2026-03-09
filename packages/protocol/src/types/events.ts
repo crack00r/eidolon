@@ -20,6 +20,7 @@ export type EventType =
   | "memory:dream_start"
   | "memory:dream_complete"
   | "learning:discovery"
+  | "learning:crawl"
   | "learning:approved"
   | "learning:rejected"
   | "learning:implemented"

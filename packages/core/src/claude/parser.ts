@@ -16,10 +16,33 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /**
+ * Extract a Claude CLI session ID from a parsed JSON object.
+ * Checks common field names used by the Claude CLI output.
+ */
+function pickSessionId(parsed: Record<string, unknown>): string | undefined {
+  const fields = ["session_id", "sessionId", "conversation_id"];
+  for (const field of fields) {
+    const value = parsed[field];
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+  }
+  return undefined;
+}
+
+/**
  * Parse a single line of Claude Code streaming JSON output into a StreamEvent.
  * Returns null for lines that don't represent meaningful events (empty lines, etc.)
+ *
+ * When the parsed JSON contains a `session_id` field (typically in `result` events),
+ * an additional `session` event is returned via the `extraEvents` out-parameter
+ * so callers can capture the CLI session ID for future `--resume` calls.
  */
-export function parseStreamLine(line: string, logger?: Logger): StreamEvent | null {
+export function parseStreamLine(
+  line: string,
+  logger?: Logger,
+  extraEvents?: StreamEvent[],
+): StreamEvent | null {
   const trimmed = line.trim();
   if (!trimmed) return null;
 
@@ -39,6 +62,12 @@ export function parseStreamLine(line: string, logger?: Logger): StreamEvent | nu
   if (!isRecord(parsed)) return null;
 
   const now = Date.now();
+
+  // Check for session_id in any event type and emit a session event if found
+  const cliSessionId = pickSessionId(parsed);
+  if (cliSessionId && extraEvents) {
+    extraEvents.push({ type: "session", sessionId: cliSessionId, timestamp: now });
+  }
 
   if (parsed.type === "assistant") {
     const message = parsed.message;

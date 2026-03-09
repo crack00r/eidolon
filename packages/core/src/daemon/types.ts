@@ -14,6 +14,7 @@ import type { MessageRouter } from "../channels/router.ts";
 import type { TelegramChannel } from "../channels/telegram/channel.ts";
 import type { WhatsAppChannel } from "../channels/whatsapp/channel.ts";
 import type { ClaudeCodeManager } from "../claude/manager.ts";
+import type { ConversationSessionStore } from "../claude/session-store.ts";
 import type { WorkspacePreparer } from "../claude/workspace.ts";
 import type { ConfigWatcher } from "../config/watcher.ts";
 import type { DatabaseManager } from "../database/manager.ts";
@@ -141,4 +142,5 @@ export interface InitializedModules {
   replicationManager?: ReplicationManager;
   workflowStore?: WorkflowStore;
   workflowEngine?: WorkflowEngine;
+  conversationStore?: ConversationSessionStore;
 }

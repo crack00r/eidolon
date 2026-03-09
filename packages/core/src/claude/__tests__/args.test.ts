@@ -126,4 +126,82 @@ describe("buildClaudeArgs", () => {
     const args = buildClaudeArgs("prompt", makeOptions());
     expect(args).not.toContain("--system-prompt");
   });
+
+  describe("resume mode", () => {
+    test("uses --resume with session ID instead of fresh session flags", () => {
+      const args = buildClaudeArgs(
+        "follow up",
+        makeOptions({
+          resumeSessionId: "abc-123-def",
+          model: "opus",
+          allowedTools: ["Read", "Write"],
+          systemPrompt: "Be helpful.",
+        }),
+      );
+
+      expect(args).toContain("--resume");
+      expect(args[args.indexOf("--resume") + 1]).toBe("abc-123-def");
+      expect(args).toContain("--print");
+      expect(args).toContain("--output-format");
+      expect(args).toContain("--verbose");
+      expect(args[args.length - 1]).toBe("follow up");
+      expect(args[args.length - 2]).toBe("--");
+    });
+
+    test("omits model, allowedTools, systemPrompt, mcpConfig in resume mode", () => {
+      const args = buildClaudeArgs(
+        "prompt",
+        makeOptions({
+          resumeSessionId: "sess-xyz",
+          model: "opus",
+          allowedTools: ["Read"],
+          systemPrompt: "Be concise.",
+          mcpConfig: "/mcp.json",
+        }),
+      );
+
+      expect(args).not.toContain("--model");
+      expect(args).not.toContain("--allowedTools");
+      expect(args).not.toContain("--system-prompt");
+      expect(args).not.toContain("--mcp-config");
+    });
+
+    test("still includes --max-turns in resume mode", () => {
+      const args = buildClaudeArgs(
+        "prompt",
+        makeOptions({
+          resumeSessionId: "sess-xyz",
+          maxTurns: 3,
+        }),
+      );
+
+      expect(args).toContain("--max-turns");
+      expect(args[args.indexOf("--max-turns") + 1]).toBe("3");
+    });
+
+    test("does not use --resume when resumeSessionId is not provided", () => {
+      const args = buildClaudeArgs("prompt", makeOptions());
+      expect(args).not.toContain("--resume");
+    });
+
+    test("resume mode produces correct full arg list", () => {
+      const args = buildClaudeArgs(
+        "next question",
+        makeOptions({ resumeSessionId: "uuid-here", maxTurns: 5 }),
+      );
+
+      expect(args).toEqual([
+        "--print",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--resume",
+        "uuid-here",
+        "--max-turns",
+        "5",
+        "--",
+        "next question",
+      ]);
+    });
+  });
 });

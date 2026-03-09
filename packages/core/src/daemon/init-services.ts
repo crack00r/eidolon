@@ -6,6 +6,7 @@
  */
 
 import { BackupManager } from "../backup/manager.ts";
+import { ConversationSessionStore } from "../claude/session-store.ts";
 import { getConfigPath, getDataDir } from "../config/paths.ts";
 import { subscribeFeedbackConfidenceAdjustment } from "../feedback/confidence.ts";
 import { FeedbackStore } from "../feedback/store.ts";
@@ -189,6 +190,19 @@ export function buildServiceSteps(modules: InitializedModules, options?: DaemonO
 
       modules.eventBus = new EventBus(dbManager.operational, logger);
       logger.info("daemon", "EventBus initialized");
+    },
+  });
+
+  // 10a. ConversationSessionStore (needs DatabaseManager, Logger)
+  steps.push({
+    name: "ConversationSessionStore",
+    fn: () => {
+      const dbManager = modules.dbManager;
+      const logger = modules.logger;
+      if (!dbManager || !logger) return;
+
+      modules.conversationStore = new ConversationSessionStore(dbManager.operational, logger);
+      logger.info("daemon", "ConversationSessionStore initialized");
     },
   });
 

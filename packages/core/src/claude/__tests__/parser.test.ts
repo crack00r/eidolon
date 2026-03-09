@@ -152,6 +152,99 @@ describe("parseStreamLine", () => {
     expect(event?.type).toBe("tool_use");
     expect(event?.toolInput).toEqual({});
   });
+
+  describe("session_id extraction", () => {
+    test("extracts session_id from result event into extra events", () => {
+      const line = JSON.stringify({
+        type: "result",
+        result: "Final answer",
+        session_id: "cli-session-abc-123",
+      });
+      const extra: import("@eidolon/protocol").StreamEvent[] = [];
+      const event = parseStreamLine(line, undefined, extra);
+
+      expect(event).not.toBeNull();
+      expect(event?.type).toBe("text");
+      expect(extra).toHaveLength(1);
+      expect(extra[0]?.type).toBe("session");
+      expect(extra[0]?.sessionId).toBe("cli-session-abc-123");
+    });
+
+    test("extracts sessionId (camelCase) from result event", () => {
+      const line = JSON.stringify({
+        type: "result",
+        result: "Done",
+        sessionId: "camel-case-id",
+      });
+      const extra: import("@eidolon/protocol").StreamEvent[] = [];
+      parseStreamLine(line, undefined, extra);
+
+      expect(extra).toHaveLength(1);
+      expect(extra[0]?.sessionId).toBe("camel-case-id");
+    });
+
+    test("extracts session_id from system event", () => {
+      const line = JSON.stringify({
+        type: "system",
+        message: "Session started",
+        session_id: "sys-session-id",
+      });
+      const extra: import("@eidolon/protocol").StreamEvent[] = [];
+      const event = parseStreamLine(line, undefined, extra);
+
+      expect(event?.type).toBe("system");
+      expect(extra).toHaveLength(1);
+      expect(extra[0]?.sessionId).toBe("sys-session-id");
+    });
+
+    test("does not emit session event when no session_id is present", () => {
+      const line = JSON.stringify({
+        type: "result",
+        result: "No session here",
+      });
+      const extra: import("@eidolon/protocol").StreamEvent[] = [];
+      parseStreamLine(line, undefined, extra);
+
+      expect(extra).toHaveLength(0);
+    });
+
+    test("does not emit session event when extraEvents is not provided", () => {
+      const line = JSON.stringify({
+        type: "result",
+        result: "Answer",
+        session_id: "should-not-crash",
+      });
+      // Should not throw when extraEvents is undefined
+      const event = parseStreamLine(line);
+      expect(event).not.toBeNull();
+      expect(event?.type).toBe("text");
+    });
+
+    test("trims whitespace from session_id", () => {
+      const line = JSON.stringify({
+        type: "result",
+        result: "Done",
+        session_id: "  spaced-id  ",
+      });
+      const extra: import("@eidolon/protocol").StreamEvent[] = [];
+      parseStreamLine(line, undefined, extra);
+
+      expect(extra).toHaveLength(1);
+      expect(extra[0]?.sessionId).toBe("spaced-id");
+    });
+
+    test("ignores empty session_id strings", () => {
+      const line = JSON.stringify({
+        type: "result",
+        result: "Done",
+        session_id: "   ",
+      });
+      const extra: import("@eidolon/protocol").StreamEvent[] = [];
+      parseStreamLine(line, undefined, extra);
+
+      expect(extra).toHaveLength(0);
+    });
+  });
 });
 
 describe("parseStreamOutput", () => {

@@ -545,4 +545,57 @@ export const OPERATIONAL_MIGRATIONS: ReadonlyArray<Migration> = [
       ALTER TABLE scheduled_tasks DROP COLUMN timezone;
     `,
   },
+  {
+    version: 17,
+    name: "create_conversations_tables",
+    database: "operational",
+    up: `
+      CREATE TABLE IF NOT EXISTS conversations (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL DEFAULT 'New Conversation',
+        claude_session_id TEXT,
+        channel_id TEXT NOT NULL DEFAULT 'gateway',
+        user_id TEXT NOT NULL DEFAULT 'default',
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        message_count INTEGER NOT NULL DEFAULT 0
+      );
+
+      CREATE INDEX idx_conversations_user ON conversations(user_id);
+      CREATE INDEX idx_conversations_updated ON conversations(updated_at DESC);
+      CREATE INDEX idx_conversations_channel ON conversations(channel_id);
+
+      CREATE TABLE IF NOT EXISTS conversation_messages (
+        id TEXT PRIMARY KEY,
+        conversation_id TEXT NOT NULL REFERENCES conversations(id),
+        role TEXT NOT NULL CHECK(role IN ('user', 'assistant')),
+        content TEXT NOT NULL,
+        created_at INTEGER NOT NULL
+      );
+
+      CREATE INDEX idx_conv_messages_conv ON conversation_messages(conversation_id);
+      CREATE INDEX idx_conv_messages_time ON conversation_messages(conversation_id, created_at);
+    `,
+    down: `
+      DROP INDEX IF EXISTS idx_conv_messages_time;
+      DROP INDEX IF EXISTS idx_conv_messages_conv;
+      DROP TABLE IF EXISTS conversation_messages;
+      DROP INDEX IF EXISTS idx_conversations_channel;
+      DROP INDEX IF EXISTS idx_conversations_updated;
+      DROP INDEX IF EXISTS idx_conversations_user;
+      DROP TABLE IF EXISTS conversations;
+    `,
+  },
+  {
+    version: 18,
+    name: "add_discoveries_normalized_url",
+    database: "operational",
+    up: `
+      ALTER TABLE discoveries ADD COLUMN normalized_url TEXT;
+      CREATE INDEX idx_discoveries_normalized_url ON discoveries(normalized_url);
+    `,
+    down: `
+      DROP INDEX IF EXISTS idx_discoveries_normalized_url;
+    `,
+  },
 ];

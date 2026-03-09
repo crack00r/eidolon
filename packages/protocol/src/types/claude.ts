@@ -7,7 +7,7 @@ import type { EidolonError } from "../errors.ts";
 import type { Result } from "../result.ts";
 
 export interface StreamEvent {
-  readonly type: "text" | "tool_use" | "tool_result" | "error" | "done" | "system";
+  readonly type: "text" | "tool_use" | "tool_result" | "error" | "done" | "system" | "session";
   readonly content?: string;
   readonly toolName?: string;
   readonly toolInput?: Record<string, unknown>;
@@ -15,6 +15,8 @@ export interface StreamEvent {
   readonly error?: string;
   readonly errorCode?: string;
   readonly timestamp: number;
+  /** Claude CLI session ID, emitted with type: "session" events. */
+  readonly sessionId?: string;
 }
 
 export interface ClaudeSessionOptions {
@@ -29,6 +31,8 @@ export interface ClaudeSessionOptions {
   readonly env?: Record<string, string>;
   /** Zod schema for structured JSON output. When provided, the response is parsed and validated. */
   readonly outputSchema?: z.ZodType;
+  /** Claude CLI session ID to resume (from a previous response's session event). */
+  readonly resumeSessionId?: string;
 }
 
 export interface IClaudeProcess {

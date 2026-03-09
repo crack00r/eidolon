@@ -9,6 +9,7 @@
  */
 
 import { DiscoveryBroadcaster } from "../discovery/broadcaster.ts";
+import { DiscoveryEngine } from "../learning/discovery.ts";
 import { TailscaleDetector } from "../discovery/tailscale.ts";
 import { GatewayChannel } from "../gateway/gateway-channel.ts";
 import { GatewayServer } from "../gateway/server.ts";
@@ -158,6 +159,35 @@ export function buildGatewayInitSteps(
 
   // 19-core. Wire core RPC handlers (chat, memory, session, learning, voice)
   steps.push(buildCoreRpcWiringStep(modules));
+
+  // 19-rest. Wire REST API deps to GatewayServer
+  steps.push({
+    name: "GatewayRestApiWiring",
+    fn: () => {
+      const gatewayServer = modules.gatewayServer;
+      const logger = modules.logger;
+
+      if (!gatewayServer) {
+        logger?.debug("daemon", "REST API wiring skipped: no gateway server");
+        return;
+      }
+
+      // Initialize DiscoveryEngine for REST API (if DB available)
+      let discoveryEngine: DiscoveryEngine | undefined;
+      if (modules.dbManager && logger) {
+        discoveryEngine = new DiscoveryEngine(modules.dbManager.operational, logger);
+      }
+
+      gatewayServer.setRestApiDeps({
+        memoryStore: modules.memoryStore,
+        memorySearch: modules.memorySearch,
+        conversationStore: modules.conversationStore,
+        discoveryEngine,
+      });
+
+      logger?.info("daemon", "REST API deps wired to gateway");
+    },
+  });
 
   // 19a. Wire GPU pool RPC handlers to GatewayServer
   steps.push({

@@ -66,6 +66,8 @@ export async function handleUserMessage(
       return { success: false, tokensUsed: 0, error: "Required modules not initialized" };
     }
 
+    const conversationId =
+      typeof rawPayload.conversationId === "string" ? rawPayload.conversationId : undefined;
     const sessionId = `msg-${randomUUID()}`;
 
     // 1. Generate MEMORY.md content via MemoryInjector
@@ -223,7 +225,21 @@ export async function handleUserMessage(
         });
       }
 
-      // 5. Fire-and-forget memory extraction
+      // 4b. Record conversation messages if conversationStore is available
+      if (modules.conversationStore && conversationId) {
+        modules.conversationStore.addMessage({
+          conversationId,
+          role: "user",
+          content: text,
+        });
+        modules.conversationStore.addMessage({
+          conversationId,
+          role: "assistant",
+          content: responseText,
+        });
+      }
+
+      // 5. Fire-and-forget memory extraction + storage
       if (modules.memoryExtractor) {
         modules.memoryExtractor
           .extract({
@@ -233,12 +249,30 @@ export async function handleUserMessage(
             timestamp: Date.now(),
           })
           .then((extractResult) => {
-            if (extractResult.ok) {
-              logger.debug("loop-handler", `Extracted ${extractResult.value.length} memories from conversation`, {
-                sessionId,
-              });
-            } else {
+            if (!extractResult.ok) {
               logger.warn("loop-handler", `Memory extraction failed: ${extractResult.error.message}`);
+              return;
+            }
+            const extracted = extractResult.value;
+            if (extracted.length === 0) return;
+
+            logger.debug("loop-handler", `Extracted ${extracted.length} memories from conversation`, {
+              sessionId,
+            });
+
+            // Persist extracted memories to the MemoryStore
+            if (modules.memoryStore && modules.memoryExtractor) {
+              const inputs = modules.memoryExtractor.toCreateInputs(extracted, sessionId);
+              const batchResult = modules.memoryStore.createBatch(inputs);
+              if (batchResult.ok) {
+                logger.info(
+                  "loop-handler",
+                  `Stored ${batchResult.value.length} memories from conversation`,
+                  { sessionId },
+                );
+              } else {
+                logger.warn("loop-handler", `Memory storage failed: ${batchResult.error.message}`);
+              }
             }
           })
           .catch((err: unknown) => {

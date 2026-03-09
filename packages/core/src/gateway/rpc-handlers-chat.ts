@@ -16,11 +16,13 @@ import type { MethodHandler } from "./server.ts";
 const ChatSendParamsSchema = z.object({
   text: z.string().min(1).max(100_000),
   channelId: z.string().min(1).max(64).optional(),
+  conversationId: z.string().min(1).max(256).optional(),
 });
 
 const ChatStreamParamsSchema = z.object({
   text: z.string().min(1).max(100_000),
   channelId: z.string().min(1).max(64).optional(),
+  conversationId: z.string().min(1).max(256).optional(),
 });
 
 const MemorySearchParamsSchema = z.object({
@@ -48,7 +50,7 @@ export function createChatSendHandler(deps: CoreRpcDeps): MethodHandler {
       throw new RpcValidationError(`Invalid chat.send params: ${parsed.error.issues.map((i) => i.message).join(", ")}`);
     }
 
-    const { text, channelId } = parsed.data;
+    const { text, channelId, conversationId } = parsed.data;
     const messageId = randomUUID();
 
     deps.eventBus.publish(
@@ -58,13 +60,16 @@ export function createChatSendHandler(deps: CoreRpcDeps): MethodHandler {
         channelId: channelId ?? "gateway",
         userId: clientId,
         text,
+        conversationId,
       },
       { source: "gateway", priority: "critical" },
     );
 
-    deps.logger.info("chat.send", `Client ${clientId} sent message (${text.length} chars)`);
+    deps.logger.info("chat.send", `Client ${clientId} sent message (${text.length} chars)`, {
+      conversationId,
+    });
 
-    return { messageId, status: "queued" };
+    return { messageId, conversationId, status: "queued" };
   };
 }
 
@@ -78,7 +83,7 @@ export function createChatStreamHandler(deps: CoreRpcDeps): MethodHandler {
       );
     }
 
-    const { text, channelId } = parsed.data;
+    const { text, channelId, conversationId } = parsed.data;
     const messageId = randomUUID();
     const streamId = randomUUID();
 
@@ -91,13 +96,16 @@ export function createChatStreamHandler(deps: CoreRpcDeps): MethodHandler {
         userId: clientId,
         text,
         streaming: true,
+        conversationId,
       },
       { source: "gateway", priority: "critical" },
     );
 
-    deps.logger.info("chat.stream", `Client ${clientId} started streaming chat (${text.length} chars)`);
+    deps.logger.info("chat.stream", `Client ${clientId} started streaming chat (${text.length} chars)`, {
+      conversationId,
+    });
 
-    return { messageId, streamId, status: "streaming" };
+    return { messageId, streamId, conversationId, status: "streaming" };
   };
 }
 
