@@ -761,7 +761,7 @@ pub async fn validate_config() -> Result<serde_json::Value, String> {
 }
 
 #[tauri::command]
-pub async fn get_server_gateway_config() -> Result<serde_json::Value, String> {
+pub async fn get_server_gateway_config(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
     let config_path = get_config_path_internal();
     let content = tokio::task::spawn_blocking(move || {
         std::fs::read_to_string(&config_path)
@@ -777,11 +777,12 @@ pub async fn get_server_gateway_config() -> Result<serde_json::Value, String> {
         .get("port")
         .and_then(|v| v.as_u64())
         .unwrap_or(8419);
+    // Resolve token: handles both plain strings and {"$secret": "key-name"} references
     let token = gateway
         .get("auth")
         .and_then(|a| a.get("token"))
-        .and_then(|t| t.as_str())
-        .unwrap_or("");
+        .map(|t| resolve_json_string_or_secret(t, &app))
+        .unwrap_or_default();
     let tls = gateway
         .get("tls")
         .and_then(|t| t.get("enabled"))
@@ -925,7 +926,7 @@ pub struct ClientConfig {
 }
 
 #[tauri::command]
-pub async fn get_client_config() -> Result<ClientConfig, String> {
+pub async fn get_client_config(app: tauri::AppHandle) -> Result<ClientConfig, String> {
     let config_path = get_config_path_internal();
     let content = std::fs::read_to_string(&config_path)
         .map_err(|e| format!("Cannot read config at {}: {}", config_path, e))?;
@@ -933,6 +934,12 @@ pub async fn get_client_config() -> Result<ClientConfig, String> {
         .map_err(|e| format!("Invalid JSON in config: {}", e))?;
 
     let server = json.get("server").ok_or("No server section in config. Is this a client config?")?;
+
+    // Resolve token: handles both plain strings and {"$secret": "key-name"} references
+    let token = server
+        .get("token")
+        .map(|t| resolve_json_string_or_secret(t, &app))
+        .filter(|s| !s.is_empty());
 
     Ok(ClientConfig {
         host: server
@@ -944,11 +951,7 @@ pub async fn get_client_config() -> Result<ClientConfig, String> {
             .get("port")
             .and_then(|v| v.as_u64())
             .unwrap_or(8419) as u16,
-        token: server
-            .get("token")
-            .and_then(|v| v.as_str())
-            .filter(|s| !s.is_empty())
-            .map(|s| s.to_string()),
+        token,
         tls: server.get("tls").and_then(|v| v.as_bool()),
     })
 }
@@ -992,6 +995,95 @@ fn persist_master_key(key: &str) -> Result<(), String> {
     std::fs::write(&path, key).map_err(|e| format!("Failed to write master key: {}", e))?;
     set_config_permissions(&path);
     Ok(())
+}
+
+/// Resolve a JSON value that is either a plain string or a `{"$secret": "key-name"}` object.
+/// If the value is a plain string, return it directly.
+/// If it is a `$secret` reference, use the sidecar CLI to decrypt and return the plaintext.
+/// Returns an empty string if the value cannot be resolved.
+fn resolve_json_string_or_secret(value: &serde_json::Value, app: &tauri::AppHandle) -> String {
+    // Plain string -- return directly
+    if let Some(s) = value.as_str() {
+        return s.to_string();
+    }
+
+    // Check for {"$secret": "key-name"} object
+    if let Some(obj) = value.as_object() {
+        if let Some(secret_key) = obj.get("$secret").and_then(|v| v.as_str()) {
+            // Resolve the sidecar binary path via Tauri's shell plugin
+            let sidecar = app.shell().sidecar("eidolon-cli");
+            match sidecar {
+                Ok(cmd) => {
+                    // We need to invoke synchronously. Use std::process::Command with the
+                    // sidecar path instead. Tauri shell plugin doesn't expose the path directly,
+                    // so we fall back to spawning via std::process::Command and finding the
+                    // binary relative to the app's resource directory.
+                    let _ = cmd; // drop the shell command
+                }
+                Err(_) => {}
+            }
+
+            // Find the sidecar binary path manually
+            if let Ok(resource_dir) = app.path().resource_dir() {
+                let target = if cfg!(target_os = "windows") {
+                    format!("binaries/eidolon-cli-{}.exe", std::env::consts::ARCH)
+                } else {
+                    let target_triple = get_target_triple();
+                    format!("binaries/eidolon-cli-{}", target_triple)
+                };
+                let sidecar_path = resource_dir.join(&target);
+
+                // Also try Tauri's resolved sidecar name
+                let alt_path = resource_dir.join("eidolon-cli");
+
+                let binary_path = if sidecar_path.exists() {
+                    sidecar_path
+                } else if alt_path.exists() {
+                    alt_path
+                } else {
+                    eprintln!("[eidolon] WARNING: Cannot find sidecar binary at {:?} or {:?}", sidecar_path, alt_path);
+                    return String::new();
+                };
+
+                let mut cmd = Command::new(&binary_path);
+                cmd.args(["secrets", "get", secret_key, "--reveal"]);
+
+                // Pass master key as env var so the sidecar can decrypt
+                if let Some(key) = read_master_key() {
+                    cmd.env("EIDOLON_MASTER_KEY", &key);
+                }
+
+                match cmd.output() {
+                    Ok(output) => {
+                        if output.status.success() {
+                            return String::from_utf8_lossy(&output.stdout).trim().to_string();
+                        }
+                        let stderr = String::from_utf8_lossy(&output.stderr);
+                        eprintln!("[eidolon] WARNING: Failed to resolve secret '{}': {}", secret_key, stderr.trim());
+                    }
+                    Err(e) => {
+                        eprintln!("[eidolon] WARNING: Failed to spawn sidecar for secret resolution: {}", e);
+                    }
+                }
+            }
+        }
+    }
+
+    String::new()
+}
+
+/// Get the Rust target triple for the current platform.
+fn get_target_triple() -> String {
+    let arch = std::env::consts::ARCH;
+    let os = std::env::consts::OS;
+    match (arch, os) {
+        ("aarch64", "macos") => "aarch64-apple-darwin".to_string(),
+        ("x86_64", "macos") => "x86_64-apple-darwin".to_string(),
+        ("x86_64", "linux") => "x86_64-unknown-linux-gnu".to_string(),
+        ("aarch64", "linux") => "aarch64-unknown-linux-gnu".to_string(),
+        ("x86_64", "windows") => "x86_64-pc-windows-msvc".to_string(),
+        _ => format!("{}-unknown-{}", arch, os),
+    }
 }
 
 /// Try to detect a non-loopback local IPv4 address. Falls back to "127.0.0.1".

@@ -103,7 +103,16 @@ async function restartDaemon(): Promise<void> {
   daemonError = null;
   try {
     daemonRestartTimestamps.push(Date.now());
-    await startDaemonWithConfig();
+    try {
+      await startDaemonWithConfig();
+    } catch (startErr: unknown) {
+      const startMsg = startErr instanceof Error ? startErr.message : String(startErr);
+      // "Already running" is fine -- just reconnect
+      if (!startMsg.toLowerCase().includes("already running")) {
+        throw startErr;
+      }
+      clientLog("info", "app", "Daemon already running during restart, reconnecting...");
+    }
     clientLog("info", "app", "Daemon restarted successfully");
     // Reconnect after restart
     const role = await invoke<string>("get_config_role");
@@ -123,7 +132,16 @@ async function handleOnboardingComplete(): Promise<void> {
   try {
     role = await invoke<string>("get_config_role");
     if (role === "server") {
-      await startDaemonWithConfig();
+      try {
+        await startDaemonWithConfig();
+      } catch (startErr: unknown) {
+        const startMsg = startErr instanceof Error ? startErr.message : String(startErr);
+        // "Already running" is fine after onboarding -- just connect
+        if (!startMsg.toLowerCase().includes("already running")) {
+          throw startErr;
+        }
+        clientLog("info", "app", "Daemon already running after onboarding, connecting...");
+      }
     }
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -203,7 +221,12 @@ onMount(async () => {
         await startDaemonWithConfig();
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
-        daemonError = `Failed to start daemon: ${msg}`;
+        // "Already running" is not an error -- just reconnect to existing daemon
+        if (!msg.toLowerCase().includes("already running")) {
+          daemonError = `Failed to start daemon: ${msg}`;
+        } else {
+          clientLog("info", "app", "Daemon already running, reconnecting...");
+        }
       }
     }
     appState = "running";
