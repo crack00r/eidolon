@@ -31,6 +31,9 @@ interface RateLimitBucket {
   windowStart: number;
 }
 
+/** Maximum unique IPs tracked before evicting oldest entry. */
+const RATE_LIMIT_MAX_ENTRIES = 1000;
+
 /** Simple in-memory rate limiter for health server requests. */
 class HealthRateLimiter {
   private readonly buckets: Map<string, RateLimitBucket> = new Map();
@@ -52,6 +55,13 @@ class HealthRateLimiter {
     const bucket = this.buckets.get(ip);
 
     if (!bucket || now - bucket.windowStart > this.windowMs) {
+      // Evict oldest entry if at capacity
+      if (!this.buckets.has(ip) && this.buckets.size >= RATE_LIMIT_MAX_ENTRIES) {
+        const oldest = this.buckets.keys().next().value;
+        if (oldest !== undefined) {
+          this.buckets.delete(oldest);
+        }
+      }
       this.buckets.set(ip, { count: 1, windowStart: now });
       return true;
     }

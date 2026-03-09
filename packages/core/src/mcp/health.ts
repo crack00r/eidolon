@@ -44,6 +44,18 @@ export interface MCPHealthMonitorOptions {
 const DEFAULT_CHECK_INTERVAL_MS = 60_000;
 const DEFAULT_CHECK_TIMEOUT_MS = 10_000;
 
+/** Shell metacharacters that must not appear in command paths. */
+const SHELL_METACHAR_PATTERN = /[;&|`$(){}[\]<>!\n\r\\'"*?~#]/;
+
+/** Validate that a command is safe to spawn (no shell injection). */
+function validateCommand(command: string): string | null {
+  if (command.length === 0) return "Command must not be empty";
+  if (SHELL_METACHAR_PATTERN.test(command)) return "Command contains shell metacharacters";
+  // Must be an absolute path or a simple binary name (no directory traversal)
+  if (command.includes("..")) return "Command must not contain directory traversal";
+  return null;
+}
+
 const MCP_SAFE_ENV_KEYS = [
   "PATH",
   "HOME",
@@ -115,15 +127,29 @@ export class MCPHealthMonitor {
     let proc: ReturnType<typeof Bun.spawn> | null = null;
 
     try {
+      const commandError = validateCommand(config.command);
+      if (commandError) {
+        return {
+          name,
+          status: "unhealthy",
+          message: `Invalid command: ${commandError}`,
+          lastCheckedAt: startTime,
+        };
+      }
+
       const args = config.args ? [...config.args] : [];
       const commandParts = [config.command, ...args];
 
       // Filter out $secret: references from env -- they cannot be resolved here.
       // Only pass through literal values.
+      const DANGEROUS_ENV_KEYS = new Set([
+        "LD_PRELOAD", "DYLD_INSERT_LIBRARIES", "DYLD_FRAMEWORK_PATH",
+        "DYLD_LIBRARY_PATH", "NODE_OPTIONS", "PYTHONPATH",
+      ]);
       const filteredEnv: Record<string, string> = {};
       if (config.env) {
         for (const [key, value] of Object.entries(config.env)) {
-          if (!value.startsWith("$secret:")) {
+          if (!value.startsWith("$secret:") && !DANGEROUS_ENV_KEYS.has(key)) {
             filteredEnv[key] = value;
           }
         }
@@ -143,11 +169,17 @@ export class MCPHealthMonitor {
 
       // Wait for either the process to produce output (healthy) or timeout.
       const healthyPromise = this.waitForProcessOutput(proc);
+      let healthTimer: ReturnType<typeof setTimeout> | undefined;
       const timeoutPromise = new Promise<"timeout">((resolve) => {
-        setTimeout(() => resolve("timeout"), this.checkTimeoutMs);
+        healthTimer = setTimeout(() => resolve("timeout"), this.checkTimeoutMs);
       });
 
-      const result = await Promise.race([healthyPromise, timeoutPromise]);
+      let result: "output" | "exited-error" | "exited-ok" | "timeout";
+      try {
+        result = await Promise.race([healthyPromise, timeoutPromise]);
+      } finally {
+        if (healthTimer !== undefined) clearTimeout(healthTimer);
+      }
 
       const responseTimeMs = Date.now() - startTime;
 
@@ -261,6 +293,7 @@ export class MCPHealthMonitor {
         this.logger.error("periodic", "Periodic MCP health check failed", err);
       });
     }, this.checkIntervalMs);
+    this.periodicTimer.unref();
 
     this.logger.info("periodic", `Started periodic MCP health checks every ${this.checkIntervalMs}ms`);
   }

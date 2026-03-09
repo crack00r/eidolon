@@ -34,13 +34,14 @@ export type ReplicationMessageType = (typeof REPLICATION_MESSAGE_TYPES)[number];
 const BaseMessageSchema = z.object({
   type: z.enum(REPLICATION_MESSAGE_TYPES),
   timestamp: z.number(),
-  nodeId: z.string().min(1),
+  nodeId: z.string().min(1).max(256),
 });
 
 export const HeartbeatMessageSchema = BaseMessageSchema.extend({
   type: z.literal("heartbeat"),
   role: z.enum(["primary", "secondary"]),
   uptime: z.number().nonnegative(),
+  failoverCount: z.number().nonnegative().default(0),
 });
 
 export const HeartbeatAckMessageSchema = BaseMessageSchema.extend({
@@ -63,13 +64,13 @@ export const SnapshotStartMessageSchema = BaseMessageSchema.extend({
 export const SnapshotChunkMessageSchema = BaseMessageSchema.extend({
   type: z.literal("snapshot_chunk"),
   /** Which database file: memory.db, operational.db, audit.db. */
-  fileName: z.string().min(1),
+  fileName: z.string().min(1).max(256),
   /** Chunk index (0-based). */
   chunkIndex: z.number().int().nonnegative(),
   /** Total chunks for this file. */
   totalChunks: z.number().int().positive(),
   /** Base64-encoded chunk data. */
-  data: z.string(),
+  data: z.string().max(512_000),
 });
 
 export const SnapshotEndMessageSchema = BaseMessageSchema.extend({
@@ -89,7 +90,7 @@ export const DemoteMessageSchema = BaseMessageSchema.extend({
 export const ErrorMessageSchema = BaseMessageSchema.extend({
   type: z.literal("error"),
   errorCode: z.string(),
-  errorMessage: z.string(),
+  errorMessage: z.string().max(1024),
 });
 
 // ---------------------------------------------------------------------------
@@ -123,8 +124,13 @@ export type ErrorMessage = z.infer<typeof ErrorMessageSchema>;
 // Message Factories
 // ---------------------------------------------------------------------------
 
-export function createHeartbeat(nodeId: string, role: "primary" | "secondary", uptime: number): HeartbeatMessage {
-  return { type: "heartbeat", timestamp: Date.now(), nodeId, role, uptime };
+export function createHeartbeat(
+  nodeId: string,
+  role: "primary" | "secondary",
+  uptime: number,
+  failoverCount = 0,
+): HeartbeatMessage {
+  return { type: "heartbeat", timestamp: Date.now(), nodeId, role, uptime, failoverCount };
 }
 
 export function createHeartbeatAck(nodeId: string, role: "primary" | "secondary"): HeartbeatAckMessage {

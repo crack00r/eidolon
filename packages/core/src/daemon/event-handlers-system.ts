@@ -33,7 +33,7 @@ export async function handleDigestGenerate(
   for (const chId of targetChannels) {
     const sendResult = await modules.messageRouter.sendNotification(
       {
-        id: `digest-${digest.generatedAt}`,
+        id: `digest-${digest.generatedAt}-${chId}`,
         channelId: chId,
         text: digest.markdown,
         format: "markdown",

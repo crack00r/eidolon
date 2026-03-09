@@ -284,6 +284,7 @@ export interface IWorkflowEngine {
   cancelRun(runId: string): Result<void, EidolonError>;
   recoverRunningWorkflows(): Result<number, EidolonError>;
   getRunStatus(runId: string): Result<WorkflowRunStatus, EidolonError>;
+  dispose(): void;
 }
 
 // ---------------------------------------------------------------------------

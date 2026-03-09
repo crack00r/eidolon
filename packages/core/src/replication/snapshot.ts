@@ -284,20 +284,27 @@ export function createSnapshotReceiver(snapshotDir: string, logger: Logger): Sna
           }
 
           const expectedChecksum = checksums[fileName];
-          if (expectedChecksum) {
-            const fileData = readFileSync(state.tmpPath);
-            const actualChecksum = createHash("sha256").update(fileData).digest("hex");
-            if (actualChecksum !== expectedChecksum) {
-              cleanupIncomingFiles(fileStates);
-              receiving = false;
-              fileStates.clear();
-              return Err(
-                createError(
-                  ErrorCode.DB_QUERY_FAILED,
-                  `Checksum mismatch for ${fileName}: expected ${expectedChecksum}, got ${actualChecksum}`,
-                ),
-              );
-            }
+          if (!expectedChecksum) {
+            cleanupIncomingFiles(fileStates);
+            receiving = false;
+            fileStates.clear();
+            return Err(
+              createError(ErrorCode.DB_QUERY_FAILED, `Missing checksum for ${fileName} -- cannot verify integrity`),
+            );
+          }
+
+          const fileData = readFileSync(state.tmpPath);
+          const actualChecksum = createHash("sha256").update(fileData).digest("hex");
+          if (actualChecksum !== expectedChecksum) {
+            cleanupIncomingFiles(fileStates);
+            receiving = false;
+            fileStates.clear();
+            return Err(
+              createError(
+                ErrorCode.DB_QUERY_FAILED,
+                `Checksum mismatch for ${fileName}: expected ${expectedChecksum}, got ${actualChecksum}`,
+              ),
+            );
           }
 
           // Atomic rename to final path
@@ -349,9 +356,14 @@ function cleanupIncomingFiles(states: ReadonlyMap<string, FileReceiveState>): vo
 // Cleanup
 // ---------------------------------------------------------------------------
 
+/** Minimum age (1 hour) before .incoming files are eligible for cleanup. */
+const INCOMING_MIN_AGE_MS = 60 * 60 * 1000;
+
 /** Remove snapshot files older than maxAgeMs from the snapshot directory. */
 export function cleanupOldSnapshots(snapshotDir: string, maxAgeMs: number, logger: Logger): void {
   if (!existsSync(snapshotDir)) return;
+
+  const canonicalBase = resolve(snapshotDir);
 
   try {
     const files = readdirSync(snapshotDir);
@@ -359,15 +371,26 @@ export function cleanupOldSnapshots(snapshotDir: string, maxAgeMs: number, logge
     let removed = 0;
 
     for (const file of files) {
-      const filePath = join(snapshotDir, file);
+      const filePath = resolve(snapshotDir, file);
 
-      if (file.endsWith(".tmp") || file.endsWith(".incoming")) {
-        unlinkSync(filePath);
-        removed++;
+      // Path traversal guard: ensure resolved path is inside snapshotDir
+      if (!filePath.startsWith(canonicalBase + sep)) {
+        logger.warn("snapshot", `Skipping file outside snapshot directory: ${file}`);
         continue;
       }
 
       const stat = statSync(filePath);
+
+      if (file.endsWith(".tmp") || file.endsWith(".incoming")) {
+        // Only delete .tmp/.incoming files older than 1 hour to avoid
+        // removing files from an in-progress transfer.
+        if (now - stat.mtimeMs > INCOMING_MIN_AGE_MS) {
+          unlinkSync(filePath);
+          removed++;
+        }
+        continue;
+      }
+
       if (now - stat.mtimeMs > maxAgeMs) {
         unlinkSync(filePath);
         removed++;

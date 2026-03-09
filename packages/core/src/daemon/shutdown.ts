@@ -135,6 +135,9 @@ export async function performShutdown(
   }
 
   // 5. Publish shutdown event -- persisted for startup replay (best-effort).
+  //    Note: This runs after EventBus.dispose() (step 1), which only removes
+  //    in-memory subscriber handlers. The underlying SQLite persistence layer
+  //    still works, so the event is written to the DB for crash-recovery replay.
   if (modules.eventBus) {
     try {
       modules.eventBus.publish(
@@ -152,13 +155,19 @@ export async function performShutdown(
   }
 
   // 6. Teardown initialized modules in reverse, with timeout enforcement
+  let shutdownTimer: ReturnType<typeof setTimeout> | undefined;
   await Promise.race([
-    teardownModules(modules, logger),
-    new Promise<void>((_, reject) =>
-      setTimeout(() => {
+    teardownModules(modules, logger).finally(() => {
+      if (shutdownTimer !== undefined) {
+        clearTimeout(shutdownTimer);
+        shutdownTimer = undefined;
+      }
+    }),
+    new Promise<void>((_, reject) => {
+      shutdownTimer = setTimeout(() => {
         reject(new Error(`Graceful shutdown timed out after ${gracefulMs}ms`));
-      }, gracefulMs),
-    ),
+      }, gracefulMs);
+    }),
   ]).catch((err: unknown) => {
     const message = err instanceof Error ? err.message : String(err);
     logger?.error("daemon", `Shutdown timeout: ${message} -- forcing exit`);
@@ -176,5 +185,6 @@ export async function performShutdown(
     }
 
     process.exitCode = 1;
+    process.exit(1);
   });
 }

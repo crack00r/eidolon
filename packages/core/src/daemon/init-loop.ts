@@ -132,6 +132,7 @@ export function buildLoopSteps(modules: InitializedModules): InitStep[] {
             }
           }
         }, SCHEDULER_POLL_INTERVAL_MS);
+        modules.schedulerInterval.unref();
       } else {
         logger.warn("daemon", "TaskScheduler skipped: database not available");
       }

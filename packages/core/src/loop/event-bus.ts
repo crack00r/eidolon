@@ -1,3 +1,8 @@
+// TODO: This file exceeds the 300-line guideline (~480 lines). Split into separate modules:
+// - event-bus-core.ts (EventBus class, publish/subscribe, dequeue)
+// - event-bus-persistence.ts (SQLite persistence, crash recovery, replay)
+// - event-bus-types.ts (interfaces, type maps, schemas)
+
 /**
  * EventBus with SQLite persistence.
  *
@@ -107,9 +112,24 @@ export class EventBus {
           break;
         }
         this.logger.warn("event-bus", `Publish retry ${attempt + 1}/${MAX_PERSIST_RETRIES} for ${type}: ${msg}`);
-        // Sync delay between retries to reduce contention pressure.
-        // Uses Atomics.wait on a dummy buffer for a true sleep without spinning.
-        // Supplements the kernel-level busy_timeout set in connection.ts.
+        // ---------------------------------------------------------------
+        // IMPORTANT: INTENTIONAL EVENT-LOOP BLOCKING -- READ BEFORE CHANGING
+        // ---------------------------------------------------------------
+        // Atomics.wait() blocks the **entire** event loop thread for up to 50ms.
+        // This is a synchronous sleep, NOT an async delay.
+        //
+        // WHY: SQLite crash-recovery persistence requires that the event row
+        //      is written before we proceed. An async delay (setTimeout) would
+        //      allow other callbacks to interleave, potentially publishing the
+        //      in-memory event before it is persisted -- violating the
+        //      at-least-once delivery guarantee.
+        //
+        // LIMITS: Max 50ms per retry, MAX_PERSIST_RETRIES=2, so worst case
+        //         blocks for ~100ms total. This is acceptable in the daemon
+        //         context where persistence trumps latency.
+        //
+        // DO NOT use this pattern outside crash-recovery persistence paths.
+        // ---------------------------------------------------------------
         const delay = new Int32Array(new SharedArrayBuffer(4));
         Atomics.wait(delay, 0, 0, 50);
       }
@@ -231,30 +251,44 @@ export class EventBus {
    */
   defer(eventId: string): Result<void, EidolonError> {
     try {
-      // Unclaim so the event can be re-dequeued, and increment retry count
-      this.db.query("UPDATE events SET retry_count = retry_count + 1, claimed_at = NULL WHERE id = ?").run(eventId);
+      let deadLettered = false;
+      let eventType = "";
+      let retryCount = 0;
 
-      // Check if max retries exceeded -> dead letter
-      // Use per-type retry limits when available, otherwise fall back to global MAX_RETRIES
-      const row = this.db.query("SELECT retry_count, type FROM events WHERE id = ?").get(eventId) as {
-        retry_count: number;
-        type: string;
-      } | null;
+      const deferFn = this.db.transaction(() => {
+        // Unclaim so the event can be re-dequeued, and increment retry count
+        this.db.query("UPDATE events SET retry_count = retry_count + 1, claimed_at = NULL WHERE id = ?").run(eventId);
 
-      if (row) {
-        const maxRetries = MAX_RETRIES_BY_TYPE[row.type] ?? MAX_RETRIES;
-        if (row.retry_count >= maxRetries) {
-          this.logger.warn(
-            "event-bus",
-            `Event ${eventId} (${row.type}) exceeded max retries (${maxRetries}), moving to dead letter`,
-            {
-              retryCount: row.retry_count,
-              eventType: row.type,
-            },
-          );
-          this.db.query("UPDATE events SET processed_at = ? WHERE id = ?").run(Date.now(), eventId);
-          return Ok(undefined);
+        // Check if max retries exceeded -> dead letter
+        // Use per-type retry limits when available, otherwise fall back to global MAX_RETRIES
+        const row = this.db.query("SELECT retry_count, type FROM events WHERE id = ?").get(eventId) as {
+          retry_count: number;
+          type: string;
+        } | null;
+
+        if (row) {
+          eventType = row.type;
+          retryCount = row.retry_count;
+          const maxRetries = MAX_RETRIES_BY_TYPE[row.type] ?? MAX_RETRIES;
+          if (row.retry_count >= maxRetries) {
+            this.db.query("UPDATE events SET processed_at = ? WHERE id = ?").run(Date.now(), eventId);
+            deadLettered = true;
+          }
         }
+      });
+
+      deferFn();
+
+      if (deadLettered) {
+        this.logger.warn(
+          "event-bus",
+          `Event ${eventId} (${eventType}) exceeded max retries, moving to dead letter`,
+          {
+            retryCount,
+            eventType,
+          },
+        );
+        return Ok(undefined);
       }
 
       this.logger.debug("event-bus", `Deferred event: ${eventId}`);
@@ -278,12 +312,17 @@ export class EventBus {
 
   /** Replay all unprocessed events (for crash recovery).
    *  Awaits async handler completion before marking each event as processed.
-   *  If a handler rejects, the event is deferred instead. */
+   *  If a handler rejects, the event is deferred instead.
+   *
+   *  IMPORTANT: This method does NOT atomically claim events before processing.
+   *  It must only be called before the cognitive loop starts (single-consumer
+   *  assumption). If called concurrently with the loop, events could be
+   *  double-processed. */
   async replayUnprocessed(): Promise<Result<BusEvent[], EidolonError>> {
     try {
       const rows = this.db
         .query(
-          `SELECT * FROM events WHERE processed_at IS NULL
+          `SELECT * FROM events WHERE processed_at IS NULL AND claimed_at IS NULL
            ORDER BY
              CASE priority
                WHEN 'critical' THEN 0
@@ -415,18 +454,20 @@ export class EventBus {
     }
   }
 
-  /** Notify in-memory subscribers (type-specific + wildcard). */
+  /** Notify in-memory subscribers (type-specific + wildcard).
+   *  Snapshots handler sets before iterating to avoid issues if a handler
+   *  modifies subscriptions during notification. */
   private notifySubscribers(event: BusEvent): void {
     const typeHandlers = this.subscribers.get(event.type);
     if (typeHandlers) {
-      for (const handler of typeHandlers) {
+      for (const handler of [...typeHandlers]) {
         this.safeInvoke(handler, event, "Handler");
       }
     }
 
     const wildcardHandlers = this.subscribers.get("*");
     if (wildcardHandlers) {
-      for (const handler of wildcardHandlers) {
+      for (const handler of [...wildcardHandlers]) {
         this.safeInvoke(handler, event, "Wildcard handler");
       }
     }
@@ -441,14 +482,14 @@ export class EventBus {
 
     const typeHandlers = this.subscribers.get(event.type);
     if (typeHandlers) {
-      for (const handler of typeHandlers) {
+      for (const handler of [...typeHandlers]) {
         promises.push(this.safeInvokeAsync(handler, event, "Handler"));
       }
     }
 
     const wildcardHandlers = this.subscribers.get("*");
     if (wildcardHandlers) {
-      for (const handler of wildcardHandlers) {
+      for (const handler of [...wildcardHandlers]) {
         promises.push(this.safeInvokeAsync(handler, event, "Wildcard handler"));
       }
     }

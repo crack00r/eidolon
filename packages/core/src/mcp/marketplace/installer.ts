@@ -21,6 +21,32 @@ import type { McpInstallResult, McpRemoveResult } from "./types.ts";
 const MCP_INSTALL_DIR_NAME = "mcp-servers";
 const INSTALL_TIMEOUT_MS = 120_000;
 
+/** Safe env keys to pass through to npm install -- avoids leaking secrets from process.env. */
+const SAFE_ENV_KEYS: ReadonlySet<string> = new Set([
+  "PATH",
+  "HOME",
+  "USER",
+  "LANG",
+  "TERM",
+  "SHELL",
+  "TMPDIR",
+  "TZ",
+  "NODE_ENV",
+  "npm_config_cache",
+  "npm_config_registry",
+]);
+
+function buildSafeEnv(): Record<string, string> {
+  const env: Record<string, string> = { NODE_ENV: "production" };
+  for (const key of SAFE_ENV_KEYS) {
+    const val = process.env[key];
+    if (val !== undefined) {
+      env[key] = val;
+    }
+  }
+  return env;
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -40,6 +66,20 @@ function validateTemplateId(templateId: string): void {
   if (!/^[a-zA-Z0-9_-]+$/.test(templateId)) {
     throw new Error(`Template ID contains unsafe characters: ${templateId}`);
   }
+}
+
+/**
+ * Validate an npm package name against npm naming rules.
+ * Accepts scoped packages (@org/name) and unscoped packages.
+ * Rejects names with shell metacharacters or path traversal.
+ */
+const NPM_PACKAGE_NAME_RE = /^(@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*$/;
+
+function validatePackageName(name: string): boolean {
+  if (name.length === 0 || name.length > 214) return false;
+  if (name.startsWith(".") || name.startsWith("_")) return false;
+  if (name.includes("..")) return false;
+  return NPM_PACKAGE_NAME_RE.test(name);
 }
 
 /** Extract the npm package name from template args (first arg after -y in npx). */
@@ -96,6 +136,11 @@ export class McpInstaller {
       );
     }
 
+    // Validate npm package name to prevent command injection via malformed names
+    if (!validatePackageName(packageName)) {
+      return Err(createError(ErrorCode.INVALID_INPUT, `Invalid npm package name: ${packageName}`));
+    }
+
     const serverDir = join(this.installDir, templateId);
     validatePathContainment(this.installDir, serverDir);
 
@@ -126,11 +171,11 @@ export class McpInstaller {
       }
 
       // Run npm install
-      const proc = Bun.spawn(["npm", "install", packageName], {
+      const proc = Bun.spawn(["npm", "install", "--ignore-scripts", packageName], {
         cwd: serverDir,
         stdout: "pipe",
         stderr: "pipe",
-        env: { ...process.env, NODE_ENV: "production" },
+        env: buildSafeEnv(),
       });
 
       const exitCode = await Promise.race([
@@ -143,6 +188,14 @@ export class McpInstaller {
           proc.kill();
         } catch {
           /* best effort */
+        }
+        // Wait briefly for process to exit and consume streams to avoid zombie
+        try {
+          await Promise.race([proc.exited, new Promise((r) => setTimeout(r, 5000))]);
+          // Consume stdout/stderr to release pipe resources
+          await Promise.allSettled([new Response(proc.stdout).text(), new Response(proc.stderr).text()]);
+        } catch {
+          /* best effort cleanup */
         }
         const error = `Installation timed out after ${INSTALL_TIMEOUT_MS}ms`;
         this.registry.updateStatus(templateId, "failed", error);
@@ -237,7 +290,8 @@ export class McpInstaller {
       const raw = await Bun.file(pkgPath).text();
       const pkg = JSON.parse(raw) as { version?: string };
       return pkg.version ?? "unknown";
-    } catch {
+    } catch (err: unknown) {
+      this.logger.debug("mcp", `Failed to read version for ${packageName}`, { error: String(err) });
       return "unknown";
     }
   }

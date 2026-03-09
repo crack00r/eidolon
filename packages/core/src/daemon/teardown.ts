@@ -16,6 +16,26 @@ export async function teardownModules(modules: InitializedModules, logger: Logge
   // Each step is wrapped in try/catch so a failure in one does not
   // prevent the remaining modules from being cleaned up.
 
+  // 23 -> WorkflowEngine (clear all retry timers + abort controllers)
+  if (modules.workflowEngine) {
+    try {
+      modules.workflowEngine.dispose();
+      logger?.info("daemon", "WorkflowEngine disposed");
+    } catch (err: unknown) {
+      logger?.error("daemon", "Error disposing WorkflowEngine", err);
+    }
+  }
+
+  // 22 -> ReplicationManager (stop heartbeat + snapshot timers)
+  if (modules.replicationManager) {
+    try {
+      modules.replicationManager.stop();
+      logger?.info("daemon", "ReplicationManager stopped");
+    } catch (err: unknown) {
+      logger?.error("daemon", "Error stopping ReplicationManager", err);
+    }
+  }
+
   // 21 -> Discovery broadcaster (stop UDP + mDNS)
   if (modules.discoveryBroadcaster) {
     try {

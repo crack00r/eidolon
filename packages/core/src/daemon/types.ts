@@ -63,6 +63,7 @@ import type { SecretStore } from "../secrets/store.ts";
 import type { ApprovalManager } from "../security/approval-manager.ts";
 import type { MetricsBridgeHandle } from "../telemetry/metrics-bridge.ts";
 import type { TelemetryProvider } from "../telemetry/provider.ts";
+import type { ReplicationManager } from "../replication/manager.ts";
 import type { WorkflowEngine } from "../workflow/engine.ts";
 import type { WorkflowStore } from "../workflow/store.ts";
 
@@ -137,6 +138,7 @@ export interface InitializedModules {
   discoveryBroadcaster?: DiscoveryBroadcaster;
   anticipationEngine?: AnticipationEngine;
   suggestionHistory?: SuggestionHistory;
+  replicationManager?: ReplicationManager;
   workflowStore?: WorkflowStore;
   workflowEngine?: WorkflowEngine;
 }

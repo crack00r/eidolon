@@ -68,7 +68,8 @@ export class RealtimeVoiceClient {
 
   private ws: WebSocket | null = null;
   private url = "";
-  private token = "";
+  /** Auth token -- stored only until the auth message is sent, then cleared. */
+  private authToken = "";
 
   private transcriptionCallbacks: TranscriptionCallback[] = [];
   private audioCallbacks: AudioCallback[] = [];
@@ -102,7 +103,7 @@ export class RealtimeVoiceClient {
     }
 
     this.url = url;
-    this.token = authToken;
+    this.authToken = authToken;
     this.reconnectState.intentionalClose = false;
     this.reconnectState.reconnectAttempts = 0;
 
@@ -125,6 +126,10 @@ export class RealtimeVoiceClient {
       }
       this.ws = null;
     }
+
+    this.transcriptionCallbacks = [];
+    this.audioCallbacks = [];
+    this.errorCallbacks = [];
 
     this.logger.info("disconnect", "Realtime voice client disconnected");
   }
@@ -213,17 +218,33 @@ export class RealtimeVoiceClient {
 
         let resolved = false;
 
+        const connectTimeout = setTimeout(() => {
+          if (!resolved) {
+            resolved = true;
+            try {
+              socket.close();
+            } catch {
+              // Ignore close errors
+            }
+            resolve(Err(createError(ErrorCode.GPU_UNAVAILABLE, "WebSocket connection timed out after 10 seconds")));
+          }
+        }, 10_000);
+
         socket.onopen = (): void => {
+          clearTimeout(connectTimeout);
           this.ws = socket;
           this.reconnectState.reconnectAttempts = 0;
 
           // Send auth token as first message instead of in URL query parameter
           // to avoid token leakage in server logs and proxy logs.
           try {
-            socket.send(JSON.stringify({ type: "auth", token: this.token }));
+            socket.send(JSON.stringify({ type: "auth", token: this.authToken }));
           } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : String(err);
             this.logger.error("auth", `Failed to send auth message: ${msg}`);
+          } finally {
+            // Clear token from memory after sending
+            this.authToken = "";
           }
 
           startPing(() => this.ws, this.reconnectState, this.config);
@@ -240,6 +261,7 @@ export class RealtimeVoiceClient {
         };
 
         socket.onerror = (event: Event): void => {
+          clearTimeout(connectTimeout);
           const errorMessage =
             "error" in event && typeof (event as Record<string, unknown>).error === "string"
               ? String((event as Record<string, unknown>).error)
@@ -254,6 +276,7 @@ export class RealtimeVoiceClient {
         };
 
         socket.onclose = (event: CloseEvent): void => {
+          clearTimeout(connectTimeout);
           this.logger.info("ws-close", "WebSocket closed", {
             code: event.code,
             reason: event.reason,

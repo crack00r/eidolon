@@ -73,6 +73,9 @@ export interface MemoryMcpServerDeps {
 // MemoryMcpServer
 // ---------------------------------------------------------------------------
 
+/** Maximum buffer size for stdin reads (10 MB). Prevents unbounded memory growth from malicious input. */
+const MAX_BUFFER_SIZE = 10 * 1024 * 1024;
+
 export class MemoryMcpServer {
   private readonly store: MemoryStore;
   private readonly search: MemorySearch | null;
@@ -107,6 +110,11 @@ export class MemoryMcpServer {
 
         buffer += decoder.decode(value, { stream: true });
 
+        if (buffer.length > MAX_BUFFER_SIZE) {
+          this.logger.error("start", `Stdin buffer exceeded ${MAX_BUFFER_SIZE} bytes, stopping server`);
+          break;
+        }
+
         let newlineIdx = buffer.indexOf("\n");
         while (newlineIdx !== -1) {
           const line = buffer.slice(0, newlineIdx).trim();
@@ -134,7 +142,7 @@ export class MemoryMcpServer {
   stop(): void {
     this.running = false;
     if (this.reader) {
-      this.reader.cancel().catch(() => {});
+      this.reader.cancel().catch((e: unknown) => this.logger.debug("mcp", "reader cancel failed", { error: String(e) }));
     }
   }
 

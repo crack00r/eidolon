@@ -1,3 +1,7 @@
+// TODO: This file exceeds the 300-line guideline (~440 lines). Split into separate modules:
+// - task-executor-routing.ts (handleScheduledTask, handleAutomationDue, payload parsing)
+// - task-executor-claude.ts (executeClaudeTask, ClaudeTaskParams)
+
 /**
  * Task executor -- handles scheduler:task_due and scheduler:automation_due events.
  *
@@ -10,10 +14,68 @@
  */
 
 import { randomUUID } from "node:crypto";
+import type { EventType } from "@eidolon/protocol";
 import { loadWorkspaceTemplates } from "../claude/templates.ts";
 import type { Logger } from "../logging/logger.ts";
 import type { EventHandlerResult } from "../loop/cognitive-loop.ts";
 import type { InitializedModules } from "./types.ts";
+
+/** Set of known EventType values for safe runtime validation. */
+const VALID_EVENT_TYPES: ReadonlySet<string> = new Set<EventType>([
+  "user:message", "user:voice", "user:approval", "user:feedback",
+  "system:startup", "system:shutdown", "system:health_check", "system:config_changed",
+  "memory:extracted", "memory:dream_start", "memory:dream_complete",
+  "learning:discovery", "learning:approved", "learning:rejected", "learning:implemented",
+  "session:started", "session:completed", "session:failed", "session:budget_warning",
+  "channel:connected", "channel:disconnected", "channel:error",
+  "scheduler:task_due", "scheduler:automation_due",
+  "gateway:client_connected", "gateway:client_disconnected", "gateway:client_error_report",
+  "digest:generate", "digest:delivered",
+  "approval:requested", "approval:timeout", "approval:escalated",
+  "webhook:received",
+  "research:started", "research:completed", "research:failed",
+  "calendar:event_upcoming", "calendar:event_created", "calendar:conflict_detected", "calendar:sync_completed",
+  "ha:state_changed", "ha:anomaly_detected", "ha:scene_executed",
+  "plugin:loaded", "plugin:started", "plugin:stopped", "plugin:error",
+  "anticipation:check", "anticipation:suggestion", "anticipation:dismissed", "anticipation:acted",
+  "workflow:trigger", "workflow:step_ready", "workflow:step_completed", "workflow:step_failed",
+  "workflow:completed", "workflow:failed", "workflow:cancelled",
+]);
+
+// ---------------------------------------------------------------------------
+// Concurrency limits
+// ---------------------------------------------------------------------------
+
+/** Maximum number of concurrent task executions to prevent resource exhaustion. */
+const MAX_CONCURRENT_TASKS = 5;
+
+/** Approximate characters per token for rough token estimation from text length. */
+const CHARS_PER_TOKEN_ESTIMATE = 4;
+
+/** Encapsulates mutable concurrency state to avoid module-level let. */
+class TaskConcurrencyTracker {
+  private count = 0;
+
+  get active(): number {
+    return this.count;
+  }
+
+  increment(): void {
+    this.count++;
+  }
+
+  decrement(): void {
+    this.count--;
+  }
+
+  /** Reset for testing purposes. */
+  reset(): void {
+    this.count = 0;
+  }
+}
+
+/** Singleton tracker for active task count. */
+export const taskConcurrency = new TaskConcurrencyTracker();
 
 // ---------------------------------------------------------------------------
 // Payload validation helpers
@@ -72,6 +134,13 @@ export async function handleScheduledTask(
   }
 
   const { taskId, taskName, action, payload } = parsed;
+
+  // Reject if too many tasks are already running
+  if (taskConcurrency.active >= MAX_CONCURRENT_TASKS) {
+    logger.warn("task-executor", `Rejecting task "${taskName}": concurrent limit reached (${MAX_CONCURRENT_TASKS})`);
+    return { success: false, tokensUsed: 0, error: `Concurrent task limit reached (${MAX_CONCURRENT_TASKS})` };
+  }
+
   logger.info("task-executor", `Executing scheduled task: "${taskName}" (action: ${action})`, {
     taskId,
     action,
@@ -82,10 +151,11 @@ export async function handleScheduledTask(
     actor: "scheduler",
     action: "task_execute",
     target: taskId || taskName,
-    result: "success",
+    result: "started",
     details: { action, taskName },
   });
 
+  taskConcurrency.increment();
   try {
     // Route by action type
     switch (action) {
@@ -123,9 +193,15 @@ export async function handleScheduledTask(
       default: {
         // Generic action: emit as an event on the EventBus.
         // This enables extensibility -- plugins or other handlers can subscribe.
+        // Validate that the action string is a known EventType before casting.
+        if (!VALID_EVENT_TYPES.has(action)) {
+          logger.warn("task-executor", `Unknown event type "${action}" for task "${taskName}", skipping`, { taskId });
+          return { success: false, tokensUsed: 0, error: `Unknown event type: ${action}` };
+        }
         if (modules.eventBus) {
+          const validatedAction = action as EventType;
           const publishResult = modules.eventBus.publish(
-            action as Parameters<typeof modules.eventBus.publish>[0],
+            validatedAction,
             { triggeredByTask: taskId, taskName, ...payload },
             { priority: "normal", source: "scheduler" },
           );
@@ -151,6 +227,8 @@ export async function handleScheduledTask(
       details: { action, taskName, error: errMsg },
     });
     return { success: false, tokensUsed: 0, error: errMsg };
+  } finally {
+    taskConcurrency.decrement();
   }
 }
 
@@ -170,20 +248,32 @@ export async function handleAutomationDue(
   }
 
   const { automationId, name, prompt, deliverTo } = parsed;
+
+  // Reject if too many tasks are already running
+  if (taskConcurrency.active >= MAX_CONCURRENT_TASKS) {
+    logger.warn("task-executor", `Rejecting automation "${name}": concurrent limit reached (${MAX_CONCURRENT_TASKS})`);
+    return { success: false, tokensUsed: 0, error: `Concurrent task limit reached (${MAX_CONCURRENT_TASKS})` };
+  }
+
   logger.info("task-executor", `Executing automation: "${name}"`, {
     automationId,
     deliverTo,
     promptLength: prompt.length,
   });
 
-  return executeClaudeTask(modules, {
-    sessionLabel: `automation-${automationId || randomUUID()}`,
-    prompt,
-    deliverTo,
-    taskName: name,
-    taskId: automationId,
-    logger,
-  });
+  taskConcurrency.increment();
+  try {
+    return await executeClaudeTask(modules, {
+      sessionLabel: `automation-${automationId || randomUUID()}`,
+      prompt,
+      deliverTo,
+      taskName: name,
+      taskId: automationId,
+      logger,
+    });
+  } finally {
+    taskConcurrency.decrement();
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -326,8 +416,13 @@ async function executeClaudeTask(modules: InitializedModules, params: ClaudeTask
     }
 
     // 6. Record token usage
-    const estimatedInput = Math.ceil(prompt.length / 4);
-    const estimatedOutput = Math.ceil(responseText.length / 4);
+    // NOTE: Token counts are estimated from text length using a ~4 chars/token heuristic.
+    // This is a rough approximation -- actual token counts vary by model tokenizer and
+    // content (e.g., code vs prose). Actual usage data is not available from the stream
+    // events in the current IClaudeProcess implementation. These estimates are used for
+    // rate-limit tracking and cost attribution, not billing.
+    const estimatedInput = Math.ceil(prompt.length / CHARS_PER_TOKEN_ESTIMATE);
+    const estimatedOutput = Math.ceil(responseText.length / CHARS_PER_TOKEN_ESTIMATE);
     const totalTokens = estimatedInput + estimatedOutput;
 
     if (modules.tokenTracker) {

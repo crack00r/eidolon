@@ -33,8 +33,14 @@ export interface GPUWorkerConfig {
   readonly allowPrivateHosts?: boolean;
 }
 
-/** Hostnames that should always be blocked (cloud metadata endpoints). */
-const BLOCKED_HOSTNAMES = new Set(["metadata.google.internal", "instance-data"]);
+/** Hostnames that should always be blocked (cloud metadata endpoints + null addresses). */
+const BLOCKED_HOSTNAMES = new Set([
+  "metadata.google.internal",
+  "instance-data",
+  "169.254.169.254",
+  "0.0.0.0",
+  "::",
+]);
 
 /** Validate a GPU worker URL at construction time. */
 function validateGpuWorkerUrl(url: string, allowPrivate: boolean): void {
@@ -47,11 +53,22 @@ function validateGpuWorkerUrl(url: string, allowPrivate: boolean): void {
   if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
     throw new Error(`GPU worker URL must use http or https: ${url}`);
   }
-  const hostname = parsed.hostname.replace(/^\[/, "").replace(/]$/, "").toLowerCase();
+  const hostname = parsed.hostname.replace(/^\[/, "").replace(/]$/, "").toLowerCase().replace(/^::ffff:/, "");
   if (BLOCKED_HOSTNAMES.has(hostname)) {
     throw new Error(`GPU worker URL rejected: ${hostname} is a blocked hostname (SSRF protection)`);
   }
-  if (!allowPrivate && (hostname === "localhost" || /^127\./.test(hostname) || /^::1$/.test(hostname))) {
+  if (
+    !allowPrivate &&
+    (hostname === "localhost" ||
+      /^127\./.test(hostname) ||
+      /^::1$/.test(hostname) ||
+      /^10\./.test(hostname) ||
+      /^172\.(1[6-9]|2\d|3[01])\./.test(hostname) ||
+      /^192\.168\./.test(hostname) ||
+      /^169\.254\./.test(hostname) ||
+      /^fd[0-9a-f]{2}:/.test(hostname) ||
+      /^fe80:/.test(hostname))
+  ) {
     throw new Error(`GPU worker URL rejected: ${hostname} is a private address (SSRF protection)`);
   }
 }
@@ -201,9 +218,12 @@ export class GPUWorker {
       // cbResult.value is the inner Result<T, EidolonError>
       const innerResult = cbResult.value;
 
-      // Record latency on success
       if (innerResult.ok) {
+        // Record latency on success
         this.recordLatency(Date.now() - startMs);
+      } else {
+        // Inner HTTP error should still count as a circuit breaker failure
+        this.circuitBreaker.recordFailure();
       }
 
       return innerResult;
@@ -330,7 +350,7 @@ export class GPUWorker {
 
         totalBytes += value.byteLength;
         if (totalBytes > maxBytes) {
-          reader.cancel().catch(() => {});
+          reader.cancel().catch((e: unknown) => this.logger.debug("gpu", "reader cancel failed", { error: String(e) }));
           return Err(
             createError(ErrorCode.GPU_UNAVAILABLE, `GPU response too large: exceeded ${maxBytes} bytes (streamed)`),
           );

@@ -137,10 +137,13 @@ async function handleVoiceAudioStt(
       userId,
       text: transcribedText,
     };
-    modules.eventBus.publish("user:message", messagePayload, {
+    const publishResult = modules.eventBus.publish("user:message", messagePayload, {
       priority: "high",
       source: "voice-stt",
     });
+    if (!publishResult.ok) {
+      logger.error("loop-handler", `Failed to publish user:message from voice STT: ${publishResult.error.message}`, undefined, { eventId });
+    }
     return { success: true, tokensUsed: 0 };
   }
 

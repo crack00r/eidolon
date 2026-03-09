@@ -39,28 +39,33 @@ export class SessionSupervisor {
     this.logger = logger.child("session-supervisor");
   }
 
-  /** Check if a new session of this type can be started. */
+  /**
+   * Check if a new session of this type can be started.
+   *
+   * WARNING: This is a point-in-time snapshot. Do NOT use across await boundaries
+   * as the state may change. Use `register()` which performs an atomic check-and-insert.
+   */
   canStart(type: SessionType): boolean {
     const rule = CONCURRENCY_RULES[type];
     return this.countByType(type) < rule.maxConcurrent;
   }
 
-  /** Register a running session. Returns error if limit exceeded or duplicate ID. */
+  /** Register a running session. Atomically checks capacity and inserts. Returns error if limit exceeded or duplicate ID. */
   register(sessionId: string, type: SessionType): Result<void, EidolonError> {
     if (this.sessions.has(sessionId)) {
       return Err(createError(ErrorCode.SESSION_LIMIT_REACHED, `Session "${sessionId}" is already registered`));
     }
 
-    if (!this.canStart(type)) {
+    // Atomic capacity check -- do NOT use canStart() separately before register()
+    const rule = CONCURRENCY_RULES[type];
+    if (this.countByType(type) >= rule.maxConcurrent) {
       return Err(
         createError(
           ErrorCode.SESSION_LIMIT_REACHED,
-          `Cannot start session "${sessionId}": ${type} limit (${CONCURRENCY_RULES[type].maxConcurrent}) reached`,
+          `Cannot start session "${sessionId}": ${type} limit (${rule.maxConcurrent}) reached`,
         ),
       );
     }
-
-    const rule = CONCURRENCY_RULES[type];
     const slot: SessionSlot = {
       sessionId,
       type,

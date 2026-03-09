@@ -9,6 +9,12 @@ import type { CalendarEvent } from "@eidolon/protocol";
 import { z } from "zod";
 import { CalendarManager } from "../calendar/manager.ts";
 import { registerFeedbackHandlers } from "../feedback/gateway-handlers.ts";
+import {
+  CalendarCreateEventParamsSchema,
+  CalendarGetUpcomingParamsSchema,
+  CalendarListEventsParamsSchema,
+  RpcValidationError,
+} from "../gateway/rpc-schemas.ts";
 import { HAManager } from "../home-automation/manager.ts";
 import { wireMetrics } from "../metrics/wiring.ts";
 import type { InitializedModules } from "./types.ts";
@@ -17,24 +23,23 @@ import type { InitializedModules } from "./types.ts";
 // Validation schemas for RPC handler params
 // ---------------------------------------------------------------------------
 
-const CalendarCreateEventParamsSchema = z.object({
-  calendarId: z.string(),
-  title: z.string(),
-  startTime: z.number(),
-  endTime: z.number(),
-  description: z.string().optional(),
-  location: z.string().optional(),
-  allDay: z.boolean(),
-  recurrence: z.string().optional(),
-  reminders: z.array(z.number()),
-  source: z.enum(["google", "caldav", "manual"]),
-});
-
 const HAExecuteParamsSchema = z.object({
   entityId: z.string().min(1),
   domain: z.string().min(1),
   service: z.string().min(1),
   data: z.record(z.unknown()).optional(),
+});
+
+const CalendarDeleteEventParamsSchema = z.object({
+  eventId: z.string().min(1),
+});
+
+const HAStateParamsSchema = z.object({
+  entityId: z.string().min(1),
+});
+
+const HAEntitiesParamsSchema = z.object({
+  domain: z.string().optional(),
 });
 
 const PluginInfoParamsSchema = z.object({
@@ -99,44 +104,67 @@ export function buildCalendarSteps(modules: InitializedModules): InitStep[] {
       }
 
       gatewayServer.registerHandler("calendar.listEvents", async (params) => {
-        const start = typeof params.start === "number" ? params.start : Date.now();
-        const end = typeof params.end === "number" ? params.end : start + 7 * 86_400_000;
-        const result = calendarManager.listEvents(start, end);
-        if (!result.ok) throw new Error(result.error.message);
+        const parsed = CalendarListEventsParamsSchema.safeParse(params);
+        if (!parsed.success) {
+          throw new RpcValidationError(
+            `Invalid calendar.listEvents params: ${parsed.error.issues.map((i) => i.message).join(", ")}`,
+          );
+        }
+        const result = calendarManager.listEvents(parsed.data.start, parsed.data.end);
+        if (!result.ok) throw new RpcValidationError(result.error.message);
         return { events: result.value };
       });
 
       gatewayServer.registerHandler("calendar.createEvent", async (params) => {
         const parsed = CalendarCreateEventParamsSchema.safeParse(params);
         if (!parsed.success) {
-          throw new Error(
+          throw new RpcValidationError(
             `Invalid calendar.createEvent params: ${parsed.error.issues.map((i) => i.message).join(", ")}`,
           );
         }
         const event = parsed.data as Omit<CalendarEvent, "id" | "syncedAt">;
         const result = calendarManager.createEvent(event);
-        if (!result.ok) throw new Error(result.error.message);
+        if (!result.ok) throw new RpcValidationError(result.error.message);
         return { event: result.value };
       });
 
       gatewayServer.registerHandler("calendar.deleteEvent", async (params) => {
-        const eventId = typeof params.eventId === "string" ? params.eventId : "";
-        const result = calendarManager.deleteEvent(eventId);
-        if (!result.ok) throw new Error(result.error.message);
+        const parsed = CalendarDeleteEventParamsSchema.safeParse(params);
+        if (!parsed.success) {
+          throw new RpcValidationError(
+            `Invalid calendar.deleteEvent params: ${parsed.error.issues.map((i) => i.message).join(", ")}`,
+          );
+        }
+        const result = calendarManager.deleteEvent(parsed.data.eventId);
+        if (!result.ok) throw new RpcValidationError(result.error.message);
         return { success: true };
       });
 
+      const CalendarSyncParamsSchema = z.object({
+        providerName: z.string().min(1).optional(),
+      });
+
       gatewayServer.registerHandler("calendar.sync", async (params) => {
-        const providerName = typeof params.providerName === "string" ? params.providerName : undefined;
-        const result = await calendarManager.sync(providerName);
-        if (!result.ok) throw new Error(result.error.message);
+        const parsed = CalendarSyncParamsSchema.safeParse(params);
+        if (!parsed.success) {
+          throw new RpcValidationError(
+            `Invalid calendar.sync params: ${parsed.error.issues.map((i) => i.message).join(", ")}`,
+          );
+        }
+        const result = await calendarManager.sync(parsed.data.providerName);
+        if (!result.ok) throw new RpcValidationError(result.error.message);
         return result.value;
       });
 
       gatewayServer.registerHandler("calendar.getUpcoming", async (params) => {
-        const hours = typeof params.hours === "number" ? params.hours : 24;
-        const result = calendarManager.getUpcoming(hours);
-        if (!result.ok) throw new Error(result.error.message);
+        const parsed = CalendarGetUpcomingParamsSchema.safeParse(params);
+        if (!parsed.success) {
+          throw new RpcValidationError(
+            `Invalid calendar.getUpcoming params: ${parsed.error.issues.map((i) => i.message).join(", ")}`,
+          );
+        }
+        const result = calendarManager.getUpcoming(parsed.data.hours ?? 24);
+        if (!result.ok) throw new RpcValidationError(result.error.message);
         return { events: result.value };
       });
 
@@ -200,34 +228,46 @@ export function buildHASteps(modules: InitializedModules): InitStep[] {
       }
 
       gatewayServer.registerHandler("ha.entities", async (params) => {
-        const domain = typeof params.domain === "string" ? params.domain : undefined;
-        const result = haManager.listEntities(domain);
-        if (!result.ok) throw new Error(result.error.message);
+        const parsed = HAEntitiesParamsSchema.safeParse(params);
+        if (!parsed.success) {
+          throw new RpcValidationError(
+            `Invalid ha.entities params: ${parsed.error.issues.map((i) => i.message).join(", ")}`,
+          );
+        }
+        const result = haManager.listEntities(parsed.data.domain);
+        if (!result.ok) throw new RpcValidationError(result.error.message);
         return { entities: result.value };
       });
 
       gatewayServer.registerHandler("ha.scenes", async () => {
         const result = haManager.sceneEngine.listScenes();
-        if (!result.ok) throw new Error(result.error.message);
+        if (!result.ok) throw new RpcValidationError(result.error.message);
         return { scenes: result.value };
       });
 
       gatewayServer.registerHandler("ha.execute", async (params) => {
         const parsed = HAExecuteParamsSchema.safeParse(params);
         if (!parsed.success) {
-          throw new Error(`Invalid ha.execute params: ${parsed.error.issues.map((i) => i.message).join(", ")}`);
+          throw new RpcValidationError(
+            `Invalid ha.execute params: ${parsed.error.issues.map((i) => i.message).join(", ")}`,
+          );
         }
         const { entityId, domain, service, data } = parsed.data;
         const result = await haManager.executeService(entityId, domain, service, data);
-        if (!result.ok) throw new Error(result.error.message);
+        if (!result.ok) throw new RpcValidationError(result.error.message);
         return result.value;
       });
 
       gatewayServer.registerHandler("ha.state", async (params) => {
-        const entityId = typeof params.entityId === "string" ? params.entityId : "";
-        const result = haManager.getEntity(entityId);
-        if (!result.ok) throw new Error(result.error.message);
-        if (!result.value) throw new Error(`Entity not found: ${entityId}`);
+        const parsed = HAStateParamsSchema.safeParse(params);
+        if (!parsed.success) {
+          throw new RpcValidationError(
+            `Invalid ha.state params: ${parsed.error.issues.map((i) => i.message).join(", ")}`,
+          );
+        }
+        const result = haManager.getEntity(parsed.data.entityId);
+        if (!result.ok) throw new RpcValidationError(result.error.message);
+        if (!result.value) throw new RpcValidationError("Entity not found");
         return { entity: result.value };
       });
 
@@ -303,7 +343,9 @@ export function buildMiscGatewaySteps(modules: InitializedModules): InitStep[] {
         gateway.registerHandler("plugin.info", async (params: unknown) => {
           const parsed = PluginInfoParamsSchema.safeParse(params);
           if (!parsed.success) {
-            throw new Error(`Invalid plugin.info params: ${parsed.error.issues.map((i) => i.message).join(", ")}`);
+            throw new RpcValidationError(
+              `Invalid plugin.info params: ${parsed.error.issues.map((i) => i.message).join(", ")}`,
+            );
           }
           return registry.get(parsed.data.name) ?? null;
         });

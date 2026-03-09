@@ -70,34 +70,33 @@ export interface StepResultRow {
 // Row-to-model conversion helpers
 // ---------------------------------------------------------------------------
 
+/** Parse JSON from a DB column, logging a warning and returning fallback on failure. */
+function safeParseJson<T>(column: string, json: string, fallback: T, rowId: string): T {
+  try {
+    return JSON.parse(json) as T;
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    // Use console.error as a last resort -- store-rows has no logger dependency.
+    // This is acceptable because malformed JSON in the DB is a data integrity issue
+    // that should be visible in logs.
+    console.error(`[store-rows] Malformed JSON in column '${column}' for row ${rowId}: ${msg}`);
+    return fallback;
+  }
+}
+
 export function rowToDefinition(row: DefinitionRow): WorkflowDefinition {
-  let trigger: WorkflowDefinition["trigger"];
-  try {
-    trigger = JSON.parse(row.trigger_config) as WorkflowDefinition["trigger"];
-  } catch {
-    trigger = { type: "manual" } as WorkflowDefinition["trigger"];
-  }
-
-  let steps: WorkflowDefinition["steps"];
-  try {
-    steps = JSON.parse(row.steps) as WorkflowDefinition["steps"];
-  } catch {
-    steps = [];
-  }
-
-  let onFailure: WorkflowDefinition["onFailure"];
-  try {
-    onFailure = JSON.parse(row.on_failure) as WorkflowDefinition["onFailure"];
-  } catch {
-    onFailure = { type: "abort" };
-  }
-
-  let metadata: Record<string, unknown>;
-  try {
-    metadata = JSON.parse(row.metadata) as Record<string, unknown>;
-  } catch {
-    metadata = {};
-  }
+  const trigger = safeParseJson<WorkflowDefinition["trigger"]>(
+    "trigger_config", row.trigger_config, { type: "manual" } as WorkflowDefinition["trigger"], row.id,
+  );
+  const steps = safeParseJson<WorkflowDefinition["steps"]>(
+    "steps", row.steps, [], row.id,
+  );
+  const onFailure = safeParseJson<WorkflowDefinition["onFailure"]>(
+    "on_failure", row.on_failure, { type: "abort" }, row.id,
+  );
+  const metadata = safeParseJson<Record<string, unknown>>(
+    "metadata", row.metadata, {}, row.id,
+  );
 
   return {
     id: row.id,
@@ -115,6 +114,7 @@ export function rowToDefinition(row: DefinitionRow): WorkflowDefinition {
 
 export function rowToRun(row: RunRow): WorkflowRun {
   const status = WorkflowStatusSchema.parse(row.status);
+  const triggerPayload = safeParseJson<unknown>("trigger_payload", row.trigger_payload, {}, row.id);
   return {
     id: row.id,
     definitionId: row.definition_id,
@@ -124,19 +124,20 @@ export function rowToRun(row: RunRow): WorkflowRun {
     startedAt: row.started_at,
     completedAt: row.completed_at,
     error: row.error,
-    triggerPayload: JSON.parse(row.trigger_payload),
+    triggerPayload,
     createdAt: row.created_at,
   };
 }
 
 export function rowToStepResult(row: StepResultRow): StepResult {
   const status = StepStatusSchema.parse(row.status);
+  const output: unknown = row.output ? safeParseJson<unknown>("output", row.output, null, row.id) : null;
   return {
     id: row.id,
     runId: row.run_id,
     stepId: row.step_id,
     status,
-    output: row.output ? JSON.parse(row.output) : null,
+    output,
     error: row.error,
     attempt: row.attempt,
     startedAt: row.started_at,

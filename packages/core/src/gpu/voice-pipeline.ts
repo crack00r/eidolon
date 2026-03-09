@@ -125,9 +125,9 @@ export class VoicePipeline {
    * Split text into sentences using Intl.Segmenter.
    * Falls back to simple split on `. ` if Intl.Segmenter is unavailable.
    */
-  static splitSentences(text: string): string[] {
+  static splitSentences(text: string, locale: string = "en"): string[] {
     if (typeof Intl !== "undefined" && typeof Intl.Segmenter === "function") {
-      const segmenter = new Intl.Segmenter("en", { granularity: "sentence" });
+      const segmenter = new Intl.Segmenter(locale, { granularity: "sentence" });
       return [...segmenter.segment(text)].map((s) => s.segment.trim()).filter((s) => s.length > 0);
     }
 
@@ -142,8 +142,8 @@ export class VoicePipeline {
   interrupt(): void {
     if (this.activeAbort) {
       this.activeAbort.abort();
+      this.currentState = "interrupted";
+      this.logger.info("interrupt", "Voice pipeline interrupted");
     }
-    this.currentState = "interrupted";
-    this.logger.info("interrupt", "Voice pipeline interrupted");
   }
 }

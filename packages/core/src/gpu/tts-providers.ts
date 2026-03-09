@@ -55,39 +55,18 @@ export class GpuTtsProvider implements TtsFallbackProvider {
   }
 
   async synthesize(text: string): Promise<Result<Uint8Array, EidolonError>> {
-    const execute = async (): Promise<Result<Uint8Array, EidolonError>> => {
-      const result = await this.pool.tts({
-        text,
-        voice: this.config.voice,
-        speed: this.config.speed,
-        format: this.config.format,
-      });
+    const result = await this.pool.tts({
+      text,
+      voice: this.config.voice,
+      speed: this.config.speed,
+      format: this.config.format,
+    });
 
-      if (!result.ok) {
-        return Err(result.error);
-      }
-
-      return Ok(result.value.audio);
-    };
-
-    if (this.circuitBreaker !== null) {
-      const cbResult = await this.circuitBreaker.execute(async () => {
-        const inner = await execute();
-        if (!inner.ok) {
-          throw new Error(inner.error.message);
-        }
-        return inner.value;
-      });
-
-      if (!cbResult.ok) {
-        this.logger.warn("synthesize", `GPU TTS failed via circuit breaker: ${cbResult.error.message}`);
-        return Err(createError(ErrorCode.TTS_FAILED, `GPU TTS failed: ${cbResult.error.message}`));
-      }
-
-      return Ok(cbResult.value);
+    if (!result.ok) {
+      return Err(result.error);
     }
 
-    return execute();
+    return Ok(result.value.audio);
   }
 }
 
@@ -114,6 +93,16 @@ function detectSystemTtsCommand(): { command: string; args: string[]; useStdin: 
 
 /** Timeout for system TTS subprocess in milliseconds. */
 const SYSTEM_TTS_TIMEOUT_MS = 30_000;
+
+/** Maximum text length for system TTS to prevent resource abuse. */
+const MAX_TTS_TEXT_LENGTH = 10_000;
+
+/** Strip control characters that could interfere with TTS subprocess. */
+function sanitizeTtsText(text: string): string {
+  // Remove ASCII control chars except newline/tab, and limit length
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: intentional stripping of control chars
+  return text.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "").slice(0, MAX_TTS_TEXT_LENGTH);
+}
 
 export class SystemTtsProvider implements TtsFallbackProvider {
   readonly name = "system-tts";
@@ -158,7 +147,8 @@ export class SystemTtsProvider implements TtsFallbackProvider {
     }
 
     try {
-      const spawnArgs = ttsCmd.useStdin ? [ttsCmd.command, ...ttsCmd.args] : [ttsCmd.command, ...ttsCmd.args, text];
+      const safeText = sanitizeTtsText(text);
+      const spawnArgs = ttsCmd.useStdin ? [ttsCmd.command, ...ttsCmd.args] : [ttsCmd.command, ...ttsCmd.args, safeText];
       const proc = Bun.spawn(spawnArgs, {
         stdout: "pipe",
         stderr: "pipe",
@@ -167,7 +157,7 @@ export class SystemTtsProvider implements TtsFallbackProvider {
 
       // For stdin-based commands (espeak-ng), write text via stdin
       if (ttsCmd.useStdin && proc.stdin) {
-        proc.stdin.write(new TextEncoder().encode(text));
+        proc.stdin.write(new TextEncoder().encode(safeText));
         proc.stdin.end();
       }
 
@@ -176,16 +166,19 @@ export class SystemTtsProvider implements TtsFallbackProvider {
         proc.kill();
       }, SYSTEM_TTS_TIMEOUT_MS);
 
-      const exitCode = await proc.exited;
+      // Read stdout/stderr concurrently with waiting for exit to avoid deadlock
+      const [exitCode, stdoutBuf, stderrText] = await Promise.all([
+        proc.exited,
+        new Response(proc.stdout).arrayBuffer(),
+        new Response(proc.stderr).text(),
+      ]);
       clearTimeout(timeoutId);
 
       if (exitCode !== 0) {
-        const stderr = await new Response(proc.stderr).text();
-        return Err(createError(ErrorCode.TTS_FAILED, `System TTS failed (exit ${exitCode}): ${stderr.slice(0, 200)}`));
+        return Err(createError(ErrorCode.TTS_FAILED, `System TTS failed (exit ${exitCode}): ${stderrText.slice(0, 200)}`));
       }
 
-      const audioData = await new Response(proc.stdout).arrayBuffer();
-      const audio = new Uint8Array(audioData);
+      const audio = new Uint8Array(stdoutBuf);
 
       this.logger.debug("synthesize", "System TTS completed", {
         textLength: text.length,

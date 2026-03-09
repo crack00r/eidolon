@@ -77,6 +77,7 @@ export function wireMetrics(deps: MetricsWiringDeps): MetricsWiringHandle {
     }
     updateSessionGauge();
   }, GAUGE_UPDATE_INTERVAL_MS);
+  gaugeTimer.unref();
 
   // Run initial gauge update immediately
   const initialPending = eventBus.pendingCount();

@@ -49,7 +49,11 @@ export class EnergyBudget {
     };
   }
 
-  /** Check if we can afford to spend tokens on a category. */
+  /** Check if we can afford to spend tokens on a category.
+   *  When no estimatedTokens is provided, uses a fixed DEFAULT_ESTIMATE of 1000 tokens.
+   *  This is a conservative heuristic -- actual token usage varies by action type,
+   *  but the fixed estimate is acceptable because it only affects deferral decisions,
+   *  not actual budget consumption (which uses real token counts from the handler). */
   canAfford(category: BudgetCategory, estimatedTokens?: number): boolean {
     this.resetIfNewHour();
 
@@ -59,6 +63,8 @@ export class EnergyBudget {
     }
 
     const estimate = estimatedTokens ?? DEFAULT_ESTIMATE;
+    // Guard against negative or non-finite estimates that would bypass budget checks
+    if (!Number.isFinite(estimate) || estimate < 0) return false;
     return this.remaining(category) >= estimate;
   }
 

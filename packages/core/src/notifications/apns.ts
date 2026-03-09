@@ -12,6 +12,7 @@ import * as http2 from "node:http2";
 import type { EidolonError, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
 import type { Logger } from "../logging/logger.ts";
+import { sleep } from "../utils/async.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -209,9 +210,9 @@ export class ApnsClient {
         return result;
       }
 
-      // 429 Rate limited — retry with delay
+      // 429 Rate limited — retry with exponential backoff
       if (error.code === ErrorCode.APNS_RATE_LIMITED && attempt < MAX_RETRIES) {
-        const delayMs = this.config.retryDelayMs ?? RATE_LIMIT_RETRY_DELAY_MS;
+        const delayMs = (this.config.retryDelayMs ?? RATE_LIMIT_RETRY_DELAY_MS) * 2 ** attempt;
         this.logger.warn("send", `Rate limited (429), retrying in ${delayMs}ms`, {
           attempt: attempt + 1,
         });
@@ -393,7 +394,7 @@ export class ApnsClient {
 
     if (payload.data) {
       for (const [key, value] of Object.entries(payload.data)) {
-        result[key] = value;
+        if (key !== "aps") result[key] = value;
       }
     }
 
@@ -422,10 +423,4 @@ function base64UrlEncode(str: string): string {
 
 function base64UrlEncodeBuffer(buf: Buffer): string {
   return buf.toString("base64url");
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
 }

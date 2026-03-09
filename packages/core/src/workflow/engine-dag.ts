@@ -40,11 +40,11 @@ export function publishReadySteps(
     if (completedSteps.has(step.id)) continue;
     if (!enabledSteps.has(step.id)) continue;
 
-    // Check if already pending/running (avoid duplicate publishes)
-    const existingPending = stepResults.find(
-      (s) => s.stepId === step.id && (s.status === "pending" || s.status === "running"),
+    // Check if already pending/running/failed (avoid duplicate publishes; failed is terminal)
+    const existingNonReady = stepResults.find(
+      (s) => s.stepId === step.id && (s.status === "pending" || s.status === "running" || s.status === "failed"),
     );
-    if (existingPending) continue;
+    if (existingNonReady) continue;
 
     // All dependencies must be completed or skipped
     const depsReady = step.dependsOn.every((dep) => completedSteps.has(dep));
@@ -75,8 +75,13 @@ export function getEnabledSteps(def: WorkflowDefinition, stepResults: readonly S
     const stepDef = def.steps.find((s) => s.id === result.stepId);
     if (!stepDef || stepDef.type !== "condition") continue;
 
-    const config = stepDef.config as { thenSteps?: string[]; elseSteps?: string[] };
-    const conditionResult = result.output as boolean | null;
+    const rawConfig: unknown = stepDef.config;
+    const config =
+      typeof rawConfig === "object" && rawConfig !== null
+        ? (rawConfig as { thenSteps?: string[]; elseSteps?: string[] })
+        : { thenSteps: undefined, elseSteps: undefined };
+    const conditionResult =
+      typeof result.output === "boolean" ? result.output : null;
 
     if (conditionResult === true) {
       for (const elseId of config.elseSteps ?? []) {
@@ -134,6 +139,9 @@ export function advanceWorkflow(
 // Step failure handling
 // ---------------------------------------------------------------------------
 
+/** Maximum number of retry_from retries before giving up. */
+const MAX_RETRY_FROM_ATTEMPTS = 3;
+
 /** Handle a permanently failed step based on the workflow's failure strategy. */
 export function handleStepFailure(
   runId: string,
@@ -160,17 +168,40 @@ export function handleStepFailure(
         { priority: "high", source: "workflow-engine" },
       );
       break;
-    case "retry_from":
-      store.updateRunStatus(runId, "retrying");
-      eventBus.publish(
-        "workflow:step_ready",
-        {
-          runId,
-          stepId: strategy.stepId,
-        },
-        { priority: "normal", source: "workflow-engine" },
-      );
+    case "retry_from": {
+      // Check how many times the target step has already been attempted
+      const stepResultsRes = store.getStepResults(runId);
+      const attempts = stepResultsRes.ok
+        ? stepResultsRes.value.filter((r) => r.stepId === strategy.stepId && r.status === "failed").length
+        : 0;
+
+      if (attempts >= MAX_RETRY_FROM_ATTEMPTS) {
+        // Exceeded max retries -- fail the workflow
+        store.updateRunStatus(runId, "failed", {
+          error: `retry_from exceeded max attempts (${MAX_RETRY_FROM_ATTEMPTS}): ${errorMsg}`,
+        });
+        eventBus.publish(
+          "workflow:failed",
+          {
+            runId,
+            definitionId: def.id,
+            error: `retry_from exceeded max attempts (${MAX_RETRY_FROM_ATTEMPTS})`,
+          },
+          { priority: "high", source: "workflow-engine" },
+        );
+      } else {
+        store.updateRunStatus(runId, "retrying");
+        eventBus.publish(
+          "workflow:step_ready",
+          {
+            runId,
+            stepId: strategy.stepId,
+          },
+          { priority: "normal", source: "workflow-engine" },
+        );
+      }
       break;
+    }
   }
 }
 

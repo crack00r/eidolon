@@ -18,6 +18,10 @@ export function handleUserApproval(
   logger: Logger,
 ): EventHandlerResult {
   try {
+    if (typeof event.payload !== "object" || event.payload === null) {
+      logger.warn("loop-handler", "Invalid user:approval payload: not an object", { eventId: event.id });
+      return { success: false, tokensUsed: 0, error: "Invalid payload: not an object" };
+    }
     const rawPayload = event.payload as Record<string, unknown>;
     const approvalId = typeof rawPayload.approvalId === "string" ? rawPayload.approvalId : undefined;
     const action = typeof rawPayload.action === "string" ? rawPayload.action : undefined;
@@ -127,6 +131,10 @@ export function handleUserFeedback(
   logger: Logger,
 ): EventHandlerResult {
   try {
+    if (typeof event.payload !== "object" || event.payload === null) {
+      logger.warn("loop-handler", "Invalid user:feedback payload: not an object", { eventId: event.id });
+      return { success: false, tokensUsed: 0, error: "Invalid payload: not an object" };
+    }
     const rawPayload = event.payload as Record<string, unknown>;
     const sessionId = typeof rawPayload.sessionId === "string" ? rawPayload.sessionId : undefined;
     const rating = typeof rawPayload.rating === "number" ? rawPayload.rating : undefined;

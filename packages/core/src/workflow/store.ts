@@ -37,15 +37,6 @@ export class WorkflowStore {
 
   createDefinition(def: WorkflowDefinition): Result<WorkflowDefinition, EidolonError> {
     try {
-      const count = this.db.query("SELECT COUNT(*) as c FROM workflow_definitions").get() as {
-        c: number;
-      };
-      if (count.c >= MAX_WORKFLOW_DEFINITIONS) {
-        return Err(
-          createError(ErrorCode.INVALID_INPUT, `Maximum ${MAX_WORKFLOW_DEFINITIONS} workflow definitions reached`),
-        );
-      }
-
       const parsed = WorkflowDefinitionSchema.safeParse(def);
       if (!parsed.success) {
         return Err(createError(ErrorCode.CONFIG_INVALID, `Invalid workflow definition: ${parsed.error.message}`));
@@ -53,25 +44,46 @@ export class WorkflowStore {
       const valid = parsed.data;
       const now = Date.now();
 
-      this.db
-        .query(
-          `INSERT INTO workflow_definitions (id, name, description, trigger_type, trigger_config, steps, on_failure, max_duration_ms, enabled, created_by, created_at, updated_at, metadata)
-         VALUES ($id, $name, $description, $triggerType, $triggerConfig, $steps, $onFailure, $maxDurationMs, 1, $createdBy, $createdAt, $updatedAt, $metadata)`,
-        )
-        .run({
-          $id: valid.id,
-          $name: valid.name,
-          $description: valid.description,
-          $triggerType: valid.trigger.type,
-          $triggerConfig: JSON.stringify(valid.trigger),
-          $steps: JSON.stringify(valid.steps),
-          $onFailure: JSON.stringify(valid.onFailure),
-          $maxDurationMs: valid.maxDurationMs,
-          $createdBy: valid.createdBy,
-          $createdAt: valid.createdAt || now,
-          $updatedAt: now,
-          $metadata: JSON.stringify(valid.metadata),
-        });
+      // Wrap count+insert in a transaction to prevent TOCTOU race
+      const insertInTransaction = this.db.transaction(() => {
+        const count = this.db.query("SELECT COUNT(*) as c FROM workflow_definitions").get() as {
+          c: number;
+        };
+        if (count.c >= MAX_WORKFLOW_DEFINITIONS) {
+          throw new Error(`__LIMIT_EXCEEDED__`);
+        }
+
+        this.db
+          .query(
+            `INSERT INTO workflow_definitions (id, name, description, trigger_type, trigger_config, steps, on_failure, max_duration_ms, enabled, created_by, created_at, updated_at, metadata)
+           VALUES ($id, $name, $description, $triggerType, $triggerConfig, $steps, $onFailure, $maxDurationMs, 1, $createdBy, $createdAt, $updatedAt, $metadata)`,
+          )
+          .run({
+            $id: valid.id,
+            $name: valid.name,
+            $description: valid.description,
+            $triggerType: valid.trigger.type,
+            $triggerConfig: JSON.stringify(valid.trigger),
+            $steps: JSON.stringify(valid.steps),
+            $onFailure: JSON.stringify(valid.onFailure),
+            $maxDurationMs: valid.maxDurationMs,
+            $createdBy: valid.createdBy,
+            $createdAt: valid.createdAt || now,
+            $updatedAt: now,
+            $metadata: JSON.stringify(valid.metadata),
+          });
+      });
+
+      try {
+        insertInTransaction();
+      } catch (txErr: unknown) {
+        if (txErr instanceof Error && txErr.message === "__LIMIT_EXCEEDED__") {
+          return Err(
+            createError(ErrorCode.INVALID_INPUT, `Maximum ${MAX_WORKFLOW_DEFINITIONS} workflow definitions reached`),
+          );
+        }
+        throw txErr;
+      }
 
       this.logger.info("workflow-store", `Created workflow definition: ${valid.id}`);
       return Ok(valid);
@@ -125,11 +137,6 @@ export class WorkflowStore {
 
   createRun(id: string, definitionId: string, triggerPayload: unknown): Result<WorkflowRun, EidolonError> {
     try {
-      const count = this.db.query("SELECT COUNT(*) as c FROM workflow_runs").get() as { c: number };
-      if (count.c >= MAX_WORKFLOW_RUNS) {
-        return Err(createError(ErrorCode.INVALID_INPUT, `Maximum ${MAX_WORKFLOW_RUNS} workflow runs reached`));
-      }
-
       const now = Date.now();
       const context: WorkflowContext = {
         runId: id,
@@ -139,18 +146,35 @@ export class WorkflowStore {
         variables: {},
       };
 
-      this.db
-        .query(
-          `INSERT INTO workflow_runs (id, definition_id, status, context, current_step_id, started_at, completed_at, error, trigger_payload, created_at)
-         VALUES ($id, $defId, 'pending', $context, NULL, NULL, NULL, NULL, $triggerPayload, $createdAt)`,
-        )
-        .run({
-          $id: id,
-          $defId: definitionId,
-          $context: serializeContext(context),
-          $triggerPayload: JSON.stringify(triggerPayload ?? {}),
-          $createdAt: now,
-        });
+      // Wrap count+insert in a transaction to prevent TOCTOU race
+      const insertInTransaction = this.db.transaction(() => {
+        const count = this.db.query("SELECT COUNT(*) as c FROM workflow_runs").get() as { c: number };
+        if (count.c >= MAX_WORKFLOW_RUNS) {
+          throw new Error("__LIMIT_EXCEEDED__");
+        }
+
+        this.db
+          .query(
+            `INSERT INTO workflow_runs (id, definition_id, status, context, current_step_id, started_at, completed_at, error, trigger_payload, created_at)
+           VALUES ($id, $defId, 'pending', $context, NULL, NULL, NULL, NULL, $triggerPayload, $createdAt)`,
+          )
+          .run({
+            $id: id,
+            $defId: definitionId,
+            $context: serializeContext(context),
+            $triggerPayload: JSON.stringify(triggerPayload ?? {}),
+            $createdAt: now,
+          });
+      });
+
+      try {
+        insertInTransaction();
+      } catch (txErr: unknown) {
+        if (txErr instanceof Error && txErr.message === "__LIMIT_EXCEEDED__") {
+          return Err(createError(ErrorCode.INVALID_INPUT, `Maximum ${MAX_WORKFLOW_RUNS} workflow runs reached`));
+        }
+        throw txErr;
+      }
 
       const run: WorkflowRun = {
         id,
@@ -195,10 +219,11 @@ export class WorkflowStore {
       const completedAt = status === "completed" || status === "failed" || status === "cancelled" ? now : null;
       const startedAt = status === "running" ? now : null;
 
-      // For currentStepId, distinguish between "not provided" (keep existing)
-      // and "explicitly set to null" (clear it). Use a sentinel approach:
+      // For currentStepId and error, distinguish between "not provided" (keep existing)
+      // and "explicitly set to null" (clear it). Use conditional SQL expressions:
       // only include the SET clause when the caller provides the field.
       const hasCurrentStepId = updates !== undefined && "currentStepId" in updates;
+      const hasError = updates !== undefined && "error" in updates;
 
       this.db
         .query(
@@ -207,7 +232,7 @@ export class WorkflowStore {
            current_step_id = ${hasCurrentStepId ? "$currentStepId" : "current_step_id"},
            completed_at = COALESCE($completedAt, completed_at),
            started_at = COALESCE(started_at, $startedAt),
-           error = COALESCE($error, error),
+           error = ${hasError ? "$error" : "error"},
            context = COALESCE($context, context)
          WHERE id = $id`,
         )
@@ -217,7 +242,7 @@ export class WorkflowStore {
           $currentStepId: hasCurrentStepId ? (updates?.currentStepId ?? null) : null,
           $completedAt: completedAt,
           $startedAt: startedAt,
-          $error: updates?.error ?? null,
+          $error: hasError ? (updates?.error ?? null) : null,
           $context: updates?.context ? serializeContext(updates.context) : null,
         });
       return Ok(undefined);
@@ -265,7 +290,7 @@ export class WorkflowStore {
           $runId: result.runId,
           $stepId: result.stepId,
           $status: result.status,
-          $output: result.output !== undefined ? JSON.stringify(result.output) : null,
+          $output: result.output != null ? JSON.stringify(result.output) : null,
           $error: result.error,
           $attempt: result.attempt,
           $startedAt: result.startedAt,
@@ -320,6 +345,19 @@ export class WorkflowStore {
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       return Err(createError(ErrorCode.DB_QUERY_FAILED, `Failed to get step results: ${msg}`, err));
+    }
+  }
+
+  /** Delete all step results for a specific step in a run (used before retry to prevent accumulation). */
+  deleteStepResultsForStep(runId: string, stepId: string): Result<void, EidolonError> {
+    try {
+      this.db
+        .query("DELETE FROM workflow_step_results WHERE run_id = $runId AND step_id = $stepId")
+        .run({ $runId: runId, $stepId: stepId });
+      return Ok(undefined);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return Err(createError(ErrorCode.DB_QUERY_FAILED, `Failed to delete step results: ${msg}`, err));
     }
   }
 

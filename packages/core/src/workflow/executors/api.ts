@@ -23,10 +23,14 @@ const PRIVATE_IP_PATTERNS = [
   /^https?:\/\/localhost[:/]/,
   /^https?:\/\/localhost$/,
   /^https?:\/\/\[::1\]/,
+  /^https?:\/\/\[::\]/,
   /^https?:\/\/169\.254\./,
   /^https?:\/\/\[fd/i,
   /^https?:\/\/\[fe80:/i,
 ];
+
+/** Hostnames that are always blocked (cloud metadata endpoints). */
+const BLOCKED_HOSTNAMES = new Set(["metadata.google.internal", "instance-data"]);
 
 /** Validate that a URL is safe for outbound HTTP requests. */
 function validateUrl(url: string): string | undefined {
@@ -40,6 +44,16 @@ function validateUrl(url: string): string | undefined {
     if (pattern.test(lower)) {
       return "Requests to private/internal IP addresses are not allowed";
     }
+  }
+  // Block cloud metadata hostnames
+  try {
+    const parsed = new URL(url);
+    const hostname = parsed.hostname.replace(/^\[/, "").replace(/]$/, "").toLowerCase();
+    if (BLOCKED_HOSTNAMES.has(hostname)) {
+      return `Blocked hostname: ${hostname} (SSRF protection)`;
+    }
+  } catch {
+    return "Invalid URL";
   }
   return undefined;
 }
@@ -75,6 +89,7 @@ export class ApiStepExecutor implements IStepExecutor {
         headers: headers ?? undefined,
         body: body !== undefined ? JSON.stringify(body) : undefined,
         signal,
+        redirect: "error",
       });
 
       const responseText = await response.text();

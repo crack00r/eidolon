@@ -13,6 +13,7 @@
 
 import { createHmac } from "node:crypto";
 import { hostname } from "node:os";
+import { constantTimeCompare } from "../gateway/server-helpers.ts";
 import type { DatabaseManager } from "../database/manager.ts";
 import type { Logger } from "../logging/logger.ts";
 import {
@@ -43,6 +44,9 @@ const SNAPSHOT_CLEANUP_MULTIPLIER = 2;
 
 /** HMAC algorithm used for message authentication. */
 const HMAC_ALGORITHM = "sha256";
+
+/** Pattern for safe snapshot file names (no path traversal). */
+const SAFE_FILENAME_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/;
 
 // ---------------------------------------------------------------------------
 // ReplicationManager
@@ -98,6 +102,7 @@ export class ReplicationManager {
       this.sendHeartbeat();
       this.checkPeerTimeout();
     }, this.config.heartbeatIntervalMs);
+    this.heartbeatTimer.unref();
 
     // Start snapshot timer (primary sends snapshots periodically)
     if (this.state.role === "primary") {
@@ -107,6 +112,16 @@ export class ReplicationManager {
     // Initialize snapshot receiver for secondary
     if (this.state.role === "secondary" && this.config.snapshotDir) {
       this.snapshotReceiver = createSnapshotReceiver(this.config.snapshotDir, this.logger);
+    }
+
+    // SEC: Warn if replication is enabled without a shared secret.
+    // Without HMAC authentication, any network peer could inject replication messages.
+    if (!this.config.sharedSecret) {
+      this.logger.warn(
+        "start",
+        "Replication is enabled without a sharedSecret -- messages will NOT be authenticated. " +
+          "Set replication.sharedSecret in config to enable HMAC verification.",
+      );
     }
 
     this.logger.info("start", `Replication started as ${this.state.role}`, {
@@ -152,13 +167,8 @@ export class ReplicationManager {
       return false;
     }
     const expected = this.computeHmac(json);
-    // Constant-time comparison to prevent timing attacks
-    if (expected.length !== hmac.length) return false;
-    let result = 0;
-    for (let i = 0; i < expected.length; i++) {
-      result |= (expected.charCodeAt(i) ?? 0) ^ (hmac.charCodeAt(i) ?? 0);
-    }
-    return result === 0;
+    // Use shared constant-time comparison to prevent timing attacks
+    return constantTimeCompare(expected, hmac);
   }
 
   /** Handle an incoming replication message from the peer. */
@@ -250,19 +260,22 @@ export class ReplicationManager {
 
   private sendHeartbeat(): void {
     const uptime = Date.now() - this.startTime;
-    this.send(createHeartbeat(this.nodeId, this.state.role, uptime));
+    this.send(createHeartbeat(this.nodeId, this.state.role, uptime, this.state.failoverCount));
   }
 
   private handleHeartbeat(msg: ReplicationMessage & { type: "heartbeat" }): void {
     this.updatePeerConnected(true);
 
     // Split-brain fencing: if both nodes believe they are primary,
-    // the node with the higher failoverCount demotes itself.
+    // the node with the LOWER failoverCount demotes itself (the peer with
+    // higher failoverCount was auto-promoted more recently and likely has fresher data).
     // On a tie, the node with the lexicographically higher nodeId demotes.
     if (msg.role === "primary" && this.state.role === "primary") {
       const peerNodeId = msg.nodeId;
+      const peerFailoverCount = msg.failoverCount ?? 0;
       const shouldDemoteSelf =
-        this.state.failoverCount > 0 || (this.state.failoverCount === 0 && this.nodeId > peerNodeId);
+        this.state.failoverCount < peerFailoverCount ||
+        (this.state.failoverCount === peerFailoverCount && this.nodeId > peerNodeId);
 
       if (shouldDemoteSelf) {
         this.logger.warn("split-brain", "Detected dual-primary, demoting self", {
@@ -336,6 +349,12 @@ export class ReplicationManager {
   }
 
   private handleSnapshotChunk(fileName: string, chunkIndex: number, totalChunks: number, data: string): void {
+    // SEC: Validate fileName to prevent path traversal attacks from peer messages.
+    // Reject filenames containing path separators or parent directory references.
+    if (!SAFE_FILENAME_PATTERN.test(fileName)) {
+      this.logger.error("snapshot", `Rejected snapshot chunk with unsafe fileName: "${fileName}"`);
+      return;
+    }
     this.snapshotReceiver?.receiveChunk(fileName, chunkIndex, totalChunks, data);
   }
 
@@ -368,13 +387,16 @@ export class ReplicationManager {
     const snap = snapResult.value;
     this.send(createSnapshotStart(this.nodeId, snap.files.length, snap.totalBytes));
 
-    // Send chunks for each file
+    // Send chunks for each file -- abort entire snapshot on any failure
     const checksums: Record<string, string> = {};
+    let aborted = false;
     for (const file of snap.files) {
       const chunkResult = chunkSnapshotFile(file.path, file.fileName);
       if (!chunkResult.ok) {
         this.logger.error("snapshot", `Failed to chunk ${file.fileName}: ${chunkResult.error.message}`);
-        continue;
+        this.send({ type: "error", timestamp: Date.now(), nodeId: this.nodeId, errorCode: "SNAPSHOT_FAILED", errorMessage: `Chunk failure for ${file.fileName}: ${chunkResult.error.message}` });
+        aborted = true;
+        break;
       }
 
       checksums[file.fileName] = file.checksum;
@@ -389,6 +411,11 @@ export class ReplicationManager {
           data: chunk.data,
         });
       }
+    }
+
+    if (aborted) {
+      this.state = { ...this.state, snapshotInProgress: false };
+      return;
     }
 
     this.send(createSnapshotEnd(this.nodeId, checksums));
@@ -419,6 +446,7 @@ export class ReplicationManager {
     this.snapshotTimer = setInterval(() => {
       this.performSnapshot();
     }, this.config.snapshotIntervalMs);
+    this.snapshotTimer.unref();
   }
 
   private stopSnapshotTimer(): void {

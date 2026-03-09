@@ -1,3 +1,7 @@
+// TODO: This file exceeds the 300-line guideline (~420 lines). Split into separate modules:
+// - cognitive-loop-core.ts (main loop, start/stop, energy tracking)
+// - cognitive-loop-handlers.ts (event handler registration and routing)
+
 /**
  * CognitiveLoop — main PEAR (Perceive-Evaluate-Act-Reflect) orchestration cycle.
  *
@@ -40,6 +44,8 @@ export interface CognitiveLoopOptions {
   readonly defaultTokenEstimate?: number;
   /** OpenTelemetry tracer for distributed tracing. Defaults to NoopTracer. */
   readonly tracer?: ITracer;
+  /** IANA timezone for business hours check (e.g. "Europe/Berlin"). Defaults to UTC. */
+  readonly timezone?: string;
 }
 
 export interface CycleResult {
@@ -93,6 +99,7 @@ export class CognitiveLoop {
   private readonly handler: EventHandler | undefined;
   private readonly actionCategories: Record<ActionType, BudgetCategory>;
   private readonly defaultTokenEstimate: number;
+  private readonly timezone: string;
 
   /** Session supervisor for future concurrency management. */
   readonly supervisor: SessionSupervisor;
@@ -134,6 +141,7 @@ export class CognitiveLoop {
       ...options?.actionCategories,
     };
     this.defaultTokenEstimate = options?.defaultTokenEstimate ?? DEFAULT_TOKEN_ESTIMATE;
+    this.timezone = options?.timezone ?? "UTC";
 
     this._running = false;
     this.lastUserActivityAt = Date.now();
@@ -246,7 +254,10 @@ export class CognitiveLoop {
     // Check energy budget (actual user interaction events always proceed)
     const isUserInteraction = event.type.startsWith("user:");
     if (!isUserInteraction && !this.energyBudget.canAfford(category)) {
-      this.eventBus.defer(event.id);
+      const deferResult = this.eventBus.defer(event.id);
+      if (!deferResult.ok) {
+        this.logger.warn("loop", `Failed to defer event ${event.id}: ${deferResult.error.message}`);
+      }
       this.stats.eventsDeferred++;
       this.stats.totalCycles++;
       this.stats.lastCycleAt = Date.now();
@@ -296,7 +307,7 @@ export class CognitiveLoop {
     if (this.handler) {
       try {
         const result = await this.handler(event, priority);
-        tokensUsed = result.tokensUsed ?? this.defaultTokenEstimate;
+        tokensUsed = (Number.isFinite(result.tokensUsed) && result.tokensUsed > 0) ? result.tokensUsed : this.defaultTokenEstimate;
         if (!result.success) {
           handlerSucceeded = false;
           tokensUsed = 0;
@@ -312,9 +323,15 @@ export class CognitiveLoop {
 
     // Only mark as processed on success; defer on failure
     if (handlerSucceeded) {
-      this.eventBus.markProcessed(event.id);
+      const markResult = this.eventBus.markProcessed(event.id);
+      if (!markResult.ok) {
+        this.logger.warn("loop", `Failed to mark event ${event.id} as processed: ${markResult.error.message}`);
+      }
     } else {
-      this.eventBus.defer(event.id);
+      const failDeferResult = this.eventBus.defer(event.id);
+      if (!failDeferResult.ok) {
+        this.logger.warn("loop", `Failed to defer event ${event.id}: ${failDeferResult.error.message}`);
+      }
       // Prevent tight retry loop: delay before continuing to the next cycle
       await this.sleep(ERROR_RETRY_DELAY_MS);
     }
@@ -366,9 +383,18 @@ export class CognitiveLoop {
     return { ...this.stats };
   }
 
-  /** Check if current time is business hours (8-18). */
+  /** Check if current time is business hours (8-18) in the configured timezone. */
   private isBusinessHours(): boolean {
-    const hour = new Date().getHours();
+    const formatter = new Intl.DateTimeFormat("en-US", {
+      timeZone: this.timezone,
+      hour: "numeric",
+      hour12: false,
+    });
+    const parts = formatter.formatToParts(new Date());
+    const hourPart = parts.find((p) => p.type === "hour");
+    const rawHour = hourPart ? Number.parseInt(hourPart.value, 10) : 0;
+    // Some locales with hour12:false return "24" instead of "00" for midnight
+    const hour = rawHour === 24 ? 0 : rawHour;
     return hour >= BUSINESS_HOURS_START && hour < BUSINESS_HOURS_END;
   }
 
@@ -392,12 +418,15 @@ export class CognitiveLoop {
       };
 
       const mainTimer = setTimeout(finish, ms);
-      // Poll for early exit if loop is stopped during sleep
+      // Poll for early exit if loop is stopped during sleep.
+      // unref() prevents this interval from keeping the process alive if
+      // the loop is torn down without calling finish() (e.g., uncaught exception).
       const checkInterval = setInterval(() => {
         if (!this._running) {
           finish();
         }
       }, SLEEP_POLL_INTERVAL_MS);
+      if (typeof checkInterval.unref === "function") checkInterval.unref();
     });
   }
 }

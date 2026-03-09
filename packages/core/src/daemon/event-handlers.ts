@@ -77,7 +77,43 @@ export function buildEventHandler(modules: InitializedModules): EventHandler {
           logger.warn("loop-handler", "WorkflowEngine not available, ignoring workflow event");
           return { success: false, tokensUsed: 0, error: "WorkflowEngine not initialized" };
         }
-        return modules.workflowEngine.processEvent(event);
+        if (typeof event.payload !== "object" || event.payload === null) {
+          logger.warn("loop-handler", `Invalid workflow event payload: expected object, got ${typeof event.payload}`, {
+            eventId: event.id,
+            eventType: event.type,
+          });
+          return { success: false, tokensUsed: 0, error: "Invalid workflow event payload" };
+        }
+        try {
+          const result = await modules.workflowEngine.processEvent(event);
+          if (
+            typeof result !== "object" ||
+            result === null ||
+            typeof result.success !== "boolean" ||
+            typeof result.tokensUsed !== "number"
+          ) {
+            logger.warn("loop-handler", "WorkflowEngine.processEvent returned invalid result", {
+              eventId: event.id,
+              result,
+            });
+            return { success: false, tokensUsed: 0, error: "Invalid processEvent result" };
+          }
+          return result;
+        } catch (err: unknown) {
+          const errMsg = err instanceof Error ? err.message : String(err);
+          logger.error("loop-handler", `WorkflowEngine.processEvent threw: ${errMsg}`, {
+            eventId: event.id,
+            eventType: event.type,
+          });
+          return { success: false, tokensUsed: 0, error: errMsg };
+        }
+      }
+      case "approval:timeout": {
+        logger.warn("loop-handler", "Approval timed out", {
+          eventId: event.id,
+          payload: event.payload,
+        });
+        return { success: true, tokensUsed: 0 };
       }
       case "system:shutdown": {
         logger.info("loop-handler", "System shutdown event received");

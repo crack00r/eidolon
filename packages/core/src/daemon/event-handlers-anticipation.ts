@@ -97,13 +97,22 @@ function parsePayload(raw: unknown): AnticipationSuggestionPayload | null {
   if (typeof obj.channelId !== "string") return null;
   if (typeof obj.patternType !== "string") return null;
 
+  const ALLOWED_PATTERN_TYPES: ReadonlySet<string> = new Set([
+    "meeting_prep",
+    "travel_prep",
+    "health_nudge",
+    "follow_up",
+    "birthday",
+  ]);
+  if (!ALLOWED_PATTERN_TYPES.has(obj.patternType)) return null;
+
   return {
     suggestionId: obj.suggestionId,
     patternType: obj.patternType as AnticipationSuggestionPayload["patternType"],
     title: obj.title,
     body: obj.body,
     channelId: obj.channelId,
-    priority: obj.priority === "critical" || obj.priority === "low" ? obj.priority : "normal",
+    priority: obj.priority === "critical" || obj.priority === "high" || obj.priority === "low" ? obj.priority : "normal",
     actionable: typeof obj.actionable === "boolean" ? obj.actionable : false,
     suggestedAction: typeof obj.suggestedAction === "string" ? obj.suggestedAction : undefined,
     calendarEventId: typeof obj.calendarEventId === "string" ? obj.calendarEventId : undefined,

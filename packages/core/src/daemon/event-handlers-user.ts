@@ -78,8 +78,8 @@ export async function handleUserMessage(
         if (profileSection.length > 0) {
           staticContext = `${profileSection}\nTime: ${new Date().toISOString()}`;
         }
-      } catch {
-        // Fall back to basic static context on profile generation failure
+      } catch (err: unknown) {
+        logger.warn("user-handler", "Profile generation failed", { error: err instanceof Error ? err.message : String(err) });
       }
     }
 

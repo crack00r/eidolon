@@ -81,6 +81,7 @@ export async function discoverPlugins(pluginDir: string, logger: Logger): Promis
 
   const entries = readdirSync(pluginDir, { withFileTypes: true });
   const results: LoadedPlugin[] = [];
+  const failedPlugins: string[] = [];
 
   for (const entry of entries) {
     if (!entry.isDirectory()) continue;
@@ -99,11 +100,13 @@ export async function discoverPlugins(pluginDir: string, logger: Logger): Promis
       const resolvedDir = resolve(dir);
       if (!entryPath.startsWith(resolvedDir + "/") && entryPath !== resolvedDir) {
         logger.warn("plugins:loader", `Plugin ${manifest.name}: path traversal detected in main: ${manifest.main}`);
+        failedPlugins.push(manifest.name);
         continue;
       }
 
       if (!existsSync(entryPath)) {
         logger.warn("plugins:loader", `Plugin ${manifest.name}: entry ${manifest.main} not found`);
+        failedPlugins.push(manifest.name);
         continue;
       }
 
@@ -112,7 +115,16 @@ export async function discoverPlugins(pluginDir: string, logger: Logger): Promis
       logger.info("plugins:loader", `Loaded plugin ${manifest.name}@${manifest.version}`);
     } catch (err) {
       logger.error("plugins:loader", `Failed to load plugin from ${dir}`, err);
+      failedPlugins.push(entry.name);
     }
+  }
+
+  if (failedPlugins.length > 0) {
+    logger.warn(
+      "plugins:loader",
+      `${failedPlugins.length} plugin(s) failed to load: ${failedPlugins.join(", ")}`,
+      { failedCount: failedPlugins.length, failedNames: failedPlugins },
+    );
   }
 
   return results;

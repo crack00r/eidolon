@@ -95,9 +95,15 @@ export class EidolonDaemon {
         this.modules.cognitiveLoop.start().catch((err: unknown) => {
           this.modules.logger?.error(
             "daemon",
-            `CognitiveLoop crashed: ${err instanceof Error ? err.message : String(err)}`,
+            `CognitiveLoop crashed, initiating graceful shutdown: ${err instanceof Error ? err.message : String(err)}`,
             err,
           );
+          this.stop().catch((stopErr: unknown) => {
+            this.modules.logger?.error(
+              "daemon",
+              `Shutdown after CognitiveLoop crash failed: ${stopErr instanceof Error ? stopErr.message : String(stopErr)}`,
+            );
+          });
         });
         this.modules.logger?.info("daemon", "CognitiveLoop started (PEAR cycle active)");
       }

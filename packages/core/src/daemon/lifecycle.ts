@@ -108,8 +108,8 @@ export function registerSignalHandlers(
   const handler = (): void => {
     // Prevent re-entrant shutdown if signal received multiple times
     if (isShuttingDown()) {
-      logger?.info("daemon", "Shutdown already in progress, ignoring repeated signal");
-      return;
+      logger?.info("daemon", "Shutdown already in progress, forcing exit on repeated signal");
+      process.exit(1);
     }
     logger?.info("daemon", "Received shutdown signal");
     void stopFn()
@@ -127,21 +127,14 @@ export function registerSignalHandlers(
   state.handler = handler;
   process.on("SIGTERM", handler);
   process.on("SIGINT", handler);
-
-  // On Windows, SIGTERM/SIGINT have limited support. The "SIGHUP" event
-  // is emitted when the console window is closed.
-  if (process.platform === "win32") {
-    process.on("SIGHUP", handler);
-  }
+  process.on("SIGHUP", handler);
 }
 
 export function removeSignalHandlers(state: SignalHandlerState): void {
   if (!state.bound || !state.handler) return;
   process.removeListener("SIGTERM", state.handler);
   process.removeListener("SIGINT", state.handler);
-  if (process.platform === "win32") {
-    process.removeListener("SIGHUP", state.handler);
-  }
+  process.removeListener("SIGHUP", state.handler);
   state.bound = false;
   state.handler = undefined;
 }
@@ -151,12 +144,12 @@ export function removeSignalHandlers(state: SignalHandlerState): void {
 // ---------------------------------------------------------------------------
 
 export function flushWalCheckpoints(dbManager: DatabaseManager | undefined, logger: Logger | undefined): void {
-  try {
-    if (!dbManager) return;
-    dbManager.memory.exec("PRAGMA wal_checkpoint(TRUNCATE)");
-    dbManager.operational.exec("PRAGMA wal_checkpoint(TRUNCATE)");
-    dbManager.audit.exec("PRAGMA wal_checkpoint(TRUNCATE)");
-  } catch {
-    logger?.warn("daemon", "WAL checkpoint flush failed");
+  if (!dbManager) return;
+  for (const db of [dbManager.memory, dbManager.operational, dbManager.audit]) {
+    try {
+      db.exec("PRAGMA wal_checkpoint(TRUNCATE)");
+    } catch {
+      logger?.warn("daemon", "WAL checkpoint failed for one database");
+    }
   }
 }

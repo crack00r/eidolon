@@ -13,6 +13,7 @@
 
 import type { EidolonError, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
+import { z } from "zod";
 import type { Logger } from "../logging/logger.ts";
 import type { BalancingStrategyName, LoadBalancerStrategy } from "./balancer.ts";
 import { createBalancer } from "./balancer.ts";
@@ -21,6 +22,13 @@ import type { SttResult } from "./stt-client.ts";
 import type { TtsRequest, TtsResult } from "./tts-client.ts";
 import type { GPUWorkerConfig, GPUWorkerInfo } from "./worker.ts";
 import { GPUWorker } from "./worker.ts";
+
+const SttResultSchema: z.ZodType<SttResult> = z.object({
+  text: z.string(),
+  language: z.string(),
+  confidence: z.number(),
+  durationSeconds: z.number(),
+});
 
 // ---------------------------------------------------------------------------
 // Types
@@ -110,6 +118,7 @@ export class GPUWorkerPool {
     this.healthCheckTimer = setInterval(() => {
       void this.checkAllHealth();
     }, this.healthCheckIntervalMs);
+    this.healthCheckTimer.unref();
 
     this.logger.info("health", "Health check monitoring started", {
       intervalMs: this.healthCheckIntervalMs,
@@ -163,6 +172,11 @@ export class GPUWorkerPool {
       return Err(validationError);
     }
 
+    // Capture a local snapshot to avoid races with reconfigure()
+    const workers = this.workers;
+    const maxRetries = this.maxRetries;
+    const balancer = this.balancer;
+
     const body = JSON.stringify({
       text: request.text,
       voice: request.voice,
@@ -173,17 +187,17 @@ export class GPUWorkerPool {
     const triedWorkers = new Set<string>();
     let lastError: EidolonError | null = null;
 
-    for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
-      const workerInfos = this.workers.map((w) => w.getInfo());
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      const workerInfos = workers.map((w) => w.getInfo());
       // Exclude already-tried workers from selection
       const available = workerInfos.filter((w) => !triedWorkers.has(w.name));
-      const selected = this.balancer.select(available, "tts");
+      const selected = balancer.select(available, "tts");
 
       if (selected === null) {
         break;
       }
 
-      const worker = this.workers.find((w) => w.name === selected.name);
+      const worker = workers.find((w) => w.name === selected.name);
       if (!worker) break;
 
       triedWorkers.add(selected.name);
@@ -214,7 +228,7 @@ export class GPUWorkerPool {
       this.logger.warn("tts", `TTS failed on worker '${selected.name}', attempting failover`, {
         error: result.error.message,
         attempt,
-        retriesLeft: this.maxRetries - attempt,
+        retriesLeft: maxRetries - attempt,
       });
     }
 
@@ -232,22 +246,27 @@ export class GPUWorkerPool {
       return Err(validationError);
     }
 
+    // Capture a local snapshot to avoid races with reconfigure()
+    const workers = this.workers;
+    const maxRetries = this.maxRetries;
+    const balancer = this.balancer;
+
     const mime = mimeType ?? "audio/wav";
     const extension = mime.split("/")[1] ?? "wav";
 
     const triedWorkers = new Set<string>();
     let lastError: EidolonError | null = null;
 
-    for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
-      const workerInfos = this.workers.map((w) => w.getInfo());
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      const workerInfos = workers.map((w) => w.getInfo());
       const available = workerInfos.filter((w) => !triedWorkers.has(w.name));
-      const selected = this.balancer.select(available, "stt");
+      const selected = balancer.select(available, "stt");
 
       if (selected === null) {
         break;
       }
 
-      const worker = this.workers.find((w) => w.name === selected.name);
+      const worker = workers.find((w) => w.name === selected.name);
       if (!worker) break;
 
       triedWorkers.add(selected.name);
@@ -261,6 +280,7 @@ export class GPUWorkerPool {
         "/stt/transcribe",
         { method: "POST", body: formData },
         STT_UPLOAD_TIMEOUT_MS,
+        SttResultSchema,
       );
 
       if (result.ok) {
@@ -277,7 +297,7 @@ export class GPUWorkerPool {
       this.logger.warn("stt", `STT failed on worker '${selected.name}', attempting failover`, {
         error: result.error.message,
         attempt,
-        retriesLeft: this.maxRetries - attempt,
+        retriesLeft: maxRetries - attempt,
       });
     }
 

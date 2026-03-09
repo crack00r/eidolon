@@ -61,6 +61,9 @@ export interface VoiceSessionConfig {
 
 const DEFAULT_MAX_AUDIO_BUFFER = 1024 * 1024; // 1 MB
 const MAX_CHUNK_SIZE = 64 * 1024; // 64 KB per individual chunk
+const MAX_JSON_MESSAGE_SIZE = 64 * 1024; // 64 KB max JSON message size
+/** Hard upper limit for total audio buffer to prevent memory DoS. */
+const MAX_AUDIO_BUFFER_SIZE = 50 * 1024 * 1024; // 50 MB
 
 // ---------------------------------------------------------------------------
 // VoiceWsHandler
@@ -79,6 +82,7 @@ export class VoiceWsHandler {
   private audioBuffer: Uint8Array[] = [];
   private audioBufferSize = 0;
   private disposed = false;
+  private flushing = false;
 
   constructor(ws: VoiceWebSocket, pool: GPUWorkerPool, logger: Logger, config?: VoiceSessionConfig) {
     this.ws = ws;
@@ -125,6 +129,10 @@ export class VoiceWsHandler {
 
     // Text data: JSON control message
     if (typeof data === "string") {
+      if (data.length > MAX_JSON_MESSAGE_SIZE) {
+        this.sendError(`JSON message too large (${data.length} bytes, max ${MAX_JSON_MESSAGE_SIZE})`);
+        return;
+      }
       this.handleJsonMessage(data);
       return;
     }
@@ -160,6 +168,14 @@ export class VoiceWsHandler {
       }
     }
 
+    // Reject if total buffer would exceed hard limit (memory DoS protection)
+    if (this.audioBufferSize + chunk.byteLength > MAX_AUDIO_BUFFER_SIZE) {
+      this.logger.error("audio-buffer", `Audio buffer exceeded ${MAX_AUDIO_BUFFER_SIZE} bytes, closing connection`);
+      this.sendError(`Audio buffer exceeded maximum size (${MAX_AUDIO_BUFFER_SIZE} bytes)`);
+      this.ws.close(1009, "Audio buffer too large");
+      return;
+    }
+
     this.audioBuffer.push(chunk);
     this.audioBufferSize += chunk.byteLength;
 
@@ -172,41 +188,50 @@ export class VoiceWsHandler {
   }
 
   private async flushAudioForStt(): Promise<void> {
+    if (this.flushing) return;
     if (this.audioBuffer.length === 0) return;
 
-    // Concatenate audio chunks
-    const totalSize = this.audioBufferSize;
-    const combined = new Uint8Array(totalSize);
-    let offset = 0;
-    for (const chunk of this.audioBuffer) {
-      combined.set(chunk, offset);
-      offset += chunk.byteLength;
-    }
+    this.flushing = true;
+    try {
+      // Concatenate audio chunks
+      const totalSize = this.audioBufferSize;
+      const combined = new Uint8Array(totalSize);
+      let offset = 0;
+      for (const chunk of this.audioBuffer) {
+        combined.set(chunk, offset);
+        offset += chunk.byteLength;
+      }
 
-    this.audioBuffer = [];
-    this.audioBufferSize = 0;
+      this.audioBuffer = [];
+      this.audioBufferSize = 0;
 
-    // Transition to processing
-    this.stateMachine.transition("speech_end");
+      // Transition to processing
+      this.stateMachine.transition("speech_end");
 
-    // Send to STT
-    const sttResult = await this.pool.stt(combined, "audio/opus");
+      // Send to STT
+      const sttResult = await this.pool.stt(combined, "audio/opus");
 
-    if (this.disposed) return;
+      if (this.disposed) return;
 
-    if (sttResult.ok) {
-      const msg: ServerTranscriptMessage = {
-        type: "transcript",
-        text: sttResult.value.text,
-        final: true,
-      };
-      this.sendJson(msg);
+      // If barge-in occurred during STT, skip the processing_complete transition
+      if (this.stateMachine.state !== "processing") return;
 
-      // After STT completes, transition to idle (processing complete)
-      this.stateMachine.transition("processing_complete");
-    } else {
-      this.sendError(`STT failed: ${sttResult.error.message}`);
-      this.stateMachine.transition("processing_complete");
+      if (sttResult.ok) {
+        const msg: ServerTranscriptMessage = {
+          type: "transcript",
+          text: sttResult.value.text,
+          final: true,
+        };
+        this.sendJson(msg);
+
+        // After STT completes, transition to idle (processing complete)
+        this.stateMachine.transition("processing_complete");
+      } else {
+        this.sendError(`STT failed: ${sttResult.error.message}`);
+        this.stateMachine.transition("processing_complete");
+      }
+    } finally {
+      this.flushing = false;
     }
   }
 

@@ -49,6 +49,8 @@ const SENSITIVE_KEY_PATTERNS: readonly RegExp[] = [
   /private[_-]?key/i,
   /access[_-]?key/i,
   /session[_-]?id/i,
+  /cookie/i,
+  /connection[_-]?string/i,
 ];
 
 /** Placeholder used to replace redacted values. */
@@ -60,8 +62,14 @@ const REDACTED = "[REDACTED]";
 function redactSensitiveKeys(data: Record<string, unknown>): Record<string, unknown> {
   const result: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(data)) {
-    if (SENSITIVE_KEY_PATTERNS.some((p) => p.test(key))) {
-      result[key] = REDACTED;
+    const isSensitive = SENSITIVE_KEY_PATTERNS.some((p) => p.test(key));
+    if (isSensitive) {
+      // Redact arrays element-wise to preserve structure, scalars as a single REDACTED
+      if (Array.isArray(value)) {
+        result[key] = value.map(() => REDACTED);
+      } else {
+        result[key] = REDACTED;
+      }
     } else if (Array.isArray(value)) {
       result[key] = value.map((item) =>
         item !== null && typeof item === "object" && !Array.isArray(item)
@@ -134,7 +142,7 @@ function writeEntry(entry: LogEntry, format: "json" | "pretty", rotator?: LogRot
   process.stdout.write(`${line}\n`);
   if (rotator) {
     // Fire-and-forget; rotation errors should not crash the caller
-    rotator.writeLine(line).catch(() => {});
+    rotator.writeLine(line).catch((err) => { console.error("[eidolon] Log write failed:", err instanceof Error ? err.message : String(err)); });
   }
 }
 

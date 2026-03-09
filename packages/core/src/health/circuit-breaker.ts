@@ -15,6 +15,8 @@ import type { Logger } from "../logging/logger.ts";
 export class CircuitBreaker {
   private state: CircuitState = "closed";
   private failures = 0;
+  private halfOpenAttempts = 0;
+  private probeInFlight = false;
   private lastFailureAt: number | undefined;
   private lastSuccessAt: number | undefined;
   private readonly config: CircuitBreakerConfig;
@@ -32,6 +34,7 @@ export class CircuitBreaker {
       const nextProbe = (this.lastFailureAt ?? 0) + this.config.resetTimeoutMs;
 
       if (now >= nextProbe) {
+        this.halfOpenAttempts = 0;
         this.transitionTo("half_open");
       } else {
         return Err(
@@ -43,6 +46,30 @@ export class CircuitBreaker {
       }
     }
 
+    // Enforce halfOpenMaxAttempts: if exceeded, trip back to open
+    if (this.state === "half_open") {
+      if (this.probeInFlight) {
+        return Err(
+          createError(
+            ErrorCode.CIRCUIT_OPEN,
+            `Circuit breaker '${this.config.name}' is half-open with a probe already in flight`,
+          ),
+        );
+      }
+      this.halfOpenAttempts += 1;
+      if (this.halfOpenAttempts > this.config.halfOpenMaxAttempts) {
+        this.transitionTo("open");
+        this.lastFailureAt = Date.now();
+        return Err(
+          createError(
+            ErrorCode.CIRCUIT_OPEN,
+            `Circuit breaker '${this.config.name}' exceeded max half-open attempts (${this.config.halfOpenMaxAttempts})`,
+          ),
+        );
+      }
+      this.probeInFlight = true;
+    }
+
     try {
       const result = await fn();
       this.onSuccess();
@@ -51,6 +78,8 @@ export class CircuitBreaker {
       this.onFailure();
       const message = err instanceof Error ? err.message : String(err);
       return Err(createError(ErrorCode.TIMEOUT, `Circuit '${this.config.name}' call failed: ${message}`, err));
+    } finally {
+      this.probeInFlight = false;
     }
   }
 
@@ -67,6 +96,11 @@ export class CircuitBreaker {
         : {}),
     };
     return status;
+  }
+
+  /** Record an external failure (e.g. when the wrapped call returns an error result). */
+  recordFailure(): void {
+    this.onFailure();
   }
 
   /** Manually reset to closed state. */

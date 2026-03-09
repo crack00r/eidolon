@@ -3,6 +3,12 @@
  *
  * Rotates log files when they exceed a configurable size limit.
  * Files are numbered: current -> .1 -> .2 -> ... -> .maxFiles (deleted).
+ *
+ * CONCURRENCY NOTE: The promise-based mutex in writeLine() serializes concurrent
+ * writes within a single process. However, rotation is NOT safe across multiple
+ * OS processes writing to the same log file simultaneously -- the rename/unlink
+ * operations are not atomic across processes. If multi-process logging is needed,
+ * use an external log aggregator or per-process log files.
  */
 
 import { existsSync, renameSync, statSync, unlinkSync } from "node:fs";
@@ -70,7 +76,7 @@ export class LogRotator {
   /** Shift existing rotated files and move the current file to .1 */
   private rotate(): void {
     // Shift existing rotated files: .N -> .N+1, deleting beyond maxFiles
-    for (let i = this.config.maxFiles - 1; i >= 1; i--) {
+    for (let i = this.config.maxFiles; i >= 1; i--) {
       const from = `${this.currentPath}.${String(i)}`;
       const to = `${this.currentPath}.${String(i + 1)}`;
 

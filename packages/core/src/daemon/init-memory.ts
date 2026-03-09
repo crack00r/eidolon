@@ -132,6 +132,7 @@ export function buildMemorySteps(modules: InitializedModules): InitStep[] {
             }
           }
         }, intervalMs);
+        modules.documentIndexerInterval.unref();
 
         const watcher = new DocumentWatcher(indexer, logger, {
           fileTypes: [...indexingConfig.fileTypes],

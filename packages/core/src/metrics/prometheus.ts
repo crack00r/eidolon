@@ -11,6 +11,13 @@
  *
  * The `formatPrometheus()` function outputs standard Prometheus exposition format
  * (text/plain; version=0.0.4) suitable for scraping by Prometheus or compatible tools.
+ *
+ * LIMITATION: All metrics are held in-memory and reset to zero on daemon restart.
+ * Counter values are therefore NOT monotonically increasing across process restarts.
+ * Prometheus handles this via its `rate()` and `increase()` functions which detect
+ * counter resets, but raw counter values should not be compared across restarts.
+ * The `reset()` method is exposed for testing only and should not be called in
+ * production outside of test fixtures.
  */
 
 // ---------------------------------------------------------------------------
@@ -265,7 +272,7 @@ export class MetricsRegistry {
 /** Format a counter metric into Prometheus exposition format lines. */
 function formatCounter(metric: CounterMetric): string {
   const lines: string[] = [];
-  lines.push(`# HELP ${metric.name} ${metric.help}`);
+  lines.push(`# HELP ${metric.name} ${escapeHelp(metric.help)}`);
   lines.push(`# TYPE ${metric.name} counter`);
 
   for (const [label, value] of metric.values.entries()) {
@@ -284,7 +291,7 @@ function formatCounter(metric: CounterMetric): string {
 /** Format a gauge metric into Prometheus exposition format lines. */
 function formatGauge(metric: GaugeMetric): string {
   const lines: string[] = [];
-  lines.push(`# HELP ${metric.name} ${metric.help}`);
+  lines.push(`# HELP ${metric.name} ${escapeHelp(metric.help)}`);
   lines.push(`# TYPE ${metric.name} gauge`);
 
   for (const [label, value] of metric.values.entries()) {
@@ -302,7 +309,7 @@ function formatGauge(metric: GaugeMetric): string {
 /** Format a histogram metric into Prometheus exposition format lines. */
 function formatHistogram(metric: HistogramMetric): string {
   const lines: string[] = [];
-  lines.push(`# HELP ${metric.name} ${metric.help}`);
+  lines.push(`# HELP ${metric.name} ${escapeHelp(metric.help)}`);
   lines.push(`# TYPE ${metric.name} histogram`);
 
   // Bucket counts are already stored cumulatively by observeLoopCycleTime
@@ -322,6 +329,11 @@ function formatHistogram(metric: HistogramMetric): string {
 /** Escape special characters in label values per Prometheus spec. */
 function escapeLabel(value: string): string {
   return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n");
+}
+
+/** Escape backslashes and newlines in HELP text per Prometheus exposition format. */
+function escapeHelp(value: string): string {
+  return value.replace(/\\/g, "\\\\").replace(/\n/g, "\\n");
 }
 
 /**

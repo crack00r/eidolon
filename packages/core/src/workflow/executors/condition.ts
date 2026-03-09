@@ -138,14 +138,26 @@ function compare(left: unknown, op: string, right: unknown): boolean {
       return left === right || String(left) === String(right);
     case "!=":
       return left !== right && String(left) !== String(right);
-    case ">":
-      return Number(left) > Number(right);
-    case "<":
-      return Number(left) < Number(right);
-    case ">=":
-      return Number(left) >= Number(right);
-    case "<=":
-      return Number(left) <= Number(right);
+    case ">": {
+      const l = Number(left), r = Number(right);
+      if (Number.isNaN(l) || Number.isNaN(r)) return false;
+      return l > r;
+    }
+    case "<": {
+      const l = Number(left), r = Number(right);
+      if (Number.isNaN(l) || Number.isNaN(r)) return false;
+      return l < r;
+    }
+    case ">=": {
+      const l = Number(left), r = Number(right);
+      if (Number.isNaN(l) || Number.isNaN(r)) return false;
+      return l >= r;
+    }
+    case "<=": {
+      const l = Number(left), r = Number(right);
+      if (Number.isNaN(l) || Number.isNaN(r)) return false;
+      return l <= r;
+    }
     case "contains":
       return String(left).includes(String(right));
     default:

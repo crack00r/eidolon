@@ -17,6 +17,10 @@ export async function handleResearchStarted(
   logger: Logger,
 ): Promise<EventHandlerResult> {
   try {
+    if (typeof event.payload !== "object" || event.payload === null) {
+      logger.warn("loop-handler", "Invalid research:started payload: not an object", { eventId: event.id });
+      return { success: false, tokensUsed: 0, error: "Invalid payload: not an object" };
+    }
     const rawPayload = event.payload as Record<string, unknown>;
     const researchId = typeof rawPayload.researchId === "string" ? rawPayload.researchId : undefined;
     const query = typeof rawPayload.query === "string" ? rawPayload.query : undefined;

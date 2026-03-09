@@ -6,6 +6,7 @@
  */
 
 import type { EidolonConfig } from "@eidolon/protocol";
+import { getNestedValue } from "../config/utils.ts";
 import type { GPUWorkerPoolConfig } from "../gpu/pool.ts";
 import type { GPUWorkerConfig } from "../gpu/worker.ts";
 import type { Logger } from "../logging/logger.ts";
@@ -14,10 +15,13 @@ import type { InitializedModules } from "./types.ts";
 /**
  * Top-level config paths that support hot-reload.
  * Changes to any key NOT listed here trigger a restart warning.
+ *
+ * NOTE: "brain.accounts" and "security.policies" are NOT listed here because
+ * they are blocked by watcher.ts LOCKED_FIELDS before config-reload ever runs.
+ * Including them would be misleading since the watcher rejects those changes.
  */
 const HOT_RELOADABLE_PATHS: ReadonlySet<string> = new Set([
   "identity",
-  "brain.accounts",
   "brain.model",
   "loop.energyBudget",
   "loop.rest",
@@ -26,19 +30,8 @@ const HOT_RELOADABLE_PATHS: ReadonlySet<string> = new Set([
   "learning.sources",
   "learning.relevance",
   "gpu.workers",
-  "security.policies",
   "logging.level",
 ]);
-
-/** Resolve a dot-separated path to a value in a nested object. */
-function getNestedValue(obj: Record<string, unknown>, path: string): unknown {
-  let current: unknown = obj;
-  for (const segment of path.split(".")) {
-    if (current === null || current === undefined || typeof current !== "object") return undefined;
-    current = (current as Record<string, unknown>)[segment];
-  }
-  return current;
-}
 
 /**
  * All top-level config paths that exist in EidolonConfig.
@@ -89,17 +82,10 @@ const ALL_CONFIG_SECTIONS: readonly string[] = [
   "llm",
 ];
 
-/**
- * Check if a section value changed between old and new config.
- *
- * JSON.stringify comparison is safe here because both oldConfig and newConfig
- * are produced by Zod's .parse(), which always outputs properties in schema-
- * declaration order. This guarantees consistent key ordering across comparisons.
- */
 function sectionChanged(oldConfig: Record<string, unknown>, newConfig: Record<string, unknown>, path: string): boolean {
   const oldVal = getNestedValue(oldConfig, path);
   const newVal = getNestedValue(newConfig, path);
-  return JSON.stringify(oldVal) !== JSON.stringify(newVal);
+  return !Bun.deepEquals(oldVal, newVal);
 }
 
 /**
@@ -110,7 +96,8 @@ export function buildConfigReloadHandler(
   modules: InitializedModules,
   logger: Logger,
 ): (newConfig: EidolonConfig) => void {
-  return (newConfig: EidolonConfig) => {
+  return (incoming: EidolonConfig) => {
+    let newConfig = incoming;
     const oldConfig = modules.config;
     if (!oldConfig) {
       // First config load -- just store it
@@ -149,6 +136,16 @@ export function buildConfigReloadHandler(
       );
     }
 
+    // Resolve $secret references before applying
+    if (modules.secretStore) {
+      const resolved = modules.secretStore.resolveSecretRefs(newConfig);
+      if (resolved.ok) {
+        newConfig = resolved.value;
+      } else {
+        logger.warn("config-reload", `Secret resolution failed: ${resolved.error.message}`);
+      }
+    }
+
     // Apply hot-reloadable changes
     modules.config = newConfig;
 
@@ -180,6 +177,10 @@ export function buildConfigReloadHandler(
     // DiscoveryEngine reads sources from config on each crawl cycle
 
     // 8. gpu.workers -- reconfigure the worker pool with new workers/settings
+    // NOTE: The config watcher pipeline must resolve secrets (e.g. w.token)
+    // before passing the config to reload handlers. If secrets are still
+    // unresolved placeholders at this point, the worker will be configured
+    // without authentication and health checks will fail.
     if (sectionChanged(oldRecord, newRecord, "gpu.workers") && modules.gpuWorkerPool) {
       const workers = newConfig.gpu.workers;
       const poolWorkers: GPUWorkerConfig[] = workers.map((w) => ({

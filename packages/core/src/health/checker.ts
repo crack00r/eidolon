@@ -91,6 +91,7 @@ export class HealthChecker {
         this.logger.error("health", "Periodic health check failed", err);
       });
     }, intervalMs);
+    this.periodicTimer.unref();
     this.logger.debug("health", `Started periodic health checks every ${intervalMs}ms`);
     return this;
   }

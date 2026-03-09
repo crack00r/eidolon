@@ -232,6 +232,19 @@ export class WorkflowEngine implements IWorkflowEngine {
     });
   }
 
+  /** Hard-stop safety net: clear ALL timers and abort controllers unconditionally. */
+  dispose(): void {
+    for (const timer of this.retryTimers.values()) {
+      clearTimeout(timer);
+    }
+    this.retryTimers.clear();
+
+    for (const controller of this.abortControllers.values()) {
+      controller.abort();
+    }
+    this.abortControllers.clear();
+  }
+
   /** Cancel all active runs (for shutdown). */
   cancelAllActive(): void {
     for (const status of ["running", "waiting", "retrying"] as const) {
@@ -341,29 +354,39 @@ export class WorkflowEngine implements IWorkflowEngine {
 
       const retryKey = `${runId}:${stepId}`;
       const retryTimer = setTimeout(() => {
-        this.retryTimers.delete(retryKey);
-        const newResultId = randomUUID();
-        this.store.createStepResult({
-          id: newResultId,
-          runId,
-          stepId,
-          status: "pending",
-          output: null,
-          error: null,
-          attempt: currentAttempt + 1,
-          startedAt: null,
-          completedAt: null,
-          tokensUsed: 0,
-        });
-        this.eventBus.publish(
-          "workflow:step_ready",
-          { runId, stepId },
-          {
-            priority: "normal",
-            source: "workflow-engine",
-          },
-        );
+        try {
+          this.retryTimers.delete(retryKey);
+          // Delete previous failed attempt to prevent unbounded accumulation
+          this.store.deleteStepResultsForStep(runId, stepId);
+          const newResultId = randomUUID();
+          this.store.createStepResult({
+            id: newResultId,
+            runId,
+            stepId,
+            status: "pending",
+            output: null,
+            error: null,
+            attempt: currentAttempt + 1,
+            startedAt: null,
+            completedAt: null,
+            tokensUsed: 0,
+          });
+          this.eventBus.publish(
+            "workflow:step_ready",
+            { runId, stepId },
+            {
+              priority: "normal",
+              source: "workflow-engine",
+            },
+          );
+        } catch (err: unknown) {
+          this.logger.error("workflow-engine", `Error in retry callback for ${runId}:${stepId}`, err);
+          this.store.updateRunStatus(runId, "failed", {
+            error: `Retry failed: ${err instanceof Error ? err.message : String(err)}`,
+          });
+        }
       }, backoff);
+      retryTimer.unref();
       this.retryTimers.set(retryKey, retryTimer);
 
       return { success: true, tokensUsed: 0 };

@@ -6,9 +6,17 @@
 
 import type { EidolonError, Result } from "@eidolon/protocol";
 import { createError, Err, ErrorCode, Ok } from "@eidolon/protocol";
+import { z } from "zod";
 import type { Logger } from "../logging/logger.ts";
 import type { GPUManager } from "./manager.ts";
 import { ALLOWED_STT_MIME_TYPES, MAX_STT_AUDIO_BYTES, STT_UPLOAD_TIMEOUT_MS } from "./pool-validation.ts";
+
+const SttResultSchema: z.ZodType<SttResult> = z.object({
+  text: z.string(),
+  language: z.string(),
+  confidence: z.number(),
+  durationSeconds: z.number(),
+});
 
 // ---------------------------------------------------------------------------
 // Types
@@ -75,6 +83,7 @@ export class STTClient {
         body: formData,
       },
       STT_UPLOAD_TIMEOUT_MS,
+      SttResultSchema,
     );
 
     if (!result.ok) {
