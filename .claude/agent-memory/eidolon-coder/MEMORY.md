@@ -161,3 +161,15 @@
 - CI uses `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` secrets
 - Desktop typecheck: `pnpm --filter @eidolon/desktop typecheck` (uses svelte-check)
 - Pre-existing svelte-check errors in `src/routes/memory/+page.svelte` (unused vars) - not blocking
+
+## Round 6 Audit Fixes Applied
+- KG relations.ts: delete() and updateConfidence() now wrap existence check + mutation in a single transaction (TOCTOU fix)
+- store-batch.ts: removed console.warn fallback; only logger.warn is used (no-op if logger not provided)
+- engine-dag.ts: retry_from has MAX_RETRY_FROM_ATTEMPTS=3; counts failed step results to detect infinite loops
+- engine.ts: retry setTimeout callback wrapped in try/catch, logs errors and fails the run on exception
+- store-rows.ts: `safeParseJson()` helper logs malformed JSON with column name and row ID (uses console.error as no logger available)
+- config-channels.ts: all `SecretRefSchema.or(z.string())` replaced with `stringOrSecret()` (enforces min(1) on strings)
+- llm.ts: LLMStreamEvent.usage properties marked readonly
+- shutdown.ts: timeout timer stored and cleared via `.finally()` when teardownModules completes
+- tts-providers.ts: `sanitizeTtsText()` strips control chars and limits to MAX_TTS_TEXT_LENGTH=10000
+- voice-ws-handler.ts: MAX_AUDIO_BUFFER_SIZE=50MB hard limit; closes connection with 1009 if exceeded
