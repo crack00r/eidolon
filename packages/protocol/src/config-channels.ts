@@ -22,8 +22,14 @@ export const WhatsAppConfigSchema = z.object({
   notifyOnDiscovery: z.boolean().default(true),
   dndSchedule: z
     .object({
-      start: z.string().regex(/^\d{2}:\d{2}$/, "Must be in HH:MM format").default("22:00"),
-      end: z.string().regex(/^\d{2}:\d{2}$/, "Must be in HH:MM format").default("07:00"),
+      start: z
+        .string()
+        .regex(/^\d{2}:\d{2}$/, "Must be in HH:MM format")
+        .default("22:00"),
+      end: z
+        .string()
+        .regex(/^\d{2}:\d{2}$/, "Must be in HH:MM format")
+        .default("07:00"),
     })
     .optional(),
 });
@@ -75,8 +81,14 @@ export const ChannelConfigSchema = z.object({
       notifyOnDiscovery: z.boolean().default(true),
       dndSchedule: z
         .object({
-          start: z.string().regex(/^\d{2}:\d{2}$/, "Must be in HH:MM format").default("22:00"),
-          end: z.string().regex(/^\d{2}:\d{2}$/, "Must be in HH:MM format").default("07:00"),
+          start: z
+            .string()
+            .regex(/^\d{2}:\d{2}$/, "Must be in HH:MM format")
+            .default("22:00"),
+          end: z
+            .string()
+            .regex(/^\d{2}:\d{2}$/, "Must be in HH:MM format")
+            .default("07:00"),
         })
         .optional(),
     })

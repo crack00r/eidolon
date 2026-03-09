@@ -42,7 +42,6 @@ import {
   type OllamaProviderSchema,
   PluginConfigSchema,
   PrivacyConfigSchema,
-  ReplicationConfigRefinedSchema,
   ReplicationConfigSchema,
   SecurityConfigSchema,
   TelemetryConfigSchema,
@@ -118,42 +117,41 @@ export const ServerConnectionSchema = z.object({
   tls: z.boolean().default(false),
 });
 
-export const EidolonConfigSchema = z.object({
-  identity: z.object({
-    name: z.string().min(1).default("Eidolon"),
-    ownerName: z.string(),
-  }),
-  role: EidolonRoleSchema.default("server"),
-  server: ServerConnectionSchema.optional(),
-  brain: BrainConfigSchema,
-  loop: LoopConfigSchema.default({}),
-  memory: MemoryConfigSchema.default({}),
-  learning: LearningConfigSchema.default({}),
-  channels: ChannelConfigSchema.default({}),
-  gateway: GatewayConfigSchema.default({}),
-  gpu: GpuConfigSchema.default({}),
-  security: SecurityConfigSchema.default({}),
-  privacy: PrivacyConfigSchema.default({}),
-  digest: DigestConfigSchema.default({}),
-  anticipation: AnticipationConfigSchema.default({}),
-  calendar: CalendarConfigSchema.default({}),
-  homeAutomation: HomeAutomationConfigSchema.default({}),
-  database: DatabaseConfigSchema.default({}),
-  logging: LoggingConfigSchema.default({}),
-  telemetry: TelemetryConfigSchema.default({}),
-  plugins: PluginConfigSchema.default({}),
-  llm: LLMConfigSchema.default({}),
-  browser: BrowserConfigSchema.default({}),
-  replication: ReplicationConfigSchema.default({}),
-  users: UsersConfigSchema,
-  daemon: DaemonConfigSchema.default({}),
-}).refine(
-  (data) => !data.replication.enabled || data.replication.sharedSecret.length >= 16,
-  {
+export const EidolonConfigSchema = z
+  .object({
+    identity: z.object({
+      name: z.string().min(1).default("Eidolon"),
+      ownerName: z.string(),
+    }),
+    role: EidolonRoleSchema.default("server"),
+    server: ServerConnectionSchema.optional(),
+    brain: BrainConfigSchema,
+    loop: LoopConfigSchema.default({}),
+    memory: MemoryConfigSchema.default({}),
+    learning: LearningConfigSchema.default({}),
+    channels: ChannelConfigSchema.default({}),
+    gateway: GatewayConfigSchema.default({}),
+    gpu: GpuConfigSchema.default({}),
+    security: SecurityConfigSchema.default({}),
+    privacy: PrivacyConfigSchema.default({}),
+    digest: DigestConfigSchema.default({}),
+    anticipation: AnticipationConfigSchema.default({}),
+    calendar: CalendarConfigSchema.default({}),
+    homeAutomation: HomeAutomationConfigSchema.default({}),
+    database: DatabaseConfigSchema.default({}),
+    logging: LoggingConfigSchema.default({}),
+    telemetry: TelemetryConfigSchema.default({}),
+    plugins: PluginConfigSchema.default({}),
+    llm: LLMConfigSchema.default({}),
+    browser: BrowserConfigSchema.default({}),
+    replication: ReplicationConfigSchema.default({}),
+    users: UsersConfigSchema,
+    daemon: DaemonConfigSchema.default({}),
+  })
+  .refine((data) => !data.replication.enabled || data.replication.sharedSecret.length >= 16, {
     message: "replication.sharedSecret must be at least 16 characters when replication is enabled",
     path: ["replication", "sharedSecret"],
-  },
-);
+  });
 
 // ---------------------------------------------------------------------------
 // Inferred Types
