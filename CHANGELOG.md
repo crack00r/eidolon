@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > [release-please](https://github.com/googleapis/release-please).
 > Do not edit manually.
 
+## [0.2.3](https://github.com/crack00r/eidolon/compare/v0.2.2...v0.2.3) (2026-03-09)
+
+
+### Bug Fixes
+
+* **ci:** invalidate Rust cache to fix Linux GLIBC_2.39 build failure ([be0c917](https://github.com/crack00r/eidolon/commit/be0c917027a1f6b003a316fd777e84a5095e130f))
+
 ## [0.2.2](https://github.com/crack00r/eidolon/compare/v0.2.1...v0.2.2) (2026-03-09)
 
 
