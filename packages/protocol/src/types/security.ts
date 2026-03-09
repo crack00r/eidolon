@@ -11,7 +11,7 @@ export interface ActionClassification {
   readonly requiresApproval: boolean;
 }
 
-export type AuditResult = "success" | "failure" | "denied";
+export type AuditResult = "success" | "failure" | "denied" | "started";
 
 export interface AuditEvent {
   readonly action: string;

@@ -312,3 +312,15 @@ export const ReplicationConfigSchema = z.object({
   /** Shared secret for HMAC message authentication between nodes. Must match on both peers. */
   sharedSecret: z.string().default(""),
 });
+
+/**
+ * Refined replication schema that enforces sharedSecret length when enabled.
+ * Use this for runtime validation; use ReplicationConfigSchema for config composition.
+ */
+export const ReplicationConfigRefinedSchema = ReplicationConfigSchema.refine(
+  (data) => !data.enabled || data.sharedSecret.length >= 16,
+  {
+    message: "sharedSecret must be at least 16 characters when replication is enabled",
+    path: ["sharedSecret"],
+  },
+);

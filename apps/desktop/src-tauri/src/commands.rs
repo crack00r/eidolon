@@ -199,6 +199,13 @@ pub fn start_daemon(
         "--foreground".to_string(),
     ];
     if !config_path.is_empty() {
+        // Validate config_path: reject path traversal and non-JSON files
+        if config_path.contains("..") {
+            return Err("Invalid config_path: path traversal ('..') is not allowed".into());
+        }
+        if !config_path.ends_with(".json") {
+            return Err("Invalid config_path: must end with '.json'".into());
+        }
         args.push("--config".to_string());
         args.push(config_path);
     }

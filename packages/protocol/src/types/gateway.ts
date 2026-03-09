@@ -2,6 +2,8 @@
  * Gateway types for JSON-RPC client communication over WebSocket.
  */
 
+import type { ApprovalStatus } from "./security.ts";
+
 // ---------------------------------------------------------------------------
 // RPC methods (client → server requests that expect a response)
 // ---------------------------------------------------------------------------
@@ -294,7 +296,7 @@ export interface AutomationDeleteParams {
 
 export interface ApprovalListParams {
   /** Filter by status. If omitted, returns "pending" requests. */
-  readonly status?: string;
+  readonly status?: ApprovalStatus;
   readonly limit?: number;
 }
 

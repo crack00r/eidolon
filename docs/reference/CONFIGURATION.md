@@ -257,7 +257,7 @@ The following reflects the actual Zod schema in `packages/protocol/src/config.ts
       "maxBlockMs": 3600000             // positive int, default 3600000
     },
     "auth": {                             // REQUIRED
-      "type": "token",                   // "token" | "none", default "token"
+      "type": "none",                    // "token" | "none", default "none"
       "token": { "$secret": "GATEWAY_TOKEN" }  // string | SecretRef (required when type="token")
     },
     "webhooks": {                         // default {} (v1.1+)
@@ -563,7 +563,7 @@ The following configuration sections support hot-reload (no daemon restart requi
 | `gpu.workers` | Yes | Workers re-discovered |
 | `homeAutomation` | Yes | Domain policies and scenes updated |
 | `calendar` | Yes | Providers re-synced |
-| `security.policies` | Yes | |
+| `security.policies` | No | Requires restart (entire `security` section is locked) |
 | `logging.level` | Yes | |
 | `telemetry` | No | Requires restart |
 | `plugins` | No | Requires restart |

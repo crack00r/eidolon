@@ -42,6 +42,7 @@ import {
   type OllamaProviderSchema,
   PluginConfigSchema,
   PrivacyConfigSchema,
+  ReplicationConfigRefinedSchema,
   ReplicationConfigSchema,
   SecurityConfigSchema,
   TelemetryConfigSchema,
@@ -96,6 +97,7 @@ export {
   OllamaProviderSchema,
   PluginConfigSchema,
   PrivacyConfigSchema,
+  ReplicationConfigRefinedSchema,
   ReplicationConfigSchema,
   SecurityConfigSchema,
   TelemetryConfigSchema,
@@ -110,7 +112,7 @@ export const EidolonRoleSchema = z.enum(["server", "client"]);
 export type EidolonRole = z.infer<typeof EidolonRoleSchema>;
 
 export const ServerConnectionSchema = z.object({
-  host: z.string(),
+  host: z.string().min(1).max(253),
   port: z.number().int().min(1).max(65535).default(8419),
   token: z.string().optional(),
   tls: z.boolean().default(false),
@@ -118,7 +120,7 @@ export const ServerConnectionSchema = z.object({
 
 export const EidolonConfigSchema = z.object({
   identity: z.object({
-    name: z.string().default("Eidolon"),
+    name: z.string().min(1).default("Eidolon"),
     ownerName: z.string(),
   }),
   role: EidolonRoleSchema.default("server"),
@@ -145,7 +147,13 @@ export const EidolonConfigSchema = z.object({
   replication: ReplicationConfigSchema.default({}),
   users: UsersConfigSchema,
   daemon: DaemonConfigSchema.default({}),
-});
+}).refine(
+  (data) => !data.replication.enabled || data.replication.sharedSecret.length >= 16,
+  {
+    message: "replication.sharedSecret must be at least 16 characters when replication is enabled",
+    path: ["replication", "sharedSecret"],
+  },
+);
 
 // ---------------------------------------------------------------------------
 // Inferred Types
@@ -159,7 +167,7 @@ export type LearningConfig = z.infer<typeof LearningConfigSchema>;
 export type ChannelConfig = z.infer<typeof ChannelConfigSchema>;
 export type GatewayConfig = z.infer<typeof GatewayConfigSchema>;
 export type GpuConfig = z.infer<typeof GpuConfigSchema>;
-export type GpuWorkerConfigSchema = z.infer<typeof GpuWorkerSchema>;
+export type GpuWorkerConfig = z.infer<typeof GpuWorkerSchema>;
 export type GpuPoolConfig = z.infer<typeof GpuPoolSchema>;
 export type SecurityConfig = z.infer<typeof SecurityConfigSchema>;
 export type DatabaseConfig = z.infer<typeof DatabaseConfigSchema>;
@@ -169,7 +177,6 @@ export type DigestConfig = z.infer<typeof DigestConfigSchema>;
 export type BrowserConfig = z.infer<typeof BrowserConfigSchema>;
 export type DaemonConfig = z.infer<typeof DaemonConfigSchema>;
 export type TelemetryConfig = z.infer<typeof TelemetryConfigSchema>;
-export type CalendarConfigInferred = z.infer<typeof CalendarConfigSchema>;
 export type HomeAutomationConfig = z.infer<typeof HomeAutomationConfigSchema>;
 export type PluginConfig = z.infer<typeof PluginConfigSchema>;
 export type LLMConfig = z.infer<typeof LLMConfigSchema>;

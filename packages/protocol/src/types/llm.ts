@@ -78,7 +78,7 @@ export interface LLMStreamEvent {
   readonly type: LLMStreamEventType;
   readonly text?: string;
   readonly toolCall?: LLMToolCall;
-  readonly usage?: { inputTokens: number; outputTokens: number };
+  readonly usage?: { readonly inputTokens: number; readonly outputTokens: number };
   readonly error?: string;
 }
 

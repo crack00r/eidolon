@@ -35,6 +35,7 @@ export type EventType =
   | "gateway:client_connected"
   | "gateway:client_disconnected"
   | "gateway:client_error_report"
+  | "gateway:client_execute"
   | "digest:generate"
   | "digest:delivered"
   | "approval:requested"

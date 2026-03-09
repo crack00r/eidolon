@@ -158,6 +158,9 @@ export const MemoryConfigSchema = z.object({
       vectorWeight: z.number().min(0).max(1).default(0.4),
       graphWeight: z.number().min(0).max(1).default(0.2),
     })
+    .refine((s) => Math.abs(s.bm25Weight + s.vectorWeight + s.graphWeight - 1.0) <= 0.01, {
+      message: "Search weights (bm25Weight + vectorWeight + graphWeight) must sum to 1.0 (within 0.01 tolerance)",
+    })
     .default({}),
   embedding: z
     .object({

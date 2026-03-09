@@ -14,5 +14,5 @@ export type SecretRef = z.infer<typeof SecretRefSchema>;
 
 /** Accepts either a plain string or a { $secret: "KEY_NAME" } reference. */
 export function stringOrSecret(): z.ZodUnion<[z.ZodString, typeof SecretRefSchema]> {
-  return z.union([z.string(), SecretRefSchema]);
+  return z.union([z.string().min(1), SecretRefSchema]);
 }
