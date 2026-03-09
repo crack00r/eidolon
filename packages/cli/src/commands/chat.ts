@@ -236,14 +236,15 @@ export function registerChatCommand(program: Command): void {
 
       // Track whether SIGINT triggered cleanup so the finally block doesn't double-clean
       let sigintHandled = false;
-      process.on("SIGINT", () => {
+      const sigintHandler = (): void => {
         process.stdout.write("\n");
         sigintHandled = true;
         cleanup();
         // Set exit code and let the event loop drain naturally
         // instead of calling process.exit() which bypasses the finally block
         process.exitCode = 0;
-      });
+      };
+      process.on("SIGINT", sigintHandler);
 
       try {
         if (options.message) {
@@ -289,6 +290,7 @@ export function registerChatCommand(program: Command): void {
           );
         }
       } finally {
+        process.removeListener("SIGINT", sigintHandler);
         if (!sigintHandled) {
           cleanup();
         }

@@ -138,7 +138,7 @@ export function registerDaemonCommand(program: Command): void {
         return;
       }
 
-      const lines = Number.parseInt(opts.lines, 10) || 50;
+      const lines = Math.max(1, Number.parseInt(opts.lines, 10) || 50);
       console.log(`Tailing ${logFile} (last ${lines} lines)...\n`);
 
       const proc =
@@ -160,6 +160,10 @@ export function registerDaemonCommand(program: Command): void {
       process.on("SIGTERM", handler);
 
       await proc.exited;
+
+      // Remove signal handlers to prevent accumulation across repeated invocations
+      process.removeListener("SIGINT", handler);
+      process.removeListener("SIGTERM", handler);
     });
 
   // -- stop -----------------------------------------------------------------
