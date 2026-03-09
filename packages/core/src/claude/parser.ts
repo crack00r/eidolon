@@ -38,11 +38,7 @@ function pickSessionId(parsed: Record<string, unknown>): string | undefined {
  * an additional `session` event is returned via the `extraEvents` out-parameter
  * so callers can capture the CLI session ID for future `--resume` calls.
  */
-export function parseStreamLine(
-  line: string,
-  logger?: Logger,
-  extraEvents?: StreamEvent[],
-): StreamEvent | null {
+export function parseStreamLine(line: string, logger?: Logger, extraEvents?: StreamEvent[]): StreamEvent | null {
   const trimmed = line.trim();
   if (!trimmed) return null;
 

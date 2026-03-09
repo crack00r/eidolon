@@ -275,10 +275,14 @@ describe("REST API", () => {
       });
       const urlObj = new URL(fullUrl);
 
-      const response = handleRestApiRoute(req, urlObj, makeDeps({
-        authToken: "secret-token",
-        conversationStore: store,
-      }));
+      const response = handleRestApiRoute(
+        req,
+        urlObj,
+        makeDeps({
+          authToken: "secret-token",
+          conversationStore: store,
+        }),
+      );
       expect(response?.status).toBe(200);
       db.close();
     });

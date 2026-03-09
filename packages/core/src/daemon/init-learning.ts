@@ -8,8 +8,8 @@
  * Step 17d in the daemon initialization sequence (after AnticipationEngine).
  */
 
-import { CrawlerRegistry } from "../learning/crawlers/index.ts";
 import type { CrawledItem } from "../learning/crawlers/index.ts";
+import { CrawlerRegistry } from "../learning/crawlers/index.ts";
 import { DiscoveryEngine } from "../learning/discovery.ts";
 import { RelevanceFilter } from "../learning/relevance.ts";
 import { SafetyClassifier } from "../learning/safety.ts";
@@ -66,25 +66,17 @@ export function buildLearningSteps(modules: InitializedModules): InitStep[] {
 
       // Wire EventBus handler for learning:crawl events
       eventBus.subscribe("learning:crawl", () => {
-        runLearningCrawl(
-          modules,
-          crawlerRegistry,
-          discoveryEngine,
-          relevanceFilter,
-          safetyClassifier,
-        ).catch((err: unknown) => {
-          logger.error(
-            "learning",
-            `Learning crawl failed: ${err instanceof Error ? err.message : String(err)}`,
-          );
-        });
+        runLearningCrawl(modules, crawlerRegistry, discoveryEngine, relevanceFilter, safetyClassifier).catch(
+          (err: unknown) => {
+            logger.error("learning", `Learning crawl failed: ${err instanceof Error ? err.message : String(err)}`);
+          },
+        );
       });
 
       // Schedule periodic crawl runs via TaskScheduler
       if (taskScheduler) {
         const listResult = taskScheduler.list();
-        const alreadyExists =
-          listResult.ok && listResult.value.some((t) => t.action === "learning:crawl");
+        const alreadyExists = listResult.ok && listResult.value.some((t) => t.action === "learning:crawl");
 
         if (!alreadyExists) {
           // Use the shortest source schedule, or default interval
@@ -97,15 +89,9 @@ export function buildLearningSteps(modules: InitializedModules): InitStep[] {
             payload: {},
           });
           if (createResult.ok) {
-            logger.info(
-              "daemon",
-              `Learning crawl scheduled every ${intervalMinutes} minutes`,
-            );
+            logger.info("daemon", `Learning crawl scheduled every ${intervalMinutes} minutes`);
           } else {
-            logger.error(
-              "daemon",
-              `Failed to schedule learning crawl: ${createResult.error.message}`,
-            );
+            logger.error("daemon", `Failed to schedule learning crawl: ${createResult.error.message}`);
           }
         } else {
           logger.debug("daemon", "Learning crawl task already exists");

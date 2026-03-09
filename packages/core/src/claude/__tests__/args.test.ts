@@ -185,10 +185,7 @@ describe("buildClaudeArgs", () => {
     });
 
     test("resume mode produces correct full arg list", () => {
-      const args = buildClaudeArgs(
-        "next question",
-        makeOptions({ resumeSessionId: "uuid-here", maxTurns: 5 }),
-      );
+      const args = buildClaudeArgs("next question", makeOptions({ resumeSessionId: "uuid-here", maxTurns: 5 }));
 
       expect(args).toEqual([
         "--print",

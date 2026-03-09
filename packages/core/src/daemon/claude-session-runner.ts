@@ -108,12 +108,7 @@ export async function runWithResumeFallback(
   });
 
   try {
-    const result = await runClaudeSession(
-      claudeManager,
-      text,
-      { ...baseOptions, resumeSessionId },
-      logger,
-    );
+    const result = await runClaudeSession(claudeManager, text, { ...baseOptions, resumeSessionId }, logger);
 
     // If we got a response, the resume worked
     if (result.responseText.length > 0) {

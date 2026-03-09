@@ -64,11 +64,7 @@ const DiscoveryListSchema = z.object({
  * Handle REST API routes. Returns a Response if matched, or null if
  * the path doesn't match any API route.
  */
-export function handleRestApiRoute(
-  req: Request,
-  url: URL,
-  deps: RestApiDeps,
-): Response | null {
+export function handleRestApiRoute(req: Request, url: URL, deps: RestApiDeps): Response | null {
   const path = url.pathname;
 
   // Auth check for all /api/ routes
@@ -159,11 +155,7 @@ function handleCreateConversation(req: Request, deps: RestApiDeps): Response {
   return jsonResponse({ error: "Use async handler" }, 501, deps.isTls);
 }
 
-function handleGetConversationMessages(
-  conversationId: string,
-  url: URL,
-  deps: RestApiDeps,
-): Response {
+function handleGetConversationMessages(conversationId: string, url: URL, deps: RestApiDeps): Response {
   if (!deps.conversationStore) {
     return jsonResponse({ error: "Conversation store not available" }, 503, deps.isTls);
   }
@@ -229,13 +221,17 @@ function handleSearchMemories(url: URL, deps: RestApiDeps): Response {
     return jsonResponse({ error: result.error.message }, 500, deps.isTls);
   }
 
-  return jsonResponse({
-    results: result.value.map((r) => ({
-      memory: r.memory,
-      rank: r.rank,
-    })),
-    total: result.value.length,
-  }, 200, deps.isTls);
+  return jsonResponse(
+    {
+      results: result.value.map((r) => ({
+        memory: r.memory,
+        rank: r.rank,
+      })),
+      total: result.value.length,
+    },
+    200,
+    deps.isTls,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -261,11 +257,15 @@ function handleListDiscoveries(url: URL, deps: RestApiDeps): Response {
     const statsResult = deps.discoveryEngine.getStats();
     const recentResult = deps.discoveryEngine.listByStatus("new", limit);
 
-    return jsonResponse({
-      stats: statsResult.ok ? statsResult.value : null,
-      discoveries: recentResult.ok ? recentResult.value : [],
-      total: recentResult.ok ? recentResult.value.length : 0,
-    }, 200, deps.isTls);
+    return jsonResponse(
+      {
+        stats: statsResult.ok ? statsResult.value : null,
+        discoveries: recentResult.ok ? recentResult.value : [],
+        total: recentResult.ok ? recentResult.value.length : 0,
+      },
+      200,
+      deps.isTls,
+    );
   }
 
   const validStatuses = ["new", "evaluated", "approved", "rejected", "implemented"] as const;
@@ -288,11 +288,7 @@ function handleListDiscoveries(url: URL, deps: RestApiDeps): Response {
  * Handle REST API routes that need async body parsing.
  * Returns a Response if matched, or null if not an API route.
  */
-export async function handleRestApiRouteAsync(
-  req: Request,
-  url: URL,
-  deps: RestApiDeps,
-): Promise<Response | null> {
+export async function handleRestApiRouteAsync(req: Request, url: URL, deps: RestApiDeps): Promise<Response | null> {
   const path = url.pathname;
 
   // Auth check
@@ -352,19 +348,23 @@ export async function handleRestApiRouteAsync(
       return jsonResponse({ error: result.error.message }, 500, deps.isTls);
     }
 
-    return jsonResponse({
-      results: result.value.map((r) => ({
-        id: r.memory.id,
-        type: r.memory.type,
-        layer: r.memory.layer,
-        content: r.memory.content,
-        confidence: r.memory.confidence,
-        score: r.score,
-        tags: r.memory.tags,
-        createdAt: r.memory.createdAt,
-      })),
-      total: result.value.length,
-    }, 200, deps.isTls);
+    return jsonResponse(
+      {
+        results: result.value.map((r) => ({
+          id: r.memory.id,
+          type: r.memory.type,
+          layer: r.memory.layer,
+          content: r.memory.content,
+          confidence: r.memory.confidence,
+          score: r.score,
+          tags: r.memory.tags,
+          createdAt: r.memory.createdAt,
+        })),
+        total: result.value.length,
+      },
+      200,
+      deps.isTls,
+    );
   }
 
   return null;
@@ -374,11 +374,7 @@ export async function handleRestApiRouteAsync(
 // Helpers
 // ---------------------------------------------------------------------------
 
-function jsonResponse(
-  data: unknown,
-  status: number,
-  isTls: boolean,
-): Response {
+function jsonResponse(data: unknown, status: number, isTls: boolean): Response {
   const headers: Record<string, string> = {
     ...SECURITY_HEADERS,
     "Content-Type": "application/json",

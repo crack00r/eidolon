@@ -50,7 +50,10 @@ interface MockRouterCall {
   readonly text: string;
 }
 
-function createMockRouter(): { routeOutbound: (msg: Record<string, unknown>) => Promise<Result<void, EidolonError>>; calls: MockRouterCall[] } {
+function createMockRouter(): {
+  routeOutbound: (msg: Record<string, unknown>) => Promise<Result<void, EidolonError>>;
+  calls: MockRouterCall[];
+} {
   const calls: MockRouterCall[] = [];
   return {
     routeOutbound: async (msg: Record<string, unknown>): Promise<Result<void, EidolonError>> => {
@@ -72,12 +75,18 @@ function createMockWorkspacePreparer(): {
   const cleanedUp: string[] = [];
   return {
     prepare: async (): Promise<Result<string, EidolonError>> => Ok("/tmp/test-workspace"),
-    cleanup: (id: string): void => { cleanedUp.push(id); },
+    cleanup: (id: string): void => {
+      cleanedUp.push(id);
+    },
     cleanedUp,
   };
 }
 
-function makeEvent(channelId: string, userId: string, text: string): { readonly id: string; readonly payload: unknown } {
+function makeEvent(
+  channelId: string,
+  userId: string,
+  text: string,
+): { readonly id: string; readonly payload: unknown } {
   return {
     id: `evt-${Date.now()}-${Math.random()}`,
     payload: { channelId, userId, text },
@@ -173,7 +182,7 @@ describe("session resume in handleUserMessage", () => {
 
   test("different conversations get independent session IDs", async () => {
     const fake = new FakeClaudeProcess();
-    let callCount = 0;
+    const callCount = 0;
     // Use different session IDs for different calls
     fake.addRule(/./, [
       { type: "text", content: "Response", timestamp: Date.now() },

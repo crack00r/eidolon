@@ -9,7 +9,6 @@
  */
 
 import { DiscoveryBroadcaster } from "../discovery/broadcaster.ts";
-import { DiscoveryEngine } from "../learning/discovery.ts";
 import { TailscaleDetector } from "../discovery/tailscale.ts";
 import { GatewayChannel } from "../gateway/gateway-channel.ts";
 import { GatewayServer } from "../gateway/server.ts";
@@ -18,6 +17,7 @@ import type { GPUWorkerPoolConfig } from "../gpu/pool.ts";
 import { GPUWorkerPool } from "../gpu/pool.ts";
 import { STTClient } from "../gpu/stt-client.ts";
 import type { GPUWorkerConfig as PoolWorkerConfig } from "../gpu/worker.ts";
+import { DiscoveryEngine } from "../learning/discovery.ts";
 import { buildCoreRpcWiringStep } from "./core-rpc-wiring.ts";
 import { buildCalendarSteps, buildHASteps, buildMiscGatewaySteps } from "./gateway-wiring-handlers.ts";
 import type { InitializedModules } from "./types.ts";

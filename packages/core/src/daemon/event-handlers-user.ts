@@ -66,8 +66,7 @@ export async function handleUserMessage(
       return { success: false, tokensUsed: 0, error: "Required modules not initialized" };
     }
 
-    const conversationId =
-      typeof rawPayload.conversationId === "string" ? rawPayload.conversationId : undefined;
+    const conversationId = typeof rawPayload.conversationId === "string" ? rawPayload.conversationId : undefined;
     const sessionId = `msg-${randomUUID()}`;
 
     // 1. Generate MEMORY.md content via MemoryInjector
@@ -265,11 +264,9 @@ export async function handleUserMessage(
               const inputs = modules.memoryExtractor.toCreateInputs(extracted, sessionId);
               const batchResult = modules.memoryStore.createBatch(inputs);
               if (batchResult.ok) {
-                logger.info(
-                  "loop-handler",
-                  `Stored ${batchResult.value.length} memories from conversation`,
-                  { sessionId },
-                );
+                logger.info("loop-handler", `Stored ${batchResult.value.length} memories from conversation`, {
+                  sessionId,
+                });
               } else {
                 logger.warn("loop-handler", `Memory storage failed: ${batchResult.error.message}`);
               }

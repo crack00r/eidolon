@@ -122,9 +122,7 @@ export class ConversationSessionStore {
    */
   get(id: string): Result<Conversation | null, EidolonError> {
     try {
-      const row = this.db
-        .query("SELECT * FROM conversations WHERE id = ?")
-        .get(id) as ConversationRow | null;
+      const row = this.db.query("SELECT * FROM conversations WHERE id = ?").get(id) as ConversationRow | null;
       return Ok(row ? rowToConversation(row) : null);
     } catch (cause) {
       return Err(createError(ErrorCode.DB_QUERY_FAILED, `Failed to get conversation ${id}`, cause));
@@ -169,10 +167,7 @@ export class ConversationSessionStore {
   /**
    * Set the Claude CLI session ID for a conversation (for --resume).
    */
-  setClaudeSessionId(
-    conversationId: string,
-    claudeSessionId: string,
-  ): Result<void, EidolonError> {
+  setClaudeSessionId(conversationId: string, claudeSessionId: string): Result<void, EidolonError> {
     try {
       this.db
         .query("UPDATE conversations SET claude_session_id = ?, updated_at = ? WHERE id = ?")
@@ -228,9 +223,7 @@ export class ConversationSessionStore {
           .run(id, params.conversationId, params.role, params.content, now);
 
         this.db
-          .query(
-            "UPDATE conversations SET message_count = message_count + 1, updated_at = ? WHERE id = ?",
-          )
+          .query("UPDATE conversations SET message_count = message_count + 1, updated_at = ? WHERE id = ?")
           .run(now, params.conversationId);
       });
       txn();
@@ -261,9 +254,7 @@ export class ConversationSessionStore {
       const offset = Math.max(0, options?.offset ?? 0);
 
       const rows = this.db
-        .query(
-          "SELECT * FROM conversation_messages WHERE conversation_id = ? ORDER BY created_at ASC LIMIT ? OFFSET ?",
-        )
+        .query("SELECT * FROM conversation_messages WHERE conversation_id = ? ORDER BY created_at ASC LIMIT ? OFFSET ?")
         .all(conversationId, limit, offset) as MessageRow[];
 
       return Ok(rows.map(rowToMessage));
@@ -288,9 +279,7 @@ export class ConversationSessionStore {
       this.logger.debug("delete", `Deleted conversation ${conversationId}`);
       return Ok(undefined);
     } catch (cause) {
-      return Err(
-        createError(ErrorCode.DB_QUERY_FAILED, `Failed to delete conversation ${conversationId}`, cause),
-      );
+      return Err(createError(ErrorCode.DB_QUERY_FAILED, `Failed to delete conversation ${conversationId}`, cause));
     }
   }
 }
